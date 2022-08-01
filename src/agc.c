@@ -106,10 +106,7 @@ static void close_once(Global* g) {
 }
 
 static a_bool sweep_till_alive(Global* g) {
-	while (*g->_gc_sweep != null) {
-		if (!sweep_once(g))
-			break;
-	}
+	while (*g->_gc_sweep != null && !sweep_once(g));
 	return *g->_gc_sweep != null;
 }
 

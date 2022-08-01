@@ -145,7 +145,7 @@ ifeq (Windows, $(TARGET_OS))
 endif
 
 ##############################################################
-# Build mode controling.
+# Build mode controlling.
 ##############################################################
 
 TARGET_O= $(ALO_A)
@@ -179,8 +179,7 @@ ALO_O= alo.o
 
 ALL_O= $(CORE_O) $(ALO_O)
 ALL_T= $(TARGET_T)
-
-ALL_RM= $(ALL_O) $(ALL_T)
+ALL_RM= $(ALL_O) $(ALL_O:.o=_dyn.o) $(ALO_T) $(ALO_A) $(ALO_SO)
 
 Q=@echo
 E=@
@@ -208,6 +207,10 @@ depend:
 %.o: %.c
 	$(Q) "CC      $@"
 	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/$(@:.o=_dyn.o)" -c $<
+	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
+
+$(ALO_O): alo.c
+	$(Q) "CC      $@"
 	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
 
 actx.o: $(ACTX_C)

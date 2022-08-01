@@ -188,7 +188,7 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 static void l_scan_prefixed_expr(Parser* par, OutExpr e) {
 	switch (l_peek(par)) {
 		case TK_PLUS: {
-			//TODO
+			//TODO should VM check type for this operation?
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
 			break;
