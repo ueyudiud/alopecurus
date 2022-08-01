@@ -2,6 +2,12 @@
 /build/
 /run/
 
+# IDEA settings
+.idea
+
+# VSCode settings
+.vscode
+
 # Eclipse settings
 .settings
 .project
