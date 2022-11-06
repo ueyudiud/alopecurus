@@ -58,6 +58,7 @@ struct Parser {
 			a_u32 _fpass: 1;
 			a_u32 _fland: 1;
 			a_u32 _fjump: 1;
+			a_u32 _fvarg: 1;
 		};
 	};
 	a_u16 _scope_depth;
@@ -65,13 +66,14 @@ struct Parser {
 	Lines _lines;
 	Scope* _scope;
 	FnScope* _fnscope;
-	RefQueue _rq;
+	RefQueue _rq; /* Function prototype queue. */
+	QBuf* _qbq; /* Queued string buffer queue, used for concatenate expression. */
 };
 
 #define SCOPE_DEPTH_ENV u8c(0)
 #define SCOPE_DEPTH_ROOT u8c(1)
 
 #define l_error(par,fmt,ln,args...) \
-ai_lex_error_(&(par)->_lex, "%s:%u: "fmt, &(par)->_lex._fname, ln, ##args)
+ai_lex_error_(&(par)->_lex, "%s:%u: "fmt, (par)->_lex._fname, ln, ##args)
 
 #endif /* aparse_h_ */

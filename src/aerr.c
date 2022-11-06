@@ -7,6 +7,7 @@
 #include "astr.h"
 #include "aenv.h"
 #include "agc.h"
+#include "avm.h"
 
 #include "aerr.h"
 
@@ -18,11 +19,12 @@ a_none ai_err_raise(a_henv env, a_msg code, char const* fmt, ...) {
 }
 
 a_none ai_err_raisev(a_henv env, a_msg code, char const* fmt, va_list varg) {
-    Global* g = G(env);
+	assume(code < 0, "cannot raise non error message.");
+	Global* g = G(env);
     GStr* str = ai_str_formatv(env, fmt, varg);
     v_set(g, &env->_error, v_of_ref(str));
-    if (g->_erf != null) {
-        (*g->_erf)(env, code, g->_erc);
-    }
+	if (g->_hookm & ALO_HMRAISE) {
+		ai_vm_hook(env, code);
+	}
     ai_env_raise(env, code);
 }

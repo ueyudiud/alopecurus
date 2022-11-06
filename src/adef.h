@@ -56,6 +56,7 @@ typedef struct {
 	a_usize _len;
 } a_lstr;
 
+typedef struct { a_u32 _; } a_x32;
 typedef a_u32 a_hash;
 typedef a_u32 a_insn;
 
@@ -91,6 +92,7 @@ typedef a_u32 a_insn;
 #undef false
 #undef true
 #undef zero
+#undef nil
 
 #define null NULL
 #define false ((a_bool) 0)
@@ -109,13 +111,34 @@ typedef a_u32 a_insn;
 
 #define new(t) (t)
 #define cast(t,e) ((t) (e))
-#define bcast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; *cast(typeof(t)*, &_e); })
+#define bcast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; *cast(typeof(t)*, _e); })
 #define fpcast(t,e) cast(t, cast(void*, e))
 #define quiet(e...) ((void) ((void) 0, ##e))
 #define addr_of(e) cast(a_usize, (quiet((typeof(*(e))*) null), e))
 #define ptr_of(t,e) ({ typeof(e) _e = (e); quiet(&_e == zero(a_usize*)); cast(typeof(t)*, _e); })
+#define ptr_diff(p,q) ({ typeof((p) + 1) _p = (p), _q = (q); (&*_p - &*_q) * cast(a_isize, sizeof(*_p)); })
+#define ptr_disp(p,d) cast(typeof(p), cast(a_byte*, p) + (d))
 #define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &cast(typeof(t)*, null)->f); cast(typeof(t)*, cast(void*, v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
+
+/**
+ ** Optional index type support.
+ */
+
+/**
+ ** Internal used `nil` literal.
+ ** Used in optional array based table reference to
+ ** represent a empty value.
+ */
+#define nil x32c(0)
+
+#define unwrap_unsafe(e) ((e)._)
+#define unwrap(e) ({ a_x32 _x = (e); assume(!is_nil(_x)); unwrap_unsafe(_x); })
+#define wrap(v)  (new(a_x32) { v })
+
+#define x32c(l) wrap(i32c(l))
+
+#define is_nil(e) (unwrap_unsafe(e) == 0)
 
 /* Utility functions. */
 
@@ -129,8 +152,8 @@ typedef a_u32 a_insn;
 #undef trap
 #undef unreachable
 
-#define max(a,b) ({ typeof(a) _a = (a); typeof(b) _b = (b); quiet(&_a == &_b); _a >= _b ? _a : _b; })
-#define min(a,b) ({ typeof(a) _a = (a); typeof(b) _b = (b); quiet(&_a == &_b); _a <= _b ? _a : _b; })
+#define max(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a >= _b ? _a : _b; })
+#define min(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a <= _b ? _a : _b; })
 #define swap(a,b) ({ typeof(a)* _a = &(a); typeof(b)* _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
 #define expect(e,v) __builtin_expect(e, v)
 #define likely(e) expect(!!(e), true)

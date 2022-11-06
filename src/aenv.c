@@ -272,7 +272,8 @@ a_isize ai_env_grow_stack(a_henv env, Value* top) {
 		grow_stack(env, ALOI_MAX_STACKSIZE + OVERFLOW_STACKSIZE);
 		return 1;
 	}
-	current_size = min(max(current_size * 2, expect_size + MIN_GROW_STACK_SIZE), MAX_VISIBLE_STACK_SIZE);
+	current_size = max(current_size * 2, expect_size + MIN_GROW_STACK_SIZE);
+	current_size = min(current_size, MAX_VISIBLE_STACK_SIZE);
 
 	return grow_stack(env, current_size + RESERVED_STACKSIZE);
 }

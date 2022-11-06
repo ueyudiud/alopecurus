@@ -17,12 +17,14 @@ typedef struct LexScope LexScope;
     _(_ENV, "_ENV")     \
     _(AS, "as")         \
     _(BREAK, "break")   \
+    _(CASE, "case")     \
     _(CONST, "const")   \
     _(CONTINUE, "continue") \
     _(DO, "do")         \
     _(ELSE, "else")     \
     _(EXPORT, "export") \
     _(FALSE, "false")   \
+    _(FN, "fn")         \
     _(FOR, "for")       \
     _(IF, "if")         \
     _(IMPORT, "import") \
@@ -32,61 +34,65 @@ typedef struct LexScope LexScope;
     _(LOOP, "loop")     \
     _(MATCH, "match")   \
     _(NIL, "nil")       \
+    _(RETURN, "return") \
     _(TRUE, "true")     \
 	_(WHILE, "while")
 
-#define TOKEN_LIST(_) \
-    _(EOF, "<eof>") \
-    KEYWORD_LIST(_) \
-    _(IDENT, "<identifier>") \
-    _(INTEGER, "<integer>") \
-    _(FLOAT, "<float>") \
-    _(STRING, "<string>") \
-    _(TSTRING, "<tstring>") \
-    _(LBK, "'('") \
-    _(RBK, "')'") \
-    _(LSQ, "'['") \
-    _(RSQ, "']'") \
-    _(LBR, "'{'") \
-    _(RBR, "'}'") \
-    _(SHARP, "'#'") \
-    _(AT, "'@'") \
-    _(TILDE, "'~'") \
-    _(COMMA, "','") \
-    _(DOT, "'.'") \
-    _(BDOT, "'..'") \
-    _(TDOT, "'...'") \
-    _(COLON, "':'") \
-    _(BCOLON, "'::'") \
-    _(PLUS, "'+'") \
-    _(MINUS, "'-'") \
-    _(STAR, "'*'") \
-    _(LSLASH, "'/'") \
-    _(PERCENT, "'%'") \
-    _(ASSIGN, "'='") \
-    _(EQ, "'=='") \
-    _(NOT, "'!'") \
-    _(NE, "'!='") \
-    _(GT, "'>'") \
-    _(GE, "'>='") \
-    _(SHL, "'<<'") \
-    _(LT, "'<'") \
-    _(LE, "'<='") \
-    _(SHR, "'>>'") \
-    _(HAT, "'^'") \
-    _(AMP, "'&'") \
-    _(BAMP, "'&&'") \
-    _(BAR, "'|'") \
-    _(BBAR, "'||'") \
-    _(QUESTION, "'?'") \
-    _(QDOT, "'?.'") \
-    _(ELVIS, "'?:'")
+#define OPERATOR_LIST(_) \
+    _(LBK, "(") \
+    _(RBK, ")") \
+    _(LSQ, "[") \
+    _(RSQ, "]") \
+    _(LBR, "{") \
+    _(RBR, "}") \
+    _(SHARP, "#") \
+    _(AT, "@") \
+    _(TILDE, "~") \
+    _(COMMA, ",") \
+    _(SEMI, ";") \
+    _(DOT, ".") \
+    _(BDOT, "..") \
+    _(TDOT, "...") \
+    _(COLON, ":") \
+    _(BCOLON, "::") \
+    _(PLUS, "+") \
+    _(MINUS, "-") \
+    _(STAR, "*") \
+    _(LSLASH, "/") \
+    _(PERCENT, "%") \
+    _(ASSIGN, "=") \
+    _(EQ, "==") \
+    _(NOT, "!") \
+    _(NE, "!=") \
+    _(GT, ">") \
+    _(GE, ">=") \
+    _(SHL, "<<") \
+    _(LT, "<") \
+    _(LE, "<=") \
+    _(SHR, ">>") \
+    _(HAT, "^") \
+    _(AMP, "&") \
+    _(BAMP, "&&") \
+    _(BAR, "|") \
+    _(BBAR, "||") \
+    _(QUESTION, "?") \
+    _(QDOT, "?.") \
+    _(ELVIS, "?:")
 
 enum {
     TK__NONE,
+
 #define TKDEF(id,repr) TK_##id,
-    TOKEN_LIST(TKDEF)
+	KEYWORD_LIST(TKDEF)
+	OPERATOR_LIST(TKDEF)
 #undef TKDEF
+	TK_EOF,
+	TK_IDENT,
+	TK_INTEGER,
+	TK_FLOAT,
+	TK_STRING,
+	TK_TSTRING,
+
     TK__MAX
 };
 
@@ -98,16 +104,24 @@ enum {
     CHANNEL_MTSTR_BODY = 0x5
 };
 
+#define MAX_TOKEN_STR_BUF_SIZE 32
+
+typedef a_byte a_tksbuf[MAX_TOKEN_STR_BUF_SIZE];
+
 intern void ai_lex_init(Lexer* lex, char const* fname);
+intern void ai_lex_close(Lexer* lex);
 intern a_none ai_lex_error_(Lexer* lex, char const* fmt, ...);
+intern char const* ai_lex_tagname(a_i32 tag);
+intern char const* ai_lex_tkrepr(Token* tk, a_tksbuf buf);
+intern GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len);
 intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
 
 #define ai_lex_error(lex,fmt,args...) ai_lex_error_(lex, "%s:%u: "fmt, (lex)->_fname, (lex)->_line, ##args)
 
 struct Token {
-    a_i32 _tag;
-    a_u32 _line;
+    a_i16 _tag;
+    a_u16 _line;
     union {
         a_int _int;
         a_float _float;
@@ -119,13 +133,13 @@ typedef struct StrNode StrNode;
 
 struct StrNode { 
     GStr* _str;
-    a_u32 _prev;
-    a_u32 _next;
+    a_x32 _prev;
+    a_x32 _next;
 };
 
 typedef struct {
     StrNode* _table;
-    a_u32 _hfree;
+    a_x32 _hfree;
     a_u32 _hmask;
     a_u32 _nstr;
 } Strs;

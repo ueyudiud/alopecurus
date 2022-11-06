@@ -41,12 +41,14 @@ static ptrdiff_t l_read_str(a_henv env, void* rctx, void const** pdst, size_t* p
 	return 0;
 }
 
+typedef int a_fno;
+
 typedef struct {
 	a_byte _buffer[256];
-	int _handle;
+	a_fno _handle;
 } FileReadCtx;
 
-static ptrdiff_t l_read_file(a_henv env, void* rctx, void const** pdst, size_t* plen) {
+static ptrdiff_t l_read_file(unused a_henv env, void* rctx, void const** pdst, size_t* plen) {
 	FileReadCtx* ctx = rctx;
 	int count = read(ctx->_handle, ctx->_buffer, sizeof(ctx->_buffer));
 	if (count < 0) return count;
@@ -61,7 +63,7 @@ a_msg aloL_readstr(a_henv env, char const* src, a_usize len, char const* name, a
 }
 
 a_msg aloL_readfile(a_henv env, char const* fname, a_u32 options) {
-	int handle = open(fname, O_RDONLY);
+	a_fno handle = open(fname, O_RDONLY);
 	if (handle < 0) return ALO_EIO;
 
 	FileReadCtx ctx;

@@ -110,31 +110,55 @@ inline a_int ai_op_mod_int(a_henv env, a_int a, a_int b) {
 #ifdef aloi_op_shl_int
 # define ai_op_shl_int(env,a,b) aloi_op_shl_int(env, a, b)
 #else
-# define ai_op_shl_int(env,a,b) cast(a_i32, cast(a_u32, a) << cast(a_u32, b));
+# define ai_op_shl_int(env,a,b) cast(a_i32, cast(a_u32, a) << cast(a_u32, b))
 #endif
 
 #ifdef aloi_op_shr_int
 # define ai_op_shr_int(env,a,b) aloi_op_shr_int(env, a, b)
 #else
-# define ai_op_shr_int(env,a,b) cast(a_i32, cast(a_u32, a) >> cast(a_u32, b));
+# define ai_op_shr_int(env,a,b) cast(a_i32, cast(a_u32, a) >> cast(a_u32, b))
 #endif
 
 #ifdef aloi_op_band_int
 # define ai_op_band_int(env,a,b) aloi_op_band_int(env, a, b)
 #else
-# define ai_op_band_int(env,a,b) cast(a_i32, cast(a_u32, a) & cast(a_u32, b));
+# define ai_op_band_int(env,a,b) cast(a_i32, cast(a_u32, a) & cast(a_u32, b))
 #endif
 
 #ifdef aloi_op_bor_int
 # define ai_op_bor_int(env,a,b) aloi_op_band_int(env, a, b)
 #else
-# define ai_op_bor_int(env,a,b) cast(a_i32, cast(a_u32, a) | cast(a_u32, b));
+# define ai_op_bor_int(env,a,b) cast(a_i32, cast(a_u32, a) | cast(a_u32, b))
 #endif
 
 #ifdef aloi_op_bxor_int
 # define ai_op_bxor_int(env,a,b) aloi_op_band_int(env, a, b)
 #else
-# define ai_op_bxor_int(env,a,b) cast(a_i32, cast(a_u32, a) ^ cast(a_u32, b));
+# define ai_op_bxor_int(env,a,b) cast(a_i32, cast(a_u32, a) ^ cast(a_u32, b))
+#endif
+
+#ifdef aloi_op_lt_int
+# define ai_op_lt_int(env,a,b) aloi_op_lt_int(env, a, b)
+#else
+# define ai_op_lt_int(env,a,b) ((a) < (b))
+#endif
+
+#ifdef aloi_op_lt_float
+# define ai_op_lt_float(env,a,b) aloi_op_lt_float(env, a, b)
+#else
+# define ai_op_lt_float(env,a,b) ((a) < (b))
+#endif
+
+#ifdef aloi_op_le_int
+# define ai_op_le_int(env,a,b) aloi_op_le_int(env, a, b)
+#else
+# define ai_op_le_int(env,a,b) ((a) <= (b))
+#endif
+
+#ifdef aloi_op_le_float
+# define ai_op_le_float(env,a,b) aloi_op_le_float(env, a, b)
+#else
+# define ai_op_le_float(env,a,b) ((a) <= (b))
 #endif
 
 #endif /* aop_h_ */

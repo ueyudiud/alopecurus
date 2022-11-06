@@ -20,50 +20,90 @@
 #define l_test(par,tk) (l_peek(par) == (tk))
 #define l_forward(par) ai_lex_forward(lex(par))
 
-static void l_check(Parser* par, a_i32 tk, char const* what) {
-	if (!l_test(par, tk)) {
-		l_error(par, "%s expected.", ln_cur(par), what);
+static a_bool l_test_skip(Parser* par, a_i32 tk) {
+	if (l_test(par, tk)) {
+		l_skip(par);
+		return true;
 	}
+	return false;
+}
+
+#define l_error_got(par,fmt,args...) ({ a_tksbuf _buf; l_error(par, fmt", got %s", ln_cur(par), ##args, ai_lex_tkrepr(tk_cur(par), _buf)); })
+
+static void l_error_expected(Parser* par, a_i32 tk) {
+	l_error_got(par, "%s expected", ai_lex_tagname(tk));
+}
+
+static void l_check_skip(Parser* par, a_i32 tk) {
+	if (!l_test(par, tk)) {
+		l_error_expected(par, tk);
+	}
+	l_skip(par);
 }
 
 static GStr* l_check_ident(Parser* par) {
 	if (!l_test(par, TK_IDENT)) {
-		l_error(par, "identifier expected.", ln_cur(par));
+		l_error_expected(par, TK_IDENT);
 	}
 	GStr* str = tk_cur(par)->_str;
 	l_skip(par);
 	return str;
 }
 
-static void l_check_pair_right(Parser* par, unused a_i32 ltk, char const* lwhat,
-							   a_i32 rtk, char const* rwhat, a_u32 line) {
+static void l_check_pair_right(Parser* par, a_i32 ltk, a_i32 rtk, a_u32 line) {
+	a_tksbuf buf;
 	if (!l_test(par, rtk)) {
 		if (ln_cur(par) == line) {
-			l_error(par, "%s expected to match %s.", ln_cur(par), lwhat, rwhat);
+			l_error_got(par, "%s expected to match %s",
+					ai_lex_tagname(ltk),
+					ai_lex_tagname(rtk));
 		}
 		else {
-			l_error(par, "%s expected to match %s at line %u.", ln_cur(par), lwhat, rwhat, line);
+			l_error_got(par, "%s expected to match %s at line %u",
+					ai_lex_tagname(ltk),
+					ai_lex_tagname(rtk),
+					line);
 		}
 	}
 	l_skip(par);
 }
 
-static void l_scan_expr(Parser* par, OutExpr e);
-static void l_scan_stat(Parser* par);
+static a_bool l_test_sep(Parser* par) {
+	switch (l_peek(par)) {
+		case TK_RBK:
+		case TK_RBR:
+		case TK_RSQ:
+		case TK_EOF:
+		case TK_SEMI:
+			return true;
+		default:
+			return false;
+	}
+}
 
-static void l_scan_tstring(Parser* par, Exprs* con) {
+static void l_scan_expr(Parser* par, OutExpr e);
+static void l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2);
+static void l_scan_stat(Parser* par);
+static void l_scan_stat_seq(Parser* par);
+
+static void l_scan_tstring(Parser* par, OutExpr e) {
 	LexScope scope;
 	a_bool stop = false;
+
+	ConExpr ce = {};
+	ai_code_constS(par, e, tk_cur(par)->_str, ln_cur(par));
+	l_skip(par);
+
 	while (!stop) {
 		a_u32 line = ln_cur(par);
 		switch (l_peek(par)) {
 			case TK_TSTRING: {
-				ai_code_constS(par, &con->_last, tk_cur(par)->_str, line);
+				ai_code_constS(par, e, tk_cur(par)->_str, line);
 				l_skip(par);
 				break;
 			}
 			case TK_STRING: {
-				ai_code_constS(par, &con->_last, tk_cur(par)->_str, line);
+				ai_code_constS(par, e, tk_cur(par)->_str, line);
 				l_skip(par);
 				stop = true;
 				break;
@@ -71,31 +111,36 @@ static void l_scan_tstring(Parser* par, Exprs* con) {
 			case TK_LBK: {
 				l_skip(par);
 				ai_lex_push_scope(&par->_lex, &scope);
-				l_scan_expr(par, &con->_last);
+				l_scan_expr(par, e);
 				ai_lex_pop_scope(&par->_lex);
-				l_check_pair_right(par, TK_LBK, "'{'", TK_RBK, "'}'", line);
+				l_check_pair_right(par, TK_LBK, TK_RBK, line);
 				break;
 			}
 			default: {
 				l_error(par, "bad template string.", ln_cur(par));
 			}
 		}
-		ai_code_multi(par, con, OP_CONCAT, line);
+		ai_code_concat_next(par, &ce, e, line);
 	}
+
+	ai_code_concat_end(par, &ce, e, ln_cur(par));
 }
 
 static void l_scan_atom_expr(Parser* par, OutExpr e) {
 	switch (l_peek(par)) {
 		case TK_NIL: {
 			ai_code_constK(par, e, EXPR_NIL, ln_cur(par));
+			l_skip(par);
 			break;
 		}
 		case TK_FALSE: {
 			ai_code_constK(par, e, EXPR_FALSE, ln_cur(par));
+			l_skip(par);
 			break;
 		}
 		case TK_TRUE: {
 			ai_code_constK(par, e, EXPR_TRUE, ln_cur(par));
+			l_skip(par);
 			break;
 		}
 		case TK_INTEGER: {
@@ -114,11 +159,7 @@ static void l_scan_atom_expr(Parser* par, OutExpr e) {
 			break;
 		}
 		case TK_TSTRING: {
-			Exprs es = {};
-			ai_code_constS(par, &es._last, tk_cur(par)->_str, ln_cur(par));
-			l_skip(par);
-			l_scan_tstring(par, &es);
-			ai_code_multi(par, &es, OP_CONCAT, ln_cur(par));
+			l_scan_tstring(par, e);
 			break;
 		}
 		case TK_IDENT: {
@@ -129,13 +170,22 @@ static void l_scan_atom_expr(Parser* par, OutExpr e) {
 		case TK_LBK: {
 			a_u32 line = ln_cur(par);
 			l_skip(par);
-			l_scan_expr(par, e);
-			if (l_test(par, TK_RBK)) {
-				l_skip(par);
+
+			if (l_test_skip(par, TK_RBK)) {
+				ai_code_constK(par, e, EXPR_UNIT, line);
 			}
 			else {
-				//TODO
+				l_scan_expr(par, e);
+				if (!l_test_skip(par, TK_RBK)) {
+					if (l_test_skip(par, TK_COMMA)) {
+						Expr e2;
+						l_scan_expr_pack(par, e, &e2);
+						ai_code_binary2(par, e, &e2, OP_VA_PUSH, ln_cur(par));
+					}
+					l_check_pair_right(par, TK_LBK, TK_RBK, line);
+				}
 			}
+			ai_code_unary(par, e, OP_TNEW, line);
 			break;
 		}
 		default: l_error(par, "bad expression.", ln_cur(par));
@@ -169,12 +219,24 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 				l_skip(par);
 				l_scan_expr(par, &e2);
 				ai_code_index(par, e, &e2, line);
-				while (l_test(par, TK_COMMA)) {
-					l_skip(par);
+				while (l_test_skip(par, TK_COMMA)) {
 					l_scan_expr(par, &e2);
 					ai_code_index(par, e, &e2, line);
 				}
-				l_check_pair_right(par, TK_LSQ, "'['", TK_RSQ, "']'", line);
+				l_check_pair_right(par, TK_LSQ, TK_RSQ, line);
+				break;
+			}
+			case TK_LBK: {
+				a_u32 line = ln_cur(par);
+				l_skip(par);
+
+				if (!l_test_skip(par, TK_RBK)) {
+					Expr e2;
+					l_scan_expr_pack(par, e, &e2);
+					l_check_pair_right(par, TK_LBK, TK_RBK, line);
+					ai_code_binary2(par, e, &e2, OP_VA_PUSH, ln_cur(par));
+				}
+				ai_code_unary(par, e, OP_CALL, line0);
 				break;
 			}
 			default: {
@@ -197,28 +259,28 @@ static void l_scan_prefixed_expr(Parser* par, OutExpr e) {
 			a_u32 line = ln_cur(par);
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
-			ai_code_prefix(par, e, OP_NEG, line);
+			ai_code_unary(par, e, OP_NEG, line);
 			break;
 		}
 		case TK_TILDE: {
 			a_u32 line = ln_cur(par);
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
-			ai_code_prefix(par, e, OP_BIT_INV, line);
+			ai_code_unary(par, e, OP_BIT_INV, line);
 			break;
 		}
 		case TK_NOT: {
 			a_u32 line = ln_cur(par);
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
-			ai_code_prefix(par, e, OP_NOT, line);
+			ai_code_unary(par, e, OP_NOT, line);
 			break;
 		}
 		case TK_STAR: {
 			a_u32 line = ln_cur(par);
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
-			ai_code_prefix(par, e, OP_UNBOX, line);
+			ai_code_unary(par, e, OP_UNBOX, line);
 			break;
 		}
 		default: {
@@ -274,10 +336,10 @@ static void l_scan_arith_expr(Parser* par, OutExpr e, a_u32 lv) {
 	while ((op = l_scan_arith_op(par)) && prios[op] >= lv) {
 		Expr e2;
 		a_u32 line = ln_cur(par);
-		ai_code_infix(par, e, op, line);
+		ai_code_binary1(par, e, op, line);
 		l_skip(par);
 		l_scan_arith_expr(par, &e2, prios[op] + 1);
-		ai_code_suffix(par, e, &e2, op, line);
+		ai_code_binary2(par, e, &e2, op, line);
 		lv = prios[op];
 	}
 }
@@ -303,15 +365,15 @@ static void l_scan_compare_expr(Parser* par, OutExpr e) {
 
 	l_scan_arith_expr(par, e, 0);
 	op1 = l_scan_compare_op(par);
-	if (op1 == OP__NONE || l_forward(par) == TK_BDOT) return;
+	if (op1 == OP__NONE) return;
 
 	l_skip(par);
 	line1 = ln_cur(par);
-	ai_code_infix(par, e, op1, line1);
+	ai_code_binary1(par, e, op1, line1);
 
 	Expr e2;
 	l_scan_arith_expr(par, &e2, 0);
-	ai_code_suffix(par, e, &e2, op1, line1);
+	ai_code_binary2(par, e, &e2, op1, line1);
 
 	op2 = l_scan_compare_op(par);
 	while (op2 != OP__NONE) {
@@ -319,15 +381,15 @@ static void l_scan_compare_expr(Parser* par, OutExpr e) {
 
 		l_skip(par);
 		line2 = ln_cur(par);
-		ai_code_infix(par, e, OP_AND, line2);
-		ai_code_infix(par, &e2, op2, line2);
+		ai_code_binary1(par, e, OP_AND, line2);
+		ai_code_binary1(par, &e2, op2, line2);
 
 		Expr e3;
 		l_scan_arith_expr(par, &e3, 0);
-		ai_code_suffix(par, &e2, &e3, op2, line2);
+		ai_code_binary2(par, &e2, &e3, op2, line2);
 
 		ai_code_drop(par, &e3);
-		ai_code_suffix(par, e, &e2, OP_AND, line2);
+		ai_code_binary2(par, e, &e2, OP_AND, line2);
 
 		op2 = l_scan_compare_op(par);
 	}
@@ -363,23 +425,39 @@ static void l_scan_relation_expr(Parser* par, OutExpr e) {
 	if (op != OP__NONE) {
 		a_u32 line = ln_cur(par);
 		l_skip(par);
-		ai_code_infix(par, e, op, line);
+		ai_code_binary1(par, e, op, line);
 
 		Expr e2;
 		l_scan_compare_expr(par, &e2);
-		ai_code_suffix(par, e, &e2, op, line);
+		ai_code_binary2(par, e, &e2, op, line);
 		ai_code_drop(par, &e2);
 	}
 }
 
-static void l_scan_conjunctive_expr(Parser* par, OutExpr e) {
+static void l_scan_concatenate_expr(Parser* par, OutExpr e) {
+	a_u32 line1 = ln_cur(par);
 	l_scan_relation_expr(par, e);
+	if (l_test_skip(par, TK_TILDE)) {
+		ConExpr ce = { };
+		ai_code_concat_next(par, &ce, e, line1);
+		do {
+			a_u32 line2 = ln_cur(par);
+			l_scan_relation_expr(par, e);
+			ai_code_concat_next(par, &ce, e, line2);
+		}
+		while (l_test_skip(par, TK_TILDE));
+		ai_code_concat_end(par, &ce, e, line1);
+	}
+}
+
+static void l_scan_conjunctive_expr(Parser* par, OutExpr e) {
+	l_scan_concatenate_expr(par, e);
 	while (l_test(par, TK_BAMP)) {
 		Expr e2;
-		ai_code_infix(par, e, OP_AND, ln_cur(par));
+		ai_code_binary1(par, e, OP_AND, ln_cur(par));
 		l_skip(par);
-		l_scan_relation_expr(par, &e2);
-		ai_code_suffix(par, e, &e2, OP_AND, ln_cur(par));
+		l_scan_concatenate_expr(par, &e2);
+		ai_code_binary2(par, e, &e2, OP_AND, ln_cur(par));
 	}
 }
 
@@ -387,10 +465,10 @@ static void l_scan_disjunctive_expr(Parser* par, OutExpr e) {
 	l_scan_conjunctive_expr(par, e);
 	while (l_test(par, TK_BBAR)) {
 		Expr e2;
-		ai_code_infix(par, e, OP_OR, ln_cur(par));
+		ai_code_binary1(par, e, OP_OR, ln_cur(par));
 		l_skip(par);
 		l_scan_conjunctive_expr(par, &e2);
-		ai_code_suffix(par, e, &e2, OP_OR, ln_cur(par));
+		ai_code_binary2(par, e, &e2, OP_OR, ln_cur(par));
 	}
 }
 
@@ -408,8 +486,7 @@ static void l_scan_ternary_expr(Parser* par, OutExpr e) {
 			a_u32 label2;
 			ai_code_monad(par, e, &label2, OP_OR_ELSE, line);
 
-			l_check(par, TK_COLON, "':'");
-			l_skip(par);
+			l_check_skip(par, TK_COLON);
 
 			Expr e2;
 			ai_code_label(par, label1, line);
@@ -420,6 +497,8 @@ static void l_scan_ternary_expr(Parser* par, OutExpr e) {
 		case TK_ELVIS: {
 			a_u32 line = ln_cur(par);
 			a_u32 label1 = ai_code_testT(par, e, line);
+
+			l_skip(par);
 
 			a_u32 label2;
 			ai_code_monad(par, e, &label2, OP_OR_ELSE, line);
@@ -438,124 +517,97 @@ static void l_scan_expr(Parser* par, OutExpr e) {
 	l_scan_ternary_expr(par, e);
 }
 
+static void l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2) {
+	l_scan_expr(par, e2);
+	while (l_test_skip(par, TK_COMMA)) {
+		ai_code_binary2(par, e1, e2, OP_VA_PUSH, ln_cur(par));
+		l_scan_expr(par, e2);
+		if (l_test_skip(par, TK_TDOT)) {
+			ai_code_unary(par, e2, OP_UNPACK, ln_cur(par));
+			break;
+		}
+	}
+}
+
 typedef struct Lhs Lhs;
 typedef struct LhsNode LhsNode;
 
 struct LhsNode {
 	Expr _expr;
-	a_u32 _line;
 	LhsNode* _last;
 };
 
 struct Lhs {
-	LhsNode _head;
 	LhsNode* _tail;
 	a_u32 _count;
+	LhsNode _head;
 };
 
 static void l_scan_normal_assign_frag(Parser* par, Lhs* lhs) {
-	a_bool lhs_multi = false;
-	a_bool lhs_wrap = false;
-	LhsNode node0 = {};
+	LhsNode n = {};
 
-	if (l_test(par, TK_COMMA)) {
-		l_skip(par);
+	if (l_test_skip(par, TK_COMMA)) {
+		n._last = lhs->_tail;
 
-		a_u32 line = ln_cur(par);
+		lhs->_count += 1;
+		lhs->_tail = &n;
 
-		if (l_test(par, TK_TDOT)) {
-			lhs_multi = true;
-			lhs_wrap = true;
-			l_skip(par);
-		}
-		else {
-			node0._line = ln_cur(par);
-			node0._last = lhs->_tail;
-
-			lhs->_count += 1;
-			lhs->_tail = &node0;
-
-			l_scan_prefixed_expr(par, &node0._expr);
-			return l_scan_normal_assign_frag(par, lhs);
-		}
-	}
-	else if (l_test(par, TK_TDOT)) {
-		lhs_multi = true;
-		l_skip(par);
+		l_scan_prefixed_expr(par, &n._expr);
+		return l_scan_normal_assign_frag(par, lhs);
 	}
 
-	l_check(par, TK_ASSIGN, "'='");
-	a_u32 line0 = ln_cur(par);
-	l_skip(par);
+	lhs->_count += 1;
 
-	Exprs rhs = {};
-	a_bool rhs_multi = false;
+	l_check_skip(par, TK_ASSIGN);
+	a_u32 line = ln_cur(par);
 
-	l_scan_expr(par, &rhs._last);
-	while (l_test(par, TK_COMMA)) {
-		a_u32 line = ln_cur(par);
-		l_skip(par);
+	Expr rhs = {};
+	Expr rhs_last;
 
-		ai_code_multi(par, &rhs, OP_VA_PUSH, line);
-		l_scan_expr(par, &rhs._last);
-	}
-
-	if (l_test(par, TK_TDOT)) {
-		l_skip(par);
-		rhs_multi = true;
-	}
-
-	if (!((lhs->_count >= rhs._count || lhs_multi) && (lhs->_count <= rhs._count || rhs_multi))) {
-		l_error(par, "assign statement argument count mismatch.", lhs->_head._line);
+	l_scan_expr_pack(par, &rhs, &rhs_last);
+	if (!ai_code_balance(par, &rhs, &rhs_last, lhs->_count, line)) {
+		l_error(par, "unbalanced assignment.", line);
 	}
 
 	LhsNode* node = lhs->_tail;
-
-	if (!lhs_multi || lhs_wrap) {
-		ai_code_take(par, &rhs, lhs->_count, OP_VA_FIT, line0);
-	}
-	else {
-		ai_code_take(par, &rhs, lhs->_count, OP_VA_FILL, line0);
-	}
-
 	loop {
-		ai_code_bind(par, &node->_expr, &rhs._last, node->_line);
-		if ((node = node->_last) == null) break;
-		ai_code_multi(par, &rhs, OP_VA_POP, node->_line);
+		ai_code_bind(par, &node->_expr, &rhs_last, line);
+		if ((node = node->_last) == null)
+			return;
+		ai_code_multi(par, &rhs, &rhs_last, OP_VA_POP, line);
 	}
 }
 
 static void l_scan_normal_stat(Parser* par) {
 	Lhs lhs = {};
-	lhs._head._line = ln_cur(par);
 	l_scan_expr(par, &lhs._head._expr);
-	if (l_test(par, TK_COMMA) || l_test(par, TK_ASSIGN)) {
+	if (l_test(par, TK_COMMA) || l_test_skip(par, TK_TDOT) || l_test(par, TK_ASSIGN)) {
 		lhs._tail = &lhs._head;
 		l_scan_normal_assign_frag(par, &lhs);
 	}
+
+	l_test_skip(par, TK_SEMI);
 	ai_code_drop(par, &lhs._head._expr);
 }
 
 static void l_scan_if_stat(Parser* par) {
 	l_skip(par);
 
-	l_check(par, TK_LBK, "'('");
-	a_u32 line1 = ln_cur(par);
-	l_skip(par);
+	l_check_skip(par, TK_LBK);
+	a_u32 line = ln_cur(par);
 
 	Expr ep;
 	l_scan_expr(par, &ep);
-	a_u32 label1 = ai_code_testT(par, &ep, line1);
+	a_u32 label1 = ai_code_testT(par, &ep, line);
 	ai_code_drop(par, &ep);
 
-	l_check_pair_right(par, TK_LBK, "'('", TK_RBK, "')'", line1);
+	l_check_pair_right(par, TK_LBK, TK_RBK, line);
 	l_skip(par);
 
 	l_scan_stat(par);
 
-	if (l_test(par, TK_ELSE)) {
+	if (l_test_skip(par, TK_ELSE)) {
 		a_u32 label2 = ai_code_gotoU(par, NO_LABEL, ln_cur(par));
-		l_skip(par);
 
 		l_sync(par);
 		ai_code_label(par, label1, ln_cur(par));
@@ -568,15 +620,147 @@ static void l_scan_if_stat(Parser* par) {
 	}
 }
 
-static void l_scan_let_stat(Parser* par) {
+static void l_scan_while_stat(Parser* par) {
 	l_skip(par);
-	//TODO
+
+	l_check_skip(par, TK_LBK);
+	a_u32 line = ln_cur(par);
+
+	a_u32 label1 = ai_code_label(par, NO_LABEL, line);
+
+	Expr ep;
+	l_scan_expr(par, &ep);
+	a_u32 label2 = ai_code_testT(par, &ep, line);
+	ai_code_drop(par, &ep);
+
+	l_check_pair_right(par, TK_LBK, TK_RBK, line);
+	l_skip(par);
+
+	l_scan_stat(par);
+	ai_code_gotoD(par, label1, ln_cur(par));
+
+	ai_code_label(par, label2, ln_cur(par));
+
+	if (l_test_skip(par, TK_ELSE)) {
+		l_sync(par);
+		l_scan_stat(par);
+	}
+}
+
+static void l_scan_return_stat(Parser* par) {
+	a_u32 line = ln_cur(par);
+
+	l_skip(par);
+
+	Expr e = {};
+
+	if (!l_test_sep(par)) {
+		Expr e2 = {};
+		l_scan_expr_pack(par, &e, &e2);
+		ai_code_binary2(par, &e, &e2, OP_VA_PUSH, line);
+	}
+
+	l_test_skip(par, TK_SEMI);
+	ai_code_unary(par, &e, OP_RETURN, line);
+}
+
+static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
+	Expr e0 = {}, e;
+
+	l_scan_expr(par, &e);
+	while (ai_code_let_bind(par, stat, &e)) {
+		if (!l_test_skip(par, TK_COMMA)) {
+			ai_code_let_nils(par, stat, line);
+			return;
+		}
+		l_scan_expr(par, &e);
+		if (l_test_skip(par, TK_TDOT)) {
+			ai_code_unary(par, &e, OP_UNPACK, ln_cur(par));
+			if (!ai_code_balance(par, &e0, &e, stat->_count - stat->_index, line)) {
+				l_error(par, "unbalanced binding.", line);
+			}
+			while (ai_code_let_bind(par, stat, &e)) {
+				ai_code_multi(par, &e0, &e, OP_VA_POP, line);
+			}
+			return;
+		}
+	}
+
+	while (l_test_skip(par, TK_COMMA)) {
+		l_scan_expr(par, &e);
+		ai_code_drop(par, &e);
+		if (l_test_skip(par, TK_TDOT))
+			break;
+	}
+}
+
+static void l_scan_let_stat(Parser* par) {
+	a_u32 line = ln_cur(par);
+	l_skip(par);
+
+	switch (l_peek(par)) {
+		case TK_CASE: {
+			//TODO
+			break;
+		}
+		case TK_FN: {
+			//TODO
+			break;
+		}
+		default: {
+			LetStat stat;
+			ai_code_let_init(par, &stat);
+
+			GStr* name = l_check_ident(par);
+			ai_code_let_push(par, &stat, name);
+
+			while (l_test_skip(par, TK_COMMA)) {
+				name = l_check_ident(par);
+				ai_code_let_push(par, &stat, name);
+			}
+
+			if (l_test_skip(par, TK_ASSIGN)) {
+				l_scan_let_rhs(par, &stat, line);
+			}
+			else {
+				ai_code_let_nils(par, &stat, line);
+			}
+			break;
+		}
+	}
+}
+
+static void l_scan_stat_pack(Parser* par) {
+	Scope scope;
+
+	a_u32 line = ln_cur(par);
+	l_skip(par);
+	ai_code_enter(par, &scope);
+
+	l_scan_stat_seq(par);
+
+	ai_code_leave(par);
+
+	l_check_pair_right(par, TK_LBR, TK_RBR, line);
 }
 
 static void l_scan_stat(Parser* par) {
+	assume(par->_scope->_top_ntr == par->_scope->_top_reg, "compute stack leaked.");
 	switch (l_peek(par)) {
 		case TK_IF: {
 			l_scan_if_stat(par);
+			break;
+		}
+		case TK_RETURN: {
+			l_scan_return_stat(par);
+			break;
+		}
+		case TK_WHILE: {
+			l_scan_while_stat(par);
+			break;
+		}
+		case TK_LBR: {
+			l_scan_stat_pack(par);
 			break;
 		}
 		default: {
@@ -589,15 +773,27 @@ static void l_scan_stat(Parser* par) {
 static void l_scan_stat_seq(Parser* par) {
 	loop {
 		switch (l_peek(par)) {
-			case TK_RBK:
+			case TK_RBR:
 			case TK_EOF:
 				return;
+			case TK_SEMI: {
+				l_skip(par);
+				break;
+			}
 			case TK_LET: {
 				l_scan_let_stat(par);
 				break;
 			}
+			case TK_RETURN: {
+				l_scan_return_stat(par);
+				break;
+			}
 			case TK_IF: {
 				l_scan_if_stat(par);
+				break;
+			}
+			case TK_WHILE: {
+				l_scan_while_stat(par);
 				break;
 			}
 			default: {
@@ -608,17 +804,20 @@ static void l_scan_stat_seq(Parser* par) {
 	}
 }
 
-static GFunMeta* l_scan_function(Parser* par, a_bool root) {
-	FnScope scope;
-	ai_code_prologue(par, &scope);
-	l_scan_stat_seq(par);
-	return ai_code_epilogue(par, root);
-}
-
 static void l_scan_root(unused a_henv env, void* ctx) {
+	FnScope scope;
+
 	Parser* par = ctx;
 	ai_code_open(par);
-	l_scan_function(par, true);
+
+	ai_code_prologue(par, &scope);
+	l_scan_stat_seq(par);
+
+	if (!l_test_skip(par, TK_EOF)) {
+		l_error(par, "bad statement.", ln_cur(par));
+	}
+
+	ai_code_epilogue(par, true, ln_cur(par));
 }
 
 a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* fname, a_u32 options, GFun** pfun) {

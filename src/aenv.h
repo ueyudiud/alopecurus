@@ -5,6 +5,8 @@
 #ifndef aenv_h_
 #define aenv_h_
 
+#include <stdatomic.h>
+
 #include "astr.h"
 
 #ifndef ALOI_DFL_GCSTEPMUL
@@ -103,8 +105,8 @@ typedef void (*a_fp_gsplash)(Global* g, void* ctx);
 struct Global {
 	Alloc _af;
 	void* _ac;
-	a_kfun _erf;
-	a_kctx _erc;
+	a_kfun _hookf;
+	a_kctx _hookc;
 	a_henv _active;
 	a_usize _mem_base;
 	a_isize _mem_debt;
@@ -128,7 +130,10 @@ struct Global {
 	a_u16 _flags;
 	a_u8 _white_color;
 	a_u8 _gcstep;
+	volatile atomic_uint_fast8_t _hookm;
 };
+
+#define ALO_HMSWAP 0x80
 
 inline void ai_env_gsplash(a_henv env, a_fp_gsplash fun, void* ctx) {
 	assume(fun != null);

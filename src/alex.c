@@ -5,11 +5,13 @@
 #define alex_c_
 
 #include <math.h>
+#include <stdio.h>
 
 #include "aenv.h"
 #include "aerr.h"
 #include "acode.h"
 #include "astrx.h"
+#include "afmt.h"
 
 #include "alex.h"
 
@@ -95,7 +97,7 @@ static a_bool c_isibody(a_i32 ch) {
 }
 
 inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
-    ai_buf_put(lex->_in._env, &lex->_buf, ch, SIZE_MAX);
+    ai_buf_put(lex->_in._env, &lex->_buf, ch);
 	return ALO_SOK;
 }
 
@@ -111,105 +113,89 @@ static void l_bput(Lexer* lex, a_i32 ch) {
 	}
 }
 
-#define NONODE u32c(-1)
-
-static void strs_drop(Strs* strs, StrNode* node, a_u32* head) {
-    a_u32 prev = node->_prev;
-    a_u32 next = node->_next;
-    if (prev != NONODE) {
-        strs->_table[prev]._next = next;
+static void strs_strip_free(Strs* strs, StrNode* node) {
+    a_x32 prev = node->_prev;
+    a_x32 next = node->_next;
+    if (!is_nil(prev)) {
+		strs->_table[unwrap(prev)]._next = next;
     }
     else {
-        *head = next;
+        strs->_hfree = next;
     }
-    if (next != NONODE) {
-        strs->_table[next]._prev = prev;
+    if (!is_nil(next)) {
+        strs->_table[unwrap(next)]._prev = prev;
     }
 }
 
-static a_usize strs_next(Strs* strs) {
-    a_usize i = strs->_hfree;
-    StrNode* node = &strs->_table[i];
-    strs->_hfree = node->_next;
-    strs->_table[node->_next]._prev = NONODE;
-    return i;
+static a_x32 strs_next_free(Strs* strs) {
+    a_x32 head = strs->_hfree;
+    StrNode* node = &strs->_table[unwrap(head)];
+	a_x32 next = node->_next;
+    strs->_hfree = next;
+	if (!is_nil(next)) {
+		strs->_table[unwrap(next)]._prev = nil;
+	}
+    return head;
 }
 
 static void strs_add(Strs* strs, GStr* str) {
-    assume(strs->_hfree <= strs->_hmask);
-    a_usize index = cast(a_usize, str->_hash & strs->_hmask);
+    assume(is_nil(strs->_hfree) || unwrap(strs->_hfree) <= strs->_hmask);
+    a_u32 index = str->_hash & strs->_hmask;
     StrNode* node = &strs->_table[index];
     if (node->_str == null) {
-        strs_drop(strs, node, &strs->_hfree);
-        *node = new(StrNode) { str, NONODE, NONODE };
+		strs_strip_free(strs, node);
+        *node = new(StrNode) {str, nil, nil };
     }
     else {
-        a_usize index2 = strs_next(strs);
-        StrNode* node2 = &strs->_table[index2];
+        a_x32 index2 = strs_next_free(strs);
+        StrNode* node2 = &strs->_table[unwrap(index2)];
         if ((node->_str->_hash & strs->_hmask) == index) {
-            *node2 = new(StrNode) { str, index, node->_next };
+            *node2 = new(StrNode) {str, wrap(index), node->_next };
             node->_next = index2;
         }
         else {
             *node2 = new(StrNode) { node->_str, node->_prev, node->_next };
-            *node = new(StrNode) { str, NONODE, NONODE };
+            *node = new(StrNode) {str, nil, nil };
         }
     }
 }
 
 static void strs_grow(a_henv env, Strs* strs) {
-    assume(strs->_hfree == strs->_hmask + 1);
-    a_usize old_cap = strs->_hfree;
+    assume(is_nil(strs->_hfree));
+    a_usize old_cap = strs->_hmask + 1;
     a_usize new_cap = old_cap * 2;
     StrNode* old_table = strs->_table;
-    StrNode* new_table = ai_mem_vnew(env, StrNode, new_cap);
+    StrNode* new_table = ai_mem_vnew(env, StrNode, new_cap) - 1;
 
     strs->_hmask = new_cap - 1;
-    strs->_hfree = 0;
+    strs->_hfree = x32c(1);
     strs->_table = new_table;
 
-    for (a_usize i = 0; i < new_cap - 1; ++i) {
-        new_table[i] = new(StrNode) { null, i - 1, i + 1 };
+    for (a_usize i = 1; i <= new_cap; ++i) {
+        new_table[i] = new(StrNode) {null, wrap(i - 1), wrap(i + 1) };
     }
-    new_table[new_cap - 1] = new(StrNode) { null, new_cap - 2, NONODE };
+    new_table[new_cap - 1]._next = nil;
 
-    for (a_usize i = 0; i < old_cap; ++i) {
+    for (a_usize i = 1; i <= old_cap; ++i) {
         GStr* str = old_table[i]._str;
         if (str != null) {
             strs_add(strs, str);
         }
     }
 
-    ai_mem_vdel(G(env), old_table, old_cap);
+	ai_mem_vdel(G(env), old_table + 1, old_cap);
+}
+
+static void strs_close(a_henv env, Strs* strs) {
+	if (strs->_table != null) {
+		ai_mem_vdel(G(env), strs->_table + 1, strs->_hmask + 1);
+	}
 }
 
 static GStr* l_tostr(Lexer* lex) {
-    a_henv env = lex->_in._env;
-    Strs* strs = &lex->_strs;
     Buf* buf = &lex->_buf;
-    a_hash hash = ai_str_hashof(G(env)->_seed, buf->_arr, buf->_len);
-    StrNode* node = &strs->_table[strs->_hmask];
-	if (node->_str != null) {
-		loop {
-			if (node->_str->_hash == hash && ai_str_requals(node->_str, buf->_arr, buf->_len)) {
-				lex->_buf._len = 0;
-				return node->_str;
-			}
-			else if (node->_next == 0)
-				break;
-			node = &strs->_table[node->_next];
-		}
-	}
-
-    if (strs->_nstr == strs->_hmask) {
-        strs_grow(env, strs);
-    }
-
-    GStr* str = ai_str_create(env, buf->_arr, buf->_len);
-    strs_add(strs, str);
-    strs->_nstr += 1;
-
-    lex->_buf._len = 0;
+    GStr* str = ai_lex_tostr(lex, buf->_arr, buf->_len);
+	ai_buf_reset(&lex->_buf);
     return str;
 }
 
@@ -225,13 +211,18 @@ void ai_lex_init(Lexer* lex, char const* fname) {
 		_up: null
 	};
     lex->_strs = new(Strs) {
-        _table: ai_mem_vnew(lex->_in._env, StrNode, STRS_INIT_CAP),
+        _table: ai_mem_vnew(lex->_in._env, StrNode, STRS_INIT_CAP) - 1,
         _hmask: STRS_INIT_CAP - 1,
-        _hfree: 0,
+        _hfree: x32c(1),
         _nstr: 0
     };
-	memclr(lex->_strs._table, STRS_INIT_CAP * sizeof(StrNode));
+	memclr(lex->_strs._table + 1, STRS_INIT_CAP * sizeof(StrNode));
     l_pollx(lex);
+}
+
+void ai_lex_close(Lexer* lex) {
+	strs_close(lex->_in._env, &lex->_strs);
+	ai_buf_close(G(lex->_in._env), &lex->_buf);
 }
 
 a_none ai_lex_error_(Lexer* lex, char const* fmt, ...) {
@@ -243,10 +234,85 @@ a_none ai_lex_error_(Lexer* lex, char const* fmt, ...) {
     va_end(varg);
 }
 
+char const* ai_lex_tagname(a_i32 tag) {
+	switch (tag) {
+#define CASE_KW(id,repr) case TK_##id: return strx_raw_kw(id);
+		KEYWORD_LIST(CASE_KW)
+#undef CASE_KW
+#define CASE_OP(id,repr) case TK_##id: return "'"repr"'";
+		OPERATOR_LIST(CASE_OP)
+#undef CASE_OP
+		case TK_EOF: return "<eof>";
+		case TK_INTEGER: return "<integer>";
+		case TK_FLOAT: return "<float>";
+		case TK_STRING: return "<string>";
+		case TK_TSTRING: return "<tstring>";
+		default: unreachable();
+	}
+}
+
+char const* ai_lex_tkrepr(Token* tk, a_tksbuf buf) {
+    switch (tk->_tag) {
+		case TK_IDENT: {
+			return cast(char const*, tk->_str->_data);
+		}
+		case TK_INTEGER: {
+			a_usize len = ai_fmt_i2s(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_int);
+			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
+		}
+		case TK_FLOAT: {
+			a_usize len = ai_fmt_f2s(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_float);
+			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
+		}
+		case TK_STRING: {
+			GStr* str = tk->_str;
+			char* src = cast(char*, buf);
+			if (str->_len > 16) { /* Hidden string content if it is too long. */
+				sprintf(src, "<string with %u bytes>", str->_len);
+			}
+			else {
+				sprintf(src, "\"%s\"", str->_data);
+			}
+			return src;
+		}
+		default: {
+			return ai_lex_tagname(tk->_tag);
+		}
+	}
+}
+
+GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len) {
+	a_henv env = lex->_in._env;
+	Strs* strs = &lex->_strs;
+	a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
+
+	StrNode* node = &strs->_table[hash & strs->_hmask];
+	if (node->_str != null) {
+		loop {
+			if (node->_str->_hash == hash && ai_str_requals(node->_str, src, len)) {
+				lex->_buf._len = 0;
+				return node->_str;
+			}
+			else if (is_nil(node->_next))
+				break;
+			node = &strs->_table[unwrap(node->_next)];
+		}
+	}
+
+	if (strs->_nstr == strs->_hmask) {
+		strs_grow(env, strs);
+	}
+
+	GStr* str = ai_str_create(env, src, len);
+	strs_add(strs, str);
+	strs->_nstr += 1;
+	return str;
+}
+
 static a_i32 l_skip_line(Lexer* lex) {
     loop {
 		switch (l_pollx(lex)) {
-			case ALO_ESTKOF:
+			case ALO_ESTMUF:
 				return TK_EOF;
 			case ALO_EOUTER:
 				return ALO_EOUTER;
@@ -297,6 +363,7 @@ static a_float l_10pow(a_i32 i) {
         if (n & m) {
             f *= table[l];
         }
+		m <<= 1;
         l += 1;
     }
     return neg ? 1.0 / f : f;
@@ -343,7 +410,8 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 j = c_ddigit(ch);
                 if (j > 0) {
                     e = 0;
-                    goto float_frag;
+					n = 0;
+                    goto float_frag_base;
                 }
                 else if (j == 0) {
                     eb = 1;
@@ -356,7 +424,10 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                         eb += 1;
                     }
                     j = c_ddigit(ch);
-                    if (j >= 0) goto float_frag;
+                    if (j >= 0) {
+						n = 0;
+						goto float_frag;
+					}
                     tk->_float = 0.0;
                     return TK_FLOAT;
                 }
@@ -461,7 +532,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     i = t + j;
                 });
                 check_gap();
-                tk->_int = i;
+                tk->_int = cast(a_int, i);
                 return TK_INTEGER;
             }
             default: {
@@ -489,7 +560,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     n = cast(a_u64, i);
                     ch = l_peekx(lex);
                     j = c_ddigit(ch);
-                    if (j >= 0) goto float_frag;
+                    if (j >= 0) goto float_frag_base;
                     l_unwind(lex, '.');
                 }
                 else {
@@ -513,7 +584,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     n = cast(a_u64, cast(a_i64, i));
                     ch = l_peekx(lex);
                     j = c_ddigit(ch);
-                    if (j >= 0) goto float_frag;
+                    if (j >= 0) goto float_frag_base;
                     l_unwind(lex, '.');
                 }
                 else {
@@ -537,7 +608,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     n = cast(a_u64, -cast(a_i64, i));
                     ch = l_peekx(lex);
                     j = c_ddigit(ch);
-                    if (j >= 0) goto float_frag;
+                    if (j >= 0) goto float_frag_base;
                     l_unwind(lex, '.');
                 }
                 else {
@@ -560,7 +631,9 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 j = c_ddigit(ch);
                 if (unlikely(j < 0))
                     goto error_overflow;
-                eb = 0;
+
+			float_frag_base:
+                eb = -1; /* For first digit. */
 
             float_frag: /* Fragment part. */
                 l_skip(lex);
@@ -864,7 +937,7 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 	}
 	else {
 		while (!l_testskip(lex, '\'')) {
-			switch (l_poll(lex)) {
+			switch (l_peekx(lex)) {
 				case ALO_ESTMUF:
 				case '\r':
 				case '\n':
@@ -994,6 +1067,9 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
 			case ',': {
 				return TK_COMMA;
 			}
+			case ';': {
+				return TK_SEMI;
+			}
             case '.': {
                 if (l_testskip(lex, '.')) {
                     if (l_testskip(lex, '.')) {
@@ -1044,9 +1120,9 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
                 return TK_ASSIGN;
             }
             case '!': {
-                if (l_testskip(lex, '=')) {
-                    return TK_NE;
-                }
+				if (l_testskip(lex, '=')) {
+					return TK_NE;
+				}
                 return TK_NOT;
             }
             case '<': {

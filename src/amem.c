@@ -34,8 +34,8 @@ void* ai_mem_realloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new) 
 }
 
 void ai_mem_dealloc(Global* g, void* blk, a_usize sz) {
-	if (blk != null) {
-		assume(sz > 0);
+	if (sz > 0) {
+		assume(blk != null);
 		ai_mem_xdealloc(g, blk, sz);
 	}
 }
@@ -49,7 +49,6 @@ void* ai_mem_xalloc(a_henv env, a_usize sz) {
 
 void* ai_mem_xrealloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new) {
 	if (sz_old == 0) {
-		assume(blk_old == null);
 		return ai_mem_xalloc(env, sz_new);
 	}
 	else {

@@ -17,9 +17,9 @@ struct GTable {
 	a_u32 _len;
 	a_u32 _hmask; /* Hash mask. */
 	TNode* _data; /* Biased data pointer. */
-	a_u32 _lhead; /* Head node of linked list. */
-	a_u32 _ltail; /* Tail node of linked list. */
-	a_u32 _hfree; /* Last hash free slot. */
+	a_x32 _lhead; /* Head node of linked list. */
+	a_x32 _ltail; /* Tail node of linked list. */
+	a_x32 _hfree; /* Last hash free slot. */
 };
 
 /**
@@ -29,9 +29,9 @@ struct TNode {
 	Value _value;
 	Value _key;
 	a_hash _hash;
-	a_i32 _hnext;
-	a_i32 _lprev;
-	a_i32 _lnext;
+	a_x32 _hnext;
+	a_x32 _lprev;
+	a_x32 _lnext;
 };
 
 intern GTable* ai_table_new(a_henv env);

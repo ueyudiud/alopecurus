@@ -32,6 +32,36 @@ a_msg alo_init(void) {
 	return ai_ctx_init();
 }
 
+static a_bool l_disable_hook(Global* g) {
+	uint_fast8_t mask = g->_hookm;
+	if ((mask & ALO_HMSWAP) != 0)
+		return false;
+	return atomic_compare_exchange_weak(&g->_hookm, &mask, ALO_HMSWAP);
+}
+
+/**
+ ** Set hook for VM. This function is thread safe.
+ *@param env the runtime environment.
+ *@param kf the hook function.
+ *@param kc the hook context.
+ *@param mask the hook mask.
+ */
+void alo_sethook(a_henv env, a_kfun kf, a_kctx kc, a_u32 mask) {
+	Global* g = G(env);
+
+	/* Make sure null safe. */
+	if (kf == null || mask == 0) {
+		kf = null;
+		mask = 0;
+	}
+
+	while (!l_disable_hook(g));
+
+	g->_hookf = kf;
+	g->_hookc = kc;
+	g->_hookm = mask;
+}
+
 /**
  ** Get VM stack size.
  *@param env the runtime environment.
@@ -88,8 +118,8 @@ static Value const* to_roslot(a_henv env, ptrdiff_t id) {
 }
 
 static Value const* to_rdslot(a_henv env, ptrdiff_t id) {
-	static Value const nil = v_of_nil();
-	return to_roslot(env, id) ?: &nil;
+	static Value const v_nil = v_of_nil();
+	return to_roslot(env, id) ?: &v_nil;
 }
 
 static Value* to_wrslot(a_henv env, ptrdiff_t id) {
@@ -396,6 +426,10 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx, char const* name, unsigned 
 	a_msg msg = ai_parse(env, fun, ctx, name, options, &out);
 	if (likely(msg == ALO_SOK)) {
 		v_set(G(env), api_incr_stack(env), v_of_ref(out));
+	}
+	else {
+		v_set(G(env), api_incr_stack(env), env->_error);
+		v_setx(&env->_error, v_of_nil());
 	}
 	return msg;
 }

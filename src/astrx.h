@@ -36,4 +36,18 @@ enum {
 
 intern void ai_strx_open(a_henv env, void* blk, GStr** dst);
 
+enum {
+#define KWPOS(id,name) STRX_POS_KW_##id, STRX_EPOS_KW_##id = STRX_POS_KW_##id + sizeof(name) - 1,
+	KEYWORD_LIST(KWPOS)
+#undef KWPOS
+	STRX_POS__MAX,
+
+	STRX__DUMMY = INTPTR_MAX /* Pad enumeration to a_isize type. */
+};
+
+intern char const ai_strx_table[STRX_POS__MAX];
+
+#define strx_raw(p) (&ai_strx_table[p])
+#define strx_raw_kw(id) strx_raw(STRX_POS_KW_##id)
+
 #endif /* astrx_h_ */

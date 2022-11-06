@@ -172,8 +172,9 @@ endif
 ACTX_C= actx/x64.w64.win.c
 
 CORE_O= aaux.o aapi.o adump.o acode.o aparse.o alex.o adbg.o \
-aerr.o aload.o asave.o avm.o astrx.o aop.o agc.o amem.o aenv.o \
-afun.o atable.o alist.o atuple.o astr.o abuf.o aio.o actx.o
+aerr.o aload.o asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o \
+aenv.o afun.o atable.o alist.o atuple.o astr.o abuf.o aio.o \
+actx.o
 
 ALO_O= alo.o
 

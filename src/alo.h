@@ -35,9 +35,14 @@ typedef size_t a_flags;
 #define ALO_ENOMEM ((a_msg) -3) /* Out of Memory */
 #define ALO_EINVAL ((a_msg) -2) /* Invalid Argument */
 #define ALO_ESTMUF ((a_msg) -1) /* Stream Underflow */
+
 #define ALO_SOK ((a_msg) 0)
 #define ALO_SYIELD ((a_msg) 1) /* Route is Yield */
 #define ALO_SDEAD ((a_msg) 2) /* Route is Dead */
+
+/* Hook masks. */
+#define ALO_HMNONE  0x0000
+#define ALO_HMRAISE 0x0001 /* Raise Error */
 
 typedef int a_bool;
 
@@ -68,6 +73,7 @@ typedef ptrdiff_t (*a_ifun)(a_henv env, void* ctx, void const** pdst, size_t* pl
 ALO_EXPORT a_msg (alo_init)(void);
 ALO_EXPORT a_msg (alo_create)(a_alloc const* af, void* ac, a_henv* penv);
 ALO_EXPORT void (alo_destroy)(a_henv env);
+ALO_EXPORT void (alo_sethook)(a_henv env, a_kfun kf, a_kctx kc, unsigned int mask);
 
 ALO_EXPORT size_t (alo_stacksize)(a_henv env);
 ALO_EXPORT a_bool (alo_ensure)(a_henv env, size_t n);

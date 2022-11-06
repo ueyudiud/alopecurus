@@ -47,7 +47,10 @@ static void dump_const(a_henv env, Value const* v) {
 			}
 			break;
 		}
-		default: unreachable();
+		default: {
+			printf("%g", v_as_float(v));
+			break;
+		}
 	}
 }
 
@@ -68,14 +71,18 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 		a_u32 n = cast(a_u32, p - meta->_insns);
 		printf("\t%5u %5s ", n, g_names[op]);
 		switch (op) {
-			case BC_NOP:
-			case BC_RET0: {
+			case BC_NOP: {
 				printf("   _    _    _\n");
 				break;
 			}
 			case BC_KF:
 			case BC_KT: {
 				printf("%4u    _    _\n", bc_load_a(i));
+				break;
+			}
+			case BC_BNZ:
+			case BC_BZ: {
+				printf("   _ %4u    _\n", bc_load_b(i));
 				break;
 			}
 			case BC_MOV:
@@ -87,8 +94,9 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 				printf("%4u %4u    _\n", bc_load_a(i), bc_load_b(i));
 				break;
 			}
-			case BC_BNZ:
-			case BC_BZ:
+			case BC_TLT:
+			case BC_TLE:
+			case BC_TNEW:
 			case BC_GET:
 			case BC_SET:
 			case BC_ADD:
@@ -102,7 +110,8 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 			case BC_BOR:
 			case BC_BXOR:
 			case BC_UNBOX:
-			case BC_CALL: {
+			case BC_CALL:
+			case BC_CAT: {
 				printf("%4u %4u %4u\n", bc_load_a(i), bc_load_b(i), bc_load_c(i));
 				break;
 			}
@@ -115,6 +124,10 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 				printf("\n");
 				break;
 			}
+			case BC_TLTI:
+			case BC_TLEI:
+			case BC_TGTI:
+			case BC_TGEI:
 			case BC_GETI:
 			case BC_SETI:
 			case BC_ADDI:
@@ -130,12 +143,17 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 				printf("%4u %4u %4d\n", bc_load_a(i), bc_load_b(i), bc_load_sc(i));
 				break;
 			}
-			case BC_RETN: {
+			case BC_BLT:
+			case BC_BLE:
+			case BC_RET: {
 				printf("   _ %4u %4u\n", bc_load_b(i), bc_load_c(i));
 				break;
 			}
-			case BC_RETV: {
-				printf("   _ %4u    _\n", bc_load_b(i));
+			case BC_BLTI:
+			case BC_BLEI:
+			case BC_BGTI:
+			case BC_BGEI: {
+				printf("   _ %4u %4d\n", bc_load_b(i), bc_load_sc(i));
 				break;
 			}
 			case BC_K: {
@@ -146,7 +164,7 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 				break;
 			}
 			case BC_KN: {
-				printf("%4u    _ %4u\n", bc_load_a(i), bc_load_sbx(op));
+				printf("%4u    _ %4u\n", bc_load_a(i), bc_load_c(i));
 				break;
 			}
 			case BC_KI: {

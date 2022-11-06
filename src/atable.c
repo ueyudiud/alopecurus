@@ -17,15 +17,15 @@
 # define ALOI_TABLE_LOAD_FACTOR 0.75
 #endif
 
-#define NONODE i32c(0)
+#define NO_STR_NODE i32c(0)
 
 GTable* ai_table_new(a_henv env) {
     GTable* self = ai_mem_alloc(env, sizeof(GTable));
     self->_len = 0;
     self->_hmask = 0;
     self->_data = null;
-    self->_lhead = self->_ltail = 0;
-    self->_hfree = 0;
+    self->_lhead = self->_ltail = nil;
+    self->_hfree = nil;
     self->_meta = &G(env)->_metas._table;
     return self;
 }
@@ -44,42 +44,21 @@ static void tnode_emplace_entry(a_henv env, TNode* node, Value key, a_hash hash,
  ** Move entry and linked list part data, the hash part data will be ignored.
  **
  *@param env the runtime environment.
+ *@param self the table.
  *@param noded the destination node.
  *@param nodes the source node.
  */
 static void tnode_move(a_henv env, TNode* noded, TNode* nodes) {
     tnode_emplace_entry(env, noded, nodes->_key, nodes->_hash, nodes->_value);
-    a_isize diff = noded - nodes;
-    a_isize lprev = nodes->_lprev;
-    if (lprev != NONODE) {
-        TNode* nodep = nodes + lprev;
-        noded->_lprev = nodes->_lprev + diff;
-        nodep->_lnext -= diff;
-    }
-    else {
-        noded->_lprev = NONODE;
-    }
-    a_isize lnext = nodes->_lnext;
-    if (lnext != NONODE) {
-        TNode* noden = nodes + lnext;
-        noded->_lnext = nodes->_lnext + diff;
-        noden->_lnext -= diff;
-    }
-    else {
-        noded->_lnext = NONODE;
-    }
+	noded->_lnext = nodes->_lnext;
+	noded->_lprev = nodes->_lprev;
 }
 
-static TNode* table_next_free(GTable* self) {
-    a_usize index = self->_hfree;
-    loop {
-        assume(index <= self->_hmask);
-        TNode* node = &self->_data[index ++];
-        if (v_is_dead_key(&node->_key)) {
-            self->_hfree = index;
-            return node;
-        }
-    }
+static a_u32 table_pop_free(GTable* self) {
+    a_u32 index = unwrap(self->_hfree);
+	TNode* node = &self->_data[index];
+	self->_hfree = node->_lnext;
+	return index;
 }
 
 /**
@@ -89,41 +68,36 @@ static TNode* table_next_free(GTable* self) {
  *@param self the table.
  *@param node the node to be linked.
  */
-static void table_link_after(GTable* self, TNode* node) {
-    a_usize index = node - self->_data;
+static void table_link_tail(GTable* self, a_u32 index, TNode* node) {
+	assume(&self->_data[index] == node);
     if (self->_len > 0) {
-        TNode* nodet = &self->_data[self->_ltail];
-        nodet->_lnext = node - nodet;
-        node->_lprev = nodet - node;
+        TNode* nodet = &self->_data[unwrap(self->_ltail)];
+		node->_lprev = self->_ltail;
+        nodet->_lnext = wrap(index);
     }
     else {
-        node->_lprev = NONODE;
-        self->_lhead = index;
+        node->_lprev = nil;
+        self->_lhead = wrap(index);
     }
-    node->_lnext = NONODE;
-    self->_ltail = index;
+    node->_lnext = nil;
+    self->_ltail = wrap(index);
 }
 
 static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
-    TNode* nodeh = &self->_data[hash & self->_hmask];
+	a_u32 indexh = hash & self->_hmask;
+    TNode* nodeh = &self->_data[indexh];
     if (tnode_is_hhead(self, nodeh, hash)) {
         /* Insert into hash list. */
-        TNode* nodet = table_next_free(self);
-        a_isize hnext = nodeh->_hnext;
+		a_u32 indext = table_pop_free(self);
+        TNode* nodet = &self->_data[indext];
         /*                       v
          * h -> n -> ... => h -> t -> n -> ...
          *           v
          * h => h -> t
          */
-        if (hnext != NONODE) {
-            TNode* noden = nodeh + hnext;
-            nodet->_hnext = noden - nodet;
-        }
-        else {
-            nodet->_hnext = NONODE;
-        }
-        nodeh->_hnext = nodet - nodeh;
-        table_link_after(self, nodet);
+		nodeh->_hnext = wrap(indext);
+		nodet->_hnext = nodeh->_hnext;
+		table_link_tail(self, indext, nodet);
     }
     else if (v_is_dead_key(&nodeh->_key)) {
         /* Emplace locally. */
@@ -131,19 +105,20 @@ static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Valu
          * nil => h
          */
         tnode_emplace_entry(env, nodeh, key, hash, value);
-        nodeh->_hnext = NONODE;
-        table_link_after(self, nodeh);
+        nodeh->_hnext = nil;
+		table_link_tail(self, indexh, nodeh);
     }
     else {
         /* Move emplaced entry to other node. */
         /*                    v
          * ... -> h -> ... => h; ... -> f -> ...
          */
-        TNode* nodef = table_next_free(self);
+		a_u32 indexf = table_pop_free(self);
+        TNode* nodef = &self->_data[indexf];
         tnode_move(env, nodef, nodeh);
         tnode_emplace_entry(env, nodef, key, hash, value);
-        nodeh->_hnext = NONODE;
-        table_link_after(self, nodeh);
+        nodeh->_hnext = nil;
+		table_link_tail(self, indexh, nodeh);
     }
 }
 
@@ -155,27 +130,27 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
         a_usize new_cap = new_hmask + 1;
         assume(expect <= new_cap);
         
-        TNode* old_nodes = ai_mem_vnew(env, TNode, new_cap);
-        TNode* new_nodes = self->_data;
+        TNode* old_nodes = self->_data;
+        TNode* new_nodes = ai_mem_vnew(env, TNode, new_cap);
         self->_data = new_nodes;
         self->_hmask = new_hmask;
-        self->_hfree = 0;
+        self->_hfree = nil;
 
-        for (a_usize i = 0; i < new_cap; ++i) {
-            v_setx(&new_nodes[i]._key, v_of_dead_key());
+        for (a_u32 i = 1; i <= new_cap; ++i) {
+			TNode* node = &new_nodes[i];
+            v_setx(&node->_key, v_of_dead_key());
+			node->_lprev = wrap(i - 1);
+			node->_lnext = wrap(i + 1);
         }
+		new_nodes[new_cap - 1]._lnext = nil;
 
-        if (self->_len > 0) {
-            TNode* node = &self->_data[self->_lhead];
-            loop {
-                table_emplace(env, self, node->_key, node->_hash, node->_value);
-                a_i32 diff = node->_lnext;
-                if (diff == NONODE) break;
-                node += cast(a_isize, diff);
-            }
-        }
+		TNode* node;
+		for (a_x32 i = self->_lhead; !is_nil(i); i = node->_lnext) {
+			node = &self->_data[unwrap(i)];
+			table_emplace(env, self, node->_key, node->_hash, node->_value);
+		}
 
-        ai_mem_vdel(G(env), old_nodes, old_cap);
+        ai_mem_vdel(G(env), old_nodes + 1, old_cap);
     }
 }
 
@@ -201,8 +176,9 @@ static TNode* hfindro(a_henv env, GTable* self, a_hash hash, Pred pred, void con
         loop {
             if (node->_hash == hash && (*pred)(env, ctx, &node->_key))
                 return node;
-            if (node->_hnext == 0) break;
-            node += node->_hnext;
+            if (is_nil(node->_hnext))
+				break;
+            node = &self->_data[unwrap(node->_hnext)];
         }
     }
     return null;
@@ -232,6 +208,8 @@ void ai_table_splash(Global* g, GTable* self) {
 }
 
 void ai_table_destruct(Global* g, GTable* self) {
-    ai_mem_vdel(g, self->_data, self->_hmask + 1);
+	if (self->_data != null) {
+		ai_mem_vdel(g, self->_data - 1, self->_hmask + 1);
+	}
     ai_mem_dealloc(g, self, sizeof(GTable));
 }
