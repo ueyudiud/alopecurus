@@ -5,7 +5,7 @@
 #ifndef agc_h_
 #define agc_h_
 
-#include "aenv.h"
+#include "agbl.h"
 
 typedef struct {
 	a_gclist _head;
@@ -92,6 +92,7 @@ intern void ai_gc_register_object_(a_henv env, a_hobj obj);
 intern void ai_gc_register_objects(a_henv env, RefQueue* rq);
 intern void ai_gc_fix_object_(a_henv env, a_hobj obj);
 intern void ai_gc_trace_mark_(Global* g, a_hobj obj);
+intern void ai_gc_set_debt(Global* g, a_isize debt);
 intern void ai_gc_incr_gc(a_henv env);
 intern void ai_gc_full_gc(a_henv env, a_bool emergency);
 intern void ai_gc_clean(Global* g);
@@ -108,6 +109,10 @@ inline a_bool ai_gc_should_run(Global* g) {
     return g->_mem_debt >= 0;
 }
 
-#define ai_gc_trigger(env) ({ if (ai_gc_should_run((env)->_g)) ai_gc_incr_gc(env); })
+#if ALO_STRICT_MEMORY_CHECK
+# define ai_gc_trigger(env) ({ ai_gc_set_debt(G(env), 0); ai_gc_incr_gc(env); })
+#else
+# define ai_gc_trigger(env) ({ if (ai_gc_should_run(G(env))) ai_gc_incr_gc(env); })
+#endif
 
 #endif /* agc_h_ */

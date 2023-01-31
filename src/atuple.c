@@ -12,9 +12,7 @@
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
     GTuple* self = ai_mem_alloc(env, sizeof(GTuple) + sizeof(Value) * len);
     self->_len = len;
-    for (a_usize i = 0; i < len; ++i) {
-        v_cpy(G(env), &self->_body[i], &src[i]);
-    }
+	v_bmcpy(G(env), self->_body, src, len);
     self->_meta = &G(env)->_metas._tuple;
     ai_gc_register_object(env, self);
     return self;

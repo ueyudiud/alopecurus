@@ -6,6 +6,7 @@
 
 #include "afun.h"
 #include "aenv.h"
+#include "aerr.h"
 #include "acode.h"
 
 #include "aparse.h"
@@ -28,7 +29,28 @@ static a_bool l_test_skip(Parser* par, a_i32 tk) {
 	return false;
 }
 
-#define l_error_got(par,fmt,args...) ({ a_tksbuf _buf; l_error(par, fmt", got %s", ln_cur(par), ##args, ai_lex_tkrepr(tk_cur(par), _buf)); })
+a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...) {
+	va_list varg;
+	ai_code_close(par);
+	if (!eof || !(par->_options & ALO_COMP_OPT_CHECK_STMUF)) {
+		va_start(varg, fmt);
+		ai_err_raisevf(par->_env, ALO_ECHUNK, fmt, varg);
+		va_end(varg);
+	}
+	else {
+		ai_env_raise(par->_env, ALO_ESTMUF);
+	}
+}
+
+#define l_error_got(par,fmt,args...) ({ \
+	a_tksbuf _buf; \
+    ai_par_report( \
+		par, \
+		tk_cur(par)->_tag == TK_EOF, \
+		par_err_fl_arg(par, fmt", got %s", ln_cur(par)), \
+		##args, \
+		ai_lex_tkrepr(tk_cur(par), _buf)); \
+})
 
 static void l_error_expected(Parser* par, a_i32 tk) {
 	l_error_got(par, "%s expected", ai_lex_tagname(tk));
@@ -50,21 +72,23 @@ static GStr* l_check_ident(Parser* par) {
 	return str;
 }
 
-static void l_check_pair_right(Parser* par, a_i32 ltk, a_i32 rtk, a_u32 line) {
-	a_tksbuf buf;
-	if (!l_test(par, rtk)) {
-		if (ln_cur(par) == line) {
-			l_error_got(par, "%s expected to match %s",
+static a_none l_error_bracket(Parser* par, a_i32 ltk, a_i32 rtk, a_u32 line) {
+	if (ln_cur(par) == line) {
+		l_error_got(par, "%s expected to match %s",
 					ai_lex_tagname(ltk),
 					ai_lex_tagname(rtk));
-		}
-		else {
-			l_error_got(par, "%s expected to match %s at line %u",
+	}
+	else {
+		l_error_got(par, "%s expected to match %s at line %u",
 					ai_lex_tagname(ltk),
 					ai_lex_tagname(rtk),
 					line);
-		}
 	}
+}
+
+static void l_check_pair_right(Parser* par, a_i32 ltk, a_i32 rtk, a_u32 line) {
+	if (!l_test(par, rtk))
+		l_error_bracket(par, ltk, rtk, line);
 	l_skip(par);
 }
 
@@ -81,6 +105,7 @@ static a_bool l_test_sep(Parser* par) {
 	}
 }
 
+static void l_scan_atom_expr(Parser* par, OutExpr e);
 static void l_scan_expr(Parser* par, OutExpr e);
 static void l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2);
 static void l_scan_stat(Parser* par);
@@ -92,6 +117,7 @@ static void l_scan_tstring(Parser* par, OutExpr e) {
 
 	ConExpr ce = {};
 	ai_code_constS(par, e, tk_cur(par)->_str, ln_cur(par));
+	ai_code_concat_next(par, &ce, e, ln_cur(par));
 	l_skip(par);
 
 	while (!stop) {
@@ -108,16 +134,17 @@ static void l_scan_tstring(Parser* par, OutExpr e) {
 				stop = true;
 				break;
 			}
-			case TK_LBK: {
+			case TK_LBR: {
 				l_skip(par);
 				ai_lex_push_scope(&par->_lex, &scope);
 				l_scan_expr(par, e);
 				ai_lex_pop_scope(&par->_lex);
-				l_check_pair_right(par, TK_LBK, TK_RBK, line);
+				l_check_pair_right(par, TK_LBR, TK_RBR, line);
 				break;
 			}
 			default: {
-				l_error(par, "bad template string.", ln_cur(par));
+				l_scan_atom_expr(par, e);
+				break;
 			}
 		}
 		ai_code_concat_next(par, &ce, e, line);
@@ -188,11 +215,14 @@ static void l_scan_atom_expr(Parser* par, OutExpr e) {
 			ai_code_unary(par, e, OP_TNEW, line);
 			break;
 		}
-		default: l_error(par, "bad expression.", ln_cur(par));
+		default: {
+			l_error_got(par, "expression expected");
+		}
 	}
 }
 
 static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
+	l_sync(par);
 	a_u32 line0 = e->_line;
 	l_scan_atom_expr(par, e);
 	a_u32 label = NO_LABEL;
@@ -236,7 +266,7 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 					l_check_pair_right(par, TK_LBK, TK_RBK, line);
 					ai_code_binary2(par, e, &e2, OP_VA_PUSH, ln_cur(par));
 				}
-				ai_code_unary(par, e, OP_CALL, line0);
+				ai_code_unary(par, e, OP_CALL, line);
 				break;
 			}
 			default: {
@@ -274,6 +304,13 @@ static void l_scan_prefixed_expr(Parser* par, OutExpr e) {
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
 			ai_code_unary(par, e, OP_NOT, line);
+			break;
+		}
+		case TK_SHARP: {
+			a_u32 line = ln_cur(par);
+			l_skip(par);
+			l_scan_prefixed_expr(par, e);
+			ai_code_unary(par, e, OP_LEN, line);
 			break;
 		}
 		case TK_STAR: {
@@ -566,7 +603,7 @@ static void l_scan_normal_assign_frag(Parser* par, Lhs* lhs) {
 
 	l_scan_expr_pack(par, &rhs, &rhs_last);
 	if (!ai_code_balance(par, &rhs, &rhs_last, lhs->_count, line)) {
-		l_error(par, "unbalanced assignment.", line);
+		ai_par_error(par, "unbalanced assignment.", line);
 	}
 
 	LhsNode* node = lhs->_tail;
@@ -667,6 +704,8 @@ static void l_scan_return_stat(Parser* par) {
 static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
 	Expr e0 = {}, e;
 
+	ai_code_label(par, stat->_label_test, line);
+
 	l_scan_expr(par, &e);
 	while (ai_code_let_bind(par, stat, &e)) {
 		if (!l_test_skip(par, TK_COMMA)) {
@@ -676,8 +715,8 @@ static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
 		l_scan_expr(par, &e);
 		if (l_test_skip(par, TK_TDOT)) {
 			ai_code_unary(par, &e, OP_UNPACK, ln_cur(par));
-			if (!ai_code_balance(par, &e0, &e, stat->_count - stat->_index, line)) {
-				l_error(par, "unbalanced binding.", line);
+			if (!ai_code_balance(par, &e, &e0, stat->_nnode, line)) {
+				ai_par_error(par, "unbalanced binding.", line);
 			}
 			while (ai_code_let_bind(par, stat, &e)) {
 				ai_code_multi(par, &e0, &e, OP_VA_POP, line);
@@ -694,37 +733,188 @@ static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
 	}
 }
 
+#define TAG_BITS_PACK 0x03
+
+#define TAG_PACK_ROOT 0x00
+#define TAG_PACK_TUPLE 0x01
+#define TAG_PACK_LIST 0x02
+#define TAG_PACK_DICT 0x03
+
+static a_none l_unmatched_pattern(Parser* par, LetNode* node) {
+	if (node == null)
+		l_error_got(par, "malformed pattern");
+	switch (node->_kind) {
+		case PAT_TUPLE:
+			l_error_bracket(par, '(', ')', node->_expr._line);
+		case PAT_LIST:
+			l_error_bracket(par, '[', ']', node->_expr._line);
+		case PAT_DICT:
+			l_error_bracket(par, '{', '}', node->_expr._line);
+		default:
+			unreachable();
+	}
+}
+
+static void l_scan_pattern(Parser* par, LetStat* stat, LetNode* parent, LetNode** slot, a_u32 tag) {
+	LetNode node_buf = {};
+	LetNode* const node = &node_buf;
+
+	stat->_nnode += 1;
+	*slot = node;
+	node->_parent = parent;
+
+	switch (tag) {
+		case TAG_PACK_ROOT:
+		case TAG_PACK_TUPLE:
+			goto branch_standard;
+		default:
+			unreachable();
+	}
+
+branch_standard:
+	switch (l_peek(par)) {
+		case TK_NIL: {
+			ai_code_constK(par, &node->_expr, EXPR_NIL, ln_cur(par));
+			l_skip(par);
+			break;
+		}
+		case TK_INTEGER: {
+			ai_code_constI(par, &node->_expr, tk_cur(par)->_int, ln_cur(par));
+			l_skip(par);
+			break;
+		}
+		case TK_FLOAT: {
+			ai_code_constF(par, &node->_expr, tk_cur(par)->_float, ln_cur(par));
+			l_skip(par);
+			break;
+		}
+		case TK_STRING: {
+			ai_code_constS(par, &node->_expr, tk_cur(par)->_str, ln_cur(par));
+			l_skip(par);
+			break;
+		}
+		case TK_IDENT: {
+			l_skip(par);
+			node->_expr = new(Expr) {
+				._kind = PAT_BIND,
+				._line = ln_cur(par),
+				._str = tk_cur(par)->_str
+			};
+			break;
+		}
+		case TK_UNDERSCORE: {
+			l_skip(par);
+			node->_kind = PAT_DROP;
+			node->_line = ln_cur(par);
+			break;
+		}
+		case TK_LBK: {
+			node->_kind = PAT_TUPLE;
+			node->_line = ln_cur(par);
+			node->_succ_tag = TAG_PACK_TUPLE;
+			l_skip(par);
+			if (!l_test_skip(par, TK_RBK)) {
+				return l_scan_pattern(par, stat, node, &node->_child, TAG_PACK_TUPLE);
+			}
+			break;
+		}
+		case TK_LSQ: {
+			node->_kind = PAT_LIST;
+			node->_line = ln_cur(par);
+			node->_succ_tag = TAG_PACK_LIST;
+			l_skip(par);
+			if (!l_test_skip(par, TK_RSQ)) {
+				return l_scan_pattern(par, stat, node, &node->_child, TAG_PACK_LIST);
+			}
+			break;
+		}
+		case TK_LBR: {
+			node->_kind = PAT_DICT;
+			node->_line = ln_cur(par);
+			node->_succ_tag = TAG_PACK_DICT;
+			l_skip(par);
+			if (!l_test_skip(par, TK_RBR)) {
+				return l_scan_pattern(par, stat, node, &node->_child, TAG_PACK_DICT);
+			}
+			break;
+		}
+		default:
+			goto error;
+	}
+
+	slot = &node->_sibling;
+	loop {
+		switch (l_peek(par)) {
+			case TK_COMMA: {
+				l_skip(par);
+				if (parent != null) {
+					tag = parent->_succ_tag;
+				}
+				else {
+					assume(tag == TAG_PACK_ROOT);
+				}
+				return l_scan_pattern(par, stat, parent, slot, tag);
+			}
+			case TK_RBK: {
+				if (parent == null || parent->_kind != PAT_TUPLE)
+					l_unmatched_pattern(par, parent);
+				l_skip(par);
+				break;
+			}
+			case TK_RSQ: {
+				if (parent == null || parent->_kind != PAT_LIST)
+					l_unmatched_pattern(par, parent);
+				l_skip(par);
+				break;
+			}
+			case TK_RBR: {
+				if (parent == null || parent->_kind != PAT_DICT)
+					l_unmatched_pattern(par, parent);
+				l_skip(par);
+				break;
+			}
+			case TK_ASSIGN: {
+				l_skip(par);
+				if (parent == null) {
+					return l_scan_let_rhs(par, stat, ln_cur(par));
+				}
+				else {
+					//TODO
+					goto error;
+				}
+			}
+			default:
+				goto error;
+		}
+
+		assume(parent != null);
+		tag = parent->_succ_tag;
+		slot = &parent->_sibling;
+		parent = parent->_parent;
+	}
+
+error:
+	l_error_got(par, "malformed pattern");
+}
+
+static void l_scan_let_clause(Parser* par, a_u32 line) {
+	LetStat stat = { };
+
+	stat._label_test = ai_code_gotoU(par, NO_LABEL, line);
+	l_scan_pattern(par, &stat, NULL, &stat._head, TAG_PACK_ROOT);
+}
+
 static void l_scan_let_stat(Parser* par) {
 	a_u32 line = ln_cur(par);
 	l_skip(par);
 
 	switch (l_peek(par)) {
-		case TK_CASE: {
-			//TODO
-			break;
-		}
 		case TK_FN: {
 			//TODO
 			break;
 		}
 		default: {
-			LetStat stat;
-			ai_code_let_init(par, &stat);
-
-			GStr* name = l_check_ident(par);
-			ai_code_let_push(par, &stat, name);
-
-			while (l_test_skip(par, TK_COMMA)) {
-				name = l_check_ident(par);
-				ai_code_let_push(par, &stat, name);
-			}
-
-			if (l_test_skip(par, TK_ASSIGN)) {
-				l_scan_let_rhs(par, &stat, line);
-			}
-			else {
-				ai_code_let_nils(par, &stat, line);
-			}
+			l_scan_let_clause(par, line);
 			break;
 		}
 	}
@@ -813,15 +1003,15 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 	ai_code_prologue(par, &scope);
 	l_scan_stat_seq(par);
 
-	if (!l_test_skip(par, TK_EOF)) {
-		l_error(par, "bad statement.", ln_cur(par));
+	if (!l_test(par, TK_EOF)) {
+		l_error_got(par, "statement expected");
 	}
 
 	ai_code_epilogue(par, true, ln_cur(par));
 }
 
 a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* fname, a_u32 options, GFun** pfun) {
-	Parser par = { _options: options };
+	Parser par = { ._options =  options };
 	ai_io_iinit(env, fun, ctx, &par._lex._in);
 	ai_lex_init(&par._lex, fname);
 	rq_init(&par._rq);

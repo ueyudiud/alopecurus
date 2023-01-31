@@ -277,7 +277,7 @@ static void run_full_gc(Global* g) {
 	}
 }
 
-static void set_debt(Global* g, a_isize debt) {
+void ai_gc_set_debt(Global* g, a_isize debt) {
 	a_usize total = ai_env_mem_total(g);
 	g->_mem_base = total - debt;
 	g->_mem_debt = debt;
@@ -294,14 +294,14 @@ static void compute_step_debt(Global* g, a_isize work) {
 		work = ISIZE_MAX;
 	}
 	g->_mem_work = work;
-	set_debt(g, -work);
+	ai_gc_set_debt(g, -work);
 }
 
 static void compute_pause_debt(Global* g) {
 	a_usize2 debt = mul_usize(g->_mem_estimate, g->_gcpausemul) / GCUNIT;
 	a_isize truncated_debt = likely(debt < ISIZE_MAX) ? cast(a_isize, debt) : ISIZE_MAX;
 	g->_mem_work = truncated_debt;
-	set_debt(g, truncated_debt);
+	ai_gc_set_debt(g, truncated_debt);
 }
 
 void ai_gc_incr_gc(a_henv env) {

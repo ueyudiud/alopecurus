@@ -6,7 +6,6 @@
 #define acode_h_
 
 #include "aparse.h"
-#include "afun.h"
 
 typedef struct Expr Expr;
 typedef struct ExprPack ExprPack;
@@ -50,6 +49,7 @@ enum {
 	OP_BIT_INV  = 0x0E,
 	OP_NOT      = 0x0F,
 	OP_UNBOX    = 0x1C,
+	OP_LEN      = 0x20,
 	OP_UNPACK   = 0x34,
 
 	OP_OPTION   = 0x1D,
@@ -93,8 +93,6 @@ intern void ai_code_flush_jump(Parser* par, a_u32 line);
 
 intern void ai_code_drop(Parser* par, InExpr e);
 intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_u32 line);
-intern void ai_code_let_init(Parser* par, LetStat* s);
-intern void ai_code_let_push(Parser* par, LetStat* s, GStr* name);
 intern void ai_code_let_nils(Parser* par, LetStat* s, a_u32 line);
 intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
 
@@ -139,27 +137,13 @@ enum {
 	 ** REPR: try { true } else { false }
 	 *@param _label the label of residual path.
 	 */
-	EXPR_TRY_TF,
+	EXPR_TRY_TRUE,
 	/**
 	 ** The try expression with boolean type. This is a volatile expression.
 	 ** REPR: try { false } else { true }
 	 *@param _label the label of residual path.
 	 */
-	EXPR_TRY_FT,
-	/**
-	 ** The try expression. This is a volatile expression.
-	 ** REPR: try { R[_whent] } else { nil }
-	 *@param _whent the register index.
-	 *@param _whenf the label of jump instruction.
-	 */
-	EXPR_TRY_RN,
-	/**
-	 ** The try expression. This is a volatile expression.
-	 ** REPR: try { R[_label(a)] } else { nil }
-	 *@param _whent the label of compute result instruction.
-	 *@param _whenf the label of jump instruction.
-	 */
-	EXPR_TRY_AN,
+	EXPR_TRY_FALSE,
 	/**
 	 ** The try expression with only residual part.
 	 ** REPR: try { ! } else { false }
@@ -172,6 +156,79 @@ enum {
 	 *@param _label the label of residual path.
 	 */
 	EXPR_RESIDUAL_TRUE,
+/*==========================Result Expressions==========================*/
+	/**
+	 ** The expression bind to a temporary register.
+	 ** REPR: R[_reg]
+	 *@param _reg the register index.
+	 */
+	EXPR_TMP,
+	/**
+	 ** The expression from a local variable.
+	 ** REPR: R[_reg]
+	 *@param _reg the register index.
+	 */
+	EXPR_VAR,
+	/**
+	 ** The expression bind to a capture value.
+	 ** REPR: C[_reg]
+	 *@param _reg the capture register index.
+	 */
+	EXPR_CAP,
+	/**
+	 ** The variable length sequence of registers.
+	 ** REPR: R[_base:_base+_len]
+	 *@param _pack the register pack.
+	 */
+	EXPR_PACK,
+/*===========================Lazy Expressions===========================*/
+	/**
+	 ** The value indexed expression. REPR: R[_base][R[_key]]
+	 *@param _base the base register index.
+	 *@param _key the key register index.
+	 */
+	EXPR_REFTT,
+	EXPR_REFVT,
+	EXPR_REFTV,
+	EXPR_REFVV,
+#define EXPR_REFR_ALL EXPR_REFTT ... EXPR_REFVV
+	/**
+	 ** The integer indexed expression.
+	 ** REPR: R[_base][_key]
+	 *@param _base the base register index.
+	 *@param _key the integer key.
+	 */
+	EXPR_REFTI_,
+	EXPR_REFVI_,
+	EXPR_REFTI,
+	EXPR_REFVI,
+#define EXPR_REFI_ALL EXPR_REFTI ... EXPR_REFVI
+	/**
+	 ** The constant indexed expression. REPR: R[_base][K[_key]]
+	 *@param _base the base register index.
+	 *@param _key the key constant index.
+	 */
+	EXPR_REFTK_,
+	EXPR_REFVK_,
+	EXPR_REFTK,
+	EXPR_REFVK,
+#define EXPR_REFK_ALL EXPR_REFTK ... EXPR_REFVK
+#define EXPR_REF_ALL EXPR_REFTT ... EXPR_REFVK
+	EXPR_REFCK,
+	/**
+	 ** The try expression. This is a volatile expression.
+	 ** REPR: try { R[_whent] } else { nil }
+	 *@param _whent the temporary register index.
+	 *@param _whenf the label of jump instruction.
+	 */
+	EXPR_TMP_OR_NIL,
+	/**
+	 ** The try expression. This is a volatile expression.
+	 ** REPR: try { R[_label(a)] } else { nil }
+	 *@param _whent the label of compute result instruction.
+	 *@param _whenf the label of jump instruction.
+	 */
+	EXPR_DST_OR_NIL,
 /*==============================Constants===============================*/
 	/**
 	 ** Nil constant expression.
@@ -196,17 +253,6 @@ enum {
 	 *@param _str the string constant.
 	 */
 	EXPR_STR,
-/*===========================Lazy Expressions===========================*/
-	EXPR_REF,
-	/**
-	 ** The integer indexed expression.
-	 ** REPR: _base[_key]
-	 *@param _base the base register index.
-	 *@param _key the integer key.
-	 */
-	EXPR_REFI,
-	EXPR_REFK,
-	EXPR_CREFK,
 /*=========================Partial Expressions==========================*/
 	/**
 	 ** The partial evaluated expression.
@@ -228,25 +274,12 @@ enum {
 	 *@param the label of instruction.
 	 */
 	EXPR_DST_C,
-/*==========================Result Expressions==========================*/
-	/**
-	 ** The expression bind to a register.
-	 ** REPR: R[_reg]
-	 *@param _reg the register index.
-	 */
-	EXPR_REG,
-	/**
-	 ** The expression bind to a capture value.
-	 ** REPR: C[_reg]
-	 *@param _reg the capture register index.
-	 */
-	EXPR_CAP,
-	/**
-	 ** The variable length sequence of registers.
-	 ** REPR: R[_base:_base+_len]
-	 *@param _pack the register pack.
-	 */
-	EXPR_PACK
+/*=========================Pattern Expressions==========================*/
+	PAT_DROP,
+	PAT_BIND,
+	PAT_TUPLE,
+	PAT_LIST,
+	PAT_DICT
 };
 
 struct ExprPack {
@@ -280,10 +313,29 @@ struct ConExpr {
 	QBuf _buf;
 };
 
+typedef struct LetNode LetNode;
+
+struct LetNode {
+	LetNode* _child;
+	LetNode* _sibling;
+	LetNode* _parent;
+	union {
+		Expr _expr;
+		struct {
+			a_u32 _kind;
+			a_u32 _line;
+			a_u32 _succ_tag; /* Successive tag. */
+		};
+	};
+};
+
 struct LetStat {
-	a_u32 _count;
-	a_u32 _local_head;
-	a_u32 _index;
+	LetNode* _head;
+	a_u32 _label_test;
+	a_u32 _label_fail;
+	a_u32 _nnode;
+	a_u32 _fvarg : 1;
+	a_u32 _ftest : 1;
 };
 
 enum {
@@ -291,10 +343,10 @@ enum {
 	 ** Local variable.
 	 *@param _index the register index.
 	 */
-	NAME_LOCAL
+	SYM_LOCAL,
 };
 
-struct Name {
+struct Sym {
 	a_u32 _kind;
 	a_u32 _index;
 	a_u16 _scope;
@@ -310,39 +362,15 @@ struct Name {
 	a_u16 _top_reg; \
 	a_u32 _begin_label; \
 	a_u32 _end_label;        \
-	a_u32 _bot_name
+	a_u32 _bot_sym
 
 struct Scope {
 	SCOPE_STRUCT_HEAD;
 };
 
-typedef struct ValBuf ValBuf;
+BUF_STRUCT_DECLARE(ValBuf, Value);
 
-struct ValBuf {
-	Value* _dat;
-	a_u32 _cap;
-	a_u32 _len;
-};
-
-typedef struct LocalInfo LocalInfo;
-typedef struct LocalInfos LocalInfos;
-typedef struct CapInfo CapInfo;
-typedef struct CapInfos CapInfos;
-
-struct LocalInfo {
-	GStr* _name;
-	a_u32 _begin_label;
-	a_u32 _end_label;
-	a_u8 _reg;
-};
-
-struct LocalInfos {
-	LocalInfo* _dat;
-	a_u32 _cap;
-	a_u32 _len;
-};
-
-struct CapInfo {
+struct CompCapInfo {
 	a_u8 _scope; /* The depth of first captured scope. */
 	a_u8 _iname; /* Qualified variable index. */
 	a_u8 _index;
@@ -359,11 +387,10 @@ struct FnScope {
 	FnScope* _fn_up;
 	Scope* _top_scope;
 	ValBuf _consts; /* Constants. */
-	LocalInfos _locals;
-	CapInfo* _caps;
 	GFunMeta** _base_subs;
-	a_u16 _ncap;
-	a_u16 _ccap;
+	a_u32 _begin_line;
+	a_u32 _begin_local;
+	a_u32 _begin_cap;
 	a_u16 _max_reg;
 };
 

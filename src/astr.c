@@ -25,11 +25,14 @@
  */
 a_hash ai_str_hashof(a_hash seed, void const* src, a_usize len) {
     a_hash hash = seed;
-    a_byte const* l = src;
-    a_usize step = 1 + (len >> 4);
-    for (a_byte const* p = src + len - 1; p >= l; p -= step) {
-        hash = (hash ^ cast(a_hash, *p)) * 0x1000193;
-    }
+	if (len > 0) {
+		a_byte const* l = src;
+		a_usize step = 1 + (len >> 4);
+		assume(src != null);
+		for (a_byte const* p = src + len - 1; p >= l; p -= step) {
+			hash = (hash ^ cast(a_hash, *p)) * 0x1000193;
+		}
+	}
     return hash;
 }
 
@@ -135,6 +138,10 @@ GStr* ai_str_new(a_henv env, void const* src, a_usize len, a_hash hash) {
             hstr_new(env, src, len, hash);
 }
 
+GStr* ai_istr_create(a_henv env, void const* src, a_usize len) {
+	return &istr_lookup(env, src, len, ai_str_hashof(G(env)->_seed, src, len))->_body;
+}
+
 GStr* ai_str_create(a_henv env, void const* src, a_usize len) {
     return ai_str_new(env, src, len, ai_str_hashof(G(env)->_seed, src, len));
 }
@@ -151,10 +158,10 @@ GStr* ai_str_formatv(a_henv env, char const* fmt, va_list varg) {
     char buf[ALOI_SHTSTR_THRESHOLD + 1];
     va_list varg2;
     va_copy(varg2, varg);
-    int len = vsnprintf(buf, sizeof(buf), fmt, varg);
+    a_usize len = cast(a_usize, cast(a_isize, vsnprintf(buf, sizeof(buf), fmt, varg)));
     if (len <= ALOI_SHTSTR_THRESHOLD) {
         va_end(varg2);
-        return &istr_lookup(env, buf, len, ai_str_hashof(G(env)->_seed, buf, len))->_body;
+        return ai_istr_create(env, buf, len);
     }
     else {
         GStr* self = ai_mem_alloc(env, sizeof(GStr) + len);
@@ -170,6 +177,10 @@ GStr* ai_str_formatv(a_henv env, char const* fmt, va_list varg) {
 
 a_bool ai_str_requals(GStr* self, void const* dat, a_usize len) {
     return self->_len == len && memcmp(self->_data, dat, len) == 0;
+}
+
+a_bool ai_str_equals(GStr* self, GStr* other) {
+    return self == other || (self->_hash == other->_hash && ai_str_requals(self, self->_data, self->_len));
 }
 
 void ai_str_boost(a_henv env) {

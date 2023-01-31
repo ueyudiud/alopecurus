@@ -23,9 +23,9 @@ static void aux_dealloc(unused void* ctx, void* blk, unused a_usize sz) {
 
 a_henv aloL_create(void) {
 	a_alloc af = {
-		allocate: aux_alloc,
-		reallocate: aux_realloc,
-		deallocate: aux_dealloc
+		.allocate = aux_alloc,
+		.reallocate = aux_realloc,
+		.deallocate = aux_dealloc
 	};
 	a_henv env;
 	a_msg msg = alo_create(&af, null, &env);

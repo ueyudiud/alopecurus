@@ -10,8 +10,12 @@
 #define api_panic(m...) panic(m)
 #define api_check(e,m...) assume(e, "API: "m)
 
+intern Value const* api_roslot(a_henv env, a_isize id);
+intern Value const* api_rdslot(a_henv env, a_isize id);
+intern Value* api_wrslot(a_henv env, a_isize id);
+
 inline Value const* api_stack_limit(a_henv env) {
-#ifdef ALOI_STRICT_STACK_CHECK
+#if ALO_STRICT_STACK_CHECK
 	return env->_frame->_bound;
 #else
     return env->_stack._limit;

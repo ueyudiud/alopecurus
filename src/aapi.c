@@ -11,6 +11,7 @@
 #include "afun.h"
 #include "actx.h"
 #include "agc.h"
+#include "avm.h"
 #include "aparse.h"
 #include "adump.h"
 
@@ -32,11 +33,24 @@ a_msg alo_init(void) {
 	return ai_ctx_init();
 }
 
-static a_bool l_disable_hook(Global* g) {
-	uint_fast8_t mask = g->_hookm;
-	if ((mask & ALO_HMSWAP) != 0)
-		return false;
-	return atomic_compare_exchange_weak(&g->_hookm, &mask, ALO_HMSWAP);
+/**
+ ** Load integer attribute.
+ *@param env the optional runtime environment.
+ *@param n the attribute name.
+ *@param pi the pointer to store result.
+ *@return true if attribute name is valid and false for otherwise.
+ */
+a_bool alo_attri(unused a_henv env, a_enum n, a_int* pi) {
+	switch (n) {
+		case ALO_ATTR_VERSION:
+			*pi = ALO_VERSION_NUMBER;
+			return true;
+		case ALO_ATTR_VARIANT:
+			*pi = 1;
+			return true;
+		default:
+			return false;
+	}
 }
 
 /**
@@ -46,7 +60,7 @@ static a_bool l_disable_hook(Global* g) {
  *@param kc the hook context.
  *@param mask the hook mask.
  */
-void alo_sethook(a_henv env, a_kfun kf, a_kctx kc, a_u32 mask) {
+void alo_sethook(a_henv env, a_kfun kf, a_kctx kc, a_flags mask) {
 	Global* g = G(env);
 
 	/* Make sure null safe. */
@@ -55,10 +69,11 @@ void alo_sethook(a_henv env, a_kfun kf, a_kctx kc, a_u32 mask) {
 		mask = 0;
 	}
 
-	while (!l_disable_hook(g));
+	ai_vm_lock_hook(g);
 
 	g->_hookf = kf;
 	g->_hookc = kc;
+
 	g->_hookm = mask;
 }
 
@@ -68,15 +83,15 @@ void alo_sethook(a_henv env, a_kfun kf, a_kctx kc, a_u32 mask) {
  *@return the stack size.
  */
 a_usize alo_stacksize(a_henv env) {
-	return env->_stack._top - env->_stack._base;
+	return env->_stack._top - env->_stack._bot;
 }
 
 a_bool alo_ensure(a_henv env, size_t n) {
 	Value* require = env->_stack._bot + n;
 	if (require > env->_stack._top) {
 		a_isize diff = ai_env_grow_stack(env, require);
-		if (diff & 0x3) return false;
-#ifdef ALOI_STRICT_STACK_CHECK
+		if (diff & (GROW_STACK_FLAG_OF1 | GROW_STACK_FLAG_OF2)) return false;
+#if ALO_STRICT_STACK_CHECK
 		env->_frame->_bound += diff;
 #endif
 	}
@@ -84,8 +99,8 @@ a_bool alo_ensure(a_henv env, size_t n) {
 }
 
 void alo_settop(a_henv env, ptrdiff_t n) {
-	Value* v = n >= 0 ? env->_stack._base + n : env->_stack._top + n;
-	api_check(v >= env->_stack._base && v <= api_stack_limit(env));
+	Value* v = n >= 0 ? env->_stack._bot + n : env->_stack._top + n;
+	api_check(v >= env->_stack._bot && v <= api_stack_limit(env));
 	Value* u = env->_stack._top;
 	while (u < v) { /* Fill nil value if stack grows. */
 		v_setx(u++, v_of_nil());
@@ -102,7 +117,7 @@ ptrdiff_t alo_absindex(a_henv env, ptrdiff_t id) {
 	return id;
 }
 
-static Value const* to_roslot(a_henv env, ptrdiff_t id) {
+Value const* api_roslot(a_henv env, a_isize id) {
 	Value const* v;
 	if (id >= 0) {
 		v = env->_stack._bot + id;
@@ -114,15 +129,15 @@ static Value const* to_roslot(a_henv env, ptrdiff_t id) {
 		if (v < env->_stack._bot) 
 			return null;
 	}
-		return v;
+	return v;
 }
 
-static Value const* to_rdslot(a_henv env, ptrdiff_t id) {
+Value const* api_rdslot(a_henv env, a_isize id) {
 	static Value const v_nil = v_of_nil();
-	return to_roslot(env, id) ?: &v_nil;
+	return api_roslot(env, id) ?: &v_nil;
 }
 
-static Value* to_wrslot(a_henv env, ptrdiff_t id) {
+Value* api_wrslot(a_henv env, a_isize id) {
 	Value* v;
 	if (id >= 0) {
 		v = env->_stack._bot + id;
@@ -159,7 +174,7 @@ static int tag_of(Value const* v) {
 }
 
 void alo_push(a_henv env, ptrdiff_t id) {
-	Value const* slot = to_rdslot(env, id);
+	Value const* slot = api_rdslot(env, id);
 	v_cpy(G(env), api_incr_stack(env), slot);
 }
 
@@ -197,7 +212,7 @@ int alo_pushvex(a_henv env, char const* sp, va_list varg) {
 			return ALO_TEMPTY;
 		}
 		case 'i': { /* Index addressing. */
-			v = to_roslot(env, va_arg(varg, ptrdiff_t));
+			v = api_roslot(env, va_arg(varg, ptrdiff_t));
 			if (v == null) return ALO_TEMPTY;
 			break;
 		}
@@ -286,7 +301,7 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 }
 
 void alo_pop(a_henv env, ptrdiff_t id) {
-	Value* d = to_wrslot(env, id);
+	Value* d = api_wrslot(env, id);
 	Value const* s = api_decr_stack(env);
 	assume(s != d);
 	v_cpy(G(env), d, s);
@@ -303,19 +318,28 @@ void alo_newtuple(a_henv env, size_t n) {
 void alo_newlist(a_henv env, size_t n) {
 	GList* val = ai_list_new(env);
 	v_set(G(env), api_incr_stack(env), v_of_ref(val));
-	ai_list_hint(env, val, n);
 	ai_gc_trigger(env);
+	ai_list_hint(env, val, n);
 }
 
 void alo_newtable(a_henv env, size_t n) {
 	GTable* val = ai_table_new(env);
 	v_set(G(env), api_incr_stack(env), v_of_ref(val));
+	ai_gc_trigger(env);
 	ai_table_hint(env, val, n);
+}
+
+void alo_newcfun(a_henv env, a_cfun f, size_t n) {
+	api_check_slot(env, 1);
+	api_check_elem(env, n);
+	GFun* val = ai_cfun_create(env, f, n, env->_stack._top - n);
+	env->_stack._top -= n;
+	v_set(G(env), api_incr_stack(env), v_of_ref(val));
 	ai_gc_trigger(env);
 }
 
 size_t alo_len(a_henv env, ptrdiff_t id) {
-	Value const* v = to_rdslot(env, id);
+	Value const* v = api_rdslot(env, id);
 	switch (v_raw_tag(v)) {
 		case T_TUPLE: {
 			GTuple* value = v_as_tuple(G(env), v);
@@ -334,8 +358,8 @@ size_t alo_len(a_henv env, ptrdiff_t id) {
 	}
 }
 
-int alo_geti(a_henv env, ptrdiff_t id, ptrdiff_t key) {
-	Value const* v = to_rdslot(env, id);
+int alo_geti(a_henv env, ptrdiff_t id, a_int key) {
+	Value const* v = api_rdslot(env, id);
 	api_check_elem(env, 1);
 	switch (v_raw_tag(v)) {
 		case T_TUPLE: {
@@ -360,18 +384,27 @@ int alo_geti(a_henv env, ptrdiff_t id, ptrdiff_t key) {
 	return v != null ? tag_of(v) : ALO_TEMPTY;
 }
 
+void alo_call(a_henv env, size_t narg, ptrdiff_t nres) {
+	api_check(nres < 256, "bad result count.");
+	api_check_elem(env, narg + 1);
+	if (nres > 0) api_check_slot(env, nres);
+	ai_vm_call(env, env->_stack._top - narg - 1, new(RFlags) {
+		._count = nres < 0 ? RFLAG_COUNT_VARARG : nres
+	});
+}
+
 int alo_tagof(a_henv env, ptrdiff_t id) {
-	Value const* slot = to_roslot(env, id);
+	Value const* slot = api_roslot(env, id);
 	return slot != null ? tag_of(slot) : ALO_TEMPTY;
 }
 
 a_bool alo_tobool(a_henv env, ptrdiff_t id) {
-	Value const* v = to_rdslot(env, id);
+	Value const* v = api_rdslot(env, id);
 	return v_to_bool(v);
 }
 
 a_int alo_toint(a_henv env, ptrdiff_t id) {
-	Value const* v = to_rdslot(env, id);
+	Value const* v = api_rdslot(env, id);
 	switch (expect(v_raw_tag(v), T_INT)) {
 		case T_NIL:
 		case T_FALSE:
@@ -388,7 +421,7 @@ a_int alo_toint(a_henv env, ptrdiff_t id) {
 }
 
 a_float alo_tofloat(a_henv env, ptrdiff_t id) {
-	Value const* v = to_rdslot(env, id);
+	Value const* v = api_rdslot(env, id);
 	switch (expect(v_raw_tag(v), T_FLOAT)) {
 		case T_NIL:
 		case T_FALSE:
@@ -405,7 +438,7 @@ a_float alo_tofloat(a_henv env, ptrdiff_t id) {
 }
 
 char const* alo_tostr(a_henv env, ptrdiff_t id, size_t* plen) {
-	Value const* v = to_rdslot(env, id);
+	Value const* v = api_rdslot(env, id);
 	if (likely(v_is_str(v))) {
 		GStr* value = v_as_str(G(env), v);
 		if (plen != null) {
@@ -435,7 +468,7 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx, char const* name, unsigned 
 }
 
 void alo_dump(a_henv env, ptrdiff_t id, unsigned int options) {
-	Value const* v = to_rdslot(env, id);
+	Value const* v = api_rdslot(env, id);
 	if (likely(v_is_func(v))) {
 		GFun* fun = v_as_func(G(env), v);
 		ai_dump_print(env, downcast(GFunMeta, fun->_meta), options);

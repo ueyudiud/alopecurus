@@ -82,6 +82,10 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
     _(    BZ,    "bz", ___, reg, ___) /* if R[b] { pc := pc + 1 }                            */ \
     _(   TNZ,   "tnz", reg, reg, ___) /* R[a] := if R[b] { false } else { true }             */ \
     _(    TZ,    "tz", reg, reg, ___) /* R[a] := if R[b] { true } else { false }             */ \
+    _(   BEQ,   "beq", ___, reg, reg) /* if R[b] == R[c] { pc := pc + 1 }                    */ \
+    _(   BNE,   "bne", ___, reg, reg) /* if !(R[b] == R[c]) { pc := pc + 1 }                 */ \
+    _(   TEQ,   "teq", reg, reg, reg) /* R[a] := R[b] == R[c]                                */ \
+    _(   TNE,   "tne", reg, reg, reg) /* R[a] := !(R[b] == R[c])                             */ \
     _(   BLT,   "blt", ___, reg, reg) /* if R[b] < R[c] { pc := pc + 1 }                     */ \
     _(  BNLT,  "bnlt", ___, reg, reg) /* if !(R[b] < R[c]) { pc := pc + 1 }                  */ \
     _(   TLT,   "tlt", reg, reg, reg) /* R[a] := R[b] < R[c]                                 */ \
@@ -90,6 +94,10 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
     _(  BNLE,  "bnle", ___, reg, reg) /* if !(R[b] <= R[c]) { pc := pc + 1 }                 */ \
     _(   TLE,   "tle", reg, reg, reg) /* R[a] := R[b] <= R[c]                                */ \
     _(  TNLE,  "tnle", reg, reg, reg) /* R[a] := !(R[b] <= R[c])                             */ \
+    _(  BEQI,  "beqi", ___, reg, val) /* if R[b] == int(sc) { pc := pc + 1 }                 */ \
+    _(  BNEI,  "bnei", ___, reg, val) /* if !(R[b] == int(sc)) { pc := pc + 1 }              */ \
+    _(  TEQI,  "teqi", reg, reg, val) /* R[a] := R[b] == int(sc)                             */ \
+    _(  TNEI,  "tnei", reg, reg, val) /* R[a] := !(R[b] == int(sc))                          */ \
     _(  BLTI,  "blti", ___, reg, val) /* if R[b] < int(sc) { pc := pc + 1 }                  */ \
     _( BNLTI, "bnlti", ___, reg, val) /* if !(R[b] < int(sc)) { pc := pc + 1 }               */ \
     _(  TLTI,  "tlti", reg, reg, val) /* R[a] := R[b] <= int(sc)                             */ \
@@ -121,6 +129,7 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
     _(  SETK,  "setk", reg, reg, val) /* R[b][K[c]] := R[a]                                  */ \
     _( SETKX, "setkx", reg, reg, ___) /* R[b][K[ex]] := R[a]                                 */ \
     _(   NEG,   "neg", reg, reg, ___) /* R[a] := -R[b]                                       */ \
+    _(   LEN,   "len", reg, reg, ___) /* R[a] := #R[b]                                       */ \
     _( UNBOX, "unbox", reg, reg, num) /* R[a:a+c-1] := *R[b]                                 */ \
     _(  TNEW,  "tnew", reg, reg, num) /* R[a] := (R[b:b+c-1])                                */ \
     _(   ADD,   "add", reg, reg, reg) /* R[a] := R[b] + R[c]                                 */ \
@@ -147,6 +156,7 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
     _(   CAT,   "cat", reg, reg, num) /* R[a] := concat(R[b:b+c-1])                          */ \
     _(     J,     "j", off, off, off) /* pc := pc + sax                                      */ \
     _(   RET,   "ret", ___, reg, num) /* return R[b:b+c+1]                                   */ \
+    _(    FC,    "fc", ___, cap, ___) /* call C function at C[b]                             */ \
     _(    EX,    "ex", val, val, val) /*                                                     */
 
 enum {

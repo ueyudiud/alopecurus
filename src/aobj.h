@@ -132,6 +132,8 @@ inline GFun* g_as_func(a_hobj v) {
 	return downcast(GFun, v);
 }
 
+inline GCap* g_as_cap(Global* g, a_hobj v);
+
 inline void v_check_alive(Global* g, Value const* v);
 
 #define v_hi_mask(id) (~(id) << 15)
@@ -165,12 +167,16 @@ inline a_bool v_is_int(Value const* v) {
 	return v_raw_tag(v) == T_INT;
 }
 
+inline a_bool v_is_ptr(Value const* v) {
+	return v_raw_tag(v) == T_PTR;
+}
+
 inline a_bool v_is_ref(Value const* v) {
 	return v->_h - v_hi_mask(T_OTHER) < v_hi_mask(T_PTR) - v_hi_mask(T_OTHER);
 }
 
 inline a_bool v_is_str(Value const* v) {
-	return v_raw_tag(v) >> 1 == T_ISTR >> 1;
+	return v_raw_tag(v) == T_HSTR || v_raw_tag(v) == T_ISTR;
 }
 
 inline a_bool v_is_tuple(Value const* v) {
@@ -197,6 +203,14 @@ inline a_bool v_is_float(Value const* v) {
 	return v->_h <= u32c(0xfff80000);
 }
 
+inline a_bool v_is_num(Value const* v) {
+	return v_is_int(v) || v_is_float(v);
+}
+
+inline a_bool v_is_other(Value const* v) {
+	return v_raw_tag(v) == T_OTHER;
+}
+
 inline a_bool v_to_bool(Value const* v) {
 	return v->_h <= v_hi_mask(T_TRUE);
 }
@@ -211,8 +225,17 @@ inline a_float v_as_float(Value const* v) {
 	return v->_f;
 }
 
+inline a_float v_as_num(Value const* v) {
+	return v_is_int(v) ? v_as_int(v) : v_as_float(v);
+}
+
 inline void* v_as_hnd(Value const* v) {
 	return ptr_of(void, v->_u & u64c(0x00007fffffffffff));
+}
+
+inline void* v_as_ptr(Value const* v) {
+	assume(v_is_ptr(v), "not pointer.");
+	return v_as_hnd(v);
 }
 
 inline GObj* v_as_obj(Global* g, Value const* v) {
@@ -246,12 +269,17 @@ inline GFun* v_as_func(Global* g, Value const* v) {
 	return g_as_func(v_as_obj(g, v));
 }
 
-#define v_of_nil() (new(Value) { _h: v_hi_mask(T_NIL), _l: LO_DFL_VALUE })
-#define v_of_dead_key() (new(Value) { _u: V_DEAD_KEY })
-#define v_of_bool(v) (new(Value) { _h: v_hi_mask((v) ? T_TRUE : T_FALSE), _l: LO_DFL_VALUE })
-#define v_of_int(v) (new(Value) { _h: v_hi_mask(T_INT), _i: (v) })
-#define v_of_float(v) (new(Value) { _f: (v) })
-#define v_of_hnd(id,v) (new(Value) { _u: cast(a_u64, v_hi_mask(id)) << 32 | addr_of(v) })
+inline GCap* v_as_cap(Global* g, Value const* v) {
+	assume(v_is_other(v));
+	return g_as_cap(g, v_as_obj(g, v));
+}
+
+#define v_of_nil() (new(Value) { ._h = v_hi_mask(T_NIL), ._l = LO_DFL_VALUE })
+#define v_of_dead_key() (new(Value) { ._u = V_DEAD_KEY })
+#define v_of_bool(v) (new(Value) { ._h = v_hi_mask((v) ? T_TRUE : T_FALSE), ._l = LO_DFL_VALUE })
+#define v_of_int(v) (new(Value) { ._h = v_hi_mask(T_INT), ._i = (v) })
+#define v_of_float(v) (new(Value) { ._f = (v) })
+#define v_of_hnd(id,v) (new(Value) { ._u = cast(a_u64, v_hi_mask(id)) << 32 | addr_of(v) })
 #define v_of_ptr(v) v_of_hnd(T_PTR, v)
 
 inline Value v_of_ref(void* v) {
@@ -263,6 +291,12 @@ inline Value v_of_ref(void* v) {
 inline void v_cpy(Global* g, Value* d, Value const* s) {
 	*d = *s;
 	v_check_alive(g, d);
+}
+
+inline void v_bmcpy(Global* g, Value* d, Value const* s, a_usize n) {
+	for (a_usize i = n; i > 0; --i) {
+		v_cpy(g, &d[i - 1], &s[i - 1]);
+	}
 }
 
 inline void v_setx(Value* d, Value v) {

@@ -9,7 +9,7 @@
 #include <windef.h>
 #include <intrin.h>
 
-#include "aenv.h"
+#include "agbl.h"
 
 /* Basic stack size alignment. */
 #define PAGE_SIZE usizec(0x1000)

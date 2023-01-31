@@ -13,6 +13,20 @@ typedef struct Lexer Lexer;
 typedef struct Token Token;
 typedef struct LexScope LexScope;
 
+#define MAX_TOKEN_STR_BUF_SIZE 32
+
+typedef a_byte a_tksbuf[MAX_TOKEN_STR_BUF_SIZE];
+
+intern void ai_lex_init(Lexer* lex, char const* fname);
+intern void ai_lex_close(Lexer* lex);
+intern char const* ai_lex_tagname(a_i32 tag);
+intern char const* ai_lex_tkrepr(Token* tk, a_tksbuf buf);
+intern GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len);
+intern a_i32 ai_lex_forward(Lexer* lex);
+intern a_i32 ai_lex_peek(Lexer* lex);
+
+#define ai_lex_error(lex,fmt,args...) ai_par_report(from_member(Parser, _lex, lex), false, "%s:%u: "fmt, (lex)->_fname, (lex)->_line, ##args)
+
 #define KEYWORD_LIST(_) \
     _(_ENV, "_ENV")     \
     _(AS, "as")         \
@@ -36,7 +50,8 @@ typedef struct LexScope LexScope;
     _(NIL, "nil")       \
     _(RETURN, "return") \
     _(TRUE, "true")     \
-	_(WHILE, "while")
+	_(WHILE, "while")   \
+	_(UNDERSCORE, "_")
 
 #define OPERATOR_LIST(_) \
     _(LBK, "(") \
@@ -104,21 +119,6 @@ enum {
     CHANNEL_MTSTR_BODY = 0x5
 };
 
-#define MAX_TOKEN_STR_BUF_SIZE 32
-
-typedef a_byte a_tksbuf[MAX_TOKEN_STR_BUF_SIZE];
-
-intern void ai_lex_init(Lexer* lex, char const* fname);
-intern void ai_lex_close(Lexer* lex);
-intern a_none ai_lex_error_(Lexer* lex, char const* fmt, ...);
-intern char const* ai_lex_tagname(a_i32 tag);
-intern char const* ai_lex_tkrepr(Token* tk, a_tksbuf buf);
-intern GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len);
-intern a_i32 ai_lex_forward(Lexer* lex);
-intern a_i32 ai_lex_peek(Lexer* lex);
-
-#define ai_lex_error(lex,fmt,args...) ai_lex_error_(lex, "%s:%u: "fmt, (lex)->_fname, (lex)->_line, ##args)
-
 struct Token {
     a_i16 _tag;
     a_u16 _line;
@@ -147,9 +147,9 @@ typedef struct {
 struct LexScope {
     LexScope* _up;
     a_u32 _last_channel;
-    a_u32 _line;
+    a_u32 _begin_line;
     union {
-        a_u32 _indent;
+        a_u32 _indent; /* For multiline string. */
     };
 };
 
@@ -158,7 +158,7 @@ struct Lexer {
     Buf _buf;
     char const* _fname; /* Source file name. */
     a_u32 _line;
-    a_i32 _ch;
+    a_i32 _ch; /* Next character. */
     a_u32 _channel;
     Token _current;
 	Token _forward;
@@ -174,6 +174,7 @@ inline void ai_lex_push_scope(Lexer* lex, LexScope* scope) {
 
 inline void ai_lex_pop_scope(Lexer* lex) {
     lex->_scope = lex->_scope->_up;
+	lex->_channel = lex->_scope->_last_channel;
 }
 
 #endif /* alex_h_ */

@@ -50,7 +50,7 @@ CCOPT=
 CCDEBUG=
 CCWARN= -Wall -Wextra
 CCDEF=
-CFLAGS=
+CCFLAGS=
 LIBS= -lm
 
 ifeq (release,$(LEVEL))
@@ -60,11 +60,12 @@ else
 	ifeq (debug,$(LEVEL))
 		CCOPT= -O0
 		CCDEBUG= -g3
+  		CCDEF+= -D ALOI_DEBUG
 	endif
 endif
 
 BASE_CC= $(CC)
-BASE_CCFLAGS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(CCDEF) $(CFLAGS)
+BASE_CCFLAGS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(CCDEF) $(CCFLAGS)
 BASE_LDFLAGS= $(CCDEBUG) $(LDFLAGS)
 BASE_XLIBS= $(LIBS)
 
@@ -118,7 +119,7 @@ TARGET_SHLDFLAGS= $(BASE_LDFLAGS) $(TARGET_FLAGS) $(TARGET_XDYLDFLAGS)
 TARGET_LIBS= $(BASE_XLIBS) $(TARGET_XLIBS)
 
 ifeq (Windows,$(TARGET_OS))
-  TARGET_STRIP+= --strip-unneeded
+  	TARGET_STRIP+= --strip-unneeded
 	TARGET_XLIBS+= -lntdll
 else 
 ifeq (Darwin,$(TARGET_OS))
@@ -166,19 +167,20 @@ endif
 
 ifneq (debug,$(LEVEL))
   TARGET_STRIP= @:
-  CCDEF+= -D ALOI_DEBUG
 endif
 
 ACTX_C= actx/x64.w64.win.c
 
-CORE_O= aaux.o aapi.o adump.o acode.o aparse.o alex.o adbg.o \
+KER_O= aaux.o aapi.o adump.o acode.o aparse.o alex.o adbg.o \
 aerr.o aload.o asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o \
 aenv.o afun.o atable.o alist.o atuple.o astr.o abuf.o aio.o \
 actx.o
+LIB_O= abaselib.o
+BASE_O= $(KER_O) $(LIB_O)
 
 ALO_O= alo.o
 
-ALL_O= $(CORE_O) $(ALO_O)
+ALL_O= $(BASE_O) $(ALO_O)
 ALL_T= $(TARGET_T)
 ALL_RM= $(ALL_O) $(ALL_O:.o=_dyn.o) $(ALO_T) $(ALO_A) $(ALO_SO)
 
@@ -195,6 +197,11 @@ default all: $(ALL_T)
 clean:
 	$(Q) "RM      $(ALL_RM)"
 	$(E) cd $(OUT) && $(HOST_RM) $(ALL_RM)
+
+echo:
+	$(Q) "   LEVEL=$(LEVEL)"
+	$(Q) "      CC=$(CC)"
+	$(Q) "  CFLAGS=$(BASE_CCFLAGS)"
 
 depend:
 	$(E) $(HOST_CC) $(HOST_CCFLAGS) -MM *.c > makefile.dep
@@ -227,13 +234,13 @@ include makefile.dep
 # Target file rules.
 ##############################################################
 
-$(ALO_A): $(CORE_O)
+$(ALO_A): $(BASE_O)
 	$(Q) "AR      $@"
-	$(E) $(TARGET_AR) "$(OUT)/$@" $(addprefix $(OUT)/, $(CORE_O))
+	$(E) $(TARGET_AR) "$(OUT)/$@" $(addprefix $(OUT)/, $(BASE_O))
 
-$(ALO_SO): $(CORE_O)
+$(ALO_SO): $(BASE_O)
 	$(Q) "DYLINK  $@"
-	$(E) cd $(OUT) && $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(CORE_O) $(TARGET_LIBS)
+	$(E) cd $(OUT) && $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(BASE_O) $(TARGET_LIBS)
 	$(E) cd $(OUT) && $(TARGET_STRIP) $@
 
 $(ALO_T): $(TARGET_O) $(ALO_O)

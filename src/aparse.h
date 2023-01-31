@@ -7,6 +7,7 @@
 
 #include "agc.h"
 #include "alex.h"
+#include "afun.h"
 
 #define NO_LABEL (~u32c(0))
 
@@ -14,27 +15,21 @@ typedef struct Parser Parser;
 typedef struct Scope Scope;
 typedef struct FnScope FnScope;
 
+intern a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...);
 intern a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* fname, a_u32 options, GFun** pfun);
 
-typedef struct Name Name;
-typedef struct Names Names;
+typedef struct Sym Sym;
+typedef struct Syms Syms;
 
-typedef struct Line Line;
-typedef struct Lines Lines;
+typedef struct CompCapInfo CompCapInfo;
 
-struct Names {
-	Name* _stack;
-	a_u32 _top;
-	a_u32 _cap;
-};
+BUF_STRUCT_DECLARE(InsnBuf, a_insn);
+BUF_STRUCT_DECLARE(LineInfoBuf, LineInfo);
+BUF_STRUCT_DECLARE(LocalInfoBuf, LocalInfo);
+BUF_STRUCT_DECLARE(CapInfoBuf, CompCapInfo);
 
-struct Line {
-	a_u32 _begin;
-	a_u32 _line;
-};
-
-struct Lines {
-	Line* _stack;
+struct Syms {
+	Sym* _stack;
 	a_u32 _top;
 	a_u32 _cap;
 };
@@ -44,9 +39,13 @@ struct Parser {
 		Lexer _lex;
 		a_henv _env;
 	};
-	a_insn* _insns;
-	a_u32 _ninsn;
-	a_u32 _cinsn;
+	union {
+		InsnBuf _insns;
+		struct {
+			a_insn* _code;
+			a_usize _head_label;
+		};
+	};
 	a_u32 _options;
 	a_u32 _head_jump;
 	a_u32 _head_jump_line;
@@ -62,8 +61,10 @@ struct Parser {
 		};
 	};
 	a_u16 _scope_depth;
-	Names _names;
-	Lines _lines;
+	Syms _syms;
+	LocalInfoBuf _locals;
+	LineInfoBuf _lines;
+	CapInfoBuf _captures;
 	Scope* _scope;
 	FnScope* _fnscope;
 	RefQueue _rq; /* Function prototype queue. */
@@ -73,7 +74,9 @@ struct Parser {
 #define SCOPE_DEPTH_ENV u8c(0)
 #define SCOPE_DEPTH_ROOT u8c(1)
 
-#define l_error(par,fmt,ln,args...) \
-ai_lex_error_(&(par)->_lex, "%s:%u: "fmt, (par)->_lex._fname, ln, ##args)
+#define par_err_f_arg(par,fmt) "%s: "fmt, (par)->_lex._fname
+#define par_err_fl_arg(par,fmt,ln) par_err_f_arg(par, "%u: "fmt), ln
+
+#define ai_par_error(par,fmt,ln,args...) ai_par_report(par, false, par_err_fl_arg(par,fmt,ln), ##args)
 
 #endif /* aparse_h_ */

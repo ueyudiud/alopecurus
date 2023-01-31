@@ -11,20 +11,24 @@
 
 #include "aerr.h"
 
-a_none ai_err_raise(a_henv env, a_msg code, char const* fmt, ...) {
+a_none ai_err_raisef(a_henv env, a_msg code, char const* fmt, ...) {
     va_list varg;
     va_start(varg, fmt);
-    ai_err_raisev(env, code, fmt, varg);
-    va_end(varg);
+	ai_err_raisevf(env, code, fmt, varg);
+	va_end(varg);
 }
 
-a_none ai_err_raisev(a_henv env, a_msg code, char const* fmt, va_list varg) {
+a_none ai_err_raisevf(a_henv env, a_msg code, char const* fmt, va_list varg) {
 	assume(code < 0, "cannot raise non error message.");
-	Global* g = G(env);
     GStr* str = ai_str_formatv(env, fmt, varg);
-    v_set(g, &env->_error, v_of_ref(str));
-	if (g->_hookm & ALO_HMRAISE) {
+	ai_err_raise(env, code, v_of_ref(str));
+}
+
+a_none ai_err_raise(a_henv env, a_msg code, Value err) {
+	Global* g = G(env);
+	v_set(g, &env->_error, err);
+	if (G(env)->_hookm & ALO_HMRAISE) {
 		ai_vm_hook(env, code);
 	}
-    ai_env_raise(env, code);
+	ai_env_raise(env, code);
 }

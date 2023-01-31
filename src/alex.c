@@ -12,13 +12,14 @@
 #include "acode.h"
 #include "astrx.h"
 #include "afmt.h"
+#include "aparse.h"
 
 #include "alex.h"
 
-inline void l_enter_scope(Lexer* lex, a_u32 channel, a_u32 line) {
+inline void l_switch_scope(Lexer* lex, a_u32 channel) {
+	lex->_scope->_last_channel = lex->_channel;
+	lex->_scope->_begin_line = lex->_line;
 	lex->_channel = channel;
-	lex->_scope->_last_channel = CHANNEL_NORMAL;
-	lex->_scope->_line = line;
 }
 
 inline a_i32 l_pollx(Lexer* lex) {
@@ -36,15 +37,26 @@ static void l_unwind(Lexer* lex, a_i32 ch) {
 
 #define l_peekx(lex) ((lex)->_ch)
 
+static a_none l_foreign_error(Lexer* lex) {
+	ai_par_report(from_member(Parser, _lex, lex), false, "%s: IO error. code: %tx", lex->_in._err);
+}
+
 static a_i32 l_poll(Lexer* lex) {
 	a_i32 ch = l_pollx(lex);
-	if (unlikely(ch < 0)) {
-		ai_lex_error_(lex, "%s: IO error. code: %tx", lex->_in._err);
+	if (unlikely(ch < ALO_ESTMUF)) {
+		l_foreign_error(lex);
 	}
 	return ch;
 }
 
-#define l_peek(lex) ({ a_i32 _ch = l_peekx(lex); if (unlikely(_ch < 0)) return _ch; _ch; })
+static a_i32 l_peek(Lexer* lex) {
+	a_i32 ch = l_peekx(lex);
+	if (unlikely(ch < ALO_ESTMUF)) {
+		l_foreign_error(lex);
+	}
+	return ch;
+}
+
 #define l_skip(lex) l_pollx(lex)
 
 #define l_testx(lex,ch) (l_peekx(lex) == (ch))
@@ -97,7 +109,7 @@ static a_bool c_isibody(a_i32 ch) {
 }
 
 inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
-    ai_buf_put(lex->_in._env, &lex->_buf, ch);
+    ai_buf_putx(lex->_in._env, &lex->_buf, ch);
 	return ALO_SOK;
 }
 
@@ -111,6 +123,10 @@ static void l_bput(Lexer* lex, a_i32 ch) {
 			ai_mem_nomem(lex->_in._env);
 		}
 	}
+}
+
+static a_u32 strs_index(Strs* strs, a_hash hash) {
+	return ((hash - 1) & strs->_hmask) + 1;
 }
 
 static void strs_strip_free(Strs* strs, StrNode* node) {
@@ -140,7 +156,7 @@ static a_x32 strs_next_free(Strs* strs) {
 
 static void strs_add(Strs* strs, GStr* str) {
     assume(is_nil(strs->_hfree) || unwrap(strs->_hfree) <= strs->_hmask);
-    a_u32 index = str->_hash & strs->_hmask;
+    a_u32 index = strs_index(strs, str->_hash);
     StrNode* node = &strs->_table[index];
     if (node->_str == null) {
 		strs_strip_free(strs, node);
@@ -149,7 +165,7 @@ static void strs_add(Strs* strs, GStr* str) {
     else {
         a_x32 index2 = strs_next_free(strs);
         StrNode* node2 = &strs->_table[unwrap(index2)];
-        if ((node->_str->_hash & strs->_hmask) == index) {
+        if (((str->_hash ^ node->_str->_hash) & strs->_hmask) != 0) {
             *node2 = new(StrNode) {str, wrap(index), node->_next };
             node->_next = index2;
         }
@@ -203,7 +219,7 @@ static GStr* l_tostr(Lexer* lex) {
 
 void ai_lex_init(Lexer* lex, char const* fname) {
     lex->_fname = fname;
-    lex->_line = 0;
+    lex->_line = 1;
     lex->_current = new(Token) {};
 	lex->_channel = CHANNEL_NORMAL;
 	lex->_scope = &lex->_scope0;
@@ -223,15 +239,6 @@ void ai_lex_init(Lexer* lex, char const* fname) {
 void ai_lex_close(Lexer* lex) {
 	strs_close(lex->_in._env, &lex->_strs);
 	ai_buf_close(G(lex->_in._env), &lex->_buf);
-}
-
-a_none ai_lex_error_(Lexer* lex, char const* fmt, ...) {
-    va_list varg;
-	ai_code_close(from_member(Parser, _lex, lex));
-    a_henv env = lex->_in._env;
-    va_start(varg, fmt);
-    ai_err_raisev(env, ALO_ECHUNK, fmt, varg);
-    va_end(varg);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {
@@ -286,7 +293,7 @@ GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len) {
 	Strs* strs = &lex->_strs;
 	a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
 
-	StrNode* node = &strs->_table[hash & strs->_hmask];
+	StrNode* node = &strs->_table[strs_index(strs, hash)];
 	if (node->_str != null) {
 		loop {
 			if (node->_str->_hash == hash && ai_str_requals(node->_str, src, len)) {
@@ -937,7 +944,7 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 	}
 	else {
 		while (!l_testskip(lex, '\'')) {
-			switch (l_peekx(lex)) {
+			switch (l_peek(lex)) {
 				case ALO_ESTMUF:
 				case '\r':
 				case '\n':
@@ -953,17 +960,25 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 	return TK_STRING;
 }
 
+static a_i32 l_scan_template_string_escape(Lexer* lex, Token* tk);
+
 static a_i32 l_scan_template_string_body(Lexer* lex, Token* tk) {
 	while (!l_testskip(lex, '\"')) {
-		switch (l_peekx(lex)) {
+		switch (l_peek(lex)) {
 			case ALO_ESTMUF:
 			case '\r':
 			case '\n':
 				ai_lex_error(lex, "unclosed string.");
 			case '$': {
-				lex->_channel = CHANNEL_TSTR_ESCAPE;
-				tk->_str = l_tostr(lex);
-				return TK_TSTRING;
+				if (lex->_buf._len != 0) {
+					tk->_str = l_tostr(lex);
+					return TK_TSTRING;
+				}
+				else {
+					lex->_channel = CHANNEL_TSTR_ESCAPE;
+					l_skip(lex);
+					return l_scan_template_string_escape(lex, tk);
+				}
 			}
 			default: {
 				l_scan_echar(lex);
@@ -982,12 +997,12 @@ static a_i32 l_scan_multiline_template_string_body(Lexer* lex, Token* tk) {
 	if (indent > 0) {
 		while (!l_skip_string_indent(lex, indent, '\"')) {
 			a_i32 msg;
-			while (!((msg = l_scan_multi_echar(lex, '\"', lex->_scope->_line)) & S_LINE));
+			while (!((msg = l_scan_multi_echar(lex, '\"', lex->_scope->_begin_line)) & S_LINE));
 			if (msg & S_TEXT) break;
 		}
 	}
 	else {
-		while (!(l_scan_multi_echar(lex, '\"', lex->_scope->_line) & S_TEXT));
+		while (!(l_scan_multi_echar(lex, '\"', lex->_scope->_begin_line) & S_TEXT));
 	}
 	tk->_str = l_tostr(lex);
 	lex->_channel = CHANNEL_NORMAL;
@@ -998,7 +1013,7 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 	a_u32 line = lex->_line;
 	if (l_testskip(lex, '\"')) {
 		if (l_testskip(lex, '\"')) {
-			l_enter_scope(lex, CHANNEL_MTSTR_BODY, line);
+			l_switch_scope(lex, CHANNEL_MTSTR_BODY);
 			if (l_testskip(lex, '\n')) {
 				a_i32 n = l_scan_string_indent(lex);
 				check(n);
@@ -1012,7 +1027,7 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 		}
 	}
 	else {
-		l_enter_scope(lex, CHANNEL_TSTR_BODY, line);
+		l_switch_scope(lex, CHANNEL_TSTR_BODY);
 		return l_scan_template_string_body(lex, tk);
 	}
 }
@@ -1020,7 +1035,7 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
     loop {
         a_i32 ch;
-        switch (ch = l_pollx(lex)) {
+        switch (ch = l_poll(lex)) {
             case ALO_ESTMUF: {
                 return TK_EOF;
             }
@@ -1035,6 +1050,7 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
             }
             case '\n': {
                 lex->_line += 1;
+				tk->_line = lex->_line;
                 break;
             }
             case '(': {
@@ -1180,20 +1196,20 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
 				return l_scan_double_quoted_string(lex, tk);
 			}
             default: {
-                return ch;
+				ai_lex_error(lex, "invalid character, got '%c'", ch);
             }
         }
     }
 }
 
-static a_i32 l_scan_tstr_escape(Lexer* lex, Token* tk) {
+static a_i32 l_scan_template_string_escape(Lexer* lex, Token* tk) {
 	a_i32 ch = l_poll(lex);
 	a_u32 channel = lex->_channel ^ 0x1; /* Load body channel. */
 	switch (ch) {
-		case '(': {
+		case '{': {
 			lex->_channel = channel;
-			l_enter_scope(lex, CHANNEL_NORMAL, lex->_line);
-			return TK_LBK;
+			l_switch_scope(lex, CHANNEL_NORMAL);
+			return TK_LBR;
 		}
 		case 'a' ... 'z':
 		case 'A' ... 'Z':
@@ -1203,12 +1219,15 @@ static a_i32 l_scan_tstr_escape(Lexer* lex, Token* tk) {
 			lex->_channel = channel;
 			return t;
 		}
+		case ALO_ESTMUF:
+			return TK_EOF;
 		default:
 			ai_lex_error(lex, "bad escape string character.");
 	}
 }
 
 static void l_scan(Lexer* lex, Token* tk) {
+	tk->_line = lex->_line; /* Initialize line number. */
 	if (likely(lex->_channel == CHANNEL_NORMAL)) { /* Fast path of scanner. */
 		tk->_tag = l_scan_normal(lex, tk);
 	}
@@ -1216,7 +1235,7 @@ static void l_scan(Lexer* lex, Token* tk) {
 		switch (lex->_channel) { /* Slow path of scanner. */
 			case CHANNEL_TSTR_ESCAPE:
 			case CHANNEL_MTSTR_ESCAPE: {
-				tk->_tag = l_scan_tstr_escape(lex, tk);
+				tk->_tag = l_scan_template_string_escape(lex, tk);
 				break;
 			}
 			case CHANNEL_TSTR_BODY: {

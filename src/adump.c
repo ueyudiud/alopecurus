@@ -10,7 +10,7 @@
 #include <stdio.h>
 
 #include "abc.h"
-#include "aenv.h"
+#include "afun.h"
 #include "agc.h"
 #include "adump.h"
 
@@ -54,7 +54,22 @@ static void dump_const(a_henv env, Value const* v) {
 	}
 }
 
-static void dump_code(a_henv env, GFunMeta* meta) {
+typedef struct {
+	a_u32 _index;
+	a_u32 _limit;
+} LineItr;
+
+static void dump_line(GFunMeta* meta, LineItr* itr, a_u32 pc) {
+	if (pc >= itr->_limit) {
+		a_u32 index = itr->_index++;
+		assume(index < meta->_nline);
+		LineInfo* info = &meta->_lines[index];
+		printf("line %u\n", info->_lineno);
+		itr->_limit = info->_end;
+	}
+}
+
+static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 	static char const* g_names[] = {
 #define BCNAME(id,name,a,b,c) name,
 		ALO_BC_LIST(BCNAME)
@@ -64,11 +79,15 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 
 	a_insn* begin = meta->_insns;
 	a_insn* end = begin + meta->_ninsn;
+	LineItr line_itr = {};
 	for (a_insn* p = begin; p < end; ++p) {
 		a_insn i = *p;
 		a_u32 op = bc_load_op(i);
 		assume(op < BC__MAX, "bad opcode.");
 		a_u32 n = cast(a_u32, p - meta->_insns);
+		if (fline) {
+			dump_line(meta, &line_itr, n);
+		}
 		printf("\t%5u %5s ", n, g_names[op]);
 		switch (op) {
 			case BC_NOP: {
@@ -94,6 +113,8 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 				printf("%4u %4u    _\n", bc_load_a(i), bc_load_b(i));
 				break;
 			}
+			case BC_TEQ:
+			case BC_TNE:
 			case BC_TLT:
 			case BC_TLE:
 			case BC_TNEW:
@@ -124,6 +145,8 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 				printf("\n");
 				break;
 			}
+			case BC_TEQI:
+			case BC_TNEI:
 			case BC_TLTI:
 			case BC_TLEI:
 			case BC_TGTI:
@@ -143,12 +166,16 @@ static void dump_code(a_henv env, GFunMeta* meta) {
 				printf("%4u %4u %4d\n", bc_load_a(i), bc_load_b(i), bc_load_sc(i));
 				break;
 			}
+			case BC_BEQ:
+			case BC_BNE:
 			case BC_BLT:
 			case BC_BLE:
 			case BC_RET: {
 				printf("   _ %4u %4u\n", bc_load_b(i), bc_load_c(i));
 				break;
 			}
+			case BC_BEQI:
+			case BC_BNEI:
 			case BC_BLTI:
 			case BC_BLEI:
 			case BC_BGTI:
@@ -192,7 +219,34 @@ static void dump_meta(a_henv env, GFunMeta* meta, a_u32 options) {
 		   Ks("capture", meta->_ncap),
 		   Ks("constant", meta->_nconst),
 		   Ks("sub", meta->_nsub));
-	dump_code(env, meta);
+	dump_code(env, meta, (options & ALO_DUMP_OPT_LINE) != 0);
+	if (options & ALO_DUMP_OPT_CONST_POOL) {
+		printf("constant pool <%p>\n", meta->_consts);
+		for (a_u32 i = 0; i < meta->_nconst; ++i) {
+			printf("\t%5u\t", i);
+			dump_const(env, &meta->_consts[i]);
+			printf("\n");
+		}
+	}
+	if (options & ALO_DUMP_OPT_LOCAL) {
+		if (meta->_locals != null) {
+			printf("local info table <%p>\n", meta->_locals);
+			for (a_u32 i = 0; i < meta->_nlocal; ++i) {
+				LocalInfo* info = &meta->_locals[i];
+				printf("\t%5u\tR[%u]\t%s ; %u %u\n", i, info->_reg, info->_name->_data, info->_begin_label, info->_end_label);
+			}
+			printf("capture info table <%p>\n", meta->_caps);
+			for (a_u32 i = 0; i < meta->_ncap; ++i) {
+				CapInfo* info = &meta->_caps[i];
+				GStr* name = meta->_cap_names[i];
+				printf("\t%5u\t%c[%u]\t%s\n", i, info->_up ? 'C' : 'R', info->_reg, name->_data);
+			}
+		}
+		else {
+			printf("local info table <NULL>\n");
+		}
+	}
+	printf("\n");
 	/* Dump sub functions. */
 	for (a_u32 i = 0; i < meta->_nsub; ++i) {
 		dump_meta(env, meta->_subs[i], options);

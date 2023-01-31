@@ -66,7 +66,7 @@ typedef a_u32 a_uint;
 
 inline void ai_op_check_divisor(a_henv env, a_int b) {
 	if (unlikely(b == 0)) {
-		ai_err_raise(env, ALO_EINVAL, "attempt to divide 0.");
+		ai_err_raisef(env, ALO_EINVAL, "attempt to divide 0.");
 	}
 }
 
@@ -135,6 +135,18 @@ inline a_int ai_op_mod_int(a_henv env, a_int a, a_int b) {
 # define ai_op_bxor_int(env,a,b) aloi_op_band_int(env, a, b)
 #else
 # define ai_op_bxor_int(env,a,b) cast(a_i32, cast(a_u32, a) ^ cast(a_u32, b))
+#endif
+
+#ifdef aloi_op_eq_int
+# define ai_op_eq_int(env,a,b) aloi_op_eq_int(env, a, b)
+#else
+# define ai_op_eq_int(env,a,b) ((a) == (b))
+#endif
+
+#ifdef aloi_op_eq_float
+# define ai_op_eq_float(env,a,b) aloi_op_eq_float(env, a, b)
+#else
+# define ai_op_eq_float(env,a,b) ((a) == (b))
 #endif
 
 #ifdef aloi_op_lt_int

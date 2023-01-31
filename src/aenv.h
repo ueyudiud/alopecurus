@@ -43,17 +43,19 @@ typedef struct Stack {
 
 typedef struct Frame Frame;
 
+#define RFLAG_COUNT_VARARG 255
+
+/* Flags of result. */
+typedef struct {
+	a_u16 _count: 8; /* Number of expected return count. */
+} RFlags;
+
 struct Frame {
 	Frame* _prev;
 	a_insn* _pc;
-	union {
-		a_u16 _rflags; /* Flags of result. */
-		struct {
-			a_u8 _nret; /* Number of expected return count. */
-		};
-	};
+	RFlags _rflags;
 	/* In strict stack checking mode, the API will use frame bound to check index range. */
-#ifdef ALOI_STRICT_STACK_CHECK
+#if ALO_STRICT_STACK_CHECK
 	Value* _bound;
 #endif
 };
@@ -74,87 +76,10 @@ struct alo_Env {
 
 #define G(env) ((env)->_g)
 
-typedef struct {
-	IStr** _table;
-	a_usize _len;
-	a_usize _hmask; /* Hash code mask. */
-} IStrTable;
-
-typedef struct {
-	GMeta _nil;
-	GMeta _bool;
-	GMeta _int;
-	GMeta _ptr;
-	GMeta _dstr;
-	GMeta _istr;
-	GMeta _hstr;
-	GMeta _tuple;
-	GMeta _list;
-	GMeta _table;
-	GMeta _route;
-	GMeta _fmeta;
-} InternMetas;
-
 #define GLOBAL_FLAG_INCRGC u16c(0x0001)
 #define GLOBAL_FLAG_FULLGC u16c(0x0002)
 #define GLOBAL_FLAG_PAUSE_CLOSE u16c(0x0004)
 #define GLOBAL_FLAG_DISABLE_GC u16c(0x0008)
-
-typedef void (*a_fp_gsplash)(Global* g, void* ctx);
-
-struct Global {
-	Alloc _af;
-	void* _ac;
-	a_kfun _hookf;
-	a_kctx _hookc;
-	a_henv _active;
-	a_usize _mem_base;
-	a_isize _mem_debt;
-	a_isize _mem_work;
-	a_usize _mem_estimate;
-	a_gclist _gc_normal;
-	a_gclist _gc_fixed;
-	a_gclist _gc_closable;
-	a_gclist _gc_toclose;
-	a_gcnext* _gc_sweep;
-	GStr* _nomem_error;
-	a_fp_gsplash _gsplash;
-	void* _gsplash_ctx;
-	a_trmark _tr_gray;
-	a_trmark _tr_regray;
-	InternMetas _metas;
-	IStrTable _istable;
-	a_hash _seed;
-	a_u16 _gcpausemul;
-	a_u16 _gcstepmul;
-	a_u16 _flags;
-	a_u8 _white_color;
-	a_u8 _gcstep;
-	volatile atomic_uint_fast8_t _hookm;
-};
-
-#define ALO_HMSWAP 0x80
-
-inline void ai_env_gsplash(a_henv env, a_fp_gsplash fun, void* ctx) {
-	assume(fun != null);
-	Global* g = G(env);
-	g->_gsplash = fun;
-	g->_gsplash_ctx = ctx;
-}
-
-inline void ai_env_gsplash_clear(a_henv env) {
-	Global* g = G(env);
-	g->_gsplash = null;
-	g->_gsplash_ctx = null;
-}
-
-inline a_usize ai_env_mem_total(Global* g) {
-	return g->_mem_base + cast(a_usize, g->_mem_debt);
-}
-
-inline GStr* ai_env_strx(Global* g, a_u32 tag) {
-	return cast(GStr**, g + 1)[tag - 1];
-}
 
 typedef void (*a_pfun)(a_henv, void*);
 
@@ -163,6 +88,10 @@ intern a_henv ai_env_mainof(Global* g);
 intern a_msg ai_env_resume(a_henv env, GRoute* self);
 intern void ai_env_yield(a_henv env);
 intern a_msg ai_env_protect(a_henv env, a_pfun pfun, void* pctx);
+
+#define GROW_STACK_FLAG_OF1 1
+#define GROW_STACK_FLAG_OF2 2
+
 intern a_none ai_env_raise(a_henv env, a_msg msg);
 intern a_isize ai_env_grow_stack(a_henv env, Value* top);
 intern a_isize ai_env_check_stack(a_henv env, Value* top);

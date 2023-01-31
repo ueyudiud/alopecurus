@@ -15,8 +15,6 @@ typedef struct RCtx RCtx;
 # error unsupported architecture.
 #endif
 
-#include "adef.h"
-
 intern a_msg ai_ctx_init(void);
 
 #endif /* actx_h_ */

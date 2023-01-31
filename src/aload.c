@@ -103,7 +103,7 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
     return ALO_SOK;
 }
 
-static a_msg l_load_info(InCtx* ic, FnInfo* info) {
+static a_msg l_load_info(InCtx* ic, FnCreateInfo* info) {
     info->_nconst = l_get(ic, a_u32);
     info->_ninsn = l_get(ic, a_u32);
     info->_nsub = l_get(ic, a_u16);
@@ -116,7 +116,7 @@ static a_msg l_load_info(InCtx* ic, FnInfo* info) {
 
 static a_msg l_load_sub(InCtx* ic, GFunMeta** pf);
 
-static a_msg l_load_meta(InCtx* ic, FnInfo const* info, GFunMeta* meta) {
+static a_msg l_load_meta(InCtx* ic, FnCreateInfo const* info, GFunMeta* meta) {
     /* Noexcept code until here, add meta into object list. */
 	rq_push(&ic->_rq, meta);
     
@@ -133,7 +133,7 @@ static a_msg l_load_meta(InCtx* ic, FnInfo const* info, GFunMeta* meta) {
 
 static a_msg l_load_sub(InCtx* ic, GFunMeta** pf) {
     /* Load function header */
-    FnInfo info;
+    FnCreateInfo info;
     check(l_load_info(ic, &info));
 
     GFunMeta* meta = ai_fun_xalloc(ic->_env, &info);
@@ -146,7 +146,7 @@ static a_msg l_load_sub(InCtx* ic, GFunMeta** pf) {
 
 static a_msg l_load_root(InCtx* ic) {
     /* Load function header */
-    FnInfo info;
+    FnCreateInfo info;
     check(l_load_info(ic, &info));
 
 	a_usize meta_size = info._size;
@@ -192,7 +192,7 @@ static void l_release(InCtx* ic) {
 }
 
 a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags) {
-    InCtx ic = { _flags: flags };
+    InCtx ic = { ._flags =  flags };
 	rq_init(&ic._rq);
     ai_io_iinit(env, fun, ctx, &ic._in);
 

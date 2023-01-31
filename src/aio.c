@@ -13,12 +13,12 @@
 
 void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in) {
     *in = new(ZIn) {
-        _env: env,
-        _fun: fun,
-        _ctx: ctx,
-        _ptr: null,
-        _len: 0,
-        _err: 0
+        ._env =  env,
+        ._fun =  fun,
+        ._ctx =  ctx,
+        ._ptr =  null,
+        ._len =  0,
+        ._err =  0
     };
 }
 

@@ -300,14 +300,14 @@ a_none ai_ctx_raise(unused Route* env, a_msg msg) {
 }
 
 static EXCEPTION_DISPOSITION catch_except_hook(
-		_In_ PEXCEPTION_RECORD ExceptionRecord,
-		_In_ PVOID EstablisherFrame,
-		_Inout_ PCONTEXT unused ContextRecord,
-		_Inout_ PDISPATCHER_CONTEXT DispatcherContext) {
+		PEXCEPTION_RECORD ExceptionRecord,
+		PVOID EstablisherFrame,
+		PCONTEXT unused ContextRecord,
+		PDISPATCHER_CONTEXT DispatcherContext) {
 	a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
 	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
-	DWORD64 pc = DispatcherContext->ImageBase + *cast(a_u32*, DispatcherContext->HandlerData);
+	a_usize pc = DispatcherContext->ImageBase + *cast(a_u32*, DispatcherContext->HandlerData);
 	RtlUnwind(EstablisherFrame, cast(PVOID, pc), ExceptionRecord, cast(PVOID, cast(a_isize, msg)));
 	unreachable();
 }
@@ -323,6 +323,7 @@ a_msg ai_ctx_catch(Route* env, a_pfun pfun, void* pctx) {
 	(*pfun)(&env->_body, pctx);
 
 	asm(""::"a"(msg));
+
 end_try:
 	asm volatile("":"=a"(msg));
 	return msg;
@@ -338,9 +339,9 @@ a_msg ai_ctx_open(Route* route, a_usize stack_size) {
 	commit = (commit + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
 	PROCESS_STACK_ALLOCATION_INFORMATION alloc_info = {
-		ReserveSize: max(reserve, commit),
-		ZeroBits: 0,
-		StackBase: null
+		.ReserveSize = max(reserve, commit),
+		.ZeroBits = 0,
+		.StackBase = null
 	};
 
 	NTSTATUS status = NtSetInformationProcess(NtCurrentProcess(), ProcessThreadStackAllocation, &alloc_info, sizeof(alloc_info));
@@ -358,12 +359,12 @@ a_msg ai_ctx_open(Route* route, a_usize stack_size) {
 
 	void* stack_base = alloc_info.StackBase + reserve;
 	route->_ctx = new(RCtx) {
-		_stack_alloc_base: alloc_info.StackBase,
-		_stack_base: stack_base,
-		_stack_limit: alloc_info.StackBase + 2 * PAGE_SIZE,
-		_except_list: cast(void*, isizec(-1)),
-		_rsp: cast(a_gpr, stack_base - 0x8),
-		_rip: cast(a_gpr, rstart)
+		._stack_alloc_base = alloc_info.StackBase,
+		._stack_base = stack_base,
+		._stack_limit = alloc_info.StackBase + 2 * PAGE_SIZE,
+		._except_list = cast(void*, isizec(-1)),
+		._rsp = cast(a_gpr, stack_base - 0x8),
+		._rip = cast(a_gpr, rstart)
 	};
 
 	*cast(void**, route->_ctx._rsp) = PROC_NULL;

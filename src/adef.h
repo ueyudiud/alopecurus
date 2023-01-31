@@ -11,6 +11,9 @@
 #include "alo.h"
 #include "aaux.h"
 
+#define M_false 0
+#define M_true 1
+
 #define M_cat(a,b) M_cat0(a,b)
 #define M_cat0(a,b) a##b
 
@@ -18,6 +21,27 @@
 #define M_str0(a) #a
 
 #define M_sym(a) M_cat(a,__LINE__)
+
+/**
+ ** Check memory related function in strict mode.
+ ** If enabled, the following strategy will be used:
+ ** - the stack will be force to reallocate for each grow.
+ ** - the full GC will be triggered in each allocation.
+ */
+#ifdef ALOI_STRICT_MEMORY_CHECK
+# define ALO_STRICT_MEMORY_CHECK M_true
+#else
+# define ALO_STRICT_MEMORY_CHECK M_false
+#endif
+
+/**
+ ** Check stack limit in C API.
+ */
+#ifdef ALOI_STRICT_STACK_CHECK
+# define ALO_STRICT_STACK_CHECK M_true
+#else
+# define ALO_STRICT_STACK_CHECK M_false
+#endif
 
 /* Special attributes. */
 
@@ -95,7 +119,7 @@ typedef a_u32 a_insn;
 #undef nil
 
 #define null NULL
-#define false ((a_bool) 0)
+#define false ((a_bool) M_false)
 #define true  (!false)
 #define zero(t) ((t) {0})
 
@@ -130,13 +154,13 @@ typedef a_u32 a_insn;
  ** Used in optional array based table reference to
  ** represent a empty value.
  */
+#define x32c(l) wrap(i32c(l))
+
 #define nil x32c(0)
 
 #define unwrap_unsafe(e) ((e)._)
 #define unwrap(e) ({ a_x32 _x = (e); assume(!is_nil(_x)); unwrap_unsafe(_x); })
 #define wrap(v)  (new(a_x32) { v })
-
-#define x32c(l) wrap(i32c(l))
 
 #define is_nil(e) (unwrap_unsafe(e) == 0)
 

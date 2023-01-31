@@ -41,7 +41,7 @@ a_usize ai_fmt_i2s(a_byte* p, a_int v) {
 a_msg ai_fmt_puti(a_henv env, void* buf, a_int v) {
 	a_byte cs[16];
 	a_usize len = ai_fmt_i2s(cs + 16, v);
-	ai_buf_puts(env, buf, cs + 16 - len, len);
+	ai_buf_putsx(env, buf, cs + 16 - len, len);
 	return ALO_SOK;
 }
 
@@ -54,6 +54,6 @@ a_usize ai_fmt_f2s(a_byte* p, a_float v) {
 a_msg ai_fmt_putf(a_henv env, void* buf, a_float v) {
 	a_byte cs[32];
 	a_usize len = ai_fmt_f2s(cs + 32, v);
-	ai_buf_puts(env, buf, cs + 32 - len, len);
+	ai_buf_putsx(env, buf, cs + 32 - len, len);
 	return ALO_SOK;
 }
