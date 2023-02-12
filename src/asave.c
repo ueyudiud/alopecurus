@@ -3,6 +3,7 @@
  */
 
 #define asave_c_
+#define ALO_LIB
 
 #include "aio.h"
 #include "aenv.h"
@@ -28,7 +29,7 @@ struct OutCtx {
     a_byte _b[(sizeof(v) * 8 + 6) / 7]; \
     a_byte* _p = _b + sizeof(_b) - 1; \
     t _v = cast(t, v); \
-    while (_v >= ~cast(t, 0x7f)) { \
+    while (_v & ~cast(t, 0x7f)) { \
         *(_p--) = cast(a_byte, _v & cast(t, 0x7f)) | u8c(0x80); \
         _v >>= 7; \
     } \
@@ -81,25 +82,29 @@ static a_msg l_save_const(OutCtx* oc, Value const* v) {
     return ALO_SOK;
 }
 
-static a_msg l_save(OutCtx* oc, GFunMeta* val) {
-    l_put(oc, a_u32, val->_nconst);
-    l_put(oc, a_u32, val->_ninsn);
-    l_put(oc, a_u16, val->_nsub);
-    l_put(oc, a_u16, val->_nlocal);
-    l_put(oc, a_u8, val->_ncap);
-    l_put(oc, a_u8, val->_nstack);
-    for (a_u32 i = 0; i < val->_nconst; ++i) {
-        check(l_save_const(oc, &val->_consts[i]));
+static a_msg l_save(OutCtx* oc, GFunMeta* meta) {
+    l_putvi(oc, a_u32, meta->_nconst);
+    l_putvi(oc, a_u32, meta->_ninsn);
+    l_putvi(oc, a_u16, meta->_nsub);
+    l_putvi(oc, a_u16, meta->_nlocal);
+    l_put(oc, a_u8, meta->_ncap);
+    l_put(oc, a_u8, meta->_nstack);
+	FnMetaCreateFlags flags = {
+		._fline = false
+	};
+	l_put(oc, FnMetaCreateFlags, flags);
+    for (a_u32 i = 0; i < meta->_nconst; ++i) {
+        check(l_save_const(oc, &meta->_consts[i]));
     }
-    l_putv(oc, val->_insns, val->_ninsn);
-    for (a_u32 i = 0; i < val->_nsub; ++i) {
-        check(l_save(oc, val->_subs[i]));
+    l_putv(oc, meta->_code, meta->_ninsn);
+    for (a_u32 i = 0; i < meta->_nsub; ++i) {
+        check(l_save(oc, meta->_subs[i]));
     }
     return ALO_SOK;
 }
 
 a_msg ai_fun_save(a_henv env, GFun* val, a_ofun fun, void* ctx, a_flags flags) {
-    OutCtx oc = { _flags: flags };
+    OutCtx oc = { ._flags =  flags };
     ai_io_oinit(env, fun, ctx, &oc._out);
-    return l_save(&oc, downcast(GFunMeta, val->_meta));
+    return l_save(&oc, g_cast(GFunMeta, val->_meta));
 }

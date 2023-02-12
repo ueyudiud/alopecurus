@@ -1,13 +1,16 @@
-/*
- * aenv.c
+/**
+ *@file aenv.c
  */
 
 #define aenv_c_
+#define ALO_LIB
 
 #include "abc.h"
 #include "astr.h"
 #include "atuple.h"
 #include "alist.h"
+#include "atable.h"
+#include "amod.h"
 #include "actx.h"
 #include "amem.h"
 #include "agc.h"
@@ -38,14 +41,19 @@ static Route* env2route(a_henv env) {
 }
 
 static void route_new(GRoute* self, Global* g) {
-	self->_status = ALO_SYIELD;
-	self->_flags = 0;
-	self->_g = g;
-	self->_from = null;
-	v_setx(&self->_error, v_of_nil());
-	self->_stack = new(Stack) { };
-	self->_frame = &self->_base_frame;
-	self->_base_frame = new(Frame) { };
+	*self = new(GRoute) {
+		._status = ALO_SYIELD,
+		._flags = 0,
+		._g = g,
+		._from = null,
+		._error = v_of_nil(),
+		._frame = &self->_base_frame,
+		._base_frame = new(Frame) {
+			._prev = null,
+			._stack_bot_diff = 0,
+			._pc = null
+		}
+	};
 }
 
 static a_bool route_create(a_henv env, GRoute* self) {
@@ -67,13 +75,6 @@ static void route_destroy(Global* g, GRoute* self) {
 	ai_mem_vxdel(g, stack->_base, stack->_limit - stack->_base + RESERVED_STACKSIZE);
 }
 
-static void route_destruct(Global* g, GRoute* self) {
-	Route* route = env2route(self);
-	ai_ctx_close(route);
-	route_destroy(g, self);
-	ai_mem_dealloc(g, route, sizeof(Route));
-}
-
 static void route_splash(Global* g, GRoute* self) {
 	Stack* stack = &self->_stack;
 	Value* from = stack->_base;
@@ -87,6 +88,18 @@ static void route_splash(Global* g, GRoute* self) {
 		join_trace(&g->_tr_regray, self);
 	}
 }
+
+static void route_destruct(Global* g, GRoute* self) {
+	Route* route = env2route(self);
+	ai_ctx_close(route);
+	route_destroy(g, self);
+	ai_mem_dealloc(g, route, sizeof(Route));
+}
+
+static VTable const route_vtable = {
+	._splash = fpcast(a_fp_splash, route_splash),
+	._destruct = fpcast(a_fp_destruct, route_destruct)
+};
 
 a_msg ai_env_resume(a_henv env, GRoute* self) {
 	assume(self->_status == ALO_SYIELD && self->_from == null);
@@ -127,60 +140,72 @@ GRoute* ai_env_new(a_henv env, a_usize stack_size) {
 static void global_init(Global* g) {
 	g->_metas._dstr = new(GMeta) {
 		._tid = T_ISTR,
-		._flags = GTYPE_FLAG_IDENTITY_EQUAL,
-		._splash = null,
-		._destruct = null
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = ai_dstr_vtable
 	};
 	g->_metas._istr = new(GMeta) {
 		._tid = T_ISTR,
-		._flags = GTYPE_FLAG_IDENTITY_EQUAL,
-		._splash = fpcast(a_fp_splash, ai_istr_splash),
-		._destruct = fpcast(a_fp_destruct, ai_istr_destruct)
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = ai_istr_vtable
 	};
 	g->_metas._hstr = new(GMeta) {
 		._tid = T_HSTR,
 		._flags = 0,
-		._splash = fpcast(a_fp_splash, ai_hstr_splash),
-		._destruct = fpcast(a_fp_destruct, ai_hstr_destruct)
+		._vtable = ai_hstr_vtable
 	};
 	g->_metas._tuple = new(GMeta) {
 		._tid = T_TUPLE,
 		._flags = 0,
-		._splash = fpcast(a_fp_splash, ai_tuple_splash),
-		._destruct = fpcast(a_fp_destruct, ai_tuple_destruct)
+		._vtable = ai_tuple_vtable
 	};
 	g->_metas._list = new(GMeta) {
 		._tid = T_LIST,
-		._flags = 0,
-		._splash = fpcast(a_fp_splash, ai_list_splash),
-		._destruct = fpcast(a_fp_destruct, ai_list_destruct)
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = ai_list_vtable
+	};
+	g->_metas._table = new(GMeta) {
+		._tid = T_TABLE,
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = ai_table_vtable
 	};
 	g->_metas._route = new(GMeta) {
-		._tid = T_ROUTE,
-		._flags = GTYPE_FLAG_IDENTITY_EQUAL,
-		._splash = fpcast(a_fp_splash, route_splash),
-		._destruct = fpcast(a_fp_destruct, route_destruct)
+		._tid = T_OTHER,
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = route_vtable
+	};
+	g->_metas._cap = new(GMeta) {
+		._tid = T_OTHER,
+		._flags = 0,
+		._vtable = ai_cap_vtable
+	};
+	g->_metas._ref_array = new(GMeta) {
+		._tid = T_OTHER,
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = ai_ref_array_vtable
+	};
+	g->_metas._mod = new(GMeta) {
+		._tid = T_MOD,
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = ai_mod_vtable
 	};
 	g->_metas._fmeta = new(GMeta) {
 		._tid = T_OTHER,
-		._flags = GTYPE_FLAG_IDENTITY_EQUAL,
-		._splash = fpcast(a_fp_splash, ai_fun_meta_splash),
-		._destruct = fpcast(a_fp_destruct, ai_fun_meta_destruct)
+		._flags = GMETA_FLAG_IDENTITY_EQUAL,
+		._vtable = ai_fmeta_vtable
 	};
 
 	static a_insn const cfun_code[] = {
-			bc_make_iabc(BC_FC, 0, 0, 0),
-			bc_make_iabc(BC_NOP, 0, 0, 0)
+		bc_make_iabc(BC_FC, 0, 0, 0),
+		bc_make_iabc(BC_NOP, 0, 0, 0)
 	};
 
 	g->_metas._cfun = new(GFunMeta) {
 		._tid = T_FUNC,
-		._flags = GTYPE_FLAG_IDENTITY_EQUAL,
+		._flags = GMETA_FLAG_IDENTITY_EQUAL | GFUNMETA_FLAG_VARARG,
 		._meta = &g->_metas._fmeta,
-		._splash = fpcast(a_fp_splash, ai_fun_splash),
-		._destruct = fpcast(a_fp_destruct, ai_fun_destruct),
+		._vtable = ai_fun_vtable,
 		._ninsn = 1,
-		._insns = cast(a_insn*, cfun_code)
+		._code = cast(a_insn*, cfun_code)
 	};
 }
 
@@ -188,6 +213,10 @@ static void global_postinit(a_henv env, unused void* ctx) {
 	MRoute* m = cast(MRoute*, env);
 	ai_str_boost(env);
 	ai_strx_open(env, m->_strx_reserved, m->_strx);
+
+	GTable* global = ai_table_new(env);
+	v_set(G(env), &G(env)->_global, v_of_ref(global));
+	ai_gc_register_object(env, global);
 }
 
 a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
@@ -212,7 +241,9 @@ a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
 		._gcpausemul = ALOI_DFL_GCPAUSEMUL,
 		._gcstepmul = ALOI_DFL_GCSTEPMUL,
 		._white_color = WHITE1_COLOR,
-		._gcstep = GCSTEP_PAUSE
+		._gcstep = GCSTEP_PAUSE,
+		._global = v_of_nil(),
+		._hookm = ALO_HMNONE
 	};
 	
 	route_new(env, g);
@@ -249,6 +280,7 @@ void alo_destroy(a_henv env) {
 	/* Clean resources. */
 	ai_gc_clean(g);
 	ai_str_clean(g);
+	ai_mod_clean(g);
 	route_destroy(g, &mr->_route._body);
 
 	assume(ai_env_mem_total(g) == sizeof(MRoute), "memory leak");

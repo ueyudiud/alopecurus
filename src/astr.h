@@ -20,8 +20,8 @@ typedef struct IStr IStr;
 struct GStr {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
-	a_u32 _hash;
-	a_byte _data[1];
+	a_hash _hash;
+	a_byte _data[];
 };
 
 struct IStr {
@@ -40,12 +40,11 @@ intern a_bool ai_str_requals(GStr* self, void const* dat, a_usize len);
 intern a_bool ai_str_equals(GStr* self, GStr* other);
 intern void ai_str_boost(a_henv env);
 intern void ai_str_clean(Global* g);
-intern void ai_istr_splash(Global* g, GStr* self);
-intern void ai_hstr_splash(Global* g, GStr* self);
-intern void ai_istr_destruct(Global* g, GStr* self);
-intern void ai_hstr_destruct(Global* g, GStr* self);
 
 #define ai_str_createl(env,src) ai_str_create(env, ""src, sizeof(src) - sizeof(char))
 
+intern VTable const ai_dstr_vtable;
+intern VTable const ai_istr_vtable;
+intern VTable const ai_hstr_vtable;
 
 #endif /* astr_h_ */

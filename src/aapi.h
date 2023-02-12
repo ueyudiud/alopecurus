@@ -35,9 +35,19 @@ inline Value* api_incr_stack(a_henv env) {
     return env->_stack._top++;
 }
 
-inline Value const* api_decr_stack(a_henv env) {
+inline Value api_pre_decr_stack(a_henv env) {
     api_check_elem(env, 1);
-    return --env->_stack._top;
+    return *(env->_stack._top - 1);
+}
+
+inline void api_post_decr_stack(a_henv env) {
+    env->_stack._top -= 1;
+}
+
+inline Value api_decr_stack(a_henv env) {
+    Value v = api_pre_decr_stack(env);
+    api_post_decr_stack(env);
+    return v;
 }
 
 #endif /* aapi_h_ */

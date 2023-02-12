@@ -14,9 +14,9 @@ struct GTuple {
 };
 
 intern GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len);
-intern Value const* ai_tuple_geti(a_henv env, GTuple* self, a_isize pos);
-intern void ai_tuple_splash(Global* g, GTuple* self);
-intern void ai_tuple_destruct(Global* g, GTuple* self);
+intern Value const* ai_tuple_refi(a_henv env, GTuple* self, a_isize pos);
+
+intern VTable const ai_tuple_vtable;
 
 #endif /* atuple_h_ */
 

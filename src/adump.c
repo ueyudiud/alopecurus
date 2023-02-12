@@ -1,11 +1,9 @@
-/*
- * adump.c
- *
- *  Created on: 2022/7/30
- *      Author: ueyudiud
+/**
+ *@file adump.c
  */
 
 #define adump_c_
+#define ALO_LIB
 
 #include <stdio.h>
 
@@ -77,14 +75,14 @@ static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 		null
 	};
 
-	a_insn* begin = meta->_insns;
+	a_insn* begin = meta->_code;
 	a_insn* end = begin + meta->_ninsn;
 	LineItr line_itr = {};
 	for (a_insn* p = begin; p < end; ++p) {
 		a_insn i = *p;
 		a_u32 op = bc_load_op(i);
 		assume(op < BC__MAX, "bad opcode.");
-		a_u32 n = cast(a_u32, p - meta->_insns);
+		a_u32 n = cast(a_u32, p - meta->_code);
 		if (fline) {
 			dump_line(meta, &line_itr, n);
 		}

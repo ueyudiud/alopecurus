@@ -68,7 +68,7 @@ inline void g_set_white(Global* g, a_hobj v) {
 }
 
 inline void v_check_alive(Global* g, Value const* v) {
-	if (v_is_ref(v)) {
+	if (v_is_obj(v)) {
 		GObj* obj = cast(GObj*, v_as_hnd(v));
 		a_u32 tag = v_raw_tag(v);
 		assume((tag == obj->_meta->_tid || (tag == T_OTHER && obj->_meta->_tid > T__MAX)) && !g_is_other(g, obj));
@@ -80,7 +80,7 @@ inline void join_trace_(a_trmark* list, GObj* elem) {
 	*list = addr_of(elem);
 }
 
-#define join_trace(list,elem) join_trace_(list, downcast(GObj, elem))
+#define join_trace(list,elem) join_trace_(list, g_cast(GObj, elem))
 
 inline GObj* strip_trace(a_trmark* list) {
 	GObj* elem = ptr_of(GObj, *list);
@@ -97,22 +97,21 @@ intern void ai_gc_incr_gc(a_henv env);
 intern void ai_gc_full_gc(a_henv env, a_bool emergency);
 intern void ai_gc_clean(Global* g);
 
-#define ai_gc_register_object(env,obj) ai_gc_register_object_(env, downcast(GObj, obj))
-#define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, downcast(GObj, obj))
-#define ai_gc_trace_mark(g,obj) ai_gc_trace_mark_(g, downcast(GObj, obj))
+#define ai_gc_register_object(env,obj) ai_gc_register_object_(env, gobj_cast(obj))
+#define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, gobj_cast(obj))
+#define ai_gc_trace_mark(g,obj) ai_gc_trace_mark_(g, gobj_cast(obj))
 
 inline void ai_gc_trace_markv(Global* g, Value const* v) {
-	if (v_is_ref(v)) ai_gc_trace_mark_(g, v_as_obj(g, v));
+	if (v_is_obj(v)) ai_gc_trace_mark_(g, v_as_obj(g, v));
 }
 
-inline a_bool ai_gc_should_run(Global* g) {
-    return g->_mem_debt >= 0;
-}
+#define ai_gc_should_run(g) unlikely((g)->_mem_debt >= 0)
 
 #if ALO_STRICT_MEMORY_CHECK
-# define ai_gc_trigger(env) ({ ai_gc_set_debt(G(env), 0); ai_gc_incr_gc(env); })
+# define ai_gc_trigger_ext(env,pre,post) ({ ai_gc_set_debt(G(env), 0); pre; ai_gc_incr_gc(env); post; })
 #else
-# define ai_gc_trigger(env) ({ if (ai_gc_should_run(G(env))) ai_gc_incr_gc(env); })
+# define ai_gc_trigger_ext(env,pre,post)  ({ if (ai_gc_should_run(G(env))) { pre; ai_gc_incr_gc(env); post; } })
 #endif
+#define ai_gc_trigger(env) ai_gc_trigger_ext(env, (void) 0, (void) 0)
 
 #endif /* agc_h_ */

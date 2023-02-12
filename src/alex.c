@@ -3,6 +3,7 @@
  */
 
 #define alex_c_
+#define ALO_LIB
 
 #include <math.h>
 #include <stdio.h>
@@ -109,7 +110,7 @@ static a_bool c_isibody(a_i32 ch) {
 }
 
 inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
-    ai_buf_putx(lex->_in._env, &lex->_buf, ch);
+    ai_buf_put(lex->_in._env, &lex->_buf, ch);
 	return ALO_SOK;
 }
 
@@ -125,86 +126,65 @@ static void l_bput(Lexer* lex, a_i32 ch) {
 	}
 }
 
-static a_u32 strs_index(Strs* strs, a_hash hash) {
+static a_u32 strs_index(LexStrs* strs, a_hash hash) {
 	return ((hash - 1) & strs->_hmask) + 1;
 }
 
-static void strs_strip_free(Strs* strs, StrNode* node) {
-    a_x32 prev = node->_prev;
-    a_x32 next = node->_next;
-    if (!is_nil(prev)) {
-		strs->_table[unwrap(prev)]._next = next;
-    }
-    else {
-        strs->_hfree = next;
-    }
-    if (!is_nil(next)) {
-        strs->_table[unwrap(next)]._prev = prev;
-    }
-}
-
-static a_x32 strs_next_free(Strs* strs) {
-    a_x32 head = strs->_hfree;
-    StrNode* node = &strs->_table[unwrap(head)];
-	a_x32 next = node->_next;
-    strs->_hfree = next;
-	if (!is_nil(next)) {
-		strs->_table[unwrap(next)]._prev = nil;
+static a_u32 strs_next_free(LexStrs* strs) {
+    a_u32 head = strs->_hfree;
+    StrNode* node = &strs->_table[head];
+	while (node->_str != null) {
+		node = &strs->_table[++head];
 	}
+    strs->_hfree = head + 1;
     return head;
 }
 
-static void strs_add(Strs* strs, GStr* str) {
-    assume(is_nil(strs->_hfree) || unwrap(strs->_hfree) <= strs->_hmask);
+static void strs_add(LexStrs* strs, GStr* str) {
+    assume(strs->_hfree <= strs->_hmask);
     a_u32 index = strs_index(strs, str->_hash);
     StrNode* node = &strs->_table[index];
     if (node->_str == null) {
-		strs_strip_free(strs, node);
-        *node = new(StrNode) {str, nil, nil };
+        *node = new(StrNode) {str, ai_link_new() };
     }
     else {
-        a_x32 index2 = strs_next_free(strs);
-        StrNode* node2 = &strs->_table[unwrap(index2)];
-        if (((str->_hash ^ node->_str->_hash) & strs->_hmask) != 0) {
-            *node2 = new(StrNode) {str, wrap(index), node->_next };
-            node->_next = index2;
+        a_u32 index2 = strs_next_free(strs);
+        StrNode* node2 = &strs->_table[index2];
+        if (ai_link_prev(node) != null) {
+			ai_link_move(node, node2);
+            *node = new(StrNode) { str, ai_link_new() };
         }
         else {
-            *node2 = new(StrNode) { node->_str, node->_prev, node->_next };
-            *node = new(StrNode) {str, nil, nil };
+			node2->_str = str;
+			ai_link_insert_after(node, node2);
         }
     }
 }
 
-static void strs_grow(a_henv env, Strs* strs) {
-    assume(is_nil(strs->_hfree));
+static void strs_grow(a_henv env, LexStrs* strs) {
     a_usize old_cap = strs->_hmask + 1;
     a_usize new_cap = old_cap * 2;
     StrNode* old_table = strs->_table;
-    StrNode* new_table = ai_mem_vnew(env, StrNode, new_cap) - 1;
+    StrNode* new_table = ai_mem_vnew(env, StrNode, new_cap);
 
     strs->_hmask = new_cap - 1;
-    strs->_hfree = x32c(1);
+    strs->_hfree = 0;
     strs->_table = new_table;
+	memclr(new_table, sizeof(StrNode) * new_cap);
 
-    for (a_usize i = 1; i <= new_cap; ++i) {
-        new_table[i] = new(StrNode) {null, wrap(i - 1), wrap(i + 1) };
-    }
-    new_table[new_cap - 1]._next = nil;
-
-    for (a_usize i = 1; i <= old_cap; ++i) {
+    for (a_usize i = 0; i < old_cap; ++i) {
         GStr* str = old_table[i]._str;
         if (str != null) {
             strs_add(strs, str);
         }
     }
 
-	ai_mem_vdel(G(env), old_table + 1, old_cap);
+	ai_mem_vdel(G(env), old_table, old_cap);
 }
 
-static void strs_close(a_henv env, Strs* strs) {
+static void strs_close(a_henv env, LexStrs* strs) {
 	if (strs->_table != null) {
-		ai_mem_vdel(G(env), strs->_table + 1, strs->_hmask + 1);
+		ai_mem_vdel(G(env), strs->_table, strs->_hmask + 1);
 	}
 }
 
@@ -217,8 +197,9 @@ static GStr* l_tostr(Lexer* lex) {
 
 #define STRS_INIT_CAP 64
 
-void ai_lex_init(Lexer* lex, char const* fname) {
-    lex->_fname = fname;
+void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
+	ai_io_iinit(env, fun, ctx, &lex->_in);
+    lex->_file = null;
     lex->_line = 1;
     lex->_current = new(Token) {};
 	lex->_channel = CHANNEL_NORMAL;
@@ -226,19 +207,19 @@ void ai_lex_init(Lexer* lex, char const* fname) {
 	lex->_scope0 = new(LexScope) {
 		_up: null
 	};
-    lex->_strs = new(Strs) {
-        _table: ai_mem_vnew(lex->_in._env, StrNode, STRS_INIT_CAP) - 1,
+    lex->_strs = new(LexStrs) {
+        _table: ai_mem_vnew(lex->_in._env, StrNode, STRS_INIT_CAP),
         _hmask: STRS_INIT_CAP - 1,
-        _hfree: x32c(1),
+        _hfree: 0,
         _nstr: 0
     };
-	memclr(lex->_strs._table + 1, STRS_INIT_CAP * sizeof(StrNode));
+	memclr(lex->_strs._table, STRS_INIT_CAP * sizeof(StrNode));
     l_pollx(lex);
 }
 
 void ai_lex_close(Lexer* lex) {
 	strs_close(lex->_in._env, &lex->_strs);
-	ai_buf_close(G(lex->_in._env), &lex->_buf);
+	ai_buf_close(lex->_in._env, &lex->_buf);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {
@@ -250,6 +231,7 @@ char const* ai_lex_tagname(a_i32 tag) {
 		OPERATOR_LIST(CASE_OP)
 #undef CASE_OP
 		case TK_EOF: return "<eof>";
+		case TK_IDENT: return "<identifier>";
 		case TK_INTEGER: return "<integer>";
 		case TK_FLOAT: return "<float>";
 		case TK_STRING: return "<string>";
@@ -265,10 +247,12 @@ char const* ai_lex_tkrepr(Token* tk, a_tksbuf buf) {
 		}
 		case TK_INTEGER: {
 			a_usize len = ai_fmt_i2s(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_int);
+			buf[MAX_TOKEN_STR_BUF_SIZE] = '\0';
 			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
 		}
 		case TK_FLOAT: {
 			a_usize len = ai_fmt_f2s(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_float);
+			buf[MAX_TOKEN_STR_BUF_SIZE] = '\0';
 			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
 		}
 		case TK_STRING: {
@@ -290,20 +274,18 @@ char const* ai_lex_tkrepr(Token* tk, a_tksbuf buf) {
 
 GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len) {
 	a_henv env = lex->_in._env;
-	Strs* strs = &lex->_strs;
+	LexStrs* strs = &lex->_strs;
 	a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
 
 	StrNode* node = &strs->_table[strs_index(strs, hash)];
 	if (node->_str != null) {
-		loop {
+		do {
 			if (node->_str->_hash == hash && ai_str_requals(node->_str, src, len)) {
 				lex->_buf._len = 0;
 				return node->_str;
 			}
-			else if (is_nil(node->_next))
-				break;
-			node = &strs->_table[unwrap(node->_next)];
 		}
+		while ((node = ai_link_next(node)) != null);
 	}
 
 	if (strs->_nstr == strs->_hmask) {
@@ -1010,7 +992,6 @@ static a_i32 l_scan_multiline_template_string_body(Lexer* lex, Token* tk) {
 }
 
 static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
-	a_u32 line = lex->_line;
 	if (l_testskip(lex, '\"')) {
 		if (l_testskip(lex, '\"')) {
 			l_switch_scope(lex, CHANNEL_MTSTR_BODY);

@@ -3,6 +3,7 @@
  */
 
 #define aio_c_
+#define ALO_LIB
 
 #include <string.h>
 
@@ -69,7 +70,7 @@ void ai_io_oinit(a_henv env, a_ofun fun, void* ctx, ZOut* out) {
 }
 
 a_msg ai_io_oput(ZOut* out, void const* src, a_usize len) {
-    ptrdiff_t err = (*out->_fun)(out->_env, out->_ctx, src, len);
+	a_i32 err = (*out->_fun)(out->_env, out->_ctx, src, len);
     out->_err = err;
     return likely(!err) ? ALO_SOK : ALO_EOUTER;
 }

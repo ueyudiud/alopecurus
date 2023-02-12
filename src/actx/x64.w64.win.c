@@ -3,6 +3,7 @@
  */
 
 #define actx_x64_w64_win_c_
+#define ALO_LIB
 
 #include "../actx.h"
 

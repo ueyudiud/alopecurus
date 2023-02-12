@@ -7,17 +7,18 @@
 
 #include "aio.h"
 #include "abuf.h"
+#include "alink.h"
 #include "aobj.h"
 
 typedef struct Lexer Lexer;
 typedef struct Token Token;
 typedef struct LexScope LexScope;
 
-#define MAX_TOKEN_STR_BUF_SIZE 32
+#define MAX_TOKEN_STR_BUF_SIZE 31
 
-typedef a_byte a_tksbuf[MAX_TOKEN_STR_BUF_SIZE];
+typedef a_byte a_tksbuf[MAX_TOKEN_STR_BUF_SIZE + 1];
 
-intern void ai_lex_init(Lexer* lex, char const* fname);
+intern void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx);
 intern void ai_lex_close(Lexer* lex);
 intern char const* ai_lex_tagname(a_i32 tag);
 intern char const* ai_lex_tkrepr(Token* tk, a_tksbuf buf);
@@ -25,7 +26,9 @@ intern GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len);
 intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
 
-#define ai_lex_error(lex,fmt,args...) ai_par_report(from_member(Parser, _lex, lex), false, "%s:%u: "fmt, (lex)->_fname, (lex)->_line, ##args)
+#define lex_file(lex) (lex)->_file->_data
+
+#define ai_lex_error(lex,fmt,args...) ai_par_report(from_member(Parser, _lex, lex), false, "%s:%u: "fmt, lex_file(lex), (lex)->_line, ##args)
 
 #define KEYWORD_LIST(_) \
     _(_ENV, "_ENV")     \
@@ -133,16 +136,15 @@ typedef struct StrNode StrNode;
 
 struct StrNode { 
     GStr* _str;
-    a_x32 _prev;
-    a_x32 _next;
+	LINK_DEF;
 };
 
 typedef struct {
     StrNode* _table;
-    a_x32 _hfree;
+    a_u32 _hfree;
     a_u32 _hmask;
     a_u32 _nstr;
-} Strs;
+} LexStrs;
 
 struct LexScope {
     LexScope* _up;
@@ -156,13 +158,13 @@ struct LexScope {
 struct Lexer {
     ZIn _in;
     Buf _buf;
-    char const* _fname; /* Source file name. */
+    GStr* _file; /* Source file name. */
     a_u32 _line;
     a_i32 _ch; /* Next character. */
     a_u32 _channel;
     Token _current;
 	Token _forward;
-    Strs _strs;
+    LexStrs _strs;
     LexScope* _scope;
     LexScope _scope0;
 };

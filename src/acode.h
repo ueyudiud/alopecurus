@@ -16,6 +16,44 @@ typedef Expr* InExpr;
 typedef Expr* OutExpr;
 typedef Expr* InoutExpr;
 
+intern void ai_code_never(Parser* par, OutExpr e, a_u32 line);
+intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_u32 line);
+intern void ai_code_constI(Parser* par, OutExpr e, a_int val, a_u32 line);
+intern void ai_code_constF(Parser* par, OutExpr e, a_float val, a_u32 line);
+intern void ai_code_constS(Parser* par, OutExpr e, GStr* val, a_u32 line);
+intern void ai_code_lookupU(Parser* par, OutExpr e, GStr* name, a_u32 line);
+
+intern void ai_code_lookupC(Parser* par, InoutExpr e, GStr* name, a_u32 line);
+intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_u32 line);
+intern void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_u32 line);
+intern void ai_code_binary1(Parser* par, InoutExpr e, a_u32 op, a_u32 line);
+intern void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_u32 line);
+intern void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_u32 line);
+intern void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_u32 line);
+intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_u32 line);
+intern void ai_code_multi(Parser* par, InoutExpr es, InoutExpr e, a_u32 op, a_u32 line);
+intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_u32 line);
+intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_u32 line);
+intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_u32 line);
+
+intern void ai_code_gotoD(Parser* par, a_u32 label, a_u32 line);
+intern a_u32 ai_code_gotoU(Parser* par, a_u32 label, a_u32 line);
+intern a_u32 ai_code_label(Parser* par, a_u32 label, a_u32 line);
+intern void ai_code_flush_jump(Parser* par, a_u32 line);
+
+intern void ai_code_drop(Parser* par, InExpr e);
+intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_u32 line);
+intern void ai_code_let_nils(Parser* par, LetStat* s, a_u32 line);
+intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
+
+intern void ai_code_enter(Parser* par, Scope* scope);
+intern void ai_code_leave(Parser* par);
+intern void ai_code_prologue(Parser* par, FnScope* fnscope, a_u32 line);
+intern GFunMeta* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_u32 line);
+intern void ai_code_open(Parser* par);
+intern GFun* ai_code_build(Parser* par);
+intern void ai_code_close(Parser* par);
+
 enum {
 	OP__NONE    = 0x00,
 
@@ -65,44 +103,6 @@ enum {
 	OP_TNEW     = 0x32,
 	OP_CALL     = 0x33
 };
-
-intern void ai_code_never(Parser* par, OutExpr e, a_u32 line);
-intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_u32 line);
-intern void ai_code_constI(Parser* par, OutExpr e, a_int val, a_u32 line);
-intern void ai_code_constF(Parser* par, OutExpr e, a_float val, a_u32 line);
-intern void ai_code_constS(Parser* par, OutExpr e, GStr* val, a_u32 line);
-intern void ai_code_lookupU(Parser* par, OutExpr e, GStr* name, a_u32 line);
-
-intern void ai_code_lookupC(Parser* par, InoutExpr e, GStr* name, a_u32 line);
-intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_u32 line);
-intern void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_u32 line);
-intern void ai_code_binary1(Parser* par, InoutExpr e, a_u32 op, a_u32 line);
-intern void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_u32 line);
-intern void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_u32 line);
-intern void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_u32 line);
-intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_u32 line);
-intern void ai_code_multi(Parser* par, InoutExpr es, InoutExpr e, a_u32 op, a_u32 line);
-intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_u32 line);
-intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_u32 line);
-intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_u32 line);
-
-intern void ai_code_gotoD(Parser* par, a_u32 label, a_u32 line);
-intern a_u32 ai_code_gotoU(Parser* par, a_u32 label, a_u32 line);
-intern a_u32 ai_code_label(Parser* par, a_u32 label, a_u32 line);
-intern void ai_code_flush_jump(Parser* par, a_u32 line);
-
-intern void ai_code_drop(Parser* par, InExpr e);
-intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_u32 line);
-intern void ai_code_let_nils(Parser* par, LetStat* s, a_u32 line);
-intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
-
-intern void ai_code_enter(Parser* par, Scope* scope);
-intern void ai_code_leave(Parser* par);
-intern void ai_code_prologue(Parser* par, FnScope* fnscope);
-intern GFunMeta* ai_code_epilogue(Parser* par, a_bool root, a_u32 line);
-intern void ai_code_open(Parser* par);
-intern GFun* ai_code_build(Parser* par);
-intern void ai_code_close(Parser* par);
 
 /**
  ** Volatility:
@@ -158,17 +158,17 @@ enum {
 	EXPR_RESIDUAL_TRUE,
 /*==========================Result Expressions==========================*/
 	/**
-	 ** The expression bind to a temporary register.
-	 ** REPR: R[_reg]
-	 *@param _reg the register index.
-	 */
-	EXPR_TMP,
-	/**
 	 ** The expression from a local variable.
 	 ** REPR: R[_reg]
 	 *@param _reg the register index.
 	 */
 	EXPR_VAR,
+	/**
+	 ** The expression bind to a temporary register.
+	 ** REPR: R[_reg]
+	 *@param _reg the register index.
+	 */
+	EXPR_TMP,
 	/**
 	 ** The expression bind to a capture value.
 	 ** REPR: C[_reg]
@@ -187,33 +187,33 @@ enum {
 	 *@param _base the base register index.
 	 *@param _key the key register index.
 	 */
-	EXPR_REFTT,
-	EXPR_REFVT,
-	EXPR_REFTV,
 	EXPR_REFVV,
-#define EXPR_REFR_ALL EXPR_REFTT ... EXPR_REFVV
+	EXPR_REFTV,
+	EXPR_REFVT,
+	EXPR_REFTT,
+#define EXPR_REFR_ALL EXPR_REFVV ... EXPR_REFTT
 	/**
 	 ** The integer indexed expression.
 	 ** REPR: R[_base][_key]
 	 *@param _base the base register index.
 	 *@param _key the integer key.
 	 */
-	EXPR_REFTI_,
-	EXPR_REFVI_,
-	EXPR_REFTI,
 	EXPR_REFVI,
-#define EXPR_REFI_ALL EXPR_REFTI ... EXPR_REFVI
+	EXPR_REFTI,
+	EXPR_REFVI_,
+	EXPR_REFTI_,
+#define EXPR_REFI_ALL EXPR_REFVI ... EXPR_REFTI
 	/**
 	 ** The constant indexed expression. REPR: R[_base][K[_key]]
 	 *@param _base the base register index.
 	 *@param _key the key constant index.
 	 */
-	EXPR_REFTK_,
-	EXPR_REFVK_,
-	EXPR_REFTK,
 	EXPR_REFVK,
-#define EXPR_REFK_ALL EXPR_REFTK ... EXPR_REFVK
-#define EXPR_REF_ALL EXPR_REFTT ... EXPR_REFVK
+	EXPR_REFTK,
+	EXPR_REFVK_,
+	EXPR_REFTK_,
+#define EXPR_REFK_ALL EXPR_REFVK ... EXPR_REFTK
+#define EXPR_REF_ALL EXPR_REFVV ... EXPR_REFTK_
 	EXPR_REFCK,
 	/**
 	 ** The try expression. This is a volatile expression.
@@ -294,7 +294,10 @@ struct Expr {
 		a_int _int;
 		a_float _float;
 		GStr* _str;
-		a_u32 _reg;
+		struct {
+			a_u32 _reg;
+			a_u32 _sym;
+		};
 		a_u32 _label;
 		ExprPack _pack;
 		struct {
@@ -346,10 +349,16 @@ enum {
 	SYM_LOCAL,
 };
 
+enum {
+	SYM_MOD_NONE = 0x0000,
+	SYM_MOD_READONLY = 0x0001
+};
+
 struct Sym {
-	a_u32 _kind;
+	a_u8 _kind;
+	a_u8 _scope;
+	a_u16 _mods;
 	a_u32 _index;
-	a_u16 _scope;
 	GStr* _name;
 };
 
@@ -388,6 +397,7 @@ struct FnScope {
 	Scope* _top_scope;
 	ValBuf _consts; /* Constants. */
 	GFunMeta** _base_subs;
+	a_u32 _linedef;
 	a_u32 _begin_line;
 	a_u32 _begin_local;
 	a_u32 _begin_cap;

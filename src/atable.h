@@ -5,6 +5,7 @@
 #ifndef atable_h_
 #define atable_h_
 
+#include "alink.h"
 #include "aobj.h"
 
 typedef struct TNode TNode;
@@ -16,10 +17,9 @@ struct GTable {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
 	a_u32 _hmask; /* Hash mask. */
-	TNode* _data; /* Biased data pointer. */
-	a_x32 _lhead; /* Head node of linked list. */
-	a_x32 _ltail; /* Tail node of linked list. */
-	a_x32 _hfree; /* Last hash free slot. */
+	BUF_DATA_DEF(TNode); /* Data pointer. */
+	LHEAD_DEF; /* Head of linked list. */
+	a_u32 _hfree; /* Last hash free slot. */
 };
 
 /**
@@ -30,15 +30,16 @@ struct TNode {
 	Value _key;
 	a_hash _hash;
 	a_x32 _hnext;
-	a_x32 _lprev;
-	a_x32 _lnext;
+	LINK_DEF;
 };
 
 intern GTable* ai_table_new(a_henv env);
 intern void ai_table_hint(a_henv env, GTable* self, a_usize len);
-intern Value const* ai_table_geti(a_henv env, GTable* self, a_int key);
-intern Value const* ai_table_gets(a_henv env, GTable* self, a_lstr const* key);
-intern void ai_table_splash(Global* g, GTable* self);
-intern void ai_table_destruct(Global* g, GTable* self);
+intern Value const* ai_table_refi(a_henv env, GTable* self, a_int key);
+intern Value const* ai_table_refs(a_henv env, GTable* self, a_lstr const* key);
+intern Value const* ai_table_ref(a_henv env, GTable* self, Value key);
+intern void ai_table_set(a_henv env, GTable* self, Value key, Value value);
+
+intern VTable const ai_table_vtable;
 
 #endif /* atable_h_ */

@@ -3,6 +3,7 @@
  */
 
 #define astr_c_
+#define ALO_LIB
 
 #include <stdio.h>
 #include <string.h>
@@ -91,7 +92,7 @@ static IStr* istr_lookup(a_henv env, void const* src, a_usize len, a_hash hash) 
     for (IStr* str = istable->_table[hash & istable->_hmask]; str != null; str = str->_next) {
         if (str->_body._hash == hash && likely(str->_body._len == len && memcmp(str->_body._data, src, len) == 0)) {
             /* Revive string object if it is dead. */
-            if (unlikely(g_is_other(g, upcast(&str->_body)))) {
+            if (unlikely(g_is_other(g, gobj_cast(&str->_body)))) {
                 str->_body._tnext = white_color(g);
             }
             return str;
@@ -103,7 +104,7 @@ static IStr* istr_lookup(a_henv env, void const* src, a_usize len, a_hash hash) 
     }
 
     /* String not found, create new string. */
-    IStr* self = ai_mem_alloc(env, sizeof(IStr) + len);
+    IStr* self = ai_mem_alloc(env, sizeof(IStr) + 1 + len);
     str_new(&self->_body, src, len, hash);
     self->_body._meta = &g->_metas._istr;
 	istable_emplace(istable, self);
@@ -112,7 +113,7 @@ static IStr* istr_lookup(a_henv env, void const* src, a_usize len, a_hash hash) 
 }
 
 static GStr* hstr_new(a_henv env, void const* src, a_usize len, a_hash hash) {
-    GStr* self = ai_mem_alloc(env, sizeof(GStr) + len);
+    GStr* self = ai_mem_alloc(env, sizeof(GStr) + 1 + len);
     str_new(self, src, len, hash);
     self->_meta = &G(env)->_metas._hstr;
     ai_gc_register_object(env, self);
@@ -197,38 +198,53 @@ void ai_str_boost(a_henv env) {
 
 void ai_str_clean(Global* g) {
     IStrTable* istable = &g->_istable;
-    assume(istable->_len == 0);
+    assume(istable->_len == STRX__MAX - 1);
     ai_mem_vdel(g, istable->_table, istable->_hmask + 1);
 }
 
-void ai_istr_splash(Global* g, GStr* self) {
-    g->_mem_work -= sizeof(IStr) + self->_len;
+static void istr_splash(Global* g, GStr* self) {
+    g->_mem_work -= sizeof(IStr) + 1 + self->_len;
 }
 
-void ai_hstr_splash(Global* g, GStr* self) {
-    g->_mem_work -= sizeof(GStr) + self->_len;
+static void istr_destruct(Global* g, GStr* self) {
+	IStrTable* istable = &g->_istable;
+	IStr* self0 = from_member(IStr, _body, self);
+
+	/* Remove string from intern table. */
+	IStr** slot = istable_slot(istable, self->_hash);
+	loop {
+		IStr* str = *slot;
+		assume(str != null);
+		if (self0 == str) {
+			*slot = self0->_next;
+			break;
+		}
+		slot = &str->_next;
+	}
+	istable->_len -= 1;
+
+	ai_mem_dealloc(g, self0, sizeof(IStr) + 1 + self->_len);
 }
 
-void ai_istr_destruct(Global* g, GStr* self) {
-    IStrTable* istable = &g->_istable;
-    IStr* self0 = from_member(IStr, _body, self);
-    
-    /* Remove string from intern table. */
-    IStr** slot = istable_slot(istable, self->_hash);
-    loop {
-        IStr* str = *slot;
-        assume(str != null);
-        if (self0 == str) {
-            *slot = self0->_next;
-            break;
-        }
-        slot = &str->_next;
-    }
-    istable->_len -= 1;
-
-    ai_mem_dealloc(g, self0, sizeof(IStr) + self->_len);
+static void hstr_splash(Global* g, GStr* self) {
+    g->_mem_work -= sizeof(GStr) + 1 + self->_len;
 }
 
-void ai_hstr_destruct(Global* g, GStr* self) {
-    ai_mem_dealloc(g, self, sizeof(GStr) + self->_len);
+static void hstr_destruct(Global* g, GStr* self) {
+    ai_mem_dealloc(g, self, sizeof(GStr) + 1 + self->_len);
 }
+
+VTable const ai_dstr_vtable = {
+	._splash = null,
+	._destruct = null
+};
+
+VTable const ai_istr_vtable = {
+	._splash = fpcast(a_fp_splash, istr_splash),
+	._destruct = fpcast(a_fp_destruct, istr_destruct)
+};
+
+VTable const ai_hstr_vtable = {
+	._splash = fpcast(a_fp_splash, hstr_splash),
+	._destruct = fpcast(a_fp_destruct, hstr_destruct)
+};

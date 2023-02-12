@@ -5,6 +5,8 @@
 #ifndef aobj_h_
 #define aobj_h_
 
+#include <math.h>
+
 #include "adef.h"
 
 typedef struct GObj GObj;
@@ -16,8 +18,9 @@ typedef struct GCap GCap;
 typedef struct GFun GFun;
 typedef struct alo_Env GRoute;
 typedef struct GMeta GMeta;
+typedef struct alo_Mod GMod;
 
-/* Object handle. */
+/* Object fptr. */
 typedef GObj* a_hobj;
 
 /* GC support. */
@@ -39,7 +42,7 @@ typedef struct alo_Alloc Alloc;
 #define T_LIST u32c(8)
 #define T_TABLE u32c(9)
 #define T_FUNC u32c(10)
-#define T_ROUTE u32c(11)
+#define T_MOD u32c(11)
 #define T_OTHER u32c(12)
 
 #define T__MAX T_OTHER
@@ -48,8 +51,8 @@ typedef struct alo_Alloc Alloc;
 
 #define LO_DFL_VALUE (~u32c(0))
 
-#define upcast(e) cast(a_hobj, e)
-#define downcast(t,e) cast(typeof(t)*, e)
+#define gobj_cast(e) cast(a_hobj, e)
+#define g_cast(t,e) cast(typeof(t)*, e)
 
 typedef union Value {
 	a_f64 _f;
@@ -71,17 +74,23 @@ struct GObj {
 
 typedef void (*a_fp_splash)(Global* g, a_hobj self);
 typedef void (*a_fp_destruct)(Global* g, a_hobj self);
+typedef Value (*a_fp_get)(a_henv env, a_hobj self, Value index);
 
-#define GTYPE_FLAG_IDENTITY_EQUAL u16c(0x0001)
+#define GMETA_FLAG_IDENTITY_EQUAL u16c(0x0001)
 #define GTYPE_FLAG_FAST_LENGTH u16c(0x0002)
+
+typedef struct {
+	a_fp_splash _splash;
+	a_fp_destruct _destruct;
+	a_fp_get _get;
+} VTable;
 
 #define GMETA_STRUCT_HEADER \
 	GOBJ_STRUCT_HEADER; \
+	a_u32 _len; \
 	a_u16 _tid; \
 	a_u16 _flags; \
-	a_u32 _len; \
-	a_fp_splash _splash; \
-	a_fp_destruct _destruct
+    VTable _vtable
 
 struct GMeta {
 	GMETA_STRUCT_HEADER;
@@ -93,7 +102,7 @@ inline a_bool g_is_str(a_hobj v) {
 
 inline GStr* g_as_str(a_hobj v) {
 	assume(g_is_str(v));
-	return downcast(GStr, v);
+	return g_cast(GStr, v);
 }
 
 inline a_bool g_is_tuple(a_hobj v) {
@@ -102,7 +111,7 @@ inline a_bool g_is_tuple(a_hobj v) {
 
 inline GTuple* g_as_tuple(a_hobj v) {
 	assume(g_is_tuple(v));
-	return downcast(GTuple, v);
+	return g_cast(GTuple, v);
 }
 
 inline a_bool g_is_list(a_hobj v) {
@@ -111,7 +120,7 @@ inline a_bool g_is_list(a_hobj v) {
 
 inline GList* g_as_list(a_hobj v) {
 	assume(g_is_list(v));
-	return downcast(GList, v);
+	return g_cast(GList, v);
 }
 
 inline a_bool g_is_table(a_hobj v) {
@@ -120,7 +129,7 @@ inline a_bool g_is_table(a_hobj v) {
 
 inline GTable* g_as_table(a_hobj v) {
 	assume(g_is_table(v));
-	return downcast(GTable, v);
+	return g_cast(GTable, v);
 }
 
 inline a_bool g_is_func(a_hobj v) {
@@ -129,7 +138,16 @@ inline a_bool g_is_func(a_hobj v) {
 
 inline GFun* g_as_func(a_hobj v) {
 	assume(g_is_func(v));
-	return downcast(GFun, v);
+	return g_cast(GFun, v);
+}
+
+inline a_bool g_is_mod(a_hobj v) {
+	return v->_meta->_tid == T_MOD;
+}
+
+inline GMod* g_as_mod(a_hobj v) {
+	assume(g_is_mod(v));
+	return g_cast(GMod, v);
 }
 
 inline GCap* g_as_cap(Global* g, a_hobj v);
@@ -145,14 +163,14 @@ inline a_bool v_is_nil(Value const* v) {
 }
 
 #define V_STRICT_NIL (cast(a_u64, v_hi_mask(T_NIL)) << 32 | LO_DFL_VALUE)
-#define V_DEAD_KEY (cast(a_u64, v_hi_mask(T_NIL)) << 32 | ~u32c(1))
+#define V_EMPTY (cast(a_u64, v_hi_mask(T_NIL)) << 32 | ~u32c(1))
 
 inline a_bool v_is_strict_nil(Value const* v) {
 	return v->_u == V_STRICT_NIL;
 }
 
 inline a_bool v_is_dead_key(Value const* v) {
-	return v->_u == V_DEAD_KEY;
+	return v->_u == V_EMPTY;
 }
 
 inline a_bool v_is_false(Value const* v) {
@@ -171,7 +189,7 @@ inline a_bool v_is_ptr(Value const* v) {
 	return v_raw_tag(v) == T_PTR;
 }
 
-inline a_bool v_is_ref(Value const* v) {
+inline a_bool v_is_obj(Value const* v) {
 	return v->_h - v_hi_mask(T_OTHER) < v_hi_mask(T_PTR) - v_hi_mask(T_OTHER);
 }
 
@@ -195,12 +213,16 @@ inline a_bool v_is_func(Value const* v) {
 	return v_raw_tag(v) == T_FUNC;
 }
 
-inline a_bool v_is_route(Value const* v) {
-	return v_raw_tag(v) == T_ROUTE;
+inline a_bool v_is_mod(Value const* v) {
+	return v_raw_tag(v) == T_MOD;
 }
 
 inline a_bool v_is_float(Value const* v) {
 	return v->_h <= u32c(0xfff80000);
+}
+
+inline a_bool v_is_nan(Value const* v) {
+	return isnan(v->_f);
 }
 
 inline a_bool v_is_num(Value const* v) {
@@ -239,7 +261,7 @@ inline void* v_as_ptr(Value const* v) {
 }
 
 inline GObj* v_as_obj(Global* g, Value const* v) {
-	assume(v_is_ref(v));
+	assume(v_is_obj(v));
 	v_check_alive(g, v);
 	return cast(GObj*, v_as_hnd(v));
 }
@@ -269,13 +291,18 @@ inline GFun* v_as_func(Global* g, Value const* v) {
 	return g_as_func(v_as_obj(g, v));
 }
 
+inline GMod* v_as_mod(Global* g, Value const* v) {
+	assume(v_is_mod(v));
+	return g_as_mod(v_as_obj(g, v));
+}
+
 inline GCap* v_as_cap(Global* g, Value const* v) {
 	assume(v_is_other(v));
 	return g_as_cap(g, v_as_obj(g, v));
 }
 
 #define v_of_nil() (new(Value) { ._h = v_hi_mask(T_NIL), ._l = LO_DFL_VALUE })
-#define v_of_dead_key() (new(Value) { ._u = V_DEAD_KEY })
+#define v_of_empty() (new(Value) { ._u = V_EMPTY })
 #define v_of_bool(v) (new(Value) { ._h = v_hi_mask((v) ? T_TRUE : T_FALSE), ._l = LO_DFL_VALUE })
 #define v_of_int(v) (new(Value) { ._h = v_hi_mask(T_INT), ._i = (v) })
 #define v_of_float(v) (new(Value) { ._f = (v) })
@@ -283,9 +310,13 @@ inline GCap* v_as_cap(Global* g, Value const* v) {
 #define v_of_ptr(v) v_of_hnd(T_PTR, v)
 
 inline Value v_of_ref(void* v) {
-	GObj* o = upcast(v);
+	GObj* o = gobj_cast(v);
 	a_u32 id = cast(a_u32, o->_meta->_tid);
 	return v_of_hnd(min(id, T__MAX), o);
+}
+
+inline void v_setx(Value* d, Value v) {
+	*d = v;
 }
 
 inline void v_cpy(Global* g, Value* d, Value const* s) {
@@ -293,22 +324,42 @@ inline void v_cpy(Global* g, Value* d, Value const* s) {
 	v_check_alive(g, d);
 }
 
-inline void v_bmcpy(Global* g, Value* d, Value const* s, a_usize n) {
-	for (a_usize i = n; i > 0; --i) {
-		v_cpy(g, &d[i - 1], &s[i - 1]);
-	}
+inline void v_cpy_or_nil(Global* g, Value* d, Value const* s) {
+	if (s != null)
+		v_cpy(g, d, s);
+	else
+		v_setx(d, v_of_nil());
 }
 
-inline void v_setx(Value* d, Value v) {
-	*d = v;
+inline void v_cpy_multi(Global* g, Value* d, Value const* s, a_usize n) {
+	for (a_usize i = 0; i < n; ++i) {
+		v_cpy(g, &d[i], &s[i]);
+	}
 }
 
 inline void v_set(Global* g, Value* d, Value v) {
 	v_cpy(g, d, &v);
 }
 
+#define v_nil_hash() 0
+#define v_bool_hash(v) ((v) ? 32 : 31)
+
 inline a_hash v_int_hash(a_int v) {
 	return cast(a_u32, v);
+}
+
+inline a_hash v_float_hash(a_float v) {
+	a_u64 u = *cast(a_u64*, &v);
+	return (u >> 32) ^ u ^ 0x9f1b407d;
+}
+
+inline a_hash v_hnd_hash(void* v) {
+	a_usize u = cast(a_usize, v);
+#if ALO_M64
+	return (u >> 32) ^ u ^ 0x38a8eb01;
+#else
+	return u ^ 0x38a8eb01;
+#endif
 }
 
 /* Identity equality. */

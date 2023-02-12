@@ -10,6 +10,7 @@
 
 #include "astr.h"
 #include "afun.h"
+#include "amod.h"
 
 typedef struct {
 	IStr** _table;
@@ -30,6 +31,9 @@ typedef struct {
 	GMeta _table;
 	GMeta _route;
 	GMeta _cap;
+	GMeta _ref_array;
+	GMeta _mod;
+	GMeta _mod_loader;
 	GMeta _fmeta;
 	GFunMeta _cfun;
 } InternMetas;
@@ -39,8 +43,8 @@ typedef void (*a_fp_gsplash)(Global* g, void* ctx);
 struct Global {
 	Alloc _af;
 	void* _ac;
-	a_kfun _hookf;
-	a_kctx _hookc;
+	a_hfun _hookf;
+	a_hctx _hookc;
 	a_henv _active;
 	a_usize _mem_base;
 	a_isize _mem_debt;
@@ -52,11 +56,13 @@ struct Global {
 	a_gclist _gc_toclose;
 	a_gcnext* _gc_sweep;
 	GStr* _nomem_error;
+	Value _global;
 	a_fp_gsplash _gsplash;
 	void* _gsplash_ctx;
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
 	InternMetas _metas;
+	ModCache _mod_cache;
 	IStrTable _istable;
 	a_hash _seed;
 	a_u16 _gcpausemul;
@@ -70,6 +76,15 @@ struct Global {
 inline a_bool g_is_cap(Global* g, a_hobj v) {
 	return v->_meta == &g->_metas._cap;
 }
+
+inline a_bool g_is_route(Global* g, a_hobj v) {
+	return v->_meta == &g->_metas._route;
+}
+
+inline a_bool v_is_route(Global* g, Value const* v) {
+	return v_is_other(v) && g_is_route(g, v_as_obj(g, v));
+}
+
 
 #define ALO_HMSWAP 0x80
 

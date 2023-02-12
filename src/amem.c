@@ -1,8 +1,9 @@
-/*
- * amem.c
+/**
+ *@file amem.c
  */
 
 #define amem_c_
+#define ALO_LIB
 
 #include "aenv.h"
 #include "agc.h"

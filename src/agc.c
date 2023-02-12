@@ -3,6 +3,9 @@
  */
 
 #define agc_c_
+#define ALO_LIB
+
+#include "amod.h"
 
 #include "agc.h"
 
@@ -27,7 +30,7 @@ inline void join_gc_(a_gclist* list, a_hobj elem) {
 	*list = elem;
 }
 
-#define join_gc(list,elem) join_gc_(list, downcast(GObj, elem))
+#define join_gc(list,elem) join_gc_(list, g_cast(GObj, elem))
 
 inline a_hobj strip_gc(a_gclist* list) {
 	a_hobj elem = *list;
@@ -64,21 +67,21 @@ void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 }
 
 void ai_gc_trace_mark_(Global* g, a_hobj obj) {
-	if (g_is_white(g, obj) && obj->_meta->_splash != null) {
+	if (g_is_white(g, obj) && obj->_meta->_vtable._splash != null) {
 		join_trace(&g->_tr_gray, obj);
 	}
 }
 
 inline void splash_object(Global* g, a_hobj obj) {
-	a_fp_splash splash = obj->_meta->_splash;
+	a_fp_splash splash = obj->_meta->_vtable._splash;
 	if (likely(splash != null)) {
 		(*splash)(g, obj);
 	}
 }
 
 inline void delete_object(Global* g, a_hobj obj) {
-	a_fp_destruct destruct = obj->_meta->_destruct;
-	if (likely(destruct != null)) {
+	a_fp_destruct destruct = obj->_meta->_vtable._destruct;
+	if (destruct != null) {
 		(*destruct)(g, obj);
 	}
 }
@@ -151,9 +154,9 @@ static void sweep_all(Global* g) {
 	}
 }
 
-static void delete_all(Global* g, GObj* list) {
-	while (list != null) {
-		GObj* obj = strip_gc(&list);
+static void delete_all(Global* g, GObj** list) {
+	while (*list != null) {
+		GObj* obj = strip_gc(list);
 		delete_object(g, obj);
 	}
 }
@@ -173,7 +176,10 @@ static void begin_propagate(Global* g) {
 	g->_tr_gray = trmark_null;
 	g->_tr_regray = trmark_null;
 	/* Mark nonvolatile root. */
-	join_trace(&g->_tr_gray, downcast(GObj, ai_env_mainof(g)));
+	join_trace(&g->_tr_gray, gobj_cast(ai_env_mainof(g)));
+	if (v_is_obj(&g->_global)) {
+		join_trace(&g->_tr_gray, v_as_obj(g, &g->_global));
+	}
 	g->_gcstep = GCSTEP_PROPAGATE;
 }
 
@@ -198,7 +204,11 @@ static void propagate_atomic(Global* g) {
 	a_isize old_work = g->_mem_work;
 	g->_gcstep = GCSTEP_PROPAGATE_ATOMIC;
 	/* Mark volatile root. */
-	ai_gc_trace_mark_(g, downcast(GObj, g->_active));
+	ai_gc_trace_mark_(g, gobj_cast(g->_active));
+	if (v_is_obj(&g->_global)) {
+		join_trace(&g->_tr_gray, v_as_obj(g, &g->_global));
+	}
+	ai_mod_cache_splash(g, &g->_mod_cache);
 	if (g->_gsplash != null) {
 		(*g->_gsplash)(g, g->_gsplash_ctx);
 	}
@@ -333,8 +343,8 @@ void ai_gc_full_gc(a_henv env, a_bool emergency) {
 }
 
 void ai_gc_clean(Global* g) {
-	delete_all(g, g->_gc_closable);
-	delete_all(g, g->_gc_toclose);
-	delete_all(g, g->_gc_normal);
-	delete_all(g, g->_gc_fixed);
+	delete_all(g, &g->_gc_closable);
+	delete_all(g, &g->_gc_toclose);
+	delete_all(g, &g->_gc_normal);
+	delete_all(g, &g->_gc_fixed);
 }

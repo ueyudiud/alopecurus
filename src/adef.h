@@ -9,7 +9,7 @@
 
 #include "aarch.h"
 #include "alo.h"
-#include "aaux.h"
+#include "aauxlib.h"
 
 #define M_false 0
 #define M_true 1
@@ -21,6 +21,9 @@
 #define M_str0(a) #a
 
 #define M_sym(a) M_cat(a,__LINE__)
+
+#define ALO_COMP_OPT_ALOC1 0x1000000
+#define ALO_COMP_OPT_EVAL 0x2000000
 
 /**
  ** Check memory related function in strict mode.
@@ -80,7 +83,7 @@ typedef struct {
 	a_usize _len;
 } a_lstr;
 
-typedef struct { a_u32 _; } a_x32;
+typedef struct { a_i32 _; } a_x32;
 typedef a_u32 a_hash;
 typedef a_u32 a_insn;
 
@@ -141,7 +144,7 @@ typedef a_u32 a_insn;
 #define addr_of(e) cast(a_usize, (quiet((typeof(*(e))*) null), e))
 #define ptr_of(t,e) ({ typeof(e) _e = (e); quiet(&_e == zero(a_usize*)); cast(typeof(t)*, _e); })
 #define ptr_diff(p,q) ({ typeof((p) + 1) _p = (p), _q = (q); (&*_p - &*_q) * cast(a_isize, sizeof(*_p)); })
-#define ptr_disp(p,d) cast(typeof(p), cast(a_byte*, p) + (d))
+#define ptr_disp(t,p,d) ptr_of(t, cast(a_usize, p) + (d))
 #define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &cast(typeof(t)*, null)->f); cast(typeof(t)*, cast(void*, v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
 
@@ -162,7 +165,7 @@ typedef a_u32 a_insn;
 #define unwrap(e) ({ a_x32 _x = (e); assume(!is_nil(_x)); unwrap_unsafe(_x); })
 #define wrap(v)  (new(a_x32) { v })
 
-#define is_nil(e) (unwrap_unsafe(e) == 0)
+#define is_nil(e) (unwrap_unsafe(e) == unwrap_unsafe(nil))
 
 /* Utility functions. */
 
@@ -193,7 +196,7 @@ intern a_none ai_dbg_panic(char const* fmt, ...);
 # define panic(...) unreachable()
 #endif
 
-#define assume(e,m...) (!!(e) || (panic(m), false))
+#define assume(e,m...) ((void) (!!(e) || (panic(m), false)))
 
 /* Special control flow. */
 
@@ -245,8 +248,16 @@ NUM_TYPE_LIST(FUNDEF)
 
 #undef NUM_TYPE_LIST
 
+inline a_u32 clz_usize(a_usize a) {
+#if ALO_M64
+	return __builtin_clzll(a);
+#else
+	return __builtin_clz(a);
+#endif
+}
+
 inline a_usize ceil_pow2m1_usize(a_usize a) {
-    return ~usizec(0) >> __builtin_clz(a);
+    return likely(a != 0) ? ~usizec(0) >> clz_usize(a) : 0;
 }
 
 #endif /* adef_h_ */

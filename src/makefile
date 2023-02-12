@@ -24,7 +24,10 @@ STRIP= strip
 # Host OS detection.
 ##############################################################
 # Supported OS list:
-# Windows, Linux, Darwin
+# Windows
+##############################################################
+# TODO OS list:
+# Linux, Darwin
 ##############################################################
 
 ifeq ($(OS),Windows_NT)
@@ -152,6 +155,14 @@ endif
 TARGET_O= $(ALO_A)
 TARGET_T= $(ALO_T) $(ALO_SO)
 
+ifeq (Windows,$(TARGET_OS))
+	TARGET_DYCC= $(STATIC_CC)
+	ifneq (static, $(TARGET))
+		TARGET= dynamic
+		TARGET_XCCFLAGS+= -D ALO_BUILD_AS_DLL
+	endif
+endif
+
 ifeq (static,$(TARGET))
 	TARGET_DYCC= @:
 	TARGET_T= $(ALO_T)
@@ -165,17 +176,16 @@ ifeq (dynamic,$(TARGET))
 endif
 endif
 
-ifneq (debug,$(LEVEL))
+ifeq (debug,$(LEVEL))
   TARGET_STRIP= @:
 endif
 
 ACTX_C= actx/x64.w64.win.c
 
-KER_O= aaux.o aapi.o adump.o acode.o aparse.o alex.o adbg.o \
-aerr.o aload.o asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o \
-aenv.o afun.o atable.o alist.o atuple.o astr.o abuf.o aio.o \
-actx.o
-LIB_O= abaselib.o
+KER_O= aapi.o adump.o acode.o aparse.o alex.o adbg.o aerr.o aload.o \
+asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o aenv.o amod.o ameta.o \
+afun.o atable.o alist.o atuple.o astr.o adict.o abuf.o aio.o actx.o
+LIB_O= asyslib.o abaselib.o aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
 
 ALO_O= alo.o
@@ -200,31 +210,45 @@ clean:
 
 echo:
 	$(Q) "   LEVEL=$(LEVEL)"
-	$(Q) "      CC=$(CC)"
-	$(Q) "  CFLAGS=$(BASE_CCFLAGS)"
+	$(Q) "  TARGET=$(TARGET)"
+	$(Q) "      CC=$(TARGET_CC)"
+	$(Q) "      AR=$(TARGET_AR)"
+	$(Q) "      LD=$(TARGET_LD)"
+	$(Q) "   STRIP=$(TARGET_STRIP)"
+	$(Q) "  CFLAGS=$(TARGET_CCFLAGS)"
 
 depend:
 	$(E) $(HOST_CC) $(HOST_CCFLAGS) -MM *.c > makefile.dep
 
-.PHONY: default all clean depend
+ifeq (Windows,$(TARGET_OS))
+check:
+	$(Q) "MKDIR   $(OUT)"
+	$(E) if not exist $(OUT) mkdir $(OUT)
+else
+check:
+	$(Q) "MKDIR   $(OUT)"
+	$(E) mkdir -p $(OUT)
+endif
+
+.PHONY: default all clean depend check
 
 ##############################################################
 # Object file rules.
 ##############################################################
 
-%.o: %.c
+%.o: %.c check
 	$(Q) "CC      $@"
 	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/$(@:.o=_dyn.o)" -c $<
 	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
 
-$(ALO_O): alo.c
+$(ALO_O): alo.c check
 	$(Q) "CC      $@"
 	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
 
-actx.o: $(ACTX_C)
+actx.o: $(ACTX_C) check
 	$(Q) "CC      $@"
-	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/actx_dyn.o" -c $<
-	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/actx.o" -c $<
+	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/$(@:.o=_dyn.o)" -c $<
+	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
 
 actx.h: actx.o
 
@@ -236,12 +260,13 @@ include makefile.dep
 
 $(ALO_A): $(BASE_O)
 	$(Q) "AR      $@"
-	$(E) $(TARGET_AR) "$(OUT)/$@" $(addprefix $(OUT)/, $(BASE_O))
+	$(E) cd $(OUT) && $(TARGET_AR) $@ $(BASE_O)
 
 $(ALO_SO): $(BASE_O)
 	$(Q) "DYLINK  $@"
 	$(E) cd $(OUT) && $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(BASE_O) $(TARGET_LIBS)
 	$(E) cd $(OUT) && $(TARGET_STRIP) $@
+	$(E) copy /Y alo-dbg.py "$(OUT)/$@-gdb.py"
 
 $(ALO_T): $(TARGET_O) $(ALO_O)
 	$(Q) "LINK    $@"

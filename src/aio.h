@@ -13,14 +13,14 @@ typedef struct {
     void* _ctx;
     a_byte const* _ptr;
     a_usize _len;
-    ptrdiff_t _err;
+	a_i32 _err;
 } ZIn;
 
 typedef struct {
     a_henv _env;
     a_ofun _fun;
     void* _ctx;
-    ptrdiff_t _err;
+	a_i32 _err;
 } ZOut;
 
 intern void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in);

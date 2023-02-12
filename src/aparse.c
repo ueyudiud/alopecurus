@@ -3,6 +3,7 @@
  */
 
 #define aparse_c_
+#define ALO_LIB
 
 #include "afun.h"
 #include "aenv.h"
@@ -32,7 +33,7 @@ static a_bool l_test_skip(Parser* par, a_i32 tk) {
 a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...) {
 	va_list varg;
 	ai_code_close(par);
-	if (!eof || !(par->_options & ALO_COMP_OPT_CHECK_STMUF)) {
+	if (!eof || !(par->_options & ALO_COMP_OPT_ALOC1)) {
 		va_start(varg, fmt);
 		ai_err_raisevf(par->_env, ALO_ECHUNK, fmt, varg);
 		va_end(varg);
@@ -558,11 +559,11 @@ static void l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2) {
 	l_scan_expr(par, e2);
 	while (l_test_skip(par, TK_COMMA)) {
 		ai_code_binary2(par, e1, e2, OP_VA_PUSH, ln_cur(par));
-		l_scan_expr(par, e2);
 		if (l_test_skip(par, TK_TDOT)) {
 			ai_code_unary(par, e2, OP_UNPACK, ln_cur(par));
 			break;
 		}
+		l_scan_expr(par, e2);
 	}
 }
 
@@ -994,32 +995,63 @@ static void l_scan_stat_seq(Parser* par) {
 	}
 }
 
+static void l_scan_root_return_stat(Parser* par) {
+	Expr e = {};
+
+	if (!l_test_sep(par)) {
+		Expr e2 = {};
+		l_scan_expr_pack(par, &e, &e2);
+		/* Unpack the return value if it is possible. */
+		if (e2._kind == EXPR_DST_AC || e2._kind == EXPR_DST_C) {
+			ai_code_unary(par, &e2, OP_UNPACK, ln_cur(par));
+		}
+		ai_code_binary2(par, &e, &e2, OP_VA_PUSH, 1);
+	}
+
+	l_test_skip(par, TK_SEMI);
+	ai_code_unary(par, &e, OP_RETURN, 1);
+}
+
 static void l_scan_root(unused a_henv env, void* ctx) {
 	FnScope scope;
 
 	Parser* par = ctx;
 	ai_code_open(par);
 
-	ai_code_prologue(par, &scope);
-	l_scan_stat_seq(par);
+	ai_code_prologue(par, &scope, 1);
+	if (unlikely(par->_options & ALO_COMP_OPT_EVAL)) {
+		l_scan_root_return_stat(par);
+	}
+	else {
+		l_scan_stat_seq(par);
+	}
 
 	if (!l_test(par, TK_EOF)) {
 		l_error_got(par, "statement expected");
 	}
 
-	ai_code_epilogue(par, true, ln_cur(par));
+	ai_code_epilogue(par, par->_name, true, ln_cur(par));
 }
 
-a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* fname, a_u32 options, GFun** pfun) {
-	Parser par = { ._options =  options };
-	ai_io_iinit(env, fun, ctx, &par._lex._in);
-	ai_lex_init(&par._lex, fname);
-	rq_init(&par._rq);
+static void l_init_parser(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, Parser* par) {
+	*par = new(Parser) { ._options = options };
+	ai_lex_init(env, &par->_lex, fun, ctx);
+	par->_lex._file = file;
+	par->_name = name;
+	rq_init(&par->_rq);
+}
+
+a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, GFun** pfun) {
+	Parser par;
+	l_init_parser(env, fun, ctx, file, name, options, &par);
 
 	a_msg msg = ai_env_protect(env, l_scan_root, &par);
 
 	if (msg == ALO_SOK) {
 		*pfun = ai_code_build(&par);
+	}
+	else {
+		ai_code_close(&par);
 	}
 
 	return msg;

@@ -11,13 +11,17 @@
 #include "alo.h"
 
 #ifndef aloi_show
-# define aloi_show(fmt,args...) printf(fmt, ##args)
+# define aloi_show(fmt,args...) quiet(printf(fmt, ##args))
 #endif
 
 #ifndef aloi_show_flush
-# define aloi_show_flush() fflush(stdout)
+# define aloi_show_flush() quiet(fflush(stdout))
 #endif
 
-ALO_EXPORT void aloL_base_show(a_henv env, ptrdiff_t id);
+#ifndef aloi_show_newline
+# define aloi_show_newline() quiet(fputc('\n', stdout), fflush(stdout))
+#endif
+
+ALO_EXPORT void aloL_base_show(a_henv env, a_isize id);
 
 #endif /* abaselib_h_ */

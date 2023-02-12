@@ -3,6 +3,7 @@
  */
 
 #define astrx_c_
+#define ALO_LIB
 
 #include <string.h>
 

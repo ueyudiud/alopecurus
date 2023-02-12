@@ -73,8 +73,8 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
 /*        id,    name,   a,   b,   c,    description                                         */ \
     _(   NOP,   "nop", ___, ___, ___) /*                                                     */ \
     _(   MOV,   "mov", reg, reg, ___) /* R[a] := R[b]                                        */ \
-    _(   LDC,   "ldc", reg, cap, ___) /* R[a] := C[b]                                        */ \
-    _(   STC,   "stc", cap, reg, ___) /* C[a] := R[b]                                        */ \
+    _(   LDC,   "ldc", reg, cap, ___) /* R[a] := *C[b]                                       */ \
+    _(   STC,   "stc", cap, reg, ___) /* *C[a] := R[b]                                       */ \
 /*======================================Duality Opcodes======================================*/ \
     _(    KF,    "kf", reg, ___, ___) /* R[a] := false                                       */ \
     _(    KT,    "kt", reg, ___, ___) /* R[a] := true                                        */ \
@@ -118,6 +118,7 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
     _(    KN,    "kn", reg, ___, off) /* R[a:a+c] := nil                                     */ \
     _(    KI,    "ki", reg, val, val) /* R[a] := int(sbx)                                    */ \
     _(     K,     "k", reg, kst, kst) /* R[a] := K[bx]                                       */ \
+    _(  CMOV,  "cmov", reg, cap, ___) /* R[a] := C[b]                                        */ \
     _(   GET,   "get", reg, reg, reg) /* R[a] := R[b][R[c]]                                  */ \
     _(  GETI,  "geti", reg, reg, val) /* R[a] := R[b][int(c)]                                */ \
     _(  GETK,  "getk", reg, reg, kst) /* R[a] := R[b][K[c]]                                  */ \

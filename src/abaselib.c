@@ -1,20 +1,20 @@
-/*
- * abaselib.c
- *
- *  Created on: 2023/1/31
- *      Author: ueyudiud
+/**
+ *@file abaselib.c
  */
 
 #define abaselib_c_
+#define ALO_LIB
 
 #include <stdio.h>
 
+#include "alink.h"
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
 #include "agc.h"
 #include "aapi.h"
 
+#include "alolib.h"
 #include "abaselib.h"
 
 #define MAX_SHOW_LEN 16
@@ -107,17 +107,17 @@ static void l_show_impl(Global* g, Value const* v, a_u32 depth) {
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("{");
-					a_x32 itr = val->_lhead;
-					TNode* node = &val->_data[unwrap(itr)];
-					l_show_impl(g, &node->_key, depth + 1);
+					TNode* itr = ai_link_first(val);
+					l_show_impl(g, &itr->_key, depth + 1);
 					aloi_show(" -> ");
-					l_show_impl(g, &node->_value, depth + 1);
+					l_show_impl(g, &itr->_value, depth + 1);
 					while (--n > 0) {
-						node = &val->_data[unwrap(itr)];
+						assume(itr != null);
+						itr = ai_link_next(itr);
 						aloi_show(", ");
-						l_show_impl(g, &node->_key, depth + 1);
+						l_show_impl(g, &itr->_key, depth + 1);
 						aloi_show(" -> ");
-						l_show_impl(g, &node->_value, depth + 1);
+						l_show_impl(g, &itr->_value, depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -134,8 +134,8 @@ static void l_show_impl(Global* g, Value const* v, a_u32 depth) {
 			aloi_show("<func:%p>", v_as_hnd(v));
 			break;
 		}
-		case T_ROUTE: {
-			aloi_show("<route:%p>", v_as_hnd(v));
+		case T_MOD: {
+			aloi_show("<mod:%s>", v_as_mod(g, v)->_name->_data);
 			break;
 		}
 		case T_OTHER: {
@@ -143,7 +143,7 @@ static void l_show_impl(Global* g, Value const* v, a_u32 depth) {
 			break;
 		}
 		default: {
-			aloi_show("%8g", v_as_float(v));
+			aloi_show("%.6g", v_as_float(v));
 			break;
 		}
 	}
@@ -154,8 +154,26 @@ static void l_show_impl(Global* g, Value const* v, a_u32 depth) {
  *@param env the runtime environment.
  *@param id the slot id.
  */
-void aloL_base_show(a_henv env, ptrdiff_t id) {
+void aloL_base_show(a_henv env, a_isize id) {
 	Value const* v = api_roslot(env, id);
 	api_check(v != null, "bad slot id.");
 	l_show_impl(G(env), v, 0);
+}
+
+static a_u32 base_print(a_henv env) {
+	a_usize len = alo_stacksize(env);
+	for (a_usize id = 0; id < len; ++id) {
+		if (id != 0) aloi_show("\t");
+		aloL_base_show(env, cast(a_isize, id));
+	}
+	aloi_show_newline();
+	return 0;
+}
+
+void aloopen_base(a_henv env) {
+	static aloL_Binding bindings[] = {
+		{ "print", base_print }
+	};
+
+	aloL_newmod(env, ALO_LIB_BASE_NAME, bindings);
 }

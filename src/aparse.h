@@ -16,7 +16,7 @@ typedef struct Scope Scope;
 typedef struct FnScope FnScope;
 
 intern a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...);
-intern a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* fname, a_u32 options, GFun** pfun);
+intern a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, GFun** pfun);
 
 typedef struct Sym Sym;
 typedef struct Syms Syms;
@@ -65,6 +65,7 @@ struct Parser {
 	LocalInfoBuf _locals;
 	LineInfoBuf _lines;
 	CapInfoBuf _captures;
+	GStr* _name;
 	Scope* _scope;
 	FnScope* _fnscope;
 	RefQueue _rq; /* Function prototype queue. */
@@ -74,8 +75,8 @@ struct Parser {
 #define SCOPE_DEPTH_ENV u8c(0)
 #define SCOPE_DEPTH_ROOT u8c(1)
 
-#define par_err_f_arg(par,fmt) "%s: "fmt, (par)->_lex._fname
-#define par_err_fl_arg(par,fmt,ln) par_err_f_arg(par, "%u: "fmt), ln
+#define par_err_f_arg(par,fmt) "%s: "fmt, lex_file(&(par)->_lex)
+#define par_err_fl_arg(par,fmt,ln) "%s:%u: "fmt, lex_file(&(par)->_lex), ln
 
 #define ai_par_error(par,fmt,ln,args...) ai_par_report(par, false, par_err_fl_arg(par,fmt,ln), ##args)
 
