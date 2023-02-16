@@ -28,12 +28,16 @@ typedef struct MRoute {
 	a_byte _strx_reserved[STRX_RESERVE_SPACE];
 } MRoute;
 
-static MRoute* main_route(Global* g) {
+static MRoute* route_main(Global* g) {
 	return from_member(MRoute, _global, g);
 }
 
-static a_bool in_main_route(a_henv env) {
-	return &main_route(G(env))->_route._body == env;
+static a_bool route_is_main(a_henv env) {
+	return &route_main(G(env))->_route._body == env;
+}
+
+static a_bool route_is_active(a_henv env) {
+	return G(env)->_active == env;
 }
 
 static Route* env2route(a_henv env) {
@@ -73,18 +77,27 @@ static a_bool route_create(a_henv env, GRoute* self) {
 static void route_destroy(Global* g, GRoute* self) {
 	Stack* stack = &self->_stack;
 	ai_mem_vxdel(g, stack->_base, stack->_limit - stack->_base + RESERVED_STACKSIZE);
+	ai_cap_close(g->_active, self->_frame->_captures, null);
 }
 
-static void route_splash(Global* g, GRoute* self) {
+static void route_splash_stack(Global* g, GRoute* self) {
 	Stack* stack = &self->_stack;
 	Value* from = stack->_base;
 	Value* const to = stack->_top;
 	for (Value const* v = from; v < to; ++v) {
 		ai_gc_trace_markv(g, v);
 	}
-	g->_mem_work -= cast(a_isize, sizeof(GRoute) + sizeof(Value) * (stack->_limit - from + RESERVED_STACKSIZE));
+	g->_mem_work -= cast(a_isize, sizeof(Value) * (stack->_limit - from + RESERVED_STACKSIZE));
+}
 
-	if (self == g->_active) {
+static void route_splash(Global* g, GRoute* self) {
+	route_splash_stack(g, self);
+	if (self->_from != null) {
+		ai_gc_trace_mark(g, self->_from);
+	}
+	g->_mem_work -= cast(a_isize, sizeof(GRoute));
+
+	if (route_is_active(self)) {
 		join_trace(&g->_tr_regray, self);
 	}
 }
@@ -102,14 +115,14 @@ static VTable const route_vtable = {
 };
 
 a_msg ai_env_resume(a_henv env, GRoute* self) {
-	assume(self->_status == ALO_SYIELD && self->_from == null);
+	assume(self->_status == ALO_SYIELD && self->_from == null && route_is_active(env));
 	self->_status = ALO_SOK;
 	self->_from = env;
 	return ai_ctx_swap(env2route(env), env2route(self));
 }
 
 void ai_env_yield(a_henv env) {
-	assume(!in_main_route(env) && env->_status == ALO_SOK);
+	assume(!route_is_main(env) && env->_status == ALO_SOK && route_is_active(env));
 	a_henv from_env = env->_from;
 	env->_status = ALO_SYIELD;
 	env->_from = null;
@@ -173,11 +186,6 @@ static void global_init(Global* g) {
 		._flags = GMETA_FLAG_IDENTITY_EQUAL,
 		._vtable = route_vtable
 	};
-	g->_metas._cap = new(GMeta) {
-		._tid = T_OTHER,
-		._flags = 0,
-		._vtable = ai_cap_vtable
-	};
 	g->_metas._ref_array = new(GMeta) {
 		._tid = T_OTHER,
 		._flags = GMETA_FLAG_IDENTITY_EQUAL,
@@ -215,7 +223,7 @@ static void global_postinit(a_henv env, unused void* ctx) {
 	ai_strx_open(env, m->_strx_reserved, m->_strx);
 
 	GTable* global = ai_table_new(env);
-	v_set(G(env), &G(env)->_global, v_of_ref(global));
+	v_set(G(env), &G(env)->_global, v_of_obj(global));
 	ai_gc_register_object(env, global);
 }
 
@@ -270,9 +278,9 @@ a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
 
 void alo_destroy(a_henv env) {
 	Global* g = G(env);
-	MRoute* mr = main_route(g);
+	MRoute* mr = route_main(g);
 
-	if (!in_main_route(env)) {
+	if (!route_is_main(env)) {
 		/* Swap user stack to ensure stack is keeping. */
 		swap(env2route(env)->_ctx, mr->_route._ctx);
 	}
@@ -288,10 +296,10 @@ void alo_destroy(a_henv env) {
 }
 
 a_henv ai_env_mainof(Global* g) {
-	return &main_route(g)->_route._body;
+	return &route_main(g)->_route._body;
 }
 
-static a_isize grow_stack(a_henv env, a_usize size_new) {
+static a_isize l_grow_stack(a_henv env, a_usize size_new) {
 	a_usize size_old = env->_stack._limit - env->_stack._base + RESERVED_STACKSIZE;
 	Value* stack_old = env->_stack._base;
 	Value* stack_new;
@@ -316,7 +324,7 @@ static a_isize grow_stack(a_henv env, a_usize size_new) {
 static a_none l_raise_stkof(a_henv env, a_bool again) {
 	if (again) {
 		GStr* err = ai_str_createl(env, "stack overflow");
-		v_set(G(env), &env->_error, v_of_ref(err));
+		v_set(G(env), &env->_error, v_of_obj(err));
 		ai_env_raise(env, ALO_ESTKOF);
 	}
 	else {
@@ -331,13 +339,13 @@ a_isize ai_env_grow_stack(a_henv env, Value* top) {
 	if (unlikely(expect_size > MAX_VISIBLE_STACK_SIZE)) {
 		if (current_size == MAX_VISIBLE_STACK_SIZE + OVERFLOW_STACKSIZE)
 			return GROW_STACK_FLAG_OF2;
-		grow_stack(env, ALOI_MAX_STACKSIZE + OVERFLOW_STACKSIZE);
+		l_grow_stack(env, ALOI_MAX_STACKSIZE + OVERFLOW_STACKSIZE);
 		return GROW_STACK_FLAG_OF1;
 	}
 	current_size = max(current_size * 2, expect_size + MIN_GROW_STACK_SIZE);
 	current_size = min(current_size, MAX_VISIBLE_STACK_SIZE);
 
-	return grow_stack(env, current_size + RESERVED_STACKSIZE);
+	return l_grow_stack(env, current_size + RESERVED_STACKSIZE);
 }
 
 a_isize ai_env_check_stack(a_henv env, Value* top) {

@@ -45,6 +45,14 @@ void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
 	}
 }
 
+static a_none l_bad_op_err(a_henv env, a_u32 op) {
+	ai_err_raisef(env, ALO_EINVAL, "bad value for %s operation.", ai_op_names[op]);
+}
+
+static a_none l_div_0_err(a_henv env) {
+	ai_err_raisef(env, ALO_EINVAL, "attempt to divide by 0.");
+}
+
 a_hash ai_vm_hash(a_henv env, Value v) {
 	switch (v_raw_tag(&v)) {
 		case T_NIL:
@@ -69,20 +77,17 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 	}
 }
 
-static a_bool l_vm_equals(a_henv env, Value const* v1, Value const* v2, a_bool* r) {
-	if (v_raw_tag(v1) == v_raw_tag(v2)) {
-		switch (v_raw_tag(v1)) {
+static a_bool l_vm_equals(a_henv env, Value v1, Value v2) {
+	if (v_raw_tag(&v1) == v_raw_tag(&v2)) {
+		switch (v_raw_tag(&v1)) {
 			case T_NIL:
 			case T_FALSE:
 			case T_TRUE:
-				*r = true;
 				return true;
 			case T_INT:
-				*r = ai_op_eq_int(env, v_as_int(v1), v_as_int(v2));
-				return true;
+				return ai_op_eq_int(v_as_int(&v1), v_as_int(&v2));
 			case T_PTR:
-				*r = v_as_ptr(v1) == v_as_ptr(v2);
-				return true;
+				return v_as_ptr(&v1) == v_as_ptr(&v2);
 			case T_TUPLE:
 			case T_OTHER:
 				//TODO
@@ -91,21 +96,44 @@ static a_bool l_vm_equals(a_henv env, Value const* v1, Value const* v2, a_bool* 
 			case T_TABLE:
 			case T_FUNC:
 			case T_MOD:
-				*r = v_as_hnd(v1) == v_as_hnd(v2);
-				return true;
+				return v_as_hnd(&v1) == v_as_hnd(&v2);
 			case T_HSTR:
-				*r = ai_str_equals(v_as_str(G(env), v1), v_as_str(G(env), v2));
-				return true;
+				return ai_str_equals(v_as_str(G(env), &v1), v_as_str(G(env), &v2));
 			default:
-				*r = ai_op_eq_float(env, v_as_float(v1), v_as_float(v2));
-				return true;
+				return ai_op_eq_float(v_as_float(&v1), v_as_float(&v2));
 		}
 	}
-	else if (v_is_num(v1) && v_is_num(v2)) {
-		return ai_op_eq_float(env, v_as_num(v1), v_as_num(v2));
+	else if (v_is_num(&v1) && v_is_num(&v2)) {
+		return ai_op_eq_float(v_as_num(&v1), v_as_num(&v2));
 	}
 	else {
 		return false;
+	}
+}
+
+static a_bool l_vm_less_than(a_henv env, Value v1, Value v2) {
+	if (v_is_int(&v1) && v_is_int(&v2)) {
+		return ai_op_cmp_int(v_as_int(&v1), v_as_int(&v2), OP_LT);
+	}
+	else if (v_is_num(&v1) && v_is_num(&v2)) {
+		return ai_op_cmp_float(v_as_num(&v1), v_as_num(&v2), OP_LT);
+	}
+	else {
+		//TODO
+		l_bad_op_err(env, OP_LT);
+	}
+}
+
+static a_bool l_vm_less_equals(a_henv env, Value v1, Value v2) {
+	if (v_is_int(&v1) && v_is_int(&v2)) {
+		return ai_op_cmp_int(v_as_int(&v1), v_as_int(&v2), OP_LE);
+	}
+	else if (v_is_num(&v1) && v_is_num(&v2)) {
+		return ai_op_cmp_float(v_as_num(&v1), v_as_num(&v2), OP_LE);
+	}
+	else {
+		//TODO
+		l_bad_op_err(env, OP_LE);
 	}
 }
 
@@ -137,7 +165,7 @@ static void l_move_ret(a_henv env, Value* dst, a_usize dst_len, Value* src, a_us
 	}
 
 	while (i < dst_len) {
-		v_setx(dst, v_of_nil());
+		v_set_nil(dst);
 		i += 1;
 		dst += 1;
 	}
@@ -172,6 +200,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		frame = new(Frame) {
 			._prev = env->_frame,
 			._stack_bot_diff = ptr_diff(env->_stack._bot, env->_stack._base),
+			._captures = env->_frame != null ? env->_frame->_captures : null,
 			._pc = fmeta->_code,
 			._rflags = rflags
 		};
@@ -183,11 +212,13 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 	loop {
 		insn = *(pc++);
+		a_u32 bc;
+		a_bool z;
 		a_usize n, a, b, c;
 		a_isize sa, sb, sc;
 		Value vt;
 		a  = bc_load_a(insn);
-		switch (bc_load_op(insn)) {
+		switch (bc = bc_load_op(insn)) {
 			case BC_NOP: {
 				break;
 			}
@@ -198,29 +229,29 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			}
 			case BC_LDC: {
 				b = bc_load_b(insn);
-				GCap* cap = v_as_cap(G(env), &fun->_capval[b]);
+				Capture* cap = v_as_cap(&fun->_capval[b]);
 				v_cpy(G(env), &R[a], cap->_ptr);
 				break;
 			}
 			case BC_STC: {
 				b = bc_load_b(insn);
-				GCap* cap = v_as_cap(G(env), &fun->_capval[a]);
+				Capture* cap = v_as_cap(&fun->_capval[a]);
 				v_cpy(G(env), cap->_ptr, &R[b]);
 				break;
 			}
 			case BC_KN: {
 				c = bc_load_c(insn);
 				for (a_u32 i = 0; i < c; ++i) {
-					v_setx(&R[a + i], v_of_nil());
+					v_set_nil(&R[a + i]);
 				}
 				break;
 			}
 			case BC_KF: {
-				v_setx(&R[a], v_of_bool(false));
+				v_set_bool(&R[a], false);
 				break;
 			}
 			case BC_KT: {
-				v_setx(&R[a], v_of_bool(true));
+				v_set_bool(&R[a], true);
 				break;
 			}
 			case BC_KI: {
@@ -233,12 +264,19 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				v_cpy(G(env), &R[a], &K[b]);
 				break;
 			}
+			case BC_LDF: {
+				b = bc_load_bx(insn);
+				GFun* v = ai_fun_new(env, g_cast(GFunMeta, fun->_meta)->_subs[b], &frame);
+				v_set(G(env), &R[a], v_of_obj(v));
+				check_gc();
+				break;
+			}
 			case BC_TNEW: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
 				n = c != 0 ? c - 1 : cast(a_usize, env->_stack._top - &R[b]);
 				GTuple* v = ai_tuple_new(env, &R[b], n);
-				v_set(G(env), &R[a], v_of_ref(v));
+				v_set(G(env), &R[a], v_of_obj(v));
 				check_gc();
 				break;
 			}
@@ -249,9 +287,23 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				v_set(G(env), &R[a], vt);
 				break;
 			}
+			case BC_GETI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+				vt = l_vm_get(env, R[b], v_of_int(sc));
+				v_set(G(env), &R[a], vt);
+				break;
+			}
 			case BC_GETK: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
+				vt = l_vm_get(env, R[b], K[c]);
+				v_set(G(env), &R[a], vt);
+				break;
+			}
+			case BC_GETKX: {
+				b = bc_load_b(insn);
+				c = bc_load_c(*pc++);
 				vt = l_vm_get(env, R[b], K[c]);
 				v_set(G(env), &R[a], vt);
 				break;
@@ -270,40 +322,239 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				v_set(G(env), &R[a], vt);
 				break;
 			}
-			case BC_BEQ: {
-				a_bool r;
+			case BC_ADD:
+			case BC_SUB:
+			case BC_MUL: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				if (l_vm_equals(env, &R[b], &R[c], &r))
-					goto vm_meta_call; //TODO
-				pc += r;
+
+				a_u32 op = bc - BC_ADD + OP_ADD;
+				Value vb = R[b];
+				Value vc = R[c];
+
+				if (v_is_int(&vb) && v_is_int(&vc)) {
+					a_int val = ai_op_bin_int(v_as_int(&vb), v_as_int(&vc), op);
+					v_setx(&R[a], v_of_int(val));
+				}
+				else if (v_is_num(&vb) && v_is_num(&vc)) {
+					a_float val = ai_op_bin_float(v_as_float(&vb), v_as_float(&vc), op);
+					v_setx(&R[a], v_of_float(val));
+				}
+				else {
+					//TODO
+					l_bad_op_err(env, op);
+				}
 				break;
 			}
-			case BC_BNE: {
-				a_bool r;
+			case BC_DIV:
+			case BC_MOD: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				if (l_vm_equals(env, &R[b], &R[c], &r))
-					goto vm_meta_call; //TODO
-				pc += !r;
+
+				a_u32 op = bc - BC_ADD + OP_ADD;
+				Value vb = R[b];
+				Value vc = R[c];
+
+				if (v_is_int(&vb) && v_is_int(&vc)) {
+					a_int ic = v_as_int(&vc);
+					if (unlikely(ic == 0)) {
+						l_div_0_err(env);
+					}
+					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+					v_setx(&R[a], v_of_int(val));
+				}
+				else if (v_is_num(&vb) && v_is_num(&vc)) {
+					a_float val = ai_op_bin_float(v_as_float(&vb), v_as_float(&vc), op);
+					v_setx(&R[a], v_of_float(val));
+				}
+				else {
+					//TODO
+					l_bad_op_err(env, op);
+				}
 				break;
 			}
-			case BC_TEQ: {
-				a_bool r;
+			case BC_SHL:
+			case BC_SHR:
+			case BC_BAND:
+			case BC_BOR:
+			case BC_BXOR: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				if (l_vm_equals(env, &R[b], &R[c], &r))
-					goto vm_meta_call; //TODO
-				v_setx(&R[a], v_of_bool(r));
+
+				a_u32 op = bc - BC_ADD + OP_ADD;
+				Value vb = R[b];
+				Value vc = R[c];
+
+				if (v_is_int(&vb) && v_is_int(&vc)) {
+					a_int val = ai_op_bin_int(v_as_int(&vb), v_as_int(&vc), op);
+					v_setx(&R[a], v_of_int(val));
+				}
+				else {
+					//TODO
+					l_bad_op_err(env, op);
+				}
 				break;
 			}
+			case BC_ADDI:
+			case BC_SUBI:
+			case BC_MULI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+
+				a_u32 op = bc - BC_ADDI + OP_ADD;
+				Value vb = R[b];
+				a_int ic = cast(a_int, sc);
+
+				if (v_is_int(&vb)) {
+					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+					v_setx(&R[a], v_of_int(val));
+				}
+				else if (v_is_num(&vb)) {
+					a_float val = ai_op_bin_float(v_as_float(&vb), ic, op);
+					v_setx(&R[a], v_of_float(val));
+				}
+				else {
+					//TODO
+					l_bad_op_err(env, op);
+				}
+				break;
+			}
+			case BC_DIVI:
+			case BC_MODI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+
+				a_u32 op = bc - BC_ADDI + OP_ADD;
+				Value vb = R[b];
+				a_int ic = cast(a_int, sc);
+
+				if (v_is_int(&vb)) {
+					if (unlikely(ic == 0)) {
+						l_div_0_err(env);
+					}
+					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+					v_setx(&R[a], v_of_int(val));
+				}
+				else if (v_is_num(&vb)) {
+					a_float val = ai_op_bin_float(v_as_float(&vb), ic, op);
+					v_setx(&R[a], v_of_float(val));
+				}
+				else {
+					//TODO
+					l_bad_op_err(env, op);
+				}
+				break;
+			}
+			case BC_SHLI:
+			case BC_SHRI:
+			case BC_BANDI:
+			case BC_BORI:
+			case BC_BXORI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+
+				a_u32 op = bc - BC_ADDI + OP_ADD;
+				Value vb = R[b];
+				a_int ic = cast(a_int, sc);
+
+				if (v_is_int(&vb)) {
+					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+					v_setx(&R[a], v_of_int(val));
+				}
+				else {
+					//TODO
+					l_bad_op_err(env, op);
+				}
+				break;
+			}
+			case BC_BZ:
+			case BC_BNZ:
+			case BC_TZ:
+			case BC_TNZ: {
+				b = bc_load_b(insn);
+				z = v_to_bool(&R[b]);
+				goto jump_or_test;
+			}
+			case BC_BEQ:
+			case BC_BNE:
+			case BC_TEQ:
 			case BC_TNE: {
-				a_bool r;
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				if (l_vm_equals(env, &R[b], &R[c], &r))
-					goto vm_meta_call; //TODO
-				v_setx(&R[a], v_of_bool(!r));
+				z = l_vm_equals(env, R[b], R[c]);
+				goto jump_or_test;
+			}
+			case BC_BLT:
+			case BC_BNLT:
+			case BC_TLT:
+			case BC_TNLT: {
+				b = bc_load_b(insn);
+				c = bc_load_c(insn);
+				z = l_vm_less_than(env, R[b], R[c]);
+				goto jump_or_test;
+			}
+			case BC_BLE:
+			case BC_BNLE:
+			case BC_TLE:
+			case BC_TNLE: {
+				b = bc_load_b(insn);
+				c = bc_load_c(insn);
+				z = l_vm_less_equals(env, R[b], R[c]);
+				goto jump_or_test;
+			}
+			case BC_BEQI:
+			case BC_BNEI:
+			case BC_TEQI:
+			case BC_TNEI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+				z = l_vm_equals(env, R[b], v_of_int(sc));
+				goto jump_or_test;
+			}
+			case BC_BLTI:
+			case BC_BNLTI:
+			case BC_TLTI:
+			case BC_TNLTI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+				z = l_vm_less_than(env, R[b], v_of_int(sc));
+				goto jump_or_test;
+			}
+			case BC_BLEI:
+			case BC_BNLEI:
+			case BC_TLEI:
+			case BC_TNLEI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+				z = l_vm_less_equals(env, R[b], v_of_int(sc));
+				goto jump_or_test;
+			}
+			case BC_BGTI:
+			case BC_BNGTI:
+			case BC_TGTI:
+			case BC_TNGTI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+				z = l_vm_less_than(env, v_of_int(sc), R[b]);
+				goto jump_or_test;
+			}
+			case BC_BGEI:
+			case BC_BNGEI:
+			case BC_TGEI:
+			case BC_TNGEI: {
+				b = bc_load_b(insn);
+				sc = bc_load_sc(insn);
+				z = l_vm_less_equals(env, v_of_int(sc), R[b]);
+				goto jump_or_test;
+			}
+			jump_or_test: {
+				z ^= cast(a_bool, bc & 1);
+				if (!(bc & 2)) {
+					pc += z;
+				}
+				else {
+					v_set_bool(&R[a], z);
+				}
 				break;
 			}
 			case BC_J: {
@@ -356,5 +607,6 @@ vm_meta_call:
 vm_return:
 	env->_frame = frame._prev;
 	env->_stack._bot = ptr_disp(Value, env->_stack._base, env->_frame->_stack_bot_diff);
+	ai_cap_close(env, frame._captures, R);
 #undef pc
 }

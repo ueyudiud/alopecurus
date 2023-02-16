@@ -62,7 +62,7 @@ static void l_free_input() {
 
 #define LINE_BUF_SIZE 256
 
-static a_usize l_read_line_frag(a_henv env, char* buf) {
+static a_usize l_read_line_frag(char* buf) {
 	if (fgets(buf, LINE_BUF_SIZE, stdin) == null)
 		return false;
 
@@ -83,11 +83,11 @@ static a_usize l_read_line_frag(a_henv env, char* buf) {
 static void l_read_line(a_henv env) {
 	char buf[LINE_BUF_SIZE];
 
-	a_usize len = l_read_line_frag(env, buf);
+	a_usize len = l_read_line_frag(buf);
 	if (len == 0) goto error;
 
 	while (buf[len - 1] != '\n') {
-		len = l_read_line_frag(env, buf);
+		len = l_read_line_frag(buf);
 		if (len == 0) goto error;
 	}
 
@@ -98,7 +98,7 @@ error:
 	aloL_errorf(env, "fail to read script.");
 }
 
-static a_i32 l_source_input(a_henv env, void* rctx, void const** pdst, a_usize* plen) {
+static a_i32 l_source_input(unused a_henv env, void* rctx, void const** pdst, a_usize* plen) {
 	InLine** pfrag = rctx;
 	InLine* frag = *pfrag;
 	if (frag != null) {
@@ -133,9 +133,10 @@ static a_bool l_try_comp_console(a_henv env, a_bool expr, a_bool* psuccess) {
 		}
 		case ALO_ECHUNK: {
 			if (!expr) goto error;
-			return false;
+			fallthrough;
 		}
 		case ALO_ESTMUF: {
+			alo_settop(env, 1);
 			return false;
 		}
 		default: {
@@ -143,6 +144,7 @@ static a_bool l_try_comp_console(a_henv env, a_bool expr, a_bool* psuccess) {
 			aloL_base_show(env, -1);
 			aloi_show_newline();
 			*psuccess = false;
+			alo_settop(env, 1);
 			return true;
 		}
 	}
@@ -194,7 +196,7 @@ static void l_print_error(a_henv env) {
 			break;
 		}
 		case ALO_TSTR: {
-			aloi_show("%s\n", alo_tostr(env, -1, null));
+			aloi_show("%s\n", alo_tostr(env, -1));
 			break;
 		}
 		default: {

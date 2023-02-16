@@ -32,7 +32,6 @@ static a_bool l_test_skip(Parser* par, a_i32 tk) {
 
 a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...) {
 	va_list varg;
-	ai_code_close(par);
 	if (!eof || !(par->_options & ALO_COMP_OPT_ALOC1)) {
 		va_start(varg, fmt);
 		ai_err_raisevf(par->_env, ALO_ECHUNK, fmt, varg);
@@ -152,6 +151,36 @@ static void l_scan_tstring(Parser* par, OutExpr e) {
 	}
 
 	ai_code_concat_end(par, &ce, e, ln_cur(par));
+}
+
+static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_u32 line) {
+	FnScope scope;
+
+	ai_code_prologue(par, &scope, line);
+
+	l_check_skip(par, TK_LBK);
+
+	if (!l_test_skip(par, TK_RBK)) {
+		do {
+			if (l_test_skip(par, TK_TDOT)) {
+				//TODO
+				panic("unimplemented");
+			}
+			else {
+				GStr* param_name = l_check_ident(par);
+				ai_code_bind_param(par, param_name, line);
+			}
+		}
+		while (l_test_skip(par, TK_COMMA));
+		l_check_skip(par, TK_RBK);
+	}
+
+	l_check_skip(par, TK_LBR);
+	l_scan_stat_seq(par);
+	l_check_skip(par, TK_RBR);
+
+	GFunMeta* meta = ai_code_epilogue(par, name, false, line);
+	ai_code_loadfunc(par, e, meta);
 }
 
 static void l_scan_atom_expr(Parser* par, OutExpr e) {
@@ -319,6 +348,12 @@ static void l_scan_prefixed_expr(Parser* par, OutExpr e) {
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
 			ai_code_unary(par, e, OP_UNBOX, line);
+			break;
+		}
+		case TK_FN: {
+			a_u32 line = ln_cur(par);
+			l_skip(par);
+			l_scan_function(par, e, null, line);
 			break;
 		}
 		default: {
@@ -911,7 +946,12 @@ static void l_scan_let_stat(Parser* par) {
 
 	switch (l_peek(par)) {
 		case TK_FN: {
-			//TODO
+			Expr e1, e2;
+			l_skip(par);
+			GStr* name = l_check_ident(par);
+			ai_code_local(par, &e1, name, line);
+			l_scan_function(par, &e2, name, line);
+			ai_code_bind(par, &e1, &e2, line);
 			break;
 		}
 		default: {
@@ -1048,7 +1088,7 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 
 	a_msg msg = ai_env_protect(env, l_scan_root, &par);
 
 	if (msg == ALO_SOK) {
-		*pfun = ai_code_build(&par);
+		*pfun = ai_code_build_and_close(&par);
 	}
 	else {
 		ai_code_close(&par);

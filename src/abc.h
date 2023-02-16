@@ -59,22 +59,20 @@
 #define bc_load_c(i) cast(a_u8, cast(a_u32, i) >> BC_OFF_C)
 #define bc_load_sc(i) cast(a_i8, cast(a_i32, i) >> BC_OFF_C)
 
-inline void bc_swap_op(a_insn* i, a_u32 op) { *i = (*i & ~BC_MASK_OP) | bc_wrap_op(op); }
-inline void bc_swap_a(a_insn* i, a_u32 a) { *i = (*i & ~BC_MASK_A) | bc_wrap_a(a); }
-inline void bc_swap_ax(a_insn* i, a_u32 a) { *i = (*i & ~BC_MASK_AX) | bc_wrap_ax(a); }
-inline void bc_swap_sax(a_insn* i, a_i32 a) { *i = (*i & ~BC_MASK_AX) | bc_wrap_sax(a); }
-inline void bc_swap_b(a_insn* i, a_u32 b) { *i = (*i & ~BC_MASK_B) | bc_wrap_b(b); }
-inline void bc_swap_bx(a_insn* i, a_u32 b) { *i = (*i & ~BC_MASK_BX) | bc_wrap_bx(b); }
-inline void bc_swap_sbx(a_insn* i, a_u32 b) { *i = (*i & ~BC_MASK_BX) | bc_wrap_sbx(b); }
-inline void bc_swap_c(a_insn* i, a_u32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_c(c); }
-inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc(c); }
+always_inline void bc_swap_op(a_insn* i, a_u32 op) { *i = (*i & ~BC_MASK_OP) | bc_wrap_op(op); }
+always_inline void bc_swap_a(a_insn* i, a_u32 a) { *i = (*i & ~BC_MASK_A) | bc_wrap_a(a); }
+always_inline void bc_swap_ax(a_insn* i, a_u32 a) { *i = (*i & ~BC_MASK_AX) | bc_wrap_ax(a); }
+always_inline void bc_swap_sax(a_insn* i, a_i32 a) { *i = (*i & ~BC_MASK_AX) | bc_wrap_sax(a); }
+always_inline void bc_swap_b(a_insn* i, a_u32 b) { *i = (*i & ~BC_MASK_B) | bc_wrap_b(b); }
+always_inline void bc_swap_bx(a_insn* i, a_u32 b) { *i = (*i & ~BC_MASK_BX) | bc_wrap_bx(b); }
+always_inline void bc_swap_sbx(a_insn* i, a_u32 b) { *i = (*i & ~BC_MASK_BX) | bc_wrap_sbx(b); }
+always_inline void bc_swap_c(a_insn* i, a_u32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_c(c); }
+always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc(c); }
 
 #define ALO_BC_LIST(_) \
 /*        id,    name,   a,   b,   c,    description                                         */ \
     _(   NOP,   "nop", ___, ___, ___) /*                                                     */ \
     _(   MOV,   "mov", reg, reg, ___) /* R[a] := R[b]                                        */ \
-    _(   LDC,   "ldc", reg, cap, ___) /* R[a] := *C[b]                                       */ \
-    _(   STC,   "stc", cap, reg, ___) /* *C[a] := R[b]                                       */ \
 /*======================================Duality Opcodes======================================*/ \
     _(    KF,    "kf", reg, ___, ___) /* R[a] := false                                       */ \
     _(    KT,    "kt", reg, ___, ___) /* R[a] := true                                        */ \
@@ -115,9 +113,12 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
     _(  TGEI,  "tgei", reg, reg, val) /* R[a] := R[b] <= int(sc)                             */ \
     _( TNGEI, "tngei", reg, reg, val) /* R[a] := !(R[b] <= int(sc))                          */ \
 /*===========================================================================================*/ \
+    _(   LDC,   "ldc", reg, cap, ___) /* R[a] := *C[b]                                       */ \
+    _(   STC,   "stc", cap, reg, ___) /* *C[a] := R[b]                                       */ \
     _(    KN,    "kn", reg, ___, off) /* R[a:a+c] := nil                                     */ \
     _(    KI,    "ki", reg, val, val) /* R[a] := int(sbx)                                    */ \
     _(     K,     "k", reg, kst, kst) /* R[a] := K[bx]                                       */ \
+    _(   LDF,   "ldf", reg, kst, kst) /* R[a] := func(F[bx])                                 */ \
     _(  CMOV,  "cmov", reg, cap, ___) /* R[a] := C[b]                                        */ \
     _(   GET,   "get", reg, reg, reg) /* R[a] := R[b][R[c]]                                  */ \
     _(  GETI,  "geti", reg, reg, val) /* R[a] := R[b][int(c)]                                */ \
@@ -156,6 +157,7 @@ inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc
     _(  CALL,  "call", reg, num, num) /* R[a:a+c-1] := R[a](R[a+1:a+b])                      */ \
     _(   CAT,   "cat", reg, reg, num) /* R[a] := concat(R[b:b+c-1])                          */ \
     _(     J,     "j", off, off, off) /* pc := pc + sax                                      */ \
+    _( CLOSE, "close", reg, ___, ___) /* close(C[A:])                                        */ \
     _(   RET,   "ret", ___, reg, num) /* return R[b:b+c+1]                                   */ \
     _(    FC,    "fc", ___, cap, ___) /* call C function at C[b]                             */ \
     _(    EX,    "ex", val, val, val) /*                                                     */
@@ -167,11 +169,11 @@ enum {
     BC__MAX
 };
 
-inline a_bool bc_has_dual_op(a_u32 op) {
+always_inline a_bool bc_has_dual_op(a_u32 op) {
 	return op >= BC_KF && op <= BC_TNGEI;
 }
 
-inline a_bool bc_is_branch_op(a_u32 op) {
+always_inline a_bool bc_is_branch_op(a_u32 op) {
 	return op >= BC_BNZ && op <= BC_TNGEI && ((op - BC_BNZ) & 2) == 0;
 }
 

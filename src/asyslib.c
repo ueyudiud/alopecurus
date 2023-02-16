@@ -15,30 +15,52 @@
 #include "alolib.h"
 #include "asyslib.h"
 
-a_none aloL_sys_exit(a_henv env, a_isize id) {
-	Value const* v = api_rdslot(env, id);
-	a_i32 exit_code;
-	switch (v_raw_tag(v)) {
-		case T_NIL:
-		case T_FALSE:
-			exit_code = 0;
-			break;
-		case T_TRUE:
-			exit_code = 1;
-			break;
-		case T_INT:
-			exit_code = v_as_int(v);
-			break;
-		default:
-			api_panic("bad exit code.");
+static a_bool l_to_exit_code(Value const* v, a_i32* pcode) {
+	if (v != null) {
+		switch (v_raw_tag(v)) {
+			case T_FALSE: {
+				*pcode = 0;
+				return true;
+			}
+			case T_TRUE: {
+				*pcode = 1;
+				return true;
+			}
+			case T_INT: {
+				*pcode = v_as_int(v);
+				return true;
+			}
+			default: {
+				return false;
+			}
+		}
 	}
+	else {
+		*pcode = 0;
+		return true;
+	}
+}
+
+static a_none l_exit(a_henv env, a_i32 code) {
 	ai_vm_hook(env, ALO_SEXIT, ALO_HMRAISE);
 	alo_destroy(env);
-	exit(exit_code);
+	exit(code);
+}
+
+a_none aloL_sys_exit(a_henv env, a_isize id) {
+	a_i32 code;
+	if (!l_to_exit_code(api_roslot(env, id), &code)) {
+		api_panic("bad exit code.");
+	}
+	l_exit(env, code);
 }
 
 static a_u32 sys_exit(a_henv env) {
-	aloL_sys_exit(env, 0);
+	a_i32 code;
+	if (!l_to_exit_code(api_roslot(env, 0), &code)) {
+		aloL_errorf(env, "bad exit code.");
+	}
+	l_exit(env, code);
 }
 
 void aloopen_sys(a_henv env) {

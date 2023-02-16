@@ -1,15 +1,16 @@
 ##############################################################
 # Makefile for building Alopecurus
 ##############################################################
-
 MAJVER=0
 MINVER=1
+PATVAR=0
 
 ##############################################################
 # Build configuration.
 ##############################################################
 LEVEL=release
-TARGET=mixed
+BUILDMODE=mixed
+DEBUGMODE=gdb
 OUT=.
 
 ##############################################################
@@ -17,8 +18,11 @@ OUT=.
 ##############################################################
 CC= gcc -std=gnu11
 AR= ar rcus
-RM= rm -f
 STRIP= strip
+
+RM= rm -f $(1)
+MD= mkdir -p $(1)
+CP= cp -f $(1) $(2)
 
 ##############################################################
 # Host OS detection.
@@ -32,7 +36,9 @@ STRIP= strip
 
 ifeq ($(OS),Windows_NT)
 	HOST_OS= Windows
-	RM= del /f
+	RM= del /f $(1)
+	MD= if not exist $(1) mkdir $(1)
+	CP= copy /Y $(1) $(2)
 else
 	HOST_OS:= $(shell uname -s)
 	ifneq (,$(findstring MINGW,$(OS)))
@@ -79,6 +85,8 @@ HOST_XLIBS=
 
 HOST_CC?= $(BASE_CC)
 HOST_RM= $(RM)
+HOST_MD= $(MD)
+HOST_CP= $(CP)
 HOST_AR= $(AR)
 
 HOST_XCCFLAGS= $(HOST_CCSYS) $(HOST_CCDEF)
@@ -123,6 +131,7 @@ TARGET_LIBS= $(BASE_XLIBS) $(TARGET_XLIBS)
 
 ifeq (Windows,$(TARGET_OS))
   	TARGET_STRIP+= --strip-unneeded
+  	TARGET_XDYLDFLAGS= -shared
 	TARGET_XLIBS+= -lntdll
 else 
 ifeq (Darwin,$(TARGET_OS))
@@ -138,36 +147,38 @@ ALO_O= alo.o
 ALO_A= alo.a
 ALO_SO= alo.so
 ALO_T= alo
+ALO_DB= $(TARGET_SONAME)-$(DEBUGMODE).py
+ALO_DB_SRC=alo-$(DEBUGMODE).py
 
-ifeq (Windows, $(TARGET_OS))
+ifeq (Windows,$(TARGET_OS))
 	ALO_T= alo.exe
 	ifeq (cygwin,$(HOST_MSYS))
 		ALO_SO= cyg$(TARGET_DLLNAME)
 	else
 		ALO_SO= $(TARGET_DLLNAME)
 	endif
+	ALO_DB= $(ALO_SO)-$(DEBUGMODE).py
 endif
 
 ##############################################################
 # Build mode controlling.
 ##############################################################
-
 TARGET_O= $(ALO_A)
 TARGET_T= $(ALO_T) $(ALO_SO)
 
 ifeq (Windows,$(TARGET_OS))
 	TARGET_DYCC= $(STATIC_CC)
-	ifneq (static, $(TARGET))
-		TARGET= dynamic
+	ifneq (static,$(BUILDMODE))
+		BUILDMODE= dynamic
 		TARGET_XCCFLAGS+= -D ALO_BUILD_AS_DLL
 	endif
 endif
 
-ifeq (static,$(TARGET))
+ifeq (static,$(BUILDMODE))
 	TARGET_DYCC= @:
 	TARGET_T= $(ALO_T)
 else
-ifeq (dynamic,$(TARGET))
+ifeq (dynamic,$(BUILDMODE))
 	ifneq (Windows,$(TARGET_OS))
 		TARGET_CC= $(DYNAMIC_CC)
 	endif
@@ -178,6 +189,9 @@ endif
 
 ifeq (debug,$(LEVEL))
   TARGET_STRIP= @:
+  ifneq (static,$(BUILDMODE))
+  	TARGET_T+= $(ALO_DB)
+  endif
 endif
 
 ACTX_C= actx/x64.w64.win.c
@@ -185,17 +199,19 @@ ACTX_C= actx/x64.w64.win.c
 KER_O= aapi.o adump.o acode.o aparse.o alex.o adbg.o aerr.o aload.o \
 asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o aenv.o amod.o ameta.o \
 afun.o atable.o alist.o atuple.o astr.o adict.o abuf.o aio.o actx.o
-LIB_O= asyslib.o abaselib.o aauxlib.o
+LIB_O= asyslib.o adbglib.o abaselib.o aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
 
 ALO_O= alo.o
 
 ALL_O= $(BASE_O) $(ALO_O)
 ALL_T= $(TARGET_T)
-ALL_RM= $(ALL_O) $(ALL_O:.o=_dyn.o) $(ALO_T) $(ALO_A) $(ALO_SO)
+ALL_RM= $(ALL_O) $(ALL_O:.o=_dyn.o) $(ALO_T) $(ALO_A) $(ALO_SO) $(ALO_DB)
 
-Q=@echo
 E=@
+Q=@echo
+#E=
+#Q=@:
 
 ##############################################################
 # Make targets.
@@ -206,29 +222,19 @@ default all: $(ALL_T)
 
 clean:
 	$(Q) "RM      $(ALL_RM)"
-	$(E) cd $(OUT) && $(HOST_RM) $(ALL_RM)
+	$(E) cd $(OUT) && $(call HOST_RM, $(ALL_RM))
 
 echo:
-	$(Q) "   LEVEL=$(LEVEL)"
-	$(Q) "  TARGET=$(TARGET)"
-	$(Q) "      CC=$(TARGET_CC)"
-	$(Q) "      AR=$(TARGET_AR)"
-	$(Q) "      LD=$(TARGET_LD)"
-	$(Q) "   STRIP=$(TARGET_STRIP)"
-	$(Q) "  CFLAGS=$(TARGET_CCFLAGS)"
+	$(Q) "    LEVEL=$(LEVEL)"
+	$(Q) "BUILDMODE=$(BUILDMODE)"
+	$(Q) "DEBUGMODE=$(DEBUGMODE)"
 
 depend:
 	$(E) $(HOST_CC) $(HOST_CCFLAGS) -MM *.c > makefile.dep
 
-ifeq (Windows,$(TARGET_OS))
 check:
 	$(Q) "MKDIR   $(OUT)"
-	$(E) if not exist $(OUT) mkdir $(OUT)
-else
-check:
-	$(Q) "MKDIR   $(OUT)"
-	$(E) mkdir -p $(OUT)
-endif
+	$(E) $(call MD, $(OUT))
 
 .PHONY: default all clean depend check
 
@@ -236,16 +242,16 @@ endif
 # Object file rules.
 ##############################################################
 
-%.o: %.c check
+%.o: %.c
 	$(Q) "CC      $@"
 	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/$(@:.o=_dyn.o)" -c $<
 	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
 
-$(ALO_O): alo.c check
+$(ALO_O): alo.c
 	$(Q) "CC      $@"
 	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
 
-actx.o: $(ACTX_C) check
+actx.o: $(ACTX_C)
 	$(Q) "CC      $@"
 	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/$(@:.o=_dyn.o)" -c $<
 	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
@@ -262,11 +268,16 @@ $(ALO_A): $(BASE_O)
 	$(Q) "AR      $@"
 	$(E) cd $(OUT) && $(TARGET_AR) $@ $(BASE_O)
 
+ifneq (debug,$(BUILDMODE))
+$(ALO_DB): $(ALO_DB_SRC) check
+	$(Q) "CP      $(ALO_DB_SRC) $@"
+	$(E) $(call CP, $(ALO_DB_SRC), "$(OUT)/$@")
+endif
+
 $(ALO_SO): $(BASE_O)
 	$(Q) "DYLINK  $@"
 	$(E) cd $(OUT) && $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(BASE_O) $(TARGET_LIBS)
 	$(E) cd $(OUT) && $(TARGET_STRIP) $@
-	$(E) copy /Y alo-dbg.py "$(OUT)/$@-gdb.py"
 
 $(ALO_T): $(TARGET_O) $(ALO_O)
 	$(Q) "LINK    $@"

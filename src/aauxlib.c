@@ -42,6 +42,50 @@ a_henv aloL_create(void) {
 	return msg == ALO_SOK ? env : null;
 }
 
+void aloL_argerror(a_henv env, a_usize id, char const* what) {
+	char const* name = ai_dbg_get_func_name(env, env->_frame);
+	if (name == null) return aloL_errorf(env, "bad argument #%tu, %s", id, what);
+	return aloL_errorf(env, "bad argument #%tu to '%s', %s", id, name, what);
+}
+
+static char const* l_typename(a_henv env, a_isize id) {
+	Value const* v = api_roslot(env, id);
+	if (v == null) return "empty";
+
+	a_u32 tag = v_raw_tag(v);
+	if (tag != T_OTHER) return ai_obj_tag_name[tag];
+
+	panic("unimplemented"); //TODO
+}
+
+void aloL_typeerror(a_henv env, a_usize id, char const* name) {
+	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, l_typename(env, cast(a_isize, id)));
+	aloL_argerror(env, id, what);
+}
+
+static char const* const l_tag_names[] = {
+	[ALO_TNIL] = "nil",
+	[ALO_TBOOL] = "bool",
+	[ALO_TINT] = "int",
+	[ALO_TFLOAT] = "float",
+	[ALO_TPTR] = "ptr",
+	[ALO_TSTR] = "str",
+	[ALO_TTUPLE] = "tuple",
+	[ALO_TLIST] = "list",
+	[ALO_TTABLE] = "table",
+	[ALO_TFUNC] = "func",
+	[ALO_TROUTE] = "route",
+	[ALO_TMOD] = "mod",
+	[ALO_TOTHER] = "other"
+};
+
+void aloL_checktag(a_henv env, a_usize id, a_tag tag) {
+	api_check(tag >= ALO_TEMPTY && tag <= ALO_TOTHER, "bad type tag.");
+	if (alo_tagof(env, cast(a_isize, id)) != tag) {
+		aloL_typeerror(env, id, l_tag_names[tag]);
+	}
+}
+
 static a_i32 l_read_str(unused a_henv env, void* rctx, void const** pdst, size_t* plen) {
 	a_lstr* ctx = rctx;
 	*pdst = ctx->_ptr;
@@ -143,12 +187,12 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		else {
 			ai_buf_putf(env, buf, "at %s", file ?: "?");
 		}
-		if (meta->_dbg_name != null) {
-			ai_buf_putf(env, buf, " (%s)", meta->_dbg_name->_data);
+		if (meta->_name != null) {
+			ai_buf_putf(env, buf, " (%s)", meta->_name->_data);
 		}
 	}
 	GStr* str = ai_str_create(env, buf->_arr, buf->_len);
-	v_set(G(env), err, v_of_ref(str));
+	v_set(G(env), err, v_of_obj(str));
 	return ALO_SOK;
 }
 
@@ -170,7 +214,7 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 	api_check_slot(env, 1);
 
 	GRefArray* refs = ai_ref_array_new(env, nb + 1);
-	v_set(G(env), api_incr_stack(env), v_of_ref(refs));
+	v_set(G(env), api_incr_stack(env), v_of_obj(refs));
 
 	GStr* name_ref = ai_str_create(env, name, strlen(name));
 	refs->_data[0] = gobj_cast(name_ref);
@@ -180,13 +224,13 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 	}
 
 	GMod* mod = ai_mod_new(env, name_ref, cast(GStr**, &refs->_data[1]), nb);
-	v_set(G(env), api_wrslot(env, -1), v_of_ref(mod));
+	v_set(G(env), api_wrslot(env, -1), v_of_obj(mod));
 
 	for (a_u32 i = 0; i < nb; ++i) {
 		a_cfun fptr = bs[i].fptr;
 		if (fptr != null) {
 			GFun* fun = ai_cfun_create(env, fptr, 0, null);
-			v_set(G(env), &mod->_values[i], v_of_ref(fun));
+			v_set(G(env), &mod->_values[i], v_of_obj(fun));
 		}
 	}
 
@@ -202,13 +246,14 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
 	a_hmod mod = alo_openmod(env, -1);
 	ai_mod_cache(env, null, mod);
-	ai_table_set(env, v_as_table(G(env), &G(env)->_global), v_of_ref(mod->_name), v_of_ref(mod));
+	ai_table_set(env, v_as_table(G(env), &G(env)->_global), v_of_obj(mod->_name), v_of_obj(mod));
 	api_decr_stack(env);
 }
 
 void aloL_openlibs(a_henv env) {
 	static LibEntry const entries[] = {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
+		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
 		{ ALO_LIB_SYS_NAME, aloopen_sys }
 	};
 

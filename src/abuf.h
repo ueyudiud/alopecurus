@@ -5,9 +5,9 @@
 #ifndef abuf_h_
 #define abuf_h_
 
-#include "amem.h"
-
 #include <string.h>
+
+#include "amem.h"
 
 #define BUF_DATA_NAME _arr
 #define BUF_DATA_DEF(t) typeof(t)* BUF_DATA_NAME
@@ -40,7 +40,7 @@ BUF_STRUCT_DECLARE(Buf, a_byte);
 BUF_STRUCT_DECLARE(QBuf, a_byte, QBuf* _last);
 BUF_STRUCT_DECLARE(RBuf, void);
 
-inline a_msg ai_buf_resize0_(a_henv env, void* buf, a_usize new_cap, a_usize size, a_usize limit) {
+always_inline a_msg ai_buf_resize0_(a_henv env, void* buf, a_usize new_cap, a_usize size, a_usize limit) {
     RBuf* rbuf = cast(RBuf*, buf);
     if (unlikely(rbuf->_cap >= limit))
         return ALO_EINVAL;
@@ -53,13 +53,13 @@ inline a_msg ai_buf_resize0_(a_henv env, void* buf, a_usize new_cap, a_usize siz
     return ALO_SOK;
 }
 
-inline void ai_buf_close_(Global* g, void* buf, a_usize size) {
+always_inline void ai_buf_close_(Global* g, void* buf, a_usize size) {
 	RBuf* rbuf = cast(RBuf*, buf);
 	ai_mem_dealloc(g, rbuf->BUF_DATA_REF, rbuf->_cap * size);
 	*rbuf = new(RBuf) {};
 }
 
-inline void ai_buf_copy_(void* dst, void* buf, a_usize size) {
+always_inline void ai_buf_copy_(void* dst, void* buf, a_usize size) {
 	RBuf* rbuf = cast(RBuf*, buf);
 	memcpy(dst, rbuf->BUF_DATA_REF, rbuf->_len * size);
 }

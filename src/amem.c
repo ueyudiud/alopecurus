@@ -13,7 +13,7 @@
 
 a_none ai_mem_nomem(a_henv env) {
 	GStr* err = G(env)->_nomem_error;
-	ai_err_raise(env, ALO_ENOMEM, likely(err != null) ? v_of_ref(err) : v_of_nil());
+	ai_err_raise(env, ALO_ENOMEM, likely(err != null) ? v_of_obj(err) : v_of_nil());
 }
 
 void* ai_mem_alloc(a_henv env, a_usize sz) {

@@ -19,10 +19,11 @@ intern a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...);
 intern a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, GFun** pfun);
 
 typedef struct Sym Sym;
-typedef struct Syms Syms;
 
 typedef struct CompCapInfo CompCapInfo;
 
+BUF_STRUCT_DECLARE(SymBuf, Sym);
+BUF_STRUCT_DECLARE(ConstBuf, Value);
 BUF_STRUCT_DECLARE(InsnBuf, a_insn);
 BUF_STRUCT_DECLARE(LineInfoBuf, LineInfo);
 BUF_STRUCT_DECLARE(LocalInfoBuf, LocalInfo);
@@ -47,21 +48,9 @@ struct Parser {
 		};
 	};
 	a_u32 _options;
-	a_u32 _head_jump;
-	a_u32 _head_jump_line;
-	a_u32 _head_land;
-	a_u32 _head_line;
-	union {
-		a_u32 _flags;
-		struct {
-			a_u32 _fpass: 1;
-			a_u32 _fland: 1;
-			a_u32 _fjump: 1;
-			a_u32 _fvarg: 1;
-		};
-	};
-	a_u16 _scope_depth;
-	Syms _syms;
+	a_u8 _scope_depth;
+	SymBuf _symbols;
+	ConstBuf _consts; /* Constants. */
 	LocalInfoBuf _locals;
 	LineInfoBuf _lines;
 	CapInfoBuf _captures;

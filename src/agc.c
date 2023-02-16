@@ -25,20 +25,20 @@
 # define ALOI_CLOSECOST usizec(256)
 #endif
 
-inline void join_gc_(a_gclist* list, a_hobj elem) {
+always_inline void join_gc_(a_gclist* list, a_hobj elem) {
 	elem->_gnext = *list;
 	*list = elem;
 }
 
 #define join_gc(list,elem) join_gc_(list, g_cast(GObj, elem))
 
-inline a_hobj strip_gc(a_gclist* list) {
+always_inline a_hobj strip_gc(a_gclist* list) {
 	a_hobj elem = *list;
 	*list = elem->_gnext;
 	return elem;
 }
 
-inline void flip_color(Global* g) {
+always_inline void flip_color(Global* g) {
 	g->_white_color = cast(a_u8, other_color(g));
 }
 
@@ -72,14 +72,14 @@ void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 	}
 }
 
-inline void splash_object(Global* g, a_hobj obj) {
+always_inline void splash_object(Global* g, a_hobj obj) {
 	a_fp_splash splash = obj->_meta->_vtable._splash;
 	if (likely(splash != null)) {
 		(*splash)(g, obj);
 	}
 }
 
-inline void delete_object(Global* g, a_hobj obj) {
+always_inline void delete_object(Global* g, a_hobj obj) {
 	a_fp_destruct destruct = obj->_meta->_vtable._destruct;
 	if (destruct != null) {
 		(*destruct)(g, obj);

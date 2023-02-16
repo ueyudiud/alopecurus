@@ -169,12 +169,12 @@ struct Lexer {
     LexScope _scope0;
 };
 
-inline void ai_lex_push_scope(Lexer* lex, LexScope* scope) {
+always_inline void ai_lex_push_scope(Lexer* lex, LexScope* scope) {
     scope->_up = lex->_scope;
     lex->_scope = scope;
 }
 
-inline void ai_lex_pop_scope(Lexer* lex) {
+always_inline void ai_lex_pop_scope(Lexer* lex) {
     lex->_scope = lex->_scope->_up;
 	lex->_channel = lex->_scope->_last_channel;
 }

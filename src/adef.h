@@ -56,13 +56,13 @@
 # define intern extern
 #endif
 
-#undef inline
-#undef noinline
+#undef always_inline
+#undef never_inline
 #undef naked
 #undef unused
 
-#define inline __attribute__((__always_inline__, __gnu_inline__)) extern inline
-#define noinline __attribute__((__noinline__))
+#define always_inline __attribute__((__always_inline__, __gnu_inline__)) extern __inline__
+#define never_inline __attribute__((__noinline__))
 #define naked __attribute__((__naked__))
 #define unused __attribute__((__unused__))
 
@@ -212,7 +212,7 @@ intern a_none ai_dbg_panic(char const* fmt, ...);
 
 #undef memclr
 
-inline void* ai_def_memory_clear(void* dst, a_usize len) {
+always_inline void* ai_def_memory_clear(void* dst, a_usize len) {
 	return __builtin_memset(dst, 0, len);
 }
 
@@ -221,7 +221,7 @@ inline void* ai_def_memory_clear(void* dst, a_usize len) {
  */
 #define memclr(dst,len) ai_def_memory_clear(dst, len)
 
-inline a_usize2 mul_usize(a_usize a, a_usize b) {
+always_inline a_usize2 mul_usize(a_usize a, a_usize b) {
     return cast(a_usize2, a) * b;
 }
 
@@ -238,9 +238,9 @@ inline a_usize2 mul_usize(a_usize a, a_usize b) {
     _(usize)
 
 #define FUNDEF(t) \
-    inline a_bool checked_add_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_add_overflow(a, b, d); } \
-    inline a_bool checked_sub_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_sub_overflow(a, b, d); } \
-    inline a_bool checked_mul_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_mul_overflow(a, b, d); }
+    always_inline a_bool checked_add_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_add_overflow(a, b, d); } \
+    always_inline a_bool checked_sub_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_sub_overflow(a, b, d); } \
+    always_inline a_bool checked_mul_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_mul_overflow(a, b, d); }
 
 NUM_TYPE_LIST(FUNDEF)
 
@@ -248,7 +248,7 @@ NUM_TYPE_LIST(FUNDEF)
 
 #undef NUM_TYPE_LIST
 
-inline a_u32 clz_usize(a_usize a) {
+always_inline a_u32 clz_usize(a_usize a) {
 #if ALO_M64
 	return __builtin_clzll(a);
 #else
@@ -256,7 +256,7 @@ inline a_u32 clz_usize(a_usize a) {
 #endif
 }
 
-inline a_usize ceil_pow2m1_usize(a_usize a) {
+always_inline a_usize ceil_pow2m1_usize(a_usize a) {
     return likely(a != 0) ? ~usizec(0) >> clz_usize(a) : 0;
 }
 

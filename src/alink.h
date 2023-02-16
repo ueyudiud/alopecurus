@@ -27,19 +27,19 @@ typedef struct {
 
 #define ai_link_new() (new(Link) { nil, nil })
 
-inline a_isize ai_link__diff(void* p, void* q, a_usize s) {
+always_inline a_isize ai_link__diff(void* p, void* q, a_usize s) {
 	assume(s > 0);
 	a_byte (*const p_sized)[s] = p;
 	a_byte (*const q_sized)[s] = q;
 	return p_sized - q_sized;
 }
 
-inline a_x32 ai_link__wrap(void* b, void* n, a_usize s) {
+always_inline a_x32 ai_link__wrap(void* b, void* n, a_usize s) {
 	if (n == null) return nil;
 	return wrap(ai_link__diff(n, b, s));
 }
 
-inline void* ai_link__unwrap(void* b, a_x32 d, a_usize s) {
+always_inline void* ai_link__unwrap(void* b, a_x32 d, a_usize s) {
 	if (is_nil(d)) return null;
 	void* n = b + s * unwrap_unsafe(d);
 	assume(n != null);
@@ -58,7 +58,7 @@ inline void* ai_link__unwrap(void* b, a_x32 d, a_usize s) {
 #define ai_link_prev(n) ai_link__get(n, _prev)
 #define ai_link_next(n) ai_link__get(n, _next)
 
-inline void ai_link__move(void* ns, void* nd, a_usize s, a_usize f) {
+always_inline void ai_link__move(void* ns, void* nd, a_usize s, a_usize f) {
 	Link* restrict ls = cast(Link*, ns + f);
 	Link* restrict ld = cast(Link*, nd + f);
 	void* np = ai_link__unwrap(ns, ls->_prev, s);
@@ -77,7 +77,7 @@ inline void ai_link__move(void* ns, void* nd, a_usize s, a_usize f) {
 	};
 }
 
-inline void ai_link__push_last(LHead* h, void* b, void* n, a_usize s, a_usize f, a_bool e) {
+always_inline void ai_link__push_last(LHead* h, void* b, void* n, a_usize s, a_usize f, a_bool e) {
 	void* nt = b + h->_last * s;
 	Link* lt = cast(Link*, nt + f);
 	Link* l = cast(Link*, n + f);
@@ -92,7 +92,7 @@ inline void ai_link__push_last(LHead* h, void* b, void* n, a_usize s, a_usize f,
 	}
 }
 
-inline void ai_link__insert_after(void* nb, void* n, a_usize s, a_usize f) {
+always_inline void ai_link__insert_after(void* nb, void* n, a_usize s, a_usize f) {
 	Link* lb = cast(Link*, nb + f);
 	Link* l = cast(Link*, n + f);
 	void* nn = ai_link__unwrap(nb, lb->_next, s);

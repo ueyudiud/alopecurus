@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 
 #include "astr.h"
+#include "afun.h"
 
 #define GLOBAL_FLAG_INCRGC u16c(0x0001)
 #define GLOBAL_FLAG_FULLGC u16c(0x0002)
@@ -61,8 +62,6 @@ typedef struct Stack {
 	Value* _limit;
 } Stack;
 
-typedef struct Frame Frame;
-
 #define RFLAG_COUNT_VARARG 255
 
 /* Flags of result. */
@@ -74,6 +73,7 @@ struct Frame {
 	Frame* _prev;
 	a_insn* _pc;
 	a_isize _stack_bot_diff;
+	Capture* _captures;
 	RFlags _rflags;
 	/* In strict stack checking mode, the API will use frame bound to check index range. */
 #if ALO_STRICT_STACK_CHECK
@@ -97,7 +97,7 @@ struct alo_Env {
 
 #define G(env) ((env)->_g)
 
-inline void ai_env_pop_error(a_henv env, Value* d) {
+always_inline void ai_env_pop_error(a_henv env, Value* d) {
 	v_cpy(G(env), d, &env->_error);
 	env->_error = v_of_nil();
 }

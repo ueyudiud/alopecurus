@@ -17,18 +17,18 @@ intern void* ai_mem_xalloc(a_henv env, a_usize sz);
 intern void* ai_mem_xrealloc(a_henv env, void* blk, a_usize sz_old, a_usize sz_new);
 intern void ai_mem_xdealloc(Global* g, void* blk, a_usize sz);
 
-inline void* ai_mem_nalloc(a_alloc const* af, void* ac, a_usize sz) {
+always_inline void* ai_mem_nalloc(a_alloc const* af, void* ac, a_usize sz) {
 	assume(sz > 0);
 	return (*af->allocate)(ac, sz);
 }
 
-inline void* ai_mem_nrealloc(a_alloc const* af, void* ac, void* blk_old, a_usize sz_old, a_usize sz_new) {
+always_inline void* ai_mem_nrealloc(a_alloc const* af, void* ac, void* blk_old, a_usize sz_old, a_usize sz_new) {
 	assume(blk_old != null && sz_old > 0);
 	assume(sz_new > 0);
 	return (*af->reallocate)(ac, blk_old, sz_old, sz_new);
 }
 
-inline void ai_mem_ndealloc(a_alloc const* af, void* ac, void* blk, a_usize sz) {
+always_inline void ai_mem_ndealloc(a_alloc const* af, void* ac, void* blk, a_usize sz) {
 	assume(blk != null && sz > 0);
 	(*af->deallocate)(ac, blk, sz);
 }

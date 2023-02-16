@@ -63,15 +63,15 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
     a_u8 tag;
     switch (tag = l_get(ic, a_u8)) {
         case LVTAG_NIL: {
-            v_setx(v, v_of_nil());
+            v_set_nil(v);
             break;
         }
         case LVTAG_FALSE: {
-            v_setx(v, v_of_bool(false));
+            v_set_bool(v, false);
             break;
         }
         case LVTAG_TRUE: {
-            v_setx(v, v_of_bool(true));
+            v_set_bool(v, true);
             break;
         }
         case LVTAG_INT: {
@@ -88,14 +88,14 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
             a_u32 len = l_getvi(ic, a_u32) + LVLSTR_LEN_BIAS;
             GStr* val;
             check(l_geths(ic, len, &val));
-            v_setx(v, v_of_ref(val));
+            v_setx(v, v_of_obj(val));
             break;
         }
         default: { /* For short string */
             a_byte buf[256];
             l_getv(ic, buf, tag);
             GStr* val = ai_str_create(ic->_in._env, buf, tag);
-            v_set(G(ic->_in._env), v, v_of_ref(val));
+            v_set(G(ic->_in._env), v, v_of_obj(val));
             break;
         }
     }

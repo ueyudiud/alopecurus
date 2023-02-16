@@ -106,7 +106,7 @@ void alo_settop(a_henv env, a_isize n) {
 	api_check(v >= env->_stack._bot && v <= api_stack_limit(env));
 	Value* u = env->_stack._top;
 	while (u < v) { /* Fill nil value if stack grows. */
-		v_setx(u++, v_of_nil());
+		v_set_nil(u++);
 	}
 	env->_stack._top = v;
 }
@@ -191,6 +191,8 @@ static a_tag tag_of(a_henv env, Value const* v) {
 			return ALO_TLIST;
 		case T_TABLE:
 			return ALO_TTABLE;
+		case T_FUNC:
+			return ALO_TFUNC;
 		case T_MOD:
 			return ALO_TMOD;
 		case T_OTHER:
@@ -288,11 +290,11 @@ a_tag alo_pushvex(a_henv env, char const* sp, va_list varg) {
 }
 
 void alo_pushnil(a_henv env) {
-	v_setx(api_incr_stack(env), v_of_nil());
+	v_set_nil(api_incr_stack(env));
 }
 
 void alo_pushbool(a_henv env, a_bool val) {
-	v_setx(api_incr_stack(env), v_of_bool(val));
+	v_set_bool(api_incr_stack(env), val);
 }
 
 void alo_pushint(a_henv env, a_int val) {
@@ -309,7 +311,7 @@ void alo_pushptr(a_henv env, void* val) {
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 	GStr* val = ai_str_create(env, src, len);
-	v_setx(api_incr_stack(env), v_of_ref(val));
+	v_setx(api_incr_stack(env), v_of_obj(val));
 	ai_gc_trigger(env);
 	return cast(char const*, val->_data);
 }
@@ -324,7 +326,7 @@ char const* alo_pushfstr(a_henv env, char const* fmt, ...) {
 
 char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 	GStr* val = ai_str_formatv(env, fmt, varg);
-	v_setx(api_incr_stack(env), v_of_ref(val));
+	v_setx(api_incr_stack(env), v_of_obj(val));
 	ai_gc_trigger(env);
 	return cast(char const*, val->_data);
 }
@@ -340,20 +342,20 @@ void alo_newtuple(a_henv env, a_usize n) {
 	api_check_elem(env, n);
 	GTuple* val = ai_tuple_new(env, env->_stack._top - n, n);
 	env->_stack._top -= n;
-	v_set(G(env), api_incr_stack(env), v_of_ref(val));
+	v_set(G(env), api_incr_stack(env), v_of_obj(val));
 	ai_gc_trigger(env);
 }
 
 void alo_newlist(a_henv env, a_usize n) {
 	GList* val = ai_list_new(env);
-	v_set(G(env), api_incr_stack(env), v_of_ref(val));
+	v_set(G(env), api_incr_stack(env), v_of_obj(val));
 	ai_gc_trigger(env);
 	ai_list_hint(env, val, n);
 }
 
 void alo_newtable(a_henv env, a_usize n) {
 	GTable* val = ai_table_new(env);
-	v_set(G(env), api_incr_stack(env), v_of_ref(val));
+	v_set(G(env), api_incr_stack(env), v_of_obj(val));
 	ai_gc_trigger(env);
 	ai_table_hint(env, val, n);
 }
@@ -363,7 +365,7 @@ void alo_newcfun(a_henv env, a_cfun f, a_usize n) {
 	api_check_elem(env, n);
 	GFun* val = ai_cfun_create(env, f, n, env->_stack._top - n);
 	env->_stack._top -= n;
-	v_set(G(env), api_incr_stack(env), v_of_ref(val));
+	v_set(G(env), api_incr_stack(env), v_of_obj(val));
 	ai_gc_trigger(env);
 }
 
@@ -512,7 +514,7 @@ a_float alo_tofloat(a_henv env, a_isize id) {
 	}
 }
 
-char const* alo_tostr(a_henv env, a_isize id, a_usize* plen) {
+char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	Value const* v = api_rdslot(env, id);
 	if (likely(v_is_str(v))) {
 		GStr* value = v_as_str(G(env), v);
@@ -522,6 +524,49 @@ char const* alo_tostr(a_henv env, a_isize id, a_usize* plen) {
 		return cast(char const*, value->_data);
 	}
 	api_panic("cannot cast to string");
+}
+
+a_htype alo_typeof(a_henv env, a_isize id) {
+	Value const* v = api_roslot(env, id);
+	if (v == null) return null;
+
+	a_usize tag = v_raw_tag(v);
+	if (tag != T_OTHER) return cast(a_htype, tag + 1);
+
+	//TODO
+	panic("not implemented.");
+}
+
+char const* const ai_obj_tag_name[] = {
+	[T_NIL] = "nil",
+	[T_FALSE] = "bool",
+	[T_TRUE] = "true",
+	[T_INT] = "int",
+	[T_PTR] = "ptr",
+	[T_FLOAT] = "float",
+	[T_ISTR] = "str",
+	[T_HSTR] = "str",
+	[T_TUPLE] = "tuple",
+	[T_LIST] = "list",
+	[T_TABLE] = "table",
+	[T_FUNC] = "func",
+	[T_MOD] = "mod",
+	[T_OTHER] = null
+};
+
+char const* alo_typename(unused a_henv env, a_htype type) {
+	a_usize type_addr = addr_of(type);
+	if (type_addr == 0) {
+		return "empty";
+	}
+	else if (type_addr - 1 < T__MAX) {
+		api_check(type_addr != T_OTHER, "bad primitive tag.");
+		return ai_obj_tag_name[type_addr - 1];
+	}
+	else {
+		//TODO
+		panic("not implemented.");
+	}
 }
 
 a_hmod alo_openmod(a_henv env, a_isize id) {
@@ -558,11 +603,11 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	id_env = alo_absindex(env, id_env);
 	a_msg msg = ai_parse(env, fun, ctx, l_get_str(env, id_file), l_get_str(env, id_name), options, &out);
 	if (likely(msg == ALO_SOK)) {
-		v_set(G(env), api_incr_stack(env), v_of_ref(out));
+		v_set(G(env), api_incr_stack(env), v_of_obj(out));
 		if (g_cast(GFunMeta, out->_meta)->_ncap > 0) {
 			Value* vcap = &out->_capval[0];
 			if (!(options & ALO_COMP_OPT_CONST_ENV))
-				vcap = v_as_cap(G(env), vcap)->_ptr;
+				vcap = v_as_cap(vcap)->_ptr;
 			v_cpy(G(env), vcap, api_rdslot(env, id_env));
 		}
 	}
@@ -574,10 +619,7 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 
 void alo_dump(a_henv env, a_isize id, a_flags options) {
 	Value const* v = api_rdslot(env, id);
-	if (likely(v_is_func(v))) {
-		GFun* fun = v_as_func(G(env), v);
-		ai_dump_print(env, g_cast(GFunMeta, fun->_meta), options);
-		return;
-	}
-	api_panic("unable to dump.");
+	api_check(v_is_func(v), "only function can be dumped.");
+	GFun* fun = v_as_func(G(env), v);
+	ai_dump_print(env, g_cast(GFunMeta, fun->_meta), options);
 }

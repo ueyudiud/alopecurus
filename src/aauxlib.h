@@ -11,6 +11,10 @@ typedef struct aloL_Binding aloL_Binding;
 
 ALO_EXPORT a_henv (aloL_create)(void);
 
+ALO_EXPORT void (aloL_argerror)(a_henv env, a_usize id, char const* what);
+ALO_EXPORT void (aloL_typeerror)(a_henv env, a_usize id, char const* name);
+ALO_EXPORT void (aloL_checktag)(a_henv env, a_usize id, a_tag tag);
+
 ALO_EXPORT a_msg (aloL_compiles)(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options);
 ALO_EXPORT a_msg (aloL_compilef)(a_henv env, char const* fname, a_u32 options);
 

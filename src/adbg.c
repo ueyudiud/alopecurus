@@ -32,14 +32,14 @@ GFun* ai_dbg_get_func(a_henv env, Frame* frame) {
 }
 
 a_u32 ai_dbg_get_line(GFunMeta* meta, a_insn const* pc) {
-	if (meta->_lines != null) {
+	if (meta->_dbg_lines != null) {
 		a_u32 disp = pc - meta->_code;
 		a_u32 lo = 0;
 		a_u32 hi = meta->_nline - 1;
 		a_u32 mi;
 		while (lo < hi) {
 			mi = (lo + hi) >> 1;
-			LineInfo* info = &meta->_lines[mi];
+			LineInfo* info = &meta->_dbg_lines[mi];
 			if (disp >= info->_end) {
 				lo = mi + 1;
 			}
@@ -47,7 +47,7 @@ a_u32 ai_dbg_get_line(GFunMeta* meta, a_insn const* pc) {
 				hi = mi;
 			}
 		}
-		return meta->_lines[lo]._lineno;
+		return meta->_dbg_lines[lo]._lineno;
 	}
 	else {
 		return 0;

@@ -13,10 +13,10 @@
 
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, sizeof(GList));
+	self->_meta = &G(env)->_metas._list;
     self->_data = null;
     self->_len = 0;
     self->_cap = 0;
-    self->_meta = &G(env)->_metas._list;
     ai_gc_register_object(env, self);
     return self;
 }

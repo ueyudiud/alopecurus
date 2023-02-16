@@ -11,6 +11,7 @@
 #include "astr.h"
 #include "afun.h"
 #include "amod.h"
+#include "aenv.h"
 
 typedef struct {
 	IStr** _table;
@@ -73,39 +74,35 @@ struct Global {
 	volatile atomic_uint_fast8_t _hookm;
 };
 
-inline a_bool g_is_cap(Global* g, a_hobj v) {
-	return v->_meta == &g->_metas._cap;
-}
-
-inline a_bool g_is_route(Global* g, a_hobj v) {
+always_inline a_bool g_is_route(Global* g, a_hobj v) {
 	return v->_meta == &g->_metas._route;
 }
 
-inline a_bool v_is_route(Global* g, Value const* v) {
+always_inline a_bool v_is_route(Global* g, Value const* v) {
 	return v_is_other(v) && g_is_route(g, v_as_obj(g, v));
 }
 
 
 #define ALO_HMSWAP 0x80
 
-inline void ai_env_gsplash(a_henv env, a_fp_gsplash fun, void* ctx) {
+always_inline void ai_env_gsplash(a_henv env, a_fp_gsplash fun, void* ctx) {
 	assume(fun != null);
 	Global* g = G(env);
 	g->_gsplash = fun;
 	g->_gsplash_ctx = ctx;
 }
 
-inline void ai_env_gsplash_clear(a_henv env) {
+always_inline void ai_env_gsplash_clear(a_henv env) {
 	Global* g = G(env);
 	g->_gsplash = null;
 	g->_gsplash_ctx = null;
 }
 
-inline a_usize ai_env_mem_total(Global* g) {
+always_inline a_usize ai_env_mem_total(Global* g) {
 	return g->_mem_base + cast(a_usize, g->_mem_debt);
 }
 
-inline GStr* ai_env_strx(Global* g, a_u32 tag) {
+always_inline GStr* ai_env_strx(Global* g, a_u32 tag) {
 	return cast(GStr**, g + 1)[tag - 1];
 }
 

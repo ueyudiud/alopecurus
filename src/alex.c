@@ -17,13 +17,13 @@
 
 #include "alex.h"
 
-inline void l_switch_scope(Lexer* lex, a_u32 channel) {
+always_inline void l_switch_scope(Lexer* lex, a_u32 channel) {
 	lex->_scope->_last_channel = lex->_channel;
 	lex->_scope->_begin_line = lex->_line;
 	lex->_channel = channel;
 }
 
-inline a_i32 l_pollx(Lexer* lex) {
+always_inline a_i32 l_pollx(Lexer* lex) {
     a_i32 ch = lex->_ch;
     lex->_ch = ai_io_igetc(&lex->_in);
     return ch;
@@ -109,7 +109,7 @@ static a_bool c_isibody(a_i32 ch) {
     }
 }
 
-inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
+always_inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
     ai_buf_put(lex->_in._env, &lex->_buf, ch);
 	return ALO_SOK;
 }

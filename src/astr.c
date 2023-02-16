@@ -6,7 +6,6 @@
 #define ALO_LIB
 
 #include <stdio.h>
-#include <string.h>
 
 #include "aenv.h"
 #include "amem.h"
@@ -114,8 +113,8 @@ static IStr* istr_lookup(a_henv env, void const* src, a_usize len, a_hash hash) 
 
 static GStr* hstr_new(a_henv env, void const* src, a_usize len, a_hash hash) {
     GStr* self = ai_mem_alloc(env, sizeof(GStr) + 1 + len);
+	self->_meta = &G(env)->_metas._hstr;
     str_new(self, src, len, hash);
-    self->_meta = &G(env)->_metas._hstr;
     ai_gc_register_object(env, self);
     return self;
 }
@@ -124,10 +123,10 @@ GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 t
     Global* g = G(env);
     IStr* self = cast(IStr*, blk);
     a_hash hash = ai_str_hashof(g->_seed, src, len);
-    str_new(&self->_body, src, len, hash);
-	strx_id_set(&self->_body, tag);
 	self->_body._gnext = null;
 	self->_body._meta = &G(env)->_metas._dstr;
+    str_new(&self->_body, src, len, hash);
+	strx_id_set(&self->_body, tag);
 	istable_emplace(&g->_istable, self);
 	return &self->_body;
 }

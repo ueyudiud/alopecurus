@@ -64,7 +64,7 @@ intern a_msg ai_ctx_catch(Route* env, a_pfun fun, void* ctx);
 intern a_msg ai_ctx_open(Route* env, a_usize stack_size);
 intern void ai_ctx_close(Route* env);
 
-inline void ai_ctx_swapx(Route* from, Route* to, a_msg msg) {
+always_inline void ai_ctx_swapx(Route* from, Route* to, a_msg msg) {
     register a_gpr p1 asm("rcx");
     register a_gpr p2 asm("rdx");
     register a_gpr p3 asm("rax");

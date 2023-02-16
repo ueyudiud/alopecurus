@@ -5,6 +5,7 @@
 #ifndef acode_h_
 #define acode_h_
 
+#include "aop.h"
 #include "aparse.h"
 
 typedef struct Expr Expr;
@@ -21,6 +22,7 @@ intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_u32 line);
 intern void ai_code_constI(Parser* par, OutExpr e, a_int val, a_u32 line);
 intern void ai_code_constF(Parser* par, OutExpr e, a_float val, a_u32 line);
 intern void ai_code_constS(Parser* par, OutExpr e, GStr* val, a_u32 line);
+intern void ai_code_loadfunc(Parser* par, OutExpr e, GFunMeta* fun);
 intern void ai_code_lookupU(Parser* par, OutExpr e, GStr* name, a_u32 line);
 
 intern void ai_code_lookupC(Parser* par, InoutExpr e, GStr* name, a_u32 line);
@@ -45,64 +47,16 @@ intern void ai_code_drop(Parser* par, InExpr e);
 intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_u32 line);
 intern void ai_code_let_nils(Parser* par, LetStat* s, a_u32 line);
 intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
+intern void ai_code_local(Parser* par, OutExpr e, GStr* name, a_u32 line);
+intern void ai_code_bind_param(Parser* par, GStr* name, a_u32 line);
 
 intern void ai_code_enter(Parser* par, Scope* scope);
 intern void ai_code_leave(Parser* par);
 intern void ai_code_prologue(Parser* par, FnScope* fnscope, a_u32 line);
 intern GFunMeta* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_u32 line);
 intern void ai_code_open(Parser* par);
-intern GFun* ai_code_build(Parser* par);
+intern GFun* ai_code_build_and_close(Parser* par);
 intern void ai_code_close(Parser* par);
-
-enum {
-	OP__NONE    = 0x00,
-
-	OP_ADD      = 0x01,
-	OP_SUB      = 0x02,
-	OP_MUL      = 0x03,
-	OP_DIV      = 0x04,
-	OP_MOD      = 0x05,
-	OP_SHL      = 0x06,
-	OP_SHR      = 0x07,
-	OP_BIT_AND  = 0x08,
-	OP_BIT_OR   = 0x09,
-	OP_BIT_XOR  = 0x0A,
-	OP_AND      = 0x0B,
-	OP_OR       = 0x0C,
-
-	OP_LT       = 0x10,
-	OP_GE       = 0x11,
-	OP_LE       = 0x12,
-	OP_GT       = 0x13,
-	OP_EQ       = 0x14,
-	OP_NE       = 0x15,
-	OP_IS       = 0x16,
-	OP_IS_NOT   = 0x17,
-	OP_AS       = 0x18,
-	OP_AS_OR    = 0x19,
-	OP_IN       = 0x1A,
-	OP_NOT_IN   = 0x1B,
-
-	OP_NEG      = 0x0D,
-	OP_BIT_INV  = 0x0E,
-	OP_NOT      = 0x0F,
-	OP_UNBOX    = 0x1C,
-	OP_LEN      = 0x20,
-	OP_UNPACK   = 0x34,
-
-	OP_OPTION   = 0x1D,
-	OP_MERGE    = 0x1E,
-	OP_OR_ELSE  = 0x1F,
-
-	OP_VA_PUSH  = 0x20,
-	OP_VA_POP   = 0x21,
-	OP_RETURN   = 0x22,
-
-	OP_VA_FIT   = 0x30,
-	OP_VA_FILL  = 0x31,
-	OP_TNEW     = 0x32,
-	OP_CALL     = 0x33
-};
 
 /**
  ** Volatility:
@@ -370,19 +324,18 @@ struct Sym {
 	a_u16 _num_fur; /* Number of temporary register in fragmented section. */ \
 	a_u16 _top_reg; \
 	a_u32 _begin_label; \
-	a_u32 _end_label;        \
+	a_u32 _end_label; \
 	a_u32 _bot_sym
 
 struct Scope {
 	SCOPE_STRUCT_HEAD;
 };
 
-BUF_STRUCT_DECLARE(ValBuf, Value);
-
 struct CompCapInfo {
 	a_u8 _scope; /* The depth of first captured scope. */
 	a_u8 _iname; /* Qualified variable index. */
 	a_u8 _index;
+	a_u16 _mods;
 	GStr* _name;
 };
 
@@ -395,13 +348,28 @@ struct FnScope {
 	};
 	FnScope* _fn_up;
 	Scope* _top_scope;
-	ValBuf _consts; /* Constants. */
 	GFunMeta** _base_subs;
 	a_u32 _linedef;
+	a_u32 _begin_const;
 	a_u32 _begin_line;
 	a_u32 _begin_local;
 	a_u32 _begin_cap;
+	a_u32 _head_jump;
+	a_u32 _head_jump_line;
+	a_u32 _head_land;
+	a_u32 _head_line;
+	union {
+		a_u8 _flow_flags;
+		struct {
+			a_u8 _fpass: 1;
+			a_u8 _fland: 1;
+			a_u8 _fjump: 1;
+			a_u8 _fvarg: 1;
+		};
+	};
 	a_u16 _max_reg;
+	a_u16 _nsub;
+	a_u8 _nparam;
 };
 
 #endif /* acode_h_ */

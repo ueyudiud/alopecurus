@@ -64,9 +64,10 @@ typedef a_i32 a_tag;
 #define ALO_TTUPLE 6
 #define ALO_TLIST 7
 #define ALO_TTABLE 8
-#define ALO_TROUTE 9
-#define ALO_TMOD 10
-#define ALO_TOTHER 11
+#define ALO_TFUNC 9
+#define ALO_TROUTE 10
+#define ALO_TMOD 11
+#define ALO_TOTHER 12
 
 #define ALO_EIO ((a_msg) -9) /* Foreign IO Error */
 #define ALO_ERAISE ((a_msg) -8) /* User Raised Error */
@@ -100,6 +101,8 @@ typedef struct alo_Alloc a_alloc;
 typedef struct alo_Env* a_henv;
 /* Module handle. */
 typedef struct alo_Mod* a_hmod;
+/* Type handle. */
+typedef struct alo_Type* a_htype;
 
 struct alo_Alloc {
 	void* (*allocate)(void*, a_usize);
@@ -161,7 +164,12 @@ ALO_EXPORT a_tag (alo_tagof)(a_henv env, a_isize id);
 ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_isize id);
 ALO_EXPORT a_int (alo_toint)(a_henv env, a_isize id);
 ALO_EXPORT a_float (alo_tofloat)(a_henv env, a_isize id);
-ALO_EXPORT char const* (alo_tostr)(a_henv env, a_isize id, a_usize* plen);
+ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
+
+#define alo_tostr(env,id) alo_tolstr(env, id, NULL)
+
+ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
+ALO_EXPORT char const* (alo_typename)(a_henv env, a_htype type);
 
 ALO_EXPORT a_msg (alo_lookmod)(a_henv env, char const* src, a_usize len);
 ALO_EXPORT a_hmod (alo_openmod)(a_henv env, a_isize id);

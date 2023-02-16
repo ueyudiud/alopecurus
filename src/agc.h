@@ -12,11 +12,11 @@ typedef struct {
 	a_gclist* _tail;
 } RefQueue;
 
-inline void rq_init(RefQueue* rq) {
+always_inline void rq_init(RefQueue* rq) {
 	rq->_tail = &rq->_head;
 }
 
-inline void rq_push(RefQueue* rq, void* ref) {
+always_inline void rq_push(RefQueue* rq, void* ref) {
 	a_hobj obj = cast(a_hobj, ref);
 	*rq->_tail = obj;
 	rq->_tail = &obj->_gnext;
@@ -39,50 +39,50 @@ inline void rq_push(RefQueue* rq, void* ref) {
 #define WHITE2_COLOR 0x2
 #define BLACK_COLOR 0x4
 
-inline a_trmark white_color(Global* g) {
+always_inline a_trmark white_color(Global* g) {
     return cast(a_trmark, g->_white_color);
 }
 
-inline a_trmark other_color(Global* g) {
+always_inline a_trmark other_color(Global* g) {
     return white_color(g) ^ (WHITE1_COLOR | WHITE2_COLOR);
 }
 
-inline a_bool g_is_black(a_hobj v) {
+always_inline a_bool g_is_black(a_hobj v) {
     return (v->_tnext & BLACK_COLOR) != 0;
 }
 
-inline a_bool g_is_gray(a_hobj v) {
+always_inline a_bool g_is_gray(a_hobj v) {
     return (v->_tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
 
-inline a_bool g_is_white(Global* g, a_hobj v) {
+always_inline a_bool g_is_white(Global* g, a_hobj v) {
     return (v->_tnext & white_color(g)) != 0;
 }
 
-inline a_bool g_is_other(Global* g, a_hobj v) {
+always_inline a_bool g_is_other(Global* g, a_hobj v) {
     return (v->_tnext & other_color(g)) != 0;
 }
 
-inline void g_set_white(Global* g, a_hobj v) {
+always_inline void g_set_white(Global* g, a_hobj v) {
 	v->_tnext = white_color(g);
 }
 
-inline void v_check_alive(Global* g, Value const* v) {
+always_inline void v_check_alive(Global* g, Value const* v) {
 	if (v_is_obj(v)) {
 		GObj* obj = cast(GObj*, v_as_hnd(v));
 		a_u32 tag = v_raw_tag(v);
-		assume((tag == obj->_meta->_tid || (tag == T_OTHER && obj->_meta->_tid > T__MAX)) && !g_is_other(g, obj));
+		assume((tag == obj->_meta->_tid || (tag == T_OTHER && obj->_meta->_tid >= T_OTHER)) && !g_is_other(g, obj));
 	}
 }
 
-inline void join_trace_(a_trmark* list, GObj* elem) {
+always_inline void join_trace_(a_trmark* list, GObj* elem) {
 	elem->_tnext = *list;
 	*list = addr_of(elem);
 }
 
 #define join_trace(list,elem) join_trace_(list, g_cast(GObj, elem))
 
-inline GObj* strip_trace(a_trmark* list) {
+always_inline GObj* strip_trace(a_trmark* list) {
 	GObj* elem = ptr_of(GObj, *list);
 	*list = elem->_tnext;
 	return elem;
@@ -101,7 +101,7 @@ intern void ai_gc_clean(Global* g);
 #define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, gobj_cast(obj))
 #define ai_gc_trace_mark(g,obj) ai_gc_trace_mark_(g, gobj_cast(obj))
 
-inline void ai_gc_trace_markv(Global* g, Value const* v) {
+always_inline void ai_gc_trace_markv(Global* g, Value const* v) {
 	if (v_is_obj(v)) ai_gc_trace_mark_(g, v_as_obj(g, v));
 }
 

@@ -201,8 +201,9 @@ static TNode* table_findro(a_henv env, GTable* self, a_hash hash, Pred pred, voi
     return null;
 }
 
-static a_bool l_id_eq(unused a_henv env, void const* ctx, Value const* v) {
-	return cast(Value const*, ctx)->_u == v->_u;
+static a_bool l_id_eq(unused a_henv env, void const* ctx, Value const* v2) {
+	Value const* v1 = cast(Value const*, ctx);
+	return v_id_eq(v1, v2);
 }
 
 static TNode* table_findro_id(a_henv env, GTable* self, a_hash hash, Value const* key) {

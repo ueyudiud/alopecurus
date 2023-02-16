@@ -236,7 +236,7 @@ naked a_msg ai_ctx_swap(unused Route* from, unused Route* to) {
 	asm("jmp *%c0(%%rdx)"::Fctx(_rip));
 }
 
-inline a_msg code2msg(DWORD code) {
+always_inline a_msg code2msg(DWORD code) {
 	DWORD raw_msg = code ^ EXCEPTION_CODE_PREFIX;
 	assume(raw_msg > 0);
 	return raw_msg <= 0xff ? cast(a_msg, cast(a_i8, raw_msg)) : ALO_EOUTER;
@@ -278,7 +278,7 @@ static EXCEPTION_DISPOSITION start_except_hook(
 	trap();
 }
 
-static noinline void rmain(a_henv env) {
+static never_inline void rmain(a_henv env) {
 	(void) env;
 	//TODO
 }
