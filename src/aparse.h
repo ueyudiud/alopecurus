@@ -29,12 +29,6 @@ BUF_STRUCT_DECLARE(LineInfoBuf, LineInfo);
 BUF_STRUCT_DECLARE(LocalInfoBuf, LocalInfo);
 BUF_STRUCT_DECLARE(CapInfoBuf, CompCapInfo);
 
-struct Syms {
-	Sym* _stack;
-	a_u32 _top;
-	a_u32 _cap;
-};
-
 struct Parser {
 	union {
 		Lexer _lex;

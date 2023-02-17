@@ -177,8 +177,8 @@ static void begin_propagate(Global* g) {
 	g->_tr_regray = trmark_null;
 	/* Mark nonvolatile root. */
 	join_trace(&g->_tr_gray, gobj_cast(ai_env_mainof(g)));
-	if (v_is_obj(&g->_global)) {
-		join_trace(&g->_tr_gray, v_as_obj(g, &g->_global));
+	if (v_is_obj(g->_global)) {
+		join_trace(&g->_tr_gray, v_as_obj(g, g->_global));
 	}
 	g->_gcstep = GCSTEP_PROPAGATE;
 }
@@ -205,8 +205,8 @@ static void propagate_atomic(Global* g) {
 	g->_gcstep = GCSTEP_PROPAGATE_ATOMIC;
 	/* Mark volatile root. */
 	ai_gc_trace_mark_(g, gobj_cast(g->_active));
-	if (v_is_obj(&g->_global)) {
-		join_trace(&g->_tr_gray, v_as_obj(g, &g->_global));
+	if (v_is_obj(g->_global)) {
+		join_trace(&g->_tr_gray, v_as_obj(g, g->_global));
 	}
 	ai_mod_cache_splash(g, &g->_mod_cache);
 	if (g->_gsplash != null) {

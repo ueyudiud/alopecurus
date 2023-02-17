@@ -15,7 +15,7 @@ always_inline char const* ai_dbg_get_func_name(a_henv env, Frame* frame) {
 	GFun* fun = ai_dbg_get_func(env, frame);
 	if (fun == null) return null;
 	GStr* name = g_cast(GFunMeta, fun->_meta)->_name;
-	return name != null ? cast(char const*, name->_data) : null;
+	return name != null ? ai_str_tocstr(name) : null;
 }
 
 #endif /* adbg_h_ */

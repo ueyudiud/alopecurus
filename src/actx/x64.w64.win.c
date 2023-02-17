@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include "../actx.h"
+#include "../avm.h"
 
 typedef int NTSTATUS;
 
@@ -279,8 +280,10 @@ static EXCEPTION_DISPOSITION start_except_hook(
 }
 
 static never_inline void rmain(a_henv env) {
-	(void) env;
-	//TODO
+	assume(env->_stack._base == env->_stack._bot);
+	ai_vm_call(env, env->_stack._base, new(RFlags) {
+		._count = RFLAG_COUNT_VARARG
+	});
 }
 
 static naked a_none rstart(void) {

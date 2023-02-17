@@ -13,6 +13,7 @@
 intern Value const* api_roslot(a_henv env, a_isize id);
 intern Value const* api_rdslot(a_henv env, a_isize id);
 intern Value* api_wrslot(a_henv env, a_isize id);
+intern Value api_elem(a_henv env, a_isize id);
 
 always_inline Value const* api_stack_limit(a_henv env) {
 #if ALO_STRICT_STACK_CHECK

@@ -38,6 +38,7 @@ void ai_list_insert(a_henv env, GList* self, Value value) {
         self->_data = ai_mem_vgrow(env, self->_data, old_cap, new_cap);
     }
     v_set(G(env), &self->_data[self->_len++], value);
+	ai_gc_barrier_val(env, self, value);
 }
 
 Value const* ai_list_refi(unused a_henv env, GList* self, a_isize pos) {
@@ -58,9 +59,9 @@ Value const* ai_list_refi(unused a_henv env, GList* self, a_isize pos) {
 static void list_splash(Global* g, GList* self) {
     a_usize len = self->_len;
     for (a_usize i = 0; i < len; ++i) {
-        ai_gc_trace_markv(g, &self->_data[i]);
+		ai_gc_trace_mark_val(g, self->_data[i]);
     }
-    g->_mem_work -= sizeof(GList) + sizeof(Value) * self->_cap;
+	ai_gc_trace_work(g, sizeof(GList) + sizeof(Value) * self->_cap);
 }
 
 static void list_destruct(Global* g, GList* self) {
@@ -69,10 +70,10 @@ static void list_destruct(Global* g, GList* self) {
 }
 
 static Value list_get(a_henv env, GList* self, Value key) {
-	if (unlikely(!v_is_int(&key))) {
+	if (unlikely(!v_is_int(key))) {
 		ai_err_raisef(env, ALO_EINVAL, "bad index for list.");
 	}
-	Value const* ref = ai_list_refi(env, self, v_as_int(&key));
+	Value const* ref = ai_list_refi(env, self, v_as_int(key));
 	return ref ? *ref : v_of_nil();
 }
 

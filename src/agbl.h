@@ -9,6 +9,7 @@
 #define agbl_h_
 
 #include "astr.h"
+#include "astrx.h"
 #include "afun.h"
 #include "amod.h"
 #include "aenv.h"
@@ -57,6 +58,7 @@ struct Global {
 	a_gclist _gc_toclose;
 	a_gcnext* _gc_sweep;
 	GStr* _nomem_error;
+	GStr* _strx[STRX__MAX - 1];
 	Value _global;
 	a_fp_gsplash _gsplash;
 	void* _gsplash_ctx;
@@ -78,7 +80,7 @@ always_inline a_bool g_is_route(Global* g, a_hobj v) {
 	return v->_meta == &g->_metas._route;
 }
 
-always_inline a_bool v_is_route(Global* g, Value const* v) {
+always_inline a_bool v_is_route(Global* g, Value v) {
 	return v_is_other(v) && g_is_route(g, v_as_obj(g, v));
 }
 
@@ -103,7 +105,7 @@ always_inline a_usize ai_env_mem_total(Global* g) {
 }
 
 always_inline GStr* ai_env_strx(Global* g, a_u32 tag) {
-	return cast(GStr**, g + 1)[tag - 1];
+	return g->_strx[tag - 1];
 }
 
 #endif /* agbl_h_ */

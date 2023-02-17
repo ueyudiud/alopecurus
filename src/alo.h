@@ -145,11 +145,13 @@ ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);
 ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg);
 ALO_EXPORT void (alo_pushmod)(a_henv env, a_hmod mod);
 ALO_EXPORT void (alo_pushroute)(a_henv env);
+ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_usize n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_newtuple)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newlist)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newtable)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_usize n);
+ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 
 #define alo_pushlstr(env,src) alo_pushstr(env, ""src, sizeof(src) - sizeof((src)[0]))
 
@@ -159,6 +161,8 @@ ALO_EXPORT void (alo_insert)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_call)(a_henv env, a_usize narg, a_isize nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsav);
 ALO_EXPORT void (alo_raise)(a_henv env);
+ALO_EXPORT a_msg (alo_resume)(a_henv env);
+ALO_EXPORT void (alo_yield)(a_henv env);
 
 ALO_EXPORT a_tag (alo_tagof)(a_henv env, a_isize id);
 ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_isize id);

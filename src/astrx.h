@@ -5,7 +5,7 @@
 #ifndef astrx_h_
 #define astrx_h_
 
-#include "alex.h"
+#include "akw.h"
 
 enum {
     STRX__NORMAL,
@@ -23,8 +23,7 @@ enum {
     STRX__MAX = STRX_KW__END,
 
 #define KWLEN(id,name) + (sizeof(name) - 1)
-	STRX_RESERVE_SPACE = STRX__MAX * sizeof(IStr)
-			KEYWORD_LIST(KWLEN) /* Add keyword size. */
+	STRX_RESERVE_SPACE = STRX__MAX * sizeof(IStr) KEYWORD_LIST(KWLEN) /* Add keyword size. */
 #undef KWLEN
 };
 

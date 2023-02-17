@@ -15,7 +15,6 @@
 #include "amem.h"
 #include "agc.h"
 #include "aerr.h"
-#include "astrx.h"
 
 #include "aenv.h"
 #include "agbl.h"
@@ -24,7 +23,6 @@
 typedef struct MRoute {
 	Route _route;
 	Global _global;
-	GStr* _strx[STRX__MAX - 1];
 	a_byte _strx_reserved[STRX_RESERVE_SPACE];
 } MRoute;
 
@@ -77,7 +75,7 @@ static a_bool route_create(a_henv env, GRoute* self) {
 static void route_destroy(Global* g, GRoute* self) {
 	Stack* stack = &self->_stack;
 	ai_mem_vxdel(g, stack->_base, stack->_limit - stack->_base + RESERVED_STACKSIZE);
-	ai_cap_close(g->_active, self->_frame->_captures, null);
+	ai_cap_close(g->_active, &self->_frame->_captures, null);
 }
 
 static void route_splash_stack(Global* g, GRoute* self) {
@@ -85,9 +83,9 @@ static void route_splash_stack(Global* g, GRoute* self) {
 	Value* from = stack->_base;
 	Value* const to = stack->_top;
 	for (Value const* v = from; v < to; ++v) {
-		ai_gc_trace_markv(g, v);
+		ai_gc_trace_mark_val(g, *v);
 	}
-	g->_mem_work -= cast(a_isize, sizeof(Value) * (stack->_limit - from + RESERVED_STACKSIZE));
+	ai_gc_trace_work(g, sizeof(Value) * (stack->_limit - from + RESERVED_STACKSIZE));
 }
 
 static void route_splash(Global* g, GRoute* self) {
@@ -95,7 +93,7 @@ static void route_splash(Global* g, GRoute* self) {
 	if (self->_from != null) {
 		ai_gc_trace_mark(g, self->_from);
 	}
-	g->_mem_work -= cast(a_isize, sizeof(GRoute));
+	ai_gc_trace_work(g, sizeof(GRoute));
 
 	if (route_is_active(self)) {
 		join_trace(&g->_tr_regray, self);
@@ -220,7 +218,7 @@ static void global_init(Global* g) {
 static void global_postinit(a_henv env, unused void* ctx) {
 	MRoute* m = cast(MRoute*, env);
 	ai_str_boost(env);
-	ai_strx_open(env, m->_strx_reserved, m->_strx);
+	ai_strx_open(env, m->_strx_reserved, m->_global._strx);
 
 	GTable* global = ai_table_new(env);
 	v_set(G(env), &G(env)->_global, v_of_obj(global));
@@ -265,7 +263,7 @@ a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
 	if (route_create(env, env)) return ALO_ENOMEM;
 
 	/* Initialize remaining components. */
-	a_msg msg = ai_env_protect(env, cast(a_pfun, global_postinit), null);
+	a_msg msg = ai_env_protect(env, global_postinit, null);
 
 	if (unlikely(msg != ALO_SOK)) {
 		alo_destroy(env);

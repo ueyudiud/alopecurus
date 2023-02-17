@@ -18,7 +18,7 @@ intern GFunMeta* ai_fmeta_xalloc(a_henv env, FnMetaCreateInfo* info);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
 intern GFun* ai_fun_new(a_henv env, GFunMeta* meta, Frame* frame);
 intern void ai_fmeta_destruct(Global* g, GFunMeta* self);
-intern void ai_cap_close(a_henv env, Capture* cap, Value const* base);
+intern void ai_cap_close(a_henv env, Capture** pcap, Value const* base);
 
 intern VTable const ai_fun_vtable;
 intern VTable const ai_fmeta_vtable;

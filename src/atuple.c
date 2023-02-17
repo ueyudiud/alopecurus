@@ -38,9 +38,9 @@ Value const* ai_tuple_refi(unused a_henv env, GTuple* self, a_isize pos) {
 static void tuple_splash(Global* g, GTuple* self) {
     a_usize len = self->_len;
     for (a_usize i = 0; i < len; ++i) {
-        ai_gc_trace_markv(g, &self->_body[i]);
+		ai_gc_trace_mark_val(g, self->_body[i]);
     }
-    g->_mem_work -= sizeof(GTuple) + sizeof(Value) * len;
+	ai_gc_trace_work(g, sizeof(GTuple) + sizeof(Value) * len);
 }
 
 static void tuple_destruct(Global* g, GTuple* self) {
@@ -48,10 +48,10 @@ static void tuple_destruct(Global* g, GTuple* self) {
 }
 
 static Value tuple_get(a_henv env, GTuple* self, Value key) {
-	if (unlikely(!v_is_int(&key))) {
+	if (unlikely(!v_is_int(key))) {
 		ai_err_raisef(env, ALO_EINVAL, "bad index for tuple.");
 	}
-	Value const* value = ai_tuple_refi(env, self, v_as_int(&key));
+	Value const* value = ai_tuple_refi(env, self, v_as_int(key));
 	if (unlikely(value == null)) {
 		ai_err_raisef(env, ALO_EINVAL, "index out of bound.");
 	}

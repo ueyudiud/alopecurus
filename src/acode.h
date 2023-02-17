@@ -17,43 +17,43 @@ typedef Expr* InExpr;
 typedef Expr* OutExpr;
 typedef Expr* InoutExpr;
 
-intern void ai_code_never(Parser* par, OutExpr e, a_u32 line);
-intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_u32 line);
-intern void ai_code_constI(Parser* par, OutExpr e, a_int val, a_u32 line);
-intern void ai_code_constF(Parser* par, OutExpr e, a_float val, a_u32 line);
-intern void ai_code_constS(Parser* par, OutExpr e, GStr* val, a_u32 line);
+intern void ai_code_never(Parser* par, OutExpr e, a_line line);
+intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_line line);
+intern void ai_code_constI(Parser* par, OutExpr e, a_int val, a_line line);
+intern void ai_code_constF(Parser* par, OutExpr e, a_float val, a_line line);
+intern void ai_code_constS(Parser* par, OutExpr e, GStr* val, a_line line);
 intern void ai_code_loadfunc(Parser* par, OutExpr e, GFunMeta* fun);
-intern void ai_code_lookupU(Parser* par, OutExpr e, GStr* name, a_u32 line);
+intern void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line);
 
-intern void ai_code_lookupC(Parser* par, InoutExpr e, GStr* name, a_u32 line);
-intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_u32 line);
-intern void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_u32 line);
-intern void ai_code_binary1(Parser* par, InoutExpr e, a_u32 op, a_u32 line);
-intern void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_u32 line);
-intern void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_u32 line);
-intern void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_u32 line);
-intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_u32 line);
-intern void ai_code_multi(Parser* par, InoutExpr es, InoutExpr e, a_u32 op, a_u32 line);
-intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_u32 line);
-intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_u32 line);
-intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_u32 line);
+intern void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line);
+intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line);
+intern void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line);
+intern void ai_code_binary1(Parser* par, InoutExpr e, a_u32 op, a_line line);
+intern void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line);
+intern void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line line);
+intern void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line line);
+intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_line line);
+intern void ai_code_multi(Parser* par, InoutExpr es, InoutExpr e, a_u32 op, a_line line);
+intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line line);
+intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line);
+intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line);
 
-intern void ai_code_gotoD(Parser* par, a_u32 label, a_u32 line);
-intern a_u32 ai_code_gotoU(Parser* par, a_u32 label, a_u32 line);
-intern a_u32 ai_code_label(Parser* par, a_u32 label, a_u32 line);
-intern void ai_code_flush_jump(Parser* par, a_u32 line);
+intern void ai_code_gotoD(Parser* par, a_u32 label, a_line line);
+intern a_u32 ai_code_gotoU(Parser* par, a_u32 label, a_line line);
+intern a_u32 ai_code_label(Parser* par, a_u32 label, a_line line);
+intern void ai_code_flush_jump(Parser* par, a_line line);
 
 intern void ai_code_drop(Parser* par, InExpr e);
-intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_u32 line);
-intern void ai_code_let_nils(Parser* par, LetStat* s, a_u32 line);
+intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line);
+intern void ai_code_let_nils(Parser* par, LetStat* s, a_line line);
 intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
-intern void ai_code_local(Parser* par, OutExpr e, GStr* name, a_u32 line);
-intern void ai_code_bind_param(Parser* par, GStr* name, a_u32 line);
+intern void ai_code_local(Parser* par, OutExpr e, GStr* name, a_line line);
+intern void ai_code_bind_param(Parser* par, GStr* name, a_line line);
 
 intern void ai_code_enter(Parser* par, Scope* scope);
 intern void ai_code_leave(Parser* par);
-intern void ai_code_prologue(Parser* par, FnScope* fnscope, a_u32 line);
-intern GFunMeta* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_u32 line);
+intern void ai_code_prologue(Parser* par, FnScope* fnscope, a_line line);
+intern GFunMeta* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line);
 intern void ai_code_open(Parser* par);
 intern GFun* ai_code_build_and_close(Parser* par);
 intern void ai_code_close(Parser* par);
@@ -242,8 +242,8 @@ struct ExprPack {
 };
 
 struct Expr {
-	a_u32 _kind;
-	a_u32 _line;
+	a_u16 _kind;
+	a_line _line;
 	union {
 		a_int _int;
 		a_float _float;
@@ -355,9 +355,11 @@ struct FnScope {
 	a_u32 _begin_local;
 	a_u32 _begin_cap;
 	a_u32 _head_jump;
-	a_u32 _head_jump_line;
 	a_u32 _head_land;
-	a_u32 _head_line;
+	a_line _head_jump_line;
+	a_line _head_line;
+	a_u16 _max_reg;
+	a_u16 _nsub;
 	union {
 		a_u8 _flow_flags;
 		struct {
@@ -367,8 +369,6 @@ struct FnScope {
 			a_u8 _fvarg: 1;
 		};
 	};
-	a_u16 _max_reg;
-	a_u16 _nsub;
 	a_u8 _nparam;
 };
 

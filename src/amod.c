@@ -71,9 +71,9 @@ static void mod_splash(Global* g, GMod* self) {
 	ai_gc_trace_mark(g, self->_name);
 	ai_dict_splash(g, &self->_table);
 	for (a_u32 i = 0; i < self->_table._len; ++i) {
-		ai_gc_trace_markv(g, &self->_values[i]);
+		ai_gc_trace_mark_val(g, self->_values[i]);
 	}
-	g->_mem_work -= mod_alloc_size_by(self);
+	ai_gc_trace_work(g, mod_alloc_size_by(self));
 }
 
 static void mod_destruct(Global* g, GMod* self) {
@@ -81,10 +81,10 @@ static void mod_destruct(Global* g, GMod* self) {
 }
 
 static Value mod_get(a_henv env, GMod* self, Value key) {
-	if (!v_is_str(&key)) {
+	if (!v_is_str(key)) {
 		ai_err_raisef(env, ALO_EINVAL, "bad index for mod.");
 	}
-	a_i32 id = ai_mod_find(env, self, v_as_str(G(env), &key));
+	a_i32 id = ai_mod_find(env, self, v_as_str(G(env), key));
 	if (id < 0) {
 		ai_err_raisef(env, ALO_EINVAL, "symbol does not exists.");
 	}

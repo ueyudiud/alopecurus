@@ -175,7 +175,7 @@ static Value l_load_capture(a_henv env, CapInfo* info, Value* up, Capture** now,
 
 GFun* ai_fun_new(a_henv env, GFunMeta* meta, Frame* frame) {
 	Value* base = env->_stack._bot;
-	GFun* parent = v_as_func(G(env), base - 1);
+	GFun* parent = v_as_func(G(env), base[-1]);
 	CapInfo* infos = meta->_caps;
 
 	a_u32 len = meta->_ncap;
@@ -209,20 +209,20 @@ static void fun_splash(Global* g, GFun* self) {
     ai_gc_trace_mark(g, self->_meta);
     a_usize len = self->_len;
     for (a_usize i = 0; i < len; ++i) {
-		Value* v = &self->_capval[i];
+		Value v = self->_capval[i];
 		if (v_is_cap(v)) {
-			ai_gc_trace_markv(g, v_as_cap(v)->_ptr);
+			ai_gc_trace_mark_val(g, *v_as_cap(v)->_ptr);
 		}
 		else {
-			ai_gc_trace_markv(g, v);
+			ai_gc_trace_mark_val(g, v);
 		}
     }
-    g->_mem_work -= cast(a_isize, sizeof(GFun) + sizeof(Value) * self->_len);
+	ai_gc_trace_work(g, sizeof(GFun) + sizeof(Value) * self->_len);
 }
 
 static void fun_destruct(Global* g, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
-		Value* v = &self->_capval[i];
+		Value v = self->_capval[i];
 		if (v_is_cap(v)) {
 			Capture* cap = v_as_cap(v);
 			assume(cap->_rc > 0);
@@ -236,7 +236,7 @@ static void fun_destruct(Global* g, GFun* self) {
 
 static void fmeta_splash(Global* g, GFunMeta* self) {
     for (a_u32 i = 0; i < self->_nconst; ++i) {
-        ai_gc_trace_markv(g, &self->_consts[i]);
+		ai_gc_trace_mark_val(g, self->_consts[i]);
     }
 	if (self->_dbg_file != null) {
 		ai_gc_trace_mark(g, self->_dbg_file);
@@ -250,15 +250,16 @@ static void fmeta_splash(Global* g, GFunMeta* self) {
 			ai_gc_trace_mark(g, self->_dbg_cap_names[i]);
 		}
 	}
-    g->_mem_work -= self->_len;
+	ai_gc_trace_work(g, self->_len);
 }
 
 void ai_fmeta_destruct(Global* g, GFunMeta* self) {
     ai_mem_dealloc(g, self, self->_len);
 }
 
-void ai_cap_close(a_henv env, Capture* cap, Value const* base) {
-	while (cap != null && cap->_ptr >= base) {
+void ai_cap_close(a_henv env, Capture** pcap, Value const* base) {
+	Capture* cap;
+	while ((cap = *pcap) != null && cap->_ptr >= base) {
 		Capture* next = cap->_next;
 		if (cap->_rc > 0) {
 			cap_close(env, cap);
@@ -266,7 +267,7 @@ void ai_cap_close(a_henv env, Capture* cap, Value const* base) {
 		else {
 			cap_destruct(G(env), cap);
 		}
-		cap = next;
+		*pcap = next;
 	}
 }
 

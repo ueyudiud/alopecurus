@@ -65,7 +65,7 @@ GTable* ai_table_new(a_henv env) {
 }
 
 static a_bool tnode_is_empty(TNode* node) {
-	return v_is_dead_key(&node->_key);
+	return v_is_dead_key(node->_key);
 }
 
 static a_bool tnode_is_hhead(GTable* table, TNode* node, a_hash hash) {
@@ -185,14 +185,14 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 	}
 }
 
-typedef a_bool (*Pred)(a_henv env, void const* ctx, Value const* v);
+typedef a_bool (*Pred)(a_henv env, void const* ctx, Value v);
 
 static TNode* table_findro(a_henv env, GTable* self, a_hash hash, Pred pred, void const* ctx) {
 	if (likely(self->_len > 0)) {
 		TNode* node = unwrap_abs(self, hash & self->_hmask);
 		if (!tnode_is_empty(node) && tnode_is_hhead(self, node, hash)) {
 			do {
-				if (node->_hash == hash && (*pred)(env, ctx, &node->_key))
+				if (node->_hash == hash && (*pred)(env, ctx, node->_key))
 					return node;
 			}
 			while ((node = ai_link_unwrap(node, node->_hnext)) != null);
@@ -201,19 +201,19 @@ static TNode* table_findro(a_henv env, GTable* self, a_hash hash, Pred pred, voi
     return null;
 }
 
-static a_bool l_id_eq(unused a_henv env, void const* ctx, Value const* v2) {
+static a_bool l_id_eq(unused a_henv env, void const* ctx, Value vk) {
 	Value const* v1 = cast(Value const*, ctx);
-	return v_id_eq(v1, v2);
+	return v_id_eq(*v1, vk);
 }
 
 static TNode* table_findro_id(a_henv env, GTable* self, a_hash hash, Value const* key) {
 	return table_findro(env, self, hash, l_id_eq, key);
 }
 
-static a_bool l_str_eq(unused a_henv env, void const* ctx, Value const* v) {
+static a_bool l_str_eq(unused a_henv env, void const* ctx, Value vk) {
 	a_lstr const* key = cast(a_lstr const*, ctx);
-	if (v_is_str(v)) {
-		GStr* str = v_as_str(G(env), v);
+	if (v_is_str(vk)) {
+		GStr* str = v_as_str(G(env), vk);
 		return key->_len == str->_len && memcmp(key->_ptr, str->_data, key->_len) == 0;
 	}
 	return false;
@@ -237,7 +237,7 @@ Value const* ai_table_refs(a_henv env, GTable* self, a_lstr const* key) {
 
 static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 	TNode* node;
-	switch (v_raw_tag(&key)) {
+	switch (v_raw_tag(key)) {
 		case T_NIL:
 		case T_FALSE:
 		case T_TRUE:
@@ -250,9 +250,9 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 			break;
 		}
 		case T_HSTR: {
-			GStr* str = v_as_str(G(env), &key);
+			GStr* str = v_as_str(G(env), key);
 			*phash = str->_hash;
-			node = table_findro_str(env, self, str->_hash, cast(char const*, str->_data), str->_len);
+			node = table_findro_str(env, self, str->_hash, ai_str_tocstr(str), str->_len);
 			break;
 		}
 		case T_OTHER: {
@@ -266,9 +266,9 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 			break;
 		}
 		default: {
-			if (unlikely(v_is_nan(&key)))
+			if (unlikely(v_is_nan(key)))
 				return null;
-			*phash = v_float_hash(v_as_float(&key));
+			*phash = v_float_hash(v_as_float(key));
 			node = table_findro_id(env, self, *phash, &key);
 			break;
 		}
@@ -286,10 +286,13 @@ void ai_table_set(a_henv env, GTable* self, Value key, Value value) {
 	Value* ref = table_get_opt(env, self, key, &hash);
 	if (ref != null) {
 		v_set(G(env), ref, value);
+		ai_gc_barrier_val(env, self, value);
 	}
 	else {
 		ai_table_hint(env, self, 1);
 		table_emplace(env, self, key, hash, value);
+		ai_gc_barrier_val(env, self, key);
+		ai_gc_barrier_val(env, self, value);
 		self->_len += 1;
 	}
 }
@@ -299,11 +302,11 @@ static void table_splash(Global* g, GTable* self) {
     for (a_usize i = 0; i < len; ++i) {
         TNode* node = &self->_arr[i];
         if (!tnode_is_empty(node)) {
-            ai_gc_trace_markv(g, &node->_key);
-            ai_gc_trace_markv(g, &node->_value);
+			ai_gc_trace_mark_val(g, node->_key);
+			ai_gc_trace_mark_val(g, node->_value);
         }
     }
-    g->_mem_work -= sizeof(GTable) + sizeof(TNode) * len;
+	ai_gc_trace_work(g, sizeof(GTable) + sizeof(TNode) * len);
 }
 
 static void table_destruct(Global* g, GTable* self) {

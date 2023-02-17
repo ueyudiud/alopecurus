@@ -38,30 +38,33 @@ struct GRefArray {
 
 BUF_STRUCT_DECLARE(Buf, a_byte);
 BUF_STRUCT_DECLARE(QBuf, a_byte, QBuf* _last);
-BUF_STRUCT_DECLARE(RBuf, void);
+BUF_STRUCT_DECLARE(CBuf, char);
 
 always_inline a_msg ai_buf_resize0_(a_henv env, void* buf, a_usize new_cap, a_usize size, a_usize limit) {
-    RBuf* rbuf = cast(RBuf*, buf);
-    if (unlikely(rbuf->_cap >= limit))
+	CBuf* cbuf = buf;
+    if (unlikely(cbuf->_cap >= limit))
         return ALO_EINVAL;
-    a_usize old_cap = rbuf->_cap;
-    void* p = ai_mem_xrealloc(env, rbuf->BUF_DATA_REF, size * old_cap, size * new_cap);
-    if (unlikely(p == null)) 
-        return ALO_ENOMEM;
-    rbuf->BUF_DATA_REF = p;
-    rbuf->_cap = new_cap;
+    a_usize old_cap = cbuf->_cap;
+    void* p = ai_mem_xrealloc(env, cbuf->BUF_DATA_REF, size * old_cap, size * new_cap);
+    if (unlikely(p == null)) {
+		return ALO_ENOMEM;
+	}
+	cbuf->BUF_DATA_REF = p;
+	cbuf->_cap = new_cap;
     return ALO_SOK;
 }
 
 always_inline void ai_buf_close_(Global* g, void* buf, a_usize size) {
-	RBuf* rbuf = cast(RBuf*, buf);
-	ai_mem_dealloc(g, rbuf->BUF_DATA_REF, rbuf->_cap * size);
-	*rbuf = new(RBuf) {};
+	CBuf* cbuf = buf;
+	ai_mem_dealloc(g, cbuf->BUF_DATA_REF, cbuf->_cap * size);
+	cbuf->BUF_DATA_REF = null;
+	cbuf->_cap = 0;
+	cbuf->_len = 0;
 }
 
 always_inline void ai_buf_copy_(void* dst, void* buf, a_usize size) {
-	RBuf* rbuf = cast(RBuf*, buf);
-	memcpy(dst, rbuf->BUF_DATA_REF, rbuf->_len * size);
+	CBuf* cbuf = buf;
+	memcpy(dst, cbuf->BUF_DATA_REF, cbuf->_len * size);
 }
 
 #define ai_buf_open(b) (*(b) = new(typeof(*(b))) { .BUF_DATA_REF = null, .BUF_LEN_REF = 0, ._cap = 0 })

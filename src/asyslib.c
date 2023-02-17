@@ -17,7 +17,7 @@
 
 static a_bool l_to_exit_code(Value const* v, a_i32* pcode) {
 	if (v != null) {
-		switch (v_raw_tag(v)) {
+		switch (v_raw_tag(*v)) {
 			case T_FALSE: {
 				*pcode = 0;
 				return true;
@@ -27,7 +27,7 @@ static a_bool l_to_exit_code(Value const* v, a_i32* pcode) {
 				return true;
 			}
 			case T_INT: {
-				*pcode = v_as_int(v);
+				*pcode = v_as_int(*v);
 				return true;
 			}
 			default: {

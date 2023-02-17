@@ -28,7 +28,7 @@ a_none ai_dbg_panic(char const* fmt, ...) {
 
 GFun* ai_dbg_get_func(a_henv env, Frame* frame) {
 	Value* bot = ptr_disp(Value, env->_stack._base, frame->_stack_bot_diff);
-	return bot > env->_stack._base ? v_as_func(G(env), bot - 1) : null;
+	return bot > env->_stack._base ? v_as_func(G(env), bot[-1]) : null;
 }
 
 a_u32 ai_dbg_get_line(GFunMeta* meta, a_insn const* pc) {
@@ -57,7 +57,7 @@ a_u32 ai_dbg_get_line(GFunMeta* meta, a_insn const* pc) {
 static void l_get_source(alo_Debug* dbg, GFun* func, a_insn* pc) {
 	if (likely(func != null)) {
 		GFunMeta* meta = g_cast(GFunMeta, func->_meta);
-		dbg->file = meta->_dbg_file != null ? cast(char const*, meta->_dbg_file->_data) : null;
+		dbg->file = meta->_dbg_file != null ? ai_str_tocstr(meta->_dbg_file) : null;
 		dbg->line = ai_dbg_get_line(meta, pc);
 	}
 	else {

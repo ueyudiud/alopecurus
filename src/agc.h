@@ -63,11 +63,16 @@ always_inline a_bool g_is_other(Global* g, a_hobj v) {
     return (v->_tnext & other_color(g)) != 0;
 }
 
+always_inline a_bool g_is_white_with_assume_alive(Global* g, a_hobj v) {
+	assume(g_is_white(g, v));
+	return (v->_tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
+}
+
 always_inline void g_set_white(Global* g, a_hobj v) {
 	v->_tnext = white_color(g);
 }
 
-always_inline void v_check_alive(Global* g, Value const* v) {
+always_inline void v_check_alive(Global* g, Value v) {
 	if (v_is_obj(v)) {
 		GObj* obj = cast(GObj*, v_as_hnd(v));
 		a_u32 tag = v_raw_tag(v);
@@ -101,7 +106,7 @@ intern void ai_gc_clean(Global* g);
 #define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, gobj_cast(obj))
 #define ai_gc_trace_mark(g,obj) ai_gc_trace_mark_(g, gobj_cast(obj))
 
-always_inline void ai_gc_trace_markv(Global* g, Value const* v) {
+always_inline void ai_gc_trace_mark_val(Global* g, Value v) {
 	if (v_is_obj(v)) ai_gc_trace_mark_(g, v_as_obj(g, v));
 }
 
@@ -113,5 +118,43 @@ always_inline void ai_gc_trace_markv(Global* g, Value const* v) {
 # define ai_gc_trigger_ext(env,pre,post)  ({ if (ai_gc_should_run(G(env))) { pre; ai_gc_incr_gc(env); post; } })
 #endif
 #define ai_gc_trigger(env) ai_gc_trigger_ext(env, (void) 0, (void) 0)
+
+always_inline void ai_gc_trace_work(Global* g, a_usize size) {
+	g->_mem_work -= cast(a_isize, size);
+}
+
+always_inline void ai_gc_barrier_(a_henv env, a_hobj obj1, a_hobj obj2) {
+	Global* g = G(env);
+	if (g_is_black(obj1) && g_is_white_with_assume_alive(g, obj2)) {
+		join_trace(&g->_tr_gray, obj2);
+	}
+}
+
+#define ai_gc_barrier(env,obj1,obj2) ai_gc_barrier_(env, gobj_cast(obj1), gobj_cast(obj2))
+
+always_inline void ai_gc_barrier_val_(a_henv env, GObj* obj, Value val) {
+	if (v_is_obj(val)) {
+		ai_gc_barrier_(env, obj, v_as_obj(G(env), val));
+	}
+}
+
+#define ai_gc_barrier_val(env,obj,val) ai_gc_barrier_val_(env, gobj_cast(obj), val)
+
+always_inline void ai_gc_barrier_back_(a_henv env, a_hobj obj1, a_hobj obj2) {
+	Global* g = G(env);
+	if (g_is_black(obj1) && g_is_white_with_assume_alive(g, obj2)) {
+		join_trace(&g->_tr_regray, obj1);
+	}
+}
+
+#define ai_gc_barrier_back(env,obj1,obj2) ai_gc_barrier_back_(env, gobj_cast(obj1), gobj_cast(obj2))
+
+always_inline void ai_gc_barrier_back_val_(a_henv env, GObj* obj, Value val) {
+	if (v_is_obj(val)) {
+		ai_gc_barrier_back_(env, obj, v_as_obj(G(env), val));
+	}
+}
+
+#define ai_gc_barrier_back_val(env,obj,val) ai_gc_barrier_back_val_(env, gobj_cast(obj), val)
 
 #endif /* agc_h_ */

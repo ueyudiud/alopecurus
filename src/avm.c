@@ -54,7 +54,7 @@ static a_none l_div_0_err(a_henv env) {
 }
 
 a_hash ai_vm_hash(a_henv env, Value v) {
-	switch (v_raw_tag(&v)) {
+	switch (v_raw_tag(v)) {
 		case T_NIL:
 			return 0;
 		case T_FALSE:
@@ -62,49 +62,60 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 		case T_TRUE:
 			return v_bool_hash(true);
 		case T_INT:
-			return v_int_hash(v_as_int(&v));
+			return v_int_hash(v_as_int(v));
 		case T_PTR:
 		case T_LIST:
 		case T_TABLE:
 		case T_FUNC:
 		case T_MOD:
-			return v_hnd_hash(v_as_ptr(&v));
+			return v_hnd_hash(v_as_ptr(v));
 		case T_ISTR:
 		case T_HSTR:
-			return v_as_str(G(env), &v)->_hash;
+			return v_as_str(G(env), v)->_hash;
 		default:
-			return v_float_hash(v_as_float(&v));
+			return v_float_hash(v_as_float(v));
 	}
 }
 
 static a_bool l_vm_equals(a_henv env, Value v1, Value v2) {
-	if (v_raw_tag(&v1) == v_raw_tag(&v2)) {
-		switch (v_raw_tag(&v1)) {
+	if (v_raw_tag(v1) == v_raw_tag(v2)) {
+		switch (v_raw_tag(v1)) {
 			case T_NIL:
 			case T_FALSE:
-			case T_TRUE:
+			case T_TRUE: {
 				return true;
-			case T_INT:
-				return ai_op_eq_int(v_as_int(&v1), v_as_int(&v2));
-			case T_PTR:
-				return v_as_ptr(&v1) == v_as_ptr(&v2);
-			case T_TUPLE:
-			case T_OTHER:
-				//TODO
+			}
+			case T_INT: {
+				return ai_op_eq_int(v_as_int(v1), v_as_int(v2));
+			}
+			case T_PTR: {
+				return v_as_ptr(v1) == v_as_ptr(v2);
+			}
+			case T_OTHER: {
+				GObj* o1 = v_as_obj(G(env), v1);
+				if (!(o1->_meta->_flags & GMETA_FLAG_IDENTITY_EQUAL)) {
+					return (*o1->_meta->_vtable._equals)(env, o1, v2);
+				}
+				fallthrough;
+			}
+			case T_TUPLE: //TODO
 			case T_ISTR:
 			case T_LIST:
 			case T_TABLE:
 			case T_FUNC:
-			case T_MOD:
-				return v_as_hnd(&v1) == v_as_hnd(&v2);
-			case T_HSTR:
-				return ai_str_equals(v_as_str(G(env), &v1), v_as_str(G(env), &v2));
-			default:
-				return ai_op_eq_float(v_as_float(&v1), v_as_float(&v2));
+			case T_MOD: {
+				return v_as_hnd(v1) == v_as_hnd(v2);
+			}
+			case T_HSTR: {
+				return ai_str_equals(v_as_str(G(env), v1), v_as_str(G(env), v2));
+			}
+			default: {
+				return ai_op_eq_float(v_as_float(v1), v_as_float(v2));
+			}
 		}
 	}
-	else if (v_is_num(&v1) && v_is_num(&v2)) {
-		return ai_op_eq_float(v_as_num(&v1), v_as_num(&v2));
+	else if (v_is_num(v1) && v_is_num(v2)) {
+		return ai_op_eq_float(v_as_num(v1), v_as_num(v2));
 	}
 	else {
 		return false;
@@ -112,11 +123,11 @@ static a_bool l_vm_equals(a_henv env, Value v1, Value v2) {
 }
 
 static a_bool l_vm_less_than(a_henv env, Value v1, Value v2) {
-	if (v_is_int(&v1) && v_is_int(&v2)) {
-		return ai_op_cmp_int(v_as_int(&v1), v_as_int(&v2), OP_LT);
+	if (v_is_int(v1) && v_is_int(v2)) {
+		return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), OP_LT);
 	}
-	else if (v_is_num(&v1) && v_is_num(&v2)) {
-		return ai_op_cmp_float(v_as_num(&v1), v_as_num(&v2), OP_LT);
+	else if (v_is_num(v1) && v_is_num(v2)) {
+		return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LT);
 	}
 	else {
 		//TODO
@@ -125,11 +136,11 @@ static a_bool l_vm_less_than(a_henv env, Value v1, Value v2) {
 }
 
 static a_bool l_vm_less_equals(a_henv env, Value v1, Value v2) {
-	if (v_is_int(&v1) && v_is_int(&v2)) {
-		return ai_op_cmp_int(v_as_int(&v1), v_as_int(&v2), OP_LE);
+	if (v_is_int(v1) && v_is_int(v2)) {
+		return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), OP_LE);
 	}
-	else if (v_is_num(&v1) && v_is_num(&v2)) {
-		return ai_op_cmp_float(v_as_num(&v1), v_as_num(&v2), OP_LE);
+	else if (v_is_num(v1) && v_is_num(v2)) {
+		return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LE);
 	}
 	else {
 		//TODO
@@ -138,10 +149,10 @@ static a_bool l_vm_less_equals(a_henv env, Value v1, Value v2) {
 }
 
 static Value l_vm_get(a_henv env, Value v1, Value v2) {
-	if (unlikely(!v_is_obj(&v1))) {
+	if (unlikely(!v_is_obj(v1))) {
 		goto bad_index;
 	}
-	a_hobj obj = v_as_obj(G(env), &v1);
+	a_hobj obj = v_as_obj(G(env), v1);
 	a_fp_get get = obj->_meta->_vtable._get;
 	if (unlikely(get == null)) {
 		goto bad_index;
@@ -176,10 +187,10 @@ static void l_move_ret(a_henv env, Value* dst, a_usize dst_len, Value* src, a_us
 void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	Frame frame;
 
-	if (!v_is_func(base))
+	if (!v_is_func(*base))
 		goto vm_meta_call;
 
-	GFun* fun = v_as_func(G(env), base);
+	GFun* fun = v_as_func(G(env), *base);
 	a_insn insn;
 	Value* R;
 	Value const* K;
@@ -229,14 +240,15 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			}
 			case BC_LDC: {
 				b = bc_load_b(insn);
-				Capture* cap = v_as_cap(&fun->_capval[b]);
+				Capture* cap = v_as_cap(fun->_capval[b]);
 				v_cpy(G(env), &R[a], cap->_ptr);
 				break;
 			}
 			case BC_STC: {
 				b = bc_load_b(insn);
-				Capture* cap = v_as_cap(&fun->_capval[a]);
+				Capture* cap = v_as_cap(fun->_capval[a]);
 				v_cpy(G(env), cap->_ptr, &R[b]);
+				ai_gc_barrier_back_val(env, fun, R[b]);
 				break;
 			}
 			case BC_KN: {
@@ -332,12 +344,12 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = R[c];
 
-				if (v_is_int(&vb) && v_is_int(&vc)) {
-					a_int val = ai_op_bin_int(v_as_int(&vb), v_as_int(&vc), op);
+				if (v_is_int(vb) && v_is_int(vc)) {
+					a_int val = ai_op_bin_int(v_as_int(vb), v_as_int(vc), op);
 					v_setx(&R[a], v_of_int(val));
 				}
-				else if (v_is_num(&vb) && v_is_num(&vc)) {
-					a_float val = ai_op_bin_float(v_as_float(&vb), v_as_float(&vc), op);
+				else if (v_is_num(vb) && v_is_num(vc)) {
+					a_float val = ai_op_bin_float(v_as_float(vb), v_as_float(vc), op);
 					v_setx(&R[a], v_of_float(val));
 				}
 				else {
@@ -355,16 +367,16 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = R[c];
 
-				if (v_is_int(&vb) && v_is_int(&vc)) {
-					a_int ic = v_as_int(&vc);
+				if (v_is_int(vb) && v_is_int(vc)) {
+					a_int ic = v_as_int(vc);
 					if (unlikely(ic == 0)) {
 						l_div_0_err(env);
 					}
-					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
 					v_setx(&R[a], v_of_int(val));
 				}
-				else if (v_is_num(&vb) && v_is_num(&vc)) {
-					a_float val = ai_op_bin_float(v_as_float(&vb), v_as_float(&vc), op);
+				else if (v_is_num(vb) && v_is_num(vc)) {
+					a_float val = ai_op_bin_float(v_as_float(vb), v_as_float(vc), op);
 					v_setx(&R[a], v_of_float(val));
 				}
 				else {
@@ -385,8 +397,8 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = R[c];
 
-				if (v_is_int(&vb) && v_is_int(&vc)) {
-					a_int val = ai_op_bin_int(v_as_int(&vb), v_as_int(&vc), op);
+				if (v_is_int(vb) && v_is_int(vc)) {
+					a_int val = ai_op_bin_int(v_as_int(vb), v_as_int(vc), op);
 					v_setx(&R[a], v_of_int(val));
 				}
 				else {
@@ -405,12 +417,12 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				a_int ic = cast(a_int, sc);
 
-				if (v_is_int(&vb)) {
-					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+				if (v_is_int(vb)) {
+					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
 					v_setx(&R[a], v_of_int(val));
 				}
-				else if (v_is_num(&vb)) {
-					a_float val = ai_op_bin_float(v_as_float(&vb), ic, op);
+				else if (v_is_num(vb)) {
+					a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
 					v_setx(&R[a], v_of_float(val));
 				}
 				else {
@@ -428,15 +440,15 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				a_int ic = cast(a_int, sc);
 
-				if (v_is_int(&vb)) {
+				if (v_is_int(vb)) {
 					if (unlikely(ic == 0)) {
 						l_div_0_err(env);
 					}
-					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
 					v_setx(&R[a], v_of_int(val));
 				}
-				else if (v_is_num(&vb)) {
-					a_float val = ai_op_bin_float(v_as_float(&vb), ic, op);
+				else if (v_is_num(vb)) {
+					a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
 					v_setx(&R[a], v_of_float(val));
 				}
 				else {
@@ -457,8 +469,8 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				a_int ic = cast(a_int, sc);
 
-				if (v_is_int(&vb)) {
-					a_int val = ai_op_bin_int(v_as_int(&vb), ic, op);
+				if (v_is_int(vb)) {
+					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
 					v_setx(&R[a], v_of_int(val));
 				}
 				else {
@@ -472,7 +484,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TZ:
 			case BC_TNZ: {
 				b = bc_load_b(insn);
-				z = v_to_bool(&R[b]);
+				z = v_to_bool(R[b]);
 				goto jump_or_test;
 			}
 			case BC_BEQ:
@@ -562,6 +574,10 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				pc += sa;
 				break;
 			}
+			case BC_CLOSE: {
+				ai_cap_close(env, &frame._captures, &R[a]);
+				break;
+			}
 			case BC_CALL: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
@@ -607,6 +623,6 @@ vm_meta_call:
 vm_return:
 	env->_frame = frame._prev;
 	env->_stack._bot = ptr_disp(Value, env->_stack._base, env->_frame->_stack_bot_diff);
-	ai_cap_close(env, frame._captures, R);
+	ai_cap_close(env, &frame._captures, R);
 #undef pc
 }

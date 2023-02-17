@@ -9,6 +9,7 @@
 #include <fcntl.h>
 
 #include "abuf.h"
+#include "astr.h"
 #include "atable.h"
 #include "afun.h"
 #include "aenv.h"
@@ -52,7 +53,7 @@ static char const* l_typename(a_henv env, a_isize id) {
 	Value const* v = api_roslot(env, id);
 	if (v == null) return "empty";
 
-	a_u32 tag = v_raw_tag(v);
+	a_u32 tag = v_raw_tag(*v);
 	if (tag != T_OTHER) return ai_obj_tag_name[tag];
 
 	panic("unimplemented"); //TODO
@@ -149,21 +150,21 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		GFun* fun = ai_dbg_get_func(env, frame);
 		assume(fun != null);
 		GFunMeta* meta = g_cast(GFunMeta, fun->_meta);
-		char const* file = meta->_dbg_file != null ? cast(char const*, meta->_dbg_file->_data) : null;
+		char const* file = meta->_dbg_file != null ? ai_str_tocstr(meta->_dbg_file) : null;
 		a_u32 line = ai_dbg_get_line(meta, frame->_pc);
 		if (head) {
 			if (file != null) {
 				ai_buf_putf(env, buf, "%s:%u: ", file, line);
 			}
-			switch (v_raw_tag(err)) {
+			switch (v_raw_tag(*err)) {
 				case T_HSTR:
 				case T_ISTR: {
-					GStr* str = v_as_str(G(env), err);
+					GStr* str = v_as_str(G(env), *err);
 					ai_buf_putls(env, buf, str->_data, str->_len);
 					break;
 				}
 				case T_INT: {
-					a_u32 code = cast(a_u32, v_as_int(err));
+					a_u32 code = cast(a_u32, v_as_int(*err));
 					ai_buf_putf(env, buf, "error code: %08x", code);
 					break;
 				}
@@ -188,7 +189,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 			ai_buf_putf(env, buf, "at %s", file ?: "?");
 		}
 		if (meta->_name != null) {
-			ai_buf_putf(env, buf, " (%s)", meta->_name->_data);
+			ai_buf_putf(env, buf, " (%s)", ai_str_tocstr(meta->_name));
 		}
 	}
 	GStr* str = ai_str_create(env, buf->_arr, buf->_len);
@@ -246,7 +247,7 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
 	a_hmod mod = alo_openmod(env, -1);
 	ai_mod_cache(env, null, mod);
-	ai_table_set(env, v_as_table(G(env), &G(env)->_global), v_of_obj(mod->_name), v_of_obj(mod));
+	ai_table_set(env, v_as_table(G(env), G(env)->_global), v_of_obj(mod->_name), v_of_obj(mod));
 	api_decr_stack(env);
 }
 

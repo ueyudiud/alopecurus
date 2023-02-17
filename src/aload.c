@@ -172,7 +172,7 @@ static void l_splash(Global* g, void* ctx) {
 	rq_for(obj, &ic->_rq) {
 		GFunMeta* meta = g_cast(GFunMeta, obj);
 		for (a_u32 i = 0; i < meta->_len; ++i) {
-			ai_gc_trace_markv(g, &meta->_consts[i]);
+			ai_gc_trace_mark_val(g, meta->_consts[i]);
 		}
 	}
 }

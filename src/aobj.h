@@ -85,6 +85,7 @@ struct GObj {
 typedef void (*a_fp_splash)(Global* g, a_hobj self);
 typedef void (*a_fp_destruct)(Global* g, a_hobj self);
 typedef Value (*a_fp_get)(a_henv env, a_hobj self, Value index);
+typedef a_bool (*a_fp_equals)(a_henv env, a_hobj self, Value other);
 
 #define GMETA_FLAG_IDENTITY_EQUAL u16c(0x0001)
 #define GTYPE_FLAG_FAST_LENGTH u16c(0x0002)
@@ -93,6 +94,7 @@ typedef struct {
 	a_fp_splash _splash;
 	a_fp_destruct _destruct;
 	a_fp_get _get;
+	a_fp_equals _equals;
 } VTable;
 
 #define GMETA_STRUCT_HEADER \
@@ -160,155 +162,155 @@ always_inline GMod* g_as_mod(a_hobj v) {
 	return g_cast(GMod, v);
 }
 
-always_inline void v_check_alive(Global* g, Value const* v);
+always_inline void v_check_alive(Global* g, Value v);
 
 #define v_hi_mask(id) (~(id) << 15)
 
-#define v_raw_tag(v) (~(v)->_h >> 15)
+#define v_raw_tag(v) (~(v)._h >> 15)
 
-always_inline a_bool v_is_nil(Value const* v) {
-	return ~v->_h != 0;
+always_inline a_bool v_is_nil(Value v) {
+	return ~v._h != 0;
 }
 
 #define V_STRICT_NIL (cast(a_u64, v_hi_mask(T_NIL)) << 32 | LO_DFL_VALUE)
 #define V_EMPTY (cast(a_u64, v_hi_mask(T_NIL)) << 32 | ~u32c(1))
 
-always_inline a_bool v_is_strict_nil(Value const* v) {
-	return v->_u == V_STRICT_NIL;
+always_inline a_bool v_is_strict_nil(Value v) {
+	return v._u == V_STRICT_NIL;
 }
 
-always_inline a_bool v_is_dead_key(Value const* v) {
-	return v->_u == V_EMPTY;
+always_inline a_bool v_is_dead_key(Value v) {
+	return v._u == V_EMPTY;
 }
 
-always_inline a_bool v_is_false(Value const* v) {
+always_inline a_bool v_is_false(Value v) {
 	return v_raw_tag(v) == T_FALSE;
 }
 
-always_inline a_bool v_is_true(Value const* v) {
+always_inline a_bool v_is_true(Value v) {
 	return v_raw_tag(v) == T_TRUE;
 }
 
-always_inline a_bool v_is_int(Value const* v) {
+always_inline a_bool v_is_int(Value v) {
 	return v_raw_tag(v) == T_INT;
 }
 
-always_inline a_bool v_is_ptr(Value const* v) {
+always_inline a_bool v_is_ptr(Value v) {
 	return v_raw_tag(v) == T_PTR;
 }
 
-always_inline a_bool v_is_obj(Value const* v) {
-	return v->_h - v_hi_mask(T_OTHER) < v_hi_mask(T_PTR) - v_hi_mask(T_OTHER);
+always_inline a_bool v_is_obj(Value v) {
+	return v._h - v_hi_mask(T_OTHER) < v_hi_mask(T_PTR) - v_hi_mask(T_OTHER);
 }
 
-always_inline a_bool v_is_str(Value const* v) {
+always_inline a_bool v_is_str(Value v) {
 	return v_raw_tag(v) == T_HSTR || v_raw_tag(v) == T_ISTR;
 }
 
-always_inline a_bool v_is_tuple(Value const* v) {
+always_inline a_bool v_is_tuple(Value v) {
 	return v_raw_tag(v) == T_TUPLE;
 }
 
-always_inline a_bool v_is_list(Value const* v) {
+always_inline a_bool v_is_list(Value v) {
 	return v_raw_tag(v) == T_LIST;
 }
 
-always_inline a_bool v_is_table(Value const* v) {
+always_inline a_bool v_is_table(Value v) {
 	return v_raw_tag(v) == T_TABLE;
 }
 
-always_inline a_bool v_is_func(Value const* v) {
+always_inline a_bool v_is_func(Value v) {
 	return v_raw_tag(v) == T_FUNC;
 }
 
-always_inline a_bool v_is_mod(Value const* v) {
+always_inline a_bool v_is_mod(Value v) {
 	return v_raw_tag(v) == T_MOD;
 }
 
-always_inline a_bool v_is_cap(Value const* v) {
+always_inline a_bool v_is_cap(Value v) {
 	return v_raw_tag(v) == T_CAP;
 }
 
-always_inline a_bool v_is_float(Value const* v) {
-	return v->_h <= u32c(0xfff80000);
+always_inline a_bool v_is_float(Value v) {
+	return v._h <= u32c(0xfff80000);
 }
 
-always_inline a_bool v_is_nan(Value const* v) {
-	return v_is_float(v) && isnan(v->_f);
+always_inline a_bool v_is_nan(Value v) {
+	return v_is_float(v) && isnan(v._f);
 }
 
-always_inline a_bool v_is_num(Value const* v) {
-	return v->_h >= v_hi_mask(T_INT);
+always_inline a_bool v_is_num(Value v) {
+	return v._h >= v_hi_mask(T_INT);
 }
 
-always_inline a_bool v_is_other(Value const* v) {
+always_inline a_bool v_is_other(Value v) {
 	return v_raw_tag(v) == T_OTHER;
 }
 
-always_inline a_bool v_to_bool(Value const* v) {
-	return v->_h <= v_hi_mask(T_TRUE);
+always_inline a_bool v_to_bool(Value v) {
+	return v._h <= v_hi_mask(T_TRUE);
 }
 
-always_inline a_int v_as_int(Value const* v) {
+always_inline a_int v_as_int(Value v) {
 	assume(v_is_int(v), "not int value.");
-	return v->_i;
+	return v._i;
 }
 
-always_inline a_float v_as_float(Value const* v) {
+always_inline a_float v_as_float(Value v) {
 	assume(v_is_float(v), "not float value.");
-	return v->_f;
+	return v._f;
 }
 
-always_inline a_float v_as_num(Value const* v) {
+always_inline a_float v_as_num(Value v) {
 	return v_is_int(v) ? v_as_int(v) : v_as_float(v);
 }
 
-always_inline void* v_as_hnd(Value const* v) {
-	return ptr_of(void, v->_u & u64c(0x00007fffffffffff));
+always_inline void* v_as_hnd(Value v) {
+	return ptr_of(void, v._u & u64c(0x00007fffffffffff));
 }
 
-always_inline void* v_as_ptr(Value const* v) {
+always_inline void* v_as_ptr(Value v) {
 	assume(v_is_ptr(v), "not pointer.");
 	return v_as_hnd(v);
 }
 
-always_inline GObj* v_as_obj(Global* g, Value const* v) {
+always_inline GObj* v_as_obj(Global* g, Value v) {
 	assume(v_is_obj(v));
 	v_check_alive(g, v);
 	return cast(GObj*, v_as_hnd(v));
 }
 
-always_inline GStr* v_as_str(Global* g, Value const* v) {
+always_inline GStr* v_as_str(Global* g, Value v) {
 	assume(v_is_str(v));
 	return g_as_str(v_as_obj(g, v));
 }
 
-always_inline GTuple* v_as_tuple(Global* g, Value const* v) {
+always_inline GTuple* v_as_tuple(Global* g, Value v) {
 	assume(v_is_tuple(v));
 	return g_as_tuple(v_as_obj(g, v));
 }
 
-always_inline GList* v_as_list(Global* g, Value const* v) {
+always_inline GList* v_as_list(Global* g, Value v) {
 	assume(v_is_list(v));
 	return g_as_list(v_as_obj(g, v));
 }
 
-always_inline GTable* v_as_table(Global* g, Value const* v) {
+always_inline GTable* v_as_table(Global* g, Value v) {
 	assume(v_is_table(v));
 	return g_as_table(v_as_obj(g, v));
 }
 
-always_inline GFun* v_as_func(Global* g, Value const* v) {
+always_inline GFun* v_as_func(Global* g, Value v) {
 	assume(v_is_func(v));
 	return g_as_func(v_as_obj(g, v));
 }
 
-always_inline GMod* v_as_mod(Global* g, Value const* v) {
+always_inline GMod* v_as_mod(Global* g, Value v) {
 	assume(v_is_mod(v));
 	return g_as_mod(v_as_obj(g, v));
 }
 
-always_inline Capture* v_as_cap(Value const* v) {
+always_inline Capture* v_as_cap(Value v) {
 	assume(v_is_cap(v));
 	return cast(Capture*, v_as_hnd(v));
 }
@@ -344,19 +346,19 @@ always_inline void v_set_bool(Value* d, a_bool v) {
 	v_setx(d, v_of_bool(v));
 }
 
+always_inline void v_set(Global* g, Value* d, Value v) {
+	*d = v;
+	v_check_alive(g, v);
+}
+
 always_inline void v_cpy(Global* g, Value* d, Value const* s) {
-	*d = *s;
-	v_check_alive(g, d);
+	v_set(g, d, *s);
 }
 
 always_inline void v_cpy_multi(Global* g, Value* d, Value const* s, a_usize n) {
 	for (a_usize i = 0; i < n; ++i) {
 		v_cpy(g, &d[i], &s[i]);
 	}
-}
-
-always_inline void v_set(Global* g, Value* d, Value v) {
-	v_cpy(g, d, &v);
 }
 
 #define v_nil_hash() u32c(0)
@@ -381,7 +383,7 @@ always_inline a_hash v_hnd_hash(void* v) {
 }
 
 /* Identity equality. */
-#define v_id_eq(v1,v2) ((v1)->_u == (v2)->_u)
+#define v_id_eq(v1,v2) ((v1)._u == (v2)._u)
 
 intern char const* const ai_obj_tag_name[];
 

@@ -37,7 +37,7 @@ struct OutCtx {
     l_out(oc, _p, _b + sizeof(_b) - _p); \
 })
 
-static a_msg l_save_const(OutCtx* oc, Value const* v) {
+static a_msg l_save_const(OutCtx* oc, Value v) {
     GStr* val;
     switch (v_raw_tag(v)) {
         case T_NIL: {
@@ -94,7 +94,7 @@ static a_msg l_save(OutCtx* oc, GFunMeta* meta) {
 	};
 	l_put(oc, FnMetaCreateFlags, flags);
     for (a_u32 i = 0; i < meta->_nconst; ++i) {
-        check(l_save_const(oc, &meta->_consts[i]));
+        check(l_save_const(oc, meta->_consts[i]));
     }
     l_putv(oc, meta->_code, meta->_ninsn);
     for (a_u32 i = 0; i < meta->_nsub; ++i) {

@@ -17,18 +17,6 @@
 
 typedef struct IStr IStr;
 
-struct GStr {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_hash _hash;
-	a_byte _data[];
-};
-
-struct IStr {
-    IStr* _next; /* Next node of overflow chain in intern table. */
-    GStr _body;
-};
-
 intern a_hash ai_str_hashof(a_hash seed, void const* src, a_usize len);
 intern GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 tag);
 intern GStr* ai_str_new(a_henv env, void const* src, a_usize len, a_hash hash);
@@ -46,5 +34,21 @@ intern void ai_str_clean(Global* g);
 intern VTable const ai_dstr_vtable;
 intern VTable const ai_istr_vtable;
 intern VTable const ai_hstr_vtable;
+
+struct GStr {
+	GOBJ_STRUCT_HEADER;
+	a_u32 _len;
+	a_hash _hash;
+	a_byte _data[];
+};
+
+struct IStr {
+	IStr* _next; /* Next node of overflow chain in intern table. */
+	GStr _body;
+};
+
+always_inline char const* ai_str_tocstr(GStr* self) {
+	return cast(char const*, self->_data);
+}
 
 #endif /* astr_h_ */

@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include <stdio.h>
+#include <string.h>
 
 #include "aenv.h"
 #include "amem.h"
@@ -202,7 +203,7 @@ void ai_str_clean(Global* g) {
 }
 
 static void istr_splash(Global* g, GStr* self) {
-    g->_mem_work -= sizeof(IStr) + 1 + self->_len;
+	ai_gc_trace_work(g, sizeof(IStr) + 1 + self->_len);
 }
 
 static void istr_destruct(Global* g, GStr* self) {
@@ -226,7 +227,7 @@ static void istr_destruct(Global* g, GStr* self) {
 }
 
 static void hstr_splash(Global* g, GStr* self) {
-    g->_mem_work -= sizeof(GStr) + 1 + self->_len;
+	ai_gc_trace_work(g, sizeof(GStr) + 1 + self->_len);
 }
 
 static void hstr_destruct(Global* g, GStr* self) {

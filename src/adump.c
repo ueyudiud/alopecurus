@@ -12,7 +12,7 @@
 
 #include "abaselib.h"
 
-static void dump_const(a_henv env, Value const* v) {
+static void dump_const(a_henv env, Value v) {
 	switch (v_raw_tag(v)) {
 		case T_NIL: {
 			aloi_show("nil");
@@ -41,7 +41,7 @@ static void dump_const(a_henv env, Value const* v) {
 				aloi_show("<%u bytes string>", str->_len);
 			}
 			else {
-				aloi_show("\"%s\"", str->_data);
+				aloi_show("\"%s\"", ai_str_tocstr(str));
 			}
 			break;
 		}
@@ -54,7 +54,7 @@ static void dump_const(a_henv env, Value const* v) {
 
 static void dump_func(GFunMeta* meta) {
 	if (meta->_name != null) {
-		aloi_show("<%s>", meta->_name->_data);
+		aloi_show("<%s>", ai_str_tocstr(meta->_name));
 	}
 	else {
 		aloi_show("<%p>", meta);
@@ -109,7 +109,7 @@ static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 			case BC_K: {
 				a_u32 b = bc_load_bx(i);
 				aloi_show("%4u %9u ; ", bc_load_a(i), b);
-				dump_const(env, &meta->_consts[b]);
+				dump_const(env, meta->_consts[b]);
 				aloi_show("\n");
 				break;
 			}
@@ -170,7 +170,7 @@ static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 			case BC_SETK: {
 				a_u32 c = bc_load_c(i);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), c);
-				dump_const(env, &meta->_consts[c]);
+				dump_const(env, meta->_consts[c]);
 				aloi_show("\n");
 				break;
 			}
@@ -239,7 +239,7 @@ static void dump_meta(a_henv env, GFunMeta* meta, a_u32 options) {
 		aloi_show("constant pool <%p>\n", meta->_consts);
 		for (a_u32 i = 0; i < meta->_nconst; ++i) {
 			aloi_show("\t%5u\t", i);
-			dump_const(env, &meta->_consts[i]);
+			dump_const(env, meta->_consts[i]);
 			aloi_show("\n");
 		}
 	}
@@ -248,13 +248,13 @@ static void dump_meta(a_henv env, GFunMeta* meta, a_u32 options) {
 			aloi_show("local info table <%p>\n", meta->_dbg_locals);
 			for (a_u32 i = 0; i < meta->_nlocal; ++i) {
 				LocalInfo* info = &meta->_dbg_locals[i];
-				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n", i, info->_reg, info->_name->_data, info->_begin_label, info->_end_label);
+				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n", i, info->_reg, ai_str_tocstr(info->_name), info->_begin_label, info->_end_label);
 			}
 			printf("capture info table <%p>\n", meta->_caps);
 			for (a_u32 i = 0; i < meta->_ncap; ++i) {
 				CapInfo* info = &meta->_caps[i];
 				GStr* name = meta->_dbg_cap_names[i];
-				aloi_show("\t%5u\t%c[%u]\t%s\n", i, info->_fup ? 'C' : 'R', info->_reg, name->_data);
+				aloi_show("\t%5u\t%c[%u]\t%s\n", i, info->_fup ? 'C' : 'R', info->_reg, ai_str_tocstr(name));
 			}
 		}
 		else {

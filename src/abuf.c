@@ -13,21 +13,21 @@
 
 #include "abuf.h"
 
-static a_msg l_check_capacity(a_henv env, RBuf* buf, a_usize expect) {
-	if (expect >= buf->_cap) {
+static a_msg buf_check(a_henv env, CBuf* buf, a_usize add) {
+	if (add > buf->_cap - buf->_len) {
 		a_usize old_cap = buf->_cap;
 		a_usize new_cap = max(old_cap * 2, usizec(16));
-		new_cap = max(new_cap, expect);
+		new_cap = max(new_cap, buf->_len + add);
 		ai_buf_resizex(env, buf, new_cap);
 	}
 	return ALO_SOK;
 }
 
 a_msg ai_buf_putsx_(a_henv env, void* buf, void const* src, a_usize len) {
-	RBuf* rbuf = cast(RBuf*, buf);
-	check(l_check_capacity(env, rbuf, rbuf->_len + len));
-	memcpy(rbuf->_arr + rbuf->_len, src, len);
-	rbuf->_len += len;
+	CBuf* cbuf = buf;
+	check(buf_check(env, cbuf, len));
+	memcpy(cbuf->_arr + cbuf->_len, src, len);
+	cbuf->_len += len;
 	return ALO_SOK;
 }
 
@@ -40,31 +40,31 @@ a_msg ai_buf_putf_(a_henv env, void* buf, char const* fmt, ...) {
 }
 
 a_msg ai_buf_putvf_(a_henv env, void* buf, char const* fmt, va_list varg) {
-	RBuf* rbuf = cast(RBuf*, buf);
-	a_usize rem = rbuf->_cap - rbuf->_len;
+	CBuf* cbuf = buf;
+	a_usize rem = cbuf->_cap - cbuf->_len;
 	va_list varg2;
 	va_copy(varg2, varg);
-	a_usize len = vsnprintf(cast(char*, rbuf->_arr + rbuf->_len), rem, fmt, varg);
+	a_usize len = vsnprintf(cbuf->_arr + cbuf->_len, rem, fmt, varg);
 	a_msg msg = ALO_SOK;
 	if (len + 1 > rem) {
-		msg = l_check_capacity(env, buf, rem);
+		msg = buf_check(env, buf, len + 1);
 		if (msg == ALO_SOK) {
-			vsnprintf(cast(char*, rbuf->_arr + rbuf->_len), len + 1, fmt, varg2);
+			vsnprintf(cbuf->_arr + cbuf->_len, len + 1, fmt, varg2);
 		}
 	}
 	va_end(varg2);
 	if (msg == ALO_SOK) {
-		rbuf->_len += len;
+		cbuf->_len += len;
 	}
 	return msg;
 }
 
-static a_usize l_ref_array_size(a_usize len) {
+static a_usize ref_array_size(a_usize len) {
 	return sizeof(GRefArray) + sizeof(a_hobj) * len;
 }
 
 GRefArray* ai_ref_array_new(a_henv env, a_usize len) {
-	GRefArray* self = ai_mem_alloc(env, l_ref_array_size(len));
+	GRefArray* self = ai_mem_alloc(env, ref_array_size(len));
 
 	self->_meta = &G(env)->_metas._ref_array;
 	self->_len = len;
@@ -82,11 +82,11 @@ static void ref_array_splash(Global* g, GRefArray* self) {
 		}
 	}
 
-	g->_mem_work -= l_ref_array_size(self->_len);
+	ai_gc_trace_work(g, ref_array_size(self->_len));
 }
 
 static void ref_array_destruct(Global* g, GRefArray* self) {
-	ai_mem_dealloc(g, self, l_ref_array_size(self->_len));
+	ai_mem_dealloc(g, self, ref_array_size(self->_len));
 }
 
 VTable const ai_ref_array_vtable = {
