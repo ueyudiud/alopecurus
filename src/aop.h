@@ -11,53 +11,57 @@
 typedef a_u32 a_uint;
 
 enum {
-	OP__NONE    = 0x00,
+	OP__NONE,
 
-	OP_ADD      = 0x01,
-	OP_SUB      = 0x02,
-	OP_MUL      = 0x03,
-	OP_DIV      = 0x04,
-	OP_MOD      = 0x05,
-	OP_SHL      = 0x06,
-	OP_SHR      = 0x07,
-	OP_BIT_AND  = 0x08,
-	OP_BIT_OR   = 0x09,
-	OP_BIT_XOR  = 0x0A,
-	OP_AND      = 0x0B,
-	OP_OR       = 0x0C,
+	OP_ADD,
+	OP_SUB,
+	OP_MUL,
+	OP_DIV,
+	OP_MOD,
+	OP_SHL,
+	OP_SHR,
+	OP_BIT_AND,
+	OP_BIT_OR,
+	OP_BIT_XOR,
+	OP_AND,
+	OP_OR,
 
-	OP_LT       = 0x10,
-	OP_GE       = 0x11,
-	OP_LE       = 0x12,
-	OP_GT       = 0x13,
-	OP_EQ       = 0x14,
-	OP_NE       = 0x15,
-	OP_IS       = 0x16,
-	OP_IS_NOT   = 0x17,
-	OP_AS       = 0x18,
-	OP_AS_OR    = 0x19,
-	OP_IN       = 0x1A,
-	OP_NOT_IN   = 0x1B,
+	OP_LT,
+	OP_GE,
+	OP_LE,
+	OP_GT,
+	OP_EQ,
+	OP_NE,
+	OP_IS,
+	OP_IS_NOT,
+	OP_AS,
+	OP_AS_OR,
+	OP_IN,
+	OP_NOT_IN,
 
-	OP_NEG      = 0x0D,
-	OP_BIT_INV  = 0x0E,
-	OP_NOT      = 0x0F,
-	OP_UNBOX    = 0x1C,
-	OP_LEN      = 0x20,
-	OP_UNPACK   = 0x34,
+	OP_NEG,
+	OP_BIT_INV,
 
-	OP_OPTION   = 0x1D,
-	OP_MERGE    = 0x1E,
-	OP_OR_ELSE  = 0x1F,
+	OP_NOT,
 
-	OP_VA_PUSH  = 0x20,
-	OP_VA_POP   = 0x21,
-	OP_RETURN   = 0x22,
+	OP_UNBOX,
+	OP_LEN,
+	OP_GET,
+	OP_SET,
 
-	OP_VA_FIT   = 0x30,
-	OP_VA_FILL  = 0x31,
-	OP_TNEW     = 0x32,
-	OP_CALL     = 0x33
+	OP_CALL,
+
+	/* Builtin operator. */
+	OP_OPTION,
+	OP_MERGE,
+	OP_OR_ELSE,
+
+	OP_VA_PUSH,
+	OP_VA_POP,
+	OP_RETURN,
+
+	OP_TNEW,
+	OP_LNEW
 };
 
 #ifdef aloi_op_neg_int

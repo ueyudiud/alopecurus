@@ -27,7 +27,7 @@ BUF_STRUCT_DECLARE(ConstBuf, Value);
 BUF_STRUCT_DECLARE(InsnBuf, a_insn);
 BUF_STRUCT_DECLARE(LineInfoBuf, LineInfo);
 BUF_STRUCT_DECLARE(LocalInfoBuf, LocalInfo);
-BUF_STRUCT_DECLARE(CapInfoBuf, CompCapInfo);
+BUF_STRUCT_DECLARE(CapInfoBuf, CompCapInfo, CapInfoBuf* _last);
 
 struct Parser {
 	union {
@@ -43,11 +43,10 @@ struct Parser {
 	};
 	a_u32 _options;
 	a_u8 _scope_depth;
-	SymBuf _symbols;
+	SymBuf _syms;
 	ConstBuf _consts; /* Constants. */
 	LocalInfoBuf _locals;
 	LineInfoBuf _lines;
-	CapInfoBuf _captures;
 	GStr* _name;
 	Scope* _scope;
 	FnScope* _fnscope;

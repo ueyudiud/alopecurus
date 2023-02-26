@@ -13,6 +13,8 @@
 
 #include "abuf.h"
 
+static VTable const ref_array_vtable;
+
 static a_msg buf_check(a_henv env, CBuf* buf, a_usize add) {
 	if (add > buf->_cap - buf->_len) {
 		a_usize old_cap = buf->_cap;
@@ -66,7 +68,7 @@ static a_usize ref_array_size(a_usize len) {
 GRefArray* ai_ref_array_new(a_henv env, a_usize len) {
 	GRefArray* self = ai_mem_alloc(env, ref_array_size(len));
 
-	self->_meta = &G(env)->_metas._ref_array;
+	self->_vtable = &ref_array_vtable;
 	self->_len = len;
 	memclr(self->_data, sizeof(a_hobj) * len);
 
@@ -85,11 +87,15 @@ static void ref_array_splash(Global* g, GRefArray* self) {
 	ai_gc_trace_work(g, ref_array_size(self->_len));
 }
 
-static void ref_array_destruct(Global* g, GRefArray* self) {
+static void ref_array_delete(Global* g, GRefArray* self) {
 	ai_mem_dealloc(g, self, ref_array_size(self->_len));
 }
 
-VTable const ai_ref_array_vtable = {
+static VTable const ref_array_vtable = {
+	._tid = T_USER_TEQ,
+	._api_tag = ALO_TUSER,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._name = "array",
 	._splash = fpcast(a_fp_splash, ref_array_splash),
-	._destruct = fpcast(a_fp_destruct, ref_array_destruct)
+	._delete = fpcast(a_fp_delete, ref_array_delete)
 };

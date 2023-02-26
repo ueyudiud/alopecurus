@@ -39,7 +39,7 @@ struct OutCtx {
 
 static a_msg l_save_const(OutCtx* oc, Value v) {
     GStr* val;
-    switch (v_raw_tag(v)) {
+    switch (v_get_tag(v)) {
         case T_NIL: {
             l_put(oc, a_u8, LVTAG_NIL);
             break;
@@ -57,14 +57,14 @@ static a_msg l_save_const(OutCtx* oc, Value v) {
             break;
         }
         case T_ISTR: {
-            val = v_as_str(G(oc->_env), v);
+            val = v_as_str(v);
         save_sstr:
             l_put(oc, a_u8, val->_len);
             l_putv(oc, val->_data, val->_len);
             break;
         }
         case T_HSTR: {
-            val = v_as_str(G(oc->_env), v);
+            val = v_as_str(v);
             if (likely(val->_len <= LVLSTR_LEN_BIAS)) 
                 goto save_sstr;
             l_put(oc, a_u8, LVTAG_LSTR);
@@ -82,23 +82,24 @@ static a_msg l_save_const(OutCtx* oc, Value v) {
     return ALO_SOK;
 }
 
-static a_msg l_save(OutCtx* oc, GFunMeta* meta) {
-    l_putvi(oc, a_u32, meta->_nconst);
-    l_putvi(oc, a_u32, meta->_ninsn);
-    l_putvi(oc, a_u16, meta->_nsub);
-    l_putvi(oc, a_u16, meta->_nlocal);
-    l_put(oc, a_u8, meta->_ncap);
-    l_put(oc, a_u8, meta->_nstack);
-	FnMetaCreateFlags flags = {
-		._fline = false
+static a_msg l_save(OutCtx* oc, GProto* proto, a_bool root) {
+    l_putvi(oc, a_u32, proto->_nconst);
+    l_putvi(oc, a_u32, proto->_ninsn);
+    l_putvi(oc, a_u16, proto->_nsub);
+    l_putvi(oc, a_u16, proto->_nlocal);
+    l_put(oc, a_u8, proto->_ncap);
+    l_put(oc, a_u8, proto->_nstack);
+	ProtoCreateFlags flags = {
+		._fdebug = true,
+		._froot = root
 	};
-	l_put(oc, FnMetaCreateFlags, flags);
-    for (a_u32 i = 0; i < meta->_nconst; ++i) {
-        check(l_save_const(oc, meta->_consts[i]));
+	l_put(oc, ProtoCreateFlags, flags);
+    for (a_u32 i = 0; i < proto->_nconst; ++i) {
+        check(l_save_const(oc, proto->_consts[i]));
     }
-    l_putv(oc, meta->_code, meta->_ninsn);
-    for (a_u32 i = 0; i < meta->_nsub; ++i) {
-        check(l_save(oc, meta->_subs[i]));
+    l_putv(oc, proto->_code, proto->_ninsn);
+    for (a_u32 i = 0; i < proto->_nsub; ++i) {
+        check(l_save(oc, proto->_subs[i], false));
     }
     return ALO_SOK;
 }
@@ -106,5 +107,5 @@ static a_msg l_save(OutCtx* oc, GFunMeta* meta) {
 a_msg ai_fun_save(a_henv env, GFun* val, a_ofun fun, void* ctx, a_flags flags) {
     OutCtx oc = { ._flags =  flags };
     ai_io_oinit(env, fun, ctx, &oc._out);
-    return l_save(&oc, g_cast(GFunMeta, val->_meta));
+    return l_save(&oc, val->_proto, true);
 }

@@ -20,26 +20,7 @@ typedef struct {
 	a_usize _hmask; /* Hash code mask. */
 } IStrTable;
 
-typedef struct {
-	GMeta _nil;
-	GMeta _bool;
-	GMeta _int;
-	GMeta _ptr;
-	GMeta _dstr;
-	GMeta _istr;
-	GMeta _hstr;
-	GMeta _tuple;
-	GMeta _list;
-	GMeta _table;
-	GMeta _route;
-	GMeta _cap;
-	GMeta _ref_array;
-	GMeta _mod;
-	GMeta _mod_loader;
-	GMeta _fmeta;
-	GFunMeta _cfun;
-} InternMetas;
-
+typedef void (*a_fp_gexecpt)(a_henv env, void* ctx, a_msg msg);
 typedef void (*a_fp_gsplash)(Global* g, void* ctx);
 
 struct Global {
@@ -58,13 +39,12 @@ struct Global {
 	a_gclist _gc_toclose;
 	a_gcnext* _gc_sweep;
 	GStr* _nomem_error;
-	GStr* _strx[STRX__MAX - 1];
 	Value _global;
+	a_fp_gexecpt _gexecpt;
 	a_fp_gsplash _gsplash;
-	void* _gsplash_ctx;
+	void* _gprotect_ctx;
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
-	InternMetas _metas;
 	ModCache _mod_cache;
 	IStrTable _istable;
 	a_hash _seed;
@@ -74,30 +54,23 @@ struct Global {
 	a_u8 _white_color;
 	a_u8 _gcstep;
 	volatile atomic_uint_fast8_t _hookm;
+	GStr* _strx[STRX__MAX - 1];
 };
-
-always_inline a_bool g_is_route(Global* g, a_hobj v) {
-	return v->_meta == &g->_metas._route;
-}
-
-always_inline a_bool v_is_route(Global* g, Value v) {
-	return v_is_other(v) && g_is_route(g, v_as_obj(g, v));
-}
-
 
 #define ALO_HMSWAP 0x80
 
-always_inline void ai_env_gsplash(a_henv env, a_fp_gsplash fun, void* ctx) {
-	assume(fun != null);
+always_inline void ai_env_gprotect(a_henv env, a_fp_gsplash splash, a_fp_gexecpt except, void* ctx) {
+	assume(splash != null || except != null);
 	Global* g = G(env);
-	g->_gsplash = fun;
-	g->_gsplash_ctx = ctx;
+	g->_gsplash = splash;
+	g->_gexecpt = except;
+	g->_gprotect_ctx = ctx;
 }
 
-always_inline void ai_env_gsplash_clear(a_henv env) {
+always_inline void ai_env_gprotect_clear(a_henv env) {
 	Global* g = G(env);
 	g->_gsplash = null;
-	g->_gsplash_ctx = null;
+	g->_gprotect_ctx = null;
 }
 
 always_inline a_usize ai_env_mem_total(Global* g) {

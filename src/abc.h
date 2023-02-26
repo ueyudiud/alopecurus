@@ -134,6 +134,7 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(   LEN,   "len", reg, reg, ___) /* R[a] := #R[b]                                       */ \
     _( UNBOX, "unbox", reg, reg, num) /* R[a:a+c-1] := *R[b]                                 */ \
     _(  TNEW,  "tnew", reg, reg, num) /* R[a] := (R[b:b+c-1])                                */ \
+    _(  LNEW,  "lnew", reg, num, num) /* R[a] := [] (with size hint bx)                      */ \
     _(   ADD,   "add", reg, reg, reg) /* R[a] := R[b] + R[c]                                 */ \
     _(   SUB,   "sub", reg, reg, reg) /* R[a] := R[b] - R[c]                                 */ \
     _(   MUL,   "mul", reg, reg, reg) /* R[a] := R[b] * R[c]                                 */ \

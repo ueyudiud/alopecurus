@@ -13,6 +13,8 @@
 
 #include "amod.h"
 
+static VTable const mod_vtable;
+
 static a_usize mod_compute_capacity(a_usize len) {
 	a_usize required = len * 6 / 5;
 	return ceil_pow2m1_usize(required);
@@ -32,7 +34,7 @@ GMod* ai_mod_new(a_henv env, GStr* name, GStr** pkey, a_usize len) {
 	a_usize cap = mod_compute_capacity(len);
 	if (cap > (UINT32_MAX >> 1)) ai_err_raisef(env, ALO_EINVAL, "module size too large.");
 	GMod* self = cast(GMod*, ai_mem_alloc(env, mod_alloc_size(cap, len)));
-	self->_meta = &G(env)->_metas._mod;
+	self->_vtable = &mod_vtable;
 	self->_mc = 0;
 	self->_rc = 0;
 	self->_next = null;
@@ -84,7 +86,7 @@ static Value mod_get(a_henv env, GMod* self, Value key) {
 	if (!v_is_str(key)) {
 		ai_err_raisef(env, ALO_EINVAL, "bad index for mod.");
 	}
-	a_i32 id = ai_mod_find(env, self, v_as_str(G(env), key));
+	a_i32 id = ai_mod_find(env, self, v_as_str(key));
 	if (id < 0) {
 		ai_err_raisef(env, ALO_EINVAL, "symbol does not exists.");
 	}
@@ -196,8 +198,13 @@ void ai_mod_clean(Global* g) {
 	mod_cache_destruct(g, &g->_mod_cache);
 }
 
-VTable const ai_mod_vtable = {
+static VTable const mod_vtable = {
+	._tid = T_MOD,
+	._api_tag = ALO_TMOD,
+	._repr_id = REPR_MOD,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._name = "mod",
 	._splash = fpcast(a_fp_splash, mod_splash),
-	._destruct = fpcast(a_fp_destruct, mod_destruct),
+	._delete = fpcast(a_fp_delete, mod_destruct),
 	._get = fpcast(a_fp_get, mod_get)
 };

@@ -50,11 +50,11 @@ void aloL_argerror(a_henv env, a_usize id, char const* what) {
 }
 
 static char const* l_typename(a_henv env, a_isize id) {
-	Value const* v = api_roslot(env, id);
-	if (v == null) return "empty";
+	Value const* p = api_roslot(env, id);
+	if (p == null) return "empty";
 
-	a_u32 tag = v_raw_tag(*v);
-	if (tag != T_OTHER) return ai_obj_tag_name[tag];
+	Value v = *p;
+	if (!v_is_user(v)) return ai_obj_tag_name[v_get_tag(v)];
 
 	panic("unimplemented"); //TODO
 }
@@ -64,26 +64,10 @@ void aloL_typeerror(a_henv env, a_usize id, char const* name) {
 	aloL_argerror(env, id, what);
 }
 
-static char const* const l_tag_names[] = {
-	[ALO_TNIL] = "nil",
-	[ALO_TBOOL] = "bool",
-	[ALO_TINT] = "int",
-	[ALO_TFLOAT] = "float",
-	[ALO_TPTR] = "ptr",
-	[ALO_TSTR] = "str",
-	[ALO_TTUPLE] = "tuple",
-	[ALO_TLIST] = "list",
-	[ALO_TTABLE] = "table",
-	[ALO_TFUNC] = "func",
-	[ALO_TROUTE] = "route",
-	[ALO_TMOD] = "mod",
-	[ALO_TOTHER] = "other"
-};
-
 void aloL_checktag(a_henv env, a_usize id, a_tag tag) {
-	api_check(tag >= ALO_TEMPTY && tag <= ALO_TOTHER, "bad type tag.");
+	api_check(tag >= ALO_TEMPTY && tag <= ALO_TUSER, "bad type tag.");
 	if (alo_tagof(env, cast(a_isize, id)) != tag) {
-		aloL_typeerror(env, id, l_tag_names[tag]);
+		aloL_typeerror(env, id, ai_obj_tag_name[tag]);
 	}
 }
 
@@ -149,17 +133,17 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 	for (Frame* frame = env->_frame; frame->_prev != null; frame = frame->_prev) {
 		GFun* fun = ai_dbg_get_func(env, frame);
 		assume(fun != null);
-		GFunMeta* meta = g_cast(GFunMeta, fun->_meta);
-		char const* file = meta->_dbg_file != null ? ai_str_tocstr(meta->_dbg_file) : null;
-		a_u32 line = ai_dbg_get_line(meta, frame->_pc);
+		GProto* proto = fun->_proto;
+		char const* file = proto->_dbg_file != null ? ai_str_tocstr(proto->_dbg_file) : null;
+		a_u32 line = ai_dbg_get_line(proto, frame->_pc);
 		if (head) {
 			if (file != null) {
 				ai_buf_putf(env, buf, "%s:%u: ", file, line);
 			}
-			switch (v_raw_tag(*err)) {
+			switch (v_get_tag(*err)) {
 				case T_HSTR:
 				case T_ISTR: {
-					GStr* str = v_as_str(G(env), *err);
+					GStr* str = v_as_str(*err);
 					ai_buf_putls(env, buf, str->_data, str->_len);
 					break;
 				}
@@ -188,11 +172,11 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		else {
 			ai_buf_putf(env, buf, "at %s", file ?: "?");
 		}
-		if (meta->_name != null) {
-			ai_buf_putf(env, buf, " (%s)", ai_str_tocstr(meta->_name));
+		if (proto->_name != null) {
+			ai_buf_putf(env, buf, " (%s)", ai_str_tocstr(proto->_name));
 		}
 	}
-	GStr* str = ai_str_create(env, buf->_arr, buf->_len);
+	GStr* str = ai_str_new(env, buf->_arr, buf->_len);
 	v_set(G(env), err, v_of_obj(str));
 	return ALO_SOK;
 }
@@ -200,11 +184,9 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 	if (env->_frame->_prev != null) {
 		Buf buf;
-		ai_buf_open(&buf);
-
+		ai_buf_init(&buf);
 		a_msg msg = l_wrap_error(env, id, limit, &buf);
-		ai_buf_close(env, &buf);
-
+		ai_buf_deinit(env, &buf);
 		return msg;
 	}
 
@@ -217,11 +199,11 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 	GRefArray* refs = ai_ref_array_new(env, nb + 1);
 	v_set(G(env), api_incr_stack(env), v_of_obj(refs));
 
-	GStr* name_ref = ai_str_create(env, name, strlen(name));
+	GStr* name_ref = ai_str_new(env, name, strlen(name));
 	refs->_data[0] = gobj_cast(name_ref);
 	for (a_usize i = 0; i < nb; ++i) {
 		char const* field_name = bs[i].name;
-		refs->_data[i + 1] = gobj_cast(ai_str_create(env, field_name, strlen(field_name)));
+		refs->_data[i + 1] = gobj_cast(ai_str_new(env, field_name, strlen(field_name)));
 	}
 
 	GMod* mod = ai_mod_new(env, name_ref, cast(GStr**, &refs->_data[1]), nb);
@@ -247,7 +229,7 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
 	a_hmod mod = alo_openmod(env, -1);
 	ai_mod_cache(env, null, mod);
-	ai_table_set(env, v_as_table(G(env), G(env)->_global), v_of_obj(mod->_name), v_of_obj(mod));
+	ai_table_set(env, v_as_table(G(env)->_global), v_of_obj(mod->_name), v_of_obj(mod));
 	api_decr_stack(env);
 }
 

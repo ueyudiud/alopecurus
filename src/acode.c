@@ -26,17 +26,10 @@ enum {
 #define VARARG cast(a_u32, -1)
 
 static void l_nomem_error(Parser* par) {
-	ai_code_close(par);
 	ai_mem_nomem(par->_env);
 }
 
 #define l_check_alloc(e) if (unlikely((e) != ALO_SOK)) l_nomem_error(par)
-
-#define l_vgrow(par,vec,size_old,size_new) ({ \
-    typeof(vec) _v = ai_mem_vxgrow((par)->_env, vec, size_old, size_new); \
-	if (unlikely(_v == null)) { l_nomem_error(par); }                        \
-	_v;                                          \
-})
 
 #define l_bput(par,b,v,u)  ({ \
     typeof(b)* _buf = &(b); \
@@ -48,15 +41,10 @@ static void l_nomem_error(Parser* par) {
 	_index; \
 })
 
-#define l_bdel(par,buf) ai_buf_close((par)->_env, &(buf))
-#define l_vdel(par,vec,len) ai_mem_vdel(G((par)->_env), vec, len)
+#define l_bdel(par,buf) ai_buf_deinit((par)->_env, &(buf))
 
 always_inline void expr_copy(OutExpr dst, InExpr src) {
 	*dst = *src;
-}
-
-static LocalInfo* l_local_at(Parser* par, a_u32 index) {
-	return &par->_locals._arr[par->_fnscope->_begin_local + index];
 }
 
 /**
@@ -65,17 +53,17 @@ static LocalInfo* l_local_at(Parser* par, a_u32 index) {
  */
 static a_u32 l_const_index(Parser* par, Value val) {
 	ConstBuf* consts = &par->_consts;
-	for (a_u32 i = par->_fnscope->_begin_const; i < consts->_len; ++i) {
+	for (a_u32 i = par->_fnscope->_const_off; i < consts->_len; ++i) {
 		/*
 		 * Since all literals which have the same format provided by compiler should
 		 * have same binary data, use identity equality for comparison.
 		 */
-		if (v_id_eq(consts->_arr[i], val)) {
+		if (v_trivial_equals(consts->_arr[i], val)) {
 			return i;
 		}
 	}
 
-	if (unlikely(par->_fnscope->_begin_const + consts->_len == BC_MAX_BX + 1)) {
+	if (unlikely(par->_fnscope->_const_off + consts->_len == BC_MAX_BX + 1)) {
 		ai_par_report(par, false, par_err_f_arg(par, "too many constants."));
 	}
 
@@ -95,16 +83,15 @@ static a_u32 l_last_insn(Parser* par) {
 	return 0;
 }
 
-#define LINE_GROW_UNIT 1024
-
 static void l_emit_line(Parser* par, a_line line) {
-	if (par->_fnscope->_head_line != line) {
+	FnScope* scope = par->_fnscope;
+	if (scope->_head_line != line) {
 		LineInfo info = new(LineInfo) {UINT32_MAX, line};
-		a_u32 index = l_bput(par, par->_lines, info, LINE_GROW_UNIT);
-		if (index > 0) {
+		a_u32 index = l_bput(par, par->_lines, info, 512);
+		if (index > scope->_line_off) { /* Settle end label for last line info. */
 			par->_lines._arr[index - 1]._end = par->_head_label;
 		}
-		par->_fnscope->_head_line = line;
+		scope->_head_line = line;
 	}
 }
 
@@ -142,7 +129,7 @@ static a_u32 l_next_jump(Parser* par, a_u32 label) {
 	return disp != -1 ? cast(a_u32, cast(a_i32, label + 1) + disp) : NO_LABEL;
 }
 
-static void l_reloc(Parser* par, a_u32 from, a_u32 to, a_line line) {
+static void l_redirect(Parser* par, a_u32 from, a_u32 to, a_line line) {
 	a_insn* pi = &par->_code[from];
 
 	assume(bc_load_op(*pi) == BC_J);
@@ -161,10 +148,14 @@ static void l_reloc(Parser* par, a_u32 from, a_u32 to, a_line line) {
 static void l_redirect_chain(Parser* par, a_u32 from, a_u32 to, a_line line) {
 	loop {
 		a_u32 next = l_next_jump(par, from);
-		l_reloc(par, from, to, line);
+		l_redirect(par, from, to, line);
 		if (next == NO_LABEL) break;
 		from = next;
 	}
+}
+
+static void l_clear_close(Parser* par) {
+	par->_fnscope->_fclose = false;
 }
 
 static void l_clear_jump(Parser* par) {
@@ -180,6 +171,13 @@ static void l_clear_land(Parser* par) {
 static void l_emit_fast(Parser* par, a_insn i, a_line line) {
 	if (par->_fnscope->_fpass) {
 		l_emit_direct(par, i, line);
+	}
+}
+
+static void l_flush_close(Parser* par) {
+	if (par->_fnscope->_fclose) {
+		l_emit_direct(par, bc_make_iabc(BC_CLOSE, par->_scope->_top_ntr, DMB, DMB), par->_fnscope->_close_line);
+		l_clear_close(par);
 	}
 }
 
@@ -204,9 +202,12 @@ static void l_flush_land(Parser* par, a_line line) {
  */
 static void l_emit_leave(Parser* par, a_insn i, a_line line) {
 	if (l_should_eval(par)) {
+		FnScope* scope = par->_fnscope;
+
+		l_flush_close(par);
 		l_flush_jump(par, line);
-		if (par->_fnscope->_fland) {
-			a_u32 label = par->_fnscope->_head_land;
+		if (scope->_fland) {
+			a_u32 label = scope->_head_land;
 			loop {
 				a_u32 next = l_next_jump(par, label);
 				par->_code[label] = i;
@@ -215,15 +216,16 @@ static void l_emit_leave(Parser* par, a_insn i, a_line line) {
 			}
 			l_clear_land(par);
 		}
-		if (par->_fnscope->_fpass) {
+		if (scope->_fpass) {
 			l_emit_direct(par, i, line);
 		}
-		par->_fnscope->_fpass = false;
+		scope->_fpass = false;
 	}
 }
 
 static a_u32 l_emit(Parser* par, a_insn i, a_line line) {
 	if (l_should_eval(par)) {
+		l_flush_close(par);
 		l_flush_jump(par, line);
 		l_flush_land(par, line);
 		par->_fnscope->_fpass = true;
@@ -251,6 +253,7 @@ static a_u32 l_emit_tnew(Parser* par, a_u32 dst, a_u32 base, a_u32 len, a_line l
 }
 
 static void l_emit_ret(Parser* par, a_u32 base, a_u32 len, a_line line) {
+	l_clear_close(par); /* The captures will be close automatically after return. */
 	l_emit_leave(par, bc_make_iabc(BC_RET, DMB, base, len + 1), line);
 }
 
@@ -305,14 +308,14 @@ static void l_merge_label(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) 
 		loop {
 			a_u32 label3 = l_next_jump(par, label1);
 			if (label3 == NO_LABEL) {
-				l_reloc(par, label1, label2, line);
+				l_redirect(par, label1, label2, line);
 				return;
 			}
 			else if (label3 > label2) {
 				label1 = label3;
 			}
 			else if (label3 < label2) {
-				l_reloc(par, label1, label2, line);
+				l_redirect(par, label1, label2, line);
 				label1 = label2;
 				label2 = label3;
 			}
@@ -401,7 +404,7 @@ void ai_code_constS(Parser* par, OutExpr e, GStr* val, a_line line) {
 	}
 }
 
-void ai_code_loadfunc(Parser* par, OutExpr e, GFunMeta* fun) {
+void ai_code_loadfunc(Parser* par, OutExpr e, GProto* fun) {
 	FnScope* scope = par->_fnscope;
 	a_u16 index = scope->_nsub ++;
 	expr_dyn(e, l_emit(par, bc_make_iabx(BC_LDF, DYN, index), fun->_dbg_lndef));
@@ -482,6 +485,18 @@ static void l_succ_free_stack(Parser* par, a_u32 reg, a_u32 num) {
 }
 
 /**
+ ** Store temporary value in register to a variable in place, the register will
+ ** be dropped until leave the scope.
+ *@param par the parser.
+ *@param reg the register to store.
+ */
+static void l_store(Parser* par, a_u32 reg) {
+	Scope* scope = par->_scope;
+	assume(reg >= scope->_bot_fur && reg < scope->_top_reg, "cannot store register in place.");
+	scope->_top_ntr = max(reg + 1, scope->_top_ntr);
+}
+
+/**
  ** Drop ownership for register if it is a temporary register.
  *@param par the parser.
  *@param e the expression.
@@ -524,42 +539,75 @@ static a_u32 l_reg_bit(InExpr e) {
 	return e->_kind & 0x1;
 }
 
-static a_u32 l_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
+static a_u32 l_local(Parser* par, Sym* sym) {
+	return par->_locals._arr[par->_fnscope->_local_off + sym->_index]._reg;
+}
+
+static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
 	/* Find in captured values. */
-	for (a_u32 i = scope->_begin_cap; i < par->_captures._len; ++i) {
-		CompCapInfo* info = &par->_captures._arr[i];
-		if (info->_iname == sym->_index) {
+	for (a_u32 i = 0; i < scope->_caps._len; ++i) {
+		CompCapInfo* info = &scope->_caps._arr[i];
+		if (info->_sym_index == sym->_index) {
 			/* Already captured. */
 			return i;
 		}
 	}
+
 	/* Not found, create a new capture value. */
 	CompCapInfo info = {
-		._iname = sym->_index,
 		._scope = sym->_scope,
-		._index = sym->_scope < depth - 1 ? l_capture(par, scope->_fn_up, sym, depth - 1) : sym->_index,
-		._name = sym->_name,
-		._mods = sym->_mods
+		._sym_index = sym->_index,
+		._mods = sym->_mods,
+		._name = sym->_name
 	};
-	return l_bput(par, par->_captures, info, 32);
+	if (sym->_scope >= depth - 1) {
+		switch (sym->_kind) {
+			case SYM_LOCAL: {
+				info._src_index = l_local(par, sym); /* Get variable index. */
+				break;
+			}
+			case SYM_CAPTURE: {
+				info._src_index = sym->_index;
+				break;
+			}
+			default: {
+				unreachable();
+			}
+		}
+	}
+	else { /* Acquire capture index from upper function. */
+		info._src_index = l_lookup_capture(par, scope->_fn_up, sym,depth - 1);
+	}
+	return l_bput(par, scope->_caps, info, 16);
+}
+
+static a_u32 l_capture(Parser* par, Sym* sym) {
+	return l_lookup_capture(par, par->_fnscope, sym, par->_scope_depth);
 }
 
 /* TODO Get environment name. */
-#define l_env_name(par) (&(par)->_symbols._arr[0])
+#define l_env_name(par) (&(par)->_syms._arr[0])
 
 static void l_load_name(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
-	Sym* sym = &par->_symbols._arr[id];
+	Sym* sym = &par->_syms._arr[id];
 	switch (sym->_kind) {
 		case SYM_LOCAL: {
 			if (par->_scope_depth == sym->_scope) {
-				expr_var(e, l_local_at(par, sym->_index)->_reg, id, line);
+				expr_var(e, l_local(par, sym), id, line);
 			}
 			else {
 				e->_kind = EXPR_CAP;
 				e->_line = line;
-				e->_reg = l_capture(par, par->_fnscope, sym, par->_scope_depth);
+				e->_reg = l_capture(par, sym);
 				e->_sym = id;
 			}
+			break;
+		}
+		case SYM_CAPTURE: {
+			e->_kind = EXPR_CAP;
+			e->_line = line;
+			e->_reg = l_capture(par, sym);
+			e->_sym = id;
 			break;
 		}
 		default: unreachable();
@@ -574,7 +622,7 @@ static void l_load_name(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
  *@param line the line number of name reference.
  */
 void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line) {
-	SymBuf* syms = &par->_symbols;
+	SymBuf* syms = &par->_syms;
 	for (a_u32 i = syms->_len; i > 0; --i) {
 		a_u32 id = i - 1;
 		if (syms->_arr[id]._name == name) {
@@ -584,7 +632,7 @@ void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line) {
 	}
 
 	e->_kind = EXPR_REFCK;
-	e->_ref._base = l_capture(par, par->_fnscope, l_env_name(par), par->_scope_depth);
+	e->_ref._base = l_capture(par, l_env_name(par));
 	e->_ref._key = l_const_index(par, v_of_obj(name));
 	e->_line = line;
 }
@@ -835,6 +883,10 @@ void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 			expr_dyn(e, l_emit_tnew(par, DYN, pack._base, pack._len, line));
 			break;
 		}
+		case OP_LNEW: {
+			expr_dyn(e, l_emit(par, bc_make_iabx(BC_LNEW, DYN, 0), line));
+			break;
+		}
 		case OP_RETURN: {
 			ExprPack pack = l_move_to_pack(par, e);
 			l_emit_ret(par, pack._base, pack._len, line);
@@ -858,19 +910,6 @@ void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 					e->_label = l_emit(par, bc_make_iabc(BC_CALL, e->_reg, 1, DYN), line);
 					e->_line = line;
 					break;
-				}
-			}
-			break;
-		}
-		case OP_UNPACK: {
-			switch (e->_kind) {
-				case EXPR_DST_C:
-				case EXPR_DST_AC: {
-					par->_fnscope->_fvarg = true;
-					break;
-				}
-				default: {
-					ai_par_error(par, "bad unpack expression.", line);
 				}
 			}
 			break;
@@ -1525,6 +1564,16 @@ void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 	}
 }
 
+void ai_code_unpack(Parser* par, InoutExpr e, a_line line) {
+	if (e->_kind == EXPR_DST_C || e->_kind == EXPR_DST_AC) {
+		assume(!par->_fnscope->_fvarg, "already unpacked.");
+		par->_fnscope->_fvarg = true;
+	}
+	else {
+		ai_par_error(par, "bad unpack expression.", line);
+	}
+}
+
 static a_insn l_is_leave(Parser* par, a_u32 label) {
 	if (unlikely(label == par->_head_label))
 		return 0;
@@ -1604,6 +1653,7 @@ a_u32 ai_code_label(Parser* par, a_u32 label, a_line line) {
  */
 void ai_code_flush_jump(Parser* par, a_line line) {
 	if (l_should_eval(par)) {
+		l_flush_close(par);
 		l_flush_jump(par, line);
 	}
 }
@@ -1660,7 +1710,7 @@ void ai_code_drop(Parser* par, InExpr e) {
 }
 
 static void l_check_writable(Parser* par, a_u32 id, a_line line) {
-	Sym* sym = &par->_symbols._arr[id];
+	Sym* sym = &par->_syms._arr[id];
 	if (sym->_mods & SYM_MOD_READONLY) {
 		ai_par_error(par, "cannot assign to readonly variable %s.", line, ai_str_tocstr(sym->_name));
 	}
@@ -1738,15 +1788,17 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 #define NAMES_GROW_UNIT 64
 
 static a_u32 l_push_symbol(Parser* par, Sym sym) {
-	return l_bput(par, par->_symbols, sym, NAMES_GROW_UNIT);
+	return l_bput(par, par->_syms, sym, NAMES_GROW_UNIT);
 }
 
 static a_u32 l_push_local(Parser* par, LocalInfo info) {
 	a_u32 index = l_bput(par, par->_locals, info, 32);
-	return index - par->_fnscope->_begin_local;
+	return index - par->_fnscope->_local_off;
 }
 
 static a_u32 l_bind_local(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, a_u32 mods) {
+	l_store(par, reg);
+
 	a_u32 index = l_push_local(par, new(LocalInfo) {
 		._begin_label = begin_label,
 		._end_label = NO_LABEL,
@@ -1857,48 +1909,65 @@ void ai_code_bind_param(Parser* par, GStr* name, a_line line) {
 	scope->_nparam += 1;
 }
 
-static void l_push_scope(Parser* par, Scope* scope, a_u32 reg) {
+/**
+ ** Discard fragment section.
+ *@param par the parser.
+ */
+void ai_code_discard(Parser* par) {
+	Scope* scope = par->_scope;
+	assume(scope->_top_reg == scope->_top_ntr, "some temporary register is not freed.");
+	scope->_num_fur = 0;
+}
+
+static void scope_push(Parser* par, Scope* scope, a_u32 reg, a_line line) {
 	*scope = new(Scope) {
 		._up = par->_scope,
 		._bot_reg = reg,
 		._top_reg = reg,
 		._bot_fur = reg,
 		._num_fur = 0,
+		._begin_line = line,
 		._begin_label = par->_head_label,
 		._end_label = NO_LABEL,
-		._bot_sym = par->_symbols._len
+		._sym_off = par->_syms._len
 	};
 	par->_scope = scope;
 }
 
-static void l_pop_scope(Parser* par) {
+static void scope_pop(Parser* par, a_line line) {
 	Scope* scope = par->_scope;
-	par->_scope = scope->_up;
+	Scope* up = scope->_up;
+	par->_scope = up;
 	run {
-		a_u32 bot = scope->_bot_sym;
-		a_u32 top = par->_symbols._len;
+		a_u32 bot = scope->_sym_off;
+		a_u32 top = par->_syms._len;
 		a_u32 label = par->_head_label;
 		for (a_u32 i = bot; i < top; ++i) {
-			Sym* sym = &par->_symbols._arr[i];
-			switch (par->_symbols._arr[i]._kind) {
+			Sym* sym = &par->_syms._arr[i];
+			switch (sym->_kind) {
 				case SYM_LOCAL:
-					l_local_at(par, sym->_index)->_end_label = label;
+					par->_locals._arr[par->_fnscope->_local_off + sym->_index]._end_label = label;
 					break;
 				default:
 					unreachable();
 			}
 		}
-		par->_symbols._len = bot;
+		par->_syms._len = bot;
+	}
+	scope->_end_label = l_mark_label(par, scope->_end_label, line);
+	if (up != null && scope->_top_ntr != up->_top_ntr) {
+		par->_fnscope->_fclose = true;
+		par->_fnscope->_close_line = line;
 	}
 }
 
-void ai_code_enter(Parser* par, Scope* scope) {
-	l_push_scope(par, scope, par->_scope->_top_reg);
+void ai_code_enter(Parser* par, Scope* scope, a_line line) {
+	scope_push(par, scope, par->_scope->_top_reg, line);
 }
 
-void ai_code_leave(Parser* par) {
+void ai_code_leave(Parser* par, a_line line) {
 	assume(par->_scope->_up != null);
-	l_pop_scope(par);
+	scope_pop(par, line);
 }
 
 void ai_code_prologue(Parser* par, FnScope* fnscope, a_line line) {
@@ -1914,92 +1983,87 @@ void ai_code_prologue(Parser* par, FnScope* fnscope, a_line line) {
 
 	*fnscope = new(FnScope) {
 		._fn_up = par->_fnscope,
-		._base_subs = cast(GFunMeta**, par->_rq._tail),
-		._begin_line = par->_lines._len,
-		._begin_local = par->_locals._len,
-		._linedef = line,
+		._base_subs = cast(GProto**, par->_rq._tail),
+		._line_off = par->_lines._len,
+		._local_off = par->_locals._len,
 		._head_jump = NO_LABEL,
 		._head_land = NO_LABEL,
 		._fpass = true,
 		._fland = false,
 		._fjump = false
 	};
-	l_push_scope(par, &fnscope->_scope, 0);
+	scope_push(par, &fnscope->_scope, 0, line);
 
 	par->_fnscope = fnscope;
 	par->_scope_depth += 1;
 }
 
-GFunMeta* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
+GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 	FnScope* scope = par->_fnscope;
 
 	if (l_should_eval(par)) {
 		l_emit_ret(par, DMB, 0, line);
 	}
 
-	l_pop_scope(par);
+	scope_pop(par, line);
 
-	FnMetaCreateInfo info = {
-		._nconst = par->_consts._len - scope->_begin_const,
+	ProtoCreateInfo info = {
+		._nconst = par->_consts._len - scope->_const_off,
 		._ninsn = par->_head_label - scope->_begin_label,
 		._nsub = scope->_nsub,
-		._nlocal = par->_locals._len - scope->_begin_local,
-		._ncap = par->_captures._len - scope->_begin_cap,
+		._nlocal = par->_locals._len - scope->_local_off,
+		._ncap = scope->_caps._len,
 		._nstack = scope->_max_reg,
-		._nline = par->_lines._len - scope->_begin_line,
+		._nline = par->_lines._len - scope->_line_off,
 		._flags = {
-			._fline = (par->_options & ALO_COMP_OPT_DROP_DEBUG_LINE) == 0,
-			._fname = (par->_options & ALO_COMP_OPT_DROP_DEBUG_NAME) == 0,
-			._froot = root,
-			._fconst_env = (par->_options & ALO_COMP_OPT_CONST_ENV) != 0
+			._fdebug = (par->_options & ALO_COMP_OPT_STRIP_DEBUG) == 0,
+			._froot = root
 		}
 	};
 
-	GFunMeta* meta = ai_fmeta_xalloc(par->_env, &info);
-	if (meta == null) {
+	GProto* proto = ai_proto_xalloc(par->_env, &info);
+	if (proto == null) {
 		l_nomem_error(par);
 	}
 
-	memcpy(meta->_consts, par->_consts._arr + scope->_begin_const, sizeof(Value) * info._nconst);
-	memcpy(meta->_code, par->_code + scope->_begin_label, sizeof(a_insn) * info._ninsn);
-	if (info._flags._fline) {
-		meta->_dbg_lndef = scope->_linedef;
-		meta->_dbg_lnldef = line;
-		memcpy(meta->_dbg_lines, par->_lines._arr + scope->_begin_line, sizeof(LineInfo) * info._nline);
-	}
-	if (info._flags._fname) {
-		memcpy(meta->_dbg_locals, par->_locals._arr + scope->_begin_local, sizeof(LocalInfo) * info._nlocal);
+	memcpy(proto->_consts, par->_consts._arr + scope->_const_off, sizeof(Value) * info._nconst);
+	memcpy(proto->_code, par->_code + scope->_begin_label, sizeof(a_insn) * info._ninsn);
+	if (info._flags._fdebug) {
+		proto->_dbg_lndef = scope->_begin_line;
+		proto->_dbg_lnldef = line;
+		memcpy(proto->_dbg_lines, par->_lines._arr + scope->_line_off, sizeof(LineInfo) * info._nline);
+		memcpy(proto->_dbg_locals, par->_locals._arr + scope->_local_off, sizeof(LocalInfo) * info._nlocal);
 	}
 	run {
 		for (a_u32 i = 0; i < info._ncap; ++i) {
-			CompCapInfo* cap_info = &par->_captures._arr[scope->_begin_cap + i];
-			meta->_caps[i] = new(CapInfo) {
-				._reg = cap_info->_index,
+			CompCapInfo* cap_info = &scope->_caps._arr[i];
+			proto->_caps[i] = new(CapInfo) {
+				._reg = cap_info->_src_index,
 				._fup = cap_info->_scope != par->_scope_depth,
 				._fro = (cap_info->_mods & SYM_MOD_READONLY) != 0
 			};
-			if (info._flags._fname) {
-				meta->_dbg_cap_names[i] = cap_info->_name;
+			if (info._flags._fdebug) {
+				proto->_dbg_cap_names[i] = cap_info->_name;
 			}
 		}
 	}
 	run { /* Build sub function */
-		GFunMeta** dst = meta->_subs;
-		GFunMeta** end = cast(GFunMeta**, par->_rq._tail);
-		for (GFunMeta** src = scope->_base_subs; src != end;
-				src = cast(GFunMeta**, &(*src)->_gnext),
+		GProto** dst = proto->_subs;
+		GProto** end = cast(GProto**, par->_rq._tail);
+		for (GProto** src = scope->_base_subs; src != end;
+				src = cast(GProto**, &(*src)->_gnext),
 				dst += 1) {
 			*dst = *src;
 		}
 	}
-	if (info._flags._fname) {
-		meta->_name = name;
-		meta->_dbg_file = par->_lex._file;
+	proto->_name = name;
+	if (info._flags._fdebug) {
+		proto->_dbg_file = par->_lex._file;
+		proto->_dbg_lndef = scope->_begin_line;
+		proto->_dbg_lnldef = line;
 	}
-	if (info._flags._fline) {
-		meta->_dbg_lndef = scope->_linedef;
-		meta->_dbg_lnldef = line;
-	}
+
+	l_bdel(par, scope->_caps);
 
 	FnScope* up_scope = scope->_fn_up;
 
@@ -2007,15 +2071,31 @@ GFunMeta* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 	par->_scope = up_scope != null ? up_scope->_top_scope : null;
 	par->_scope_depth -= 1;
 	par->_head_label = scope->_begin_label;
-	par->_symbols._len = scope->_bot_sym;
-	par->_locals._len = scope->_begin_local;
-	par->_captures._len = scope->_begin_cap;
-	par->_lines._len = scope->_begin_line;
+	par->_locals._len = scope->_local_off;
+	par->_lines._len = scope->_line_off;
 	par->_rq._tail = cast(a_gclist*, scope->_base_subs);
 
-	rq_push(&par->_rq, meta);
+	rq_push(&par->_rq, proto);
 
-	return meta;
+	return proto;
+}
+
+static void l_del_proto(a_henv env, GProto* proto) {
+	for (a_u32 i = 0; i < proto->_nsub; ++i) {
+		l_del_proto(env, proto->_subs[i]);
+	}
+	ai_proto_delete(G(env), proto);
+}
+
+static void parser_close(Parser* par) {
+	l_bdel(par, par->_insns);
+	l_bdel(par, par->_consts);
+	l_bdel(par, par->_lines);
+	l_bdel(par, par->_locals);
+	l_bdel(par, par->_syms);
+	ai_lex_close(&par->_lex);
+
+	ai_env_gprotect_clear(par->_env);
 }
 
 static void parser_splash(Global* g, void* ctx) {
@@ -2031,64 +2111,50 @@ static void parser_splash(Global* g, void* ctx) {
 	}
 }
 
-static void parser_close(Parser* par) {
-	l_bdel(par, par->_insns);
-	l_bdel(par, par->_consts);
-	l_bdel(par, par->_lines);
-	l_bdel(par, par->_locals);
-	l_bdel(par, par->_captures);
-	l_bdel(par, par->_symbols);
-	ai_lex_close(&par->_lex);
-
-	ai_env_gsplash_clear(par->_env);
-}
-
-static void l_del_meta(a_henv env, GFunMeta* meta) {
-	for (a_u32 i = 0; i < meta->_nsub; ++i) {
-		l_del_meta(env, meta->_subs[i]);
+static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
+	Parser* par = ctx;
+	assume(env == par->_env);
+	/* Destroy queued prototypes. */
+	rq_for(obj, &par->_rq) { l_del_proto(par->_env, g_cast(GProto, obj)); }
+	/* Close linked buffers. */
+	for (QBuf* qb = par->_qbq; qb != null; qb = qb->_last) {
+		l_bdel(par, *qb);
 	}
-	ai_fmeta_destruct(G(env), meta);
+	for (FnScope* scope = par->_fnscope; scope != null; scope = scope->_fn_up) {
+		l_bdel(par, scope->_caps);
+	}
+	/* Close parser. */
+	parser_close(par);
 }
 
 void ai_code_open(Parser* par) {
-	ai_env_gsplash(par->_env, parser_splash, &par);
+	ai_env_gprotect(par->_env, parser_splash, parser_except, par);
 
 	/* Add '_ENV' name. */
 	l_push_symbol(par, new(Sym) {
-			._kind = SYM_LOCAL,
-			._scope = SCOPE_DEPTH_ENV,
-			._mods = (par->_options & ALO_COMP_OPT_CONST_ENV) ? SYM_MOD_READONLY : SYM_MOD_NONE,
-			._index = 0,
-			._name = ai_env_strx(G(par->_env), STRX_KW__ENV)
+		._kind = SYM_CAPTURE,
+		._scope = SCOPE_DEPTH_ENV,
+		._mods = SYM_MOD_READONLY /* Predefined environment is always readonly variable. */,
+		._index = 0,
+		._name = ai_env_strx(G(par->_env), STRX_KW__ENV)
 	});
 }
 
-static void l_register_meta(a_henv env, GFunMeta* meta) {
-	assume(meta->_gnext == null, "duplicate root function.");
-	ai_gc_register_object(env, meta);
-	for (a_u32 i = 0; i < meta->_nsub; ++i) {
-		l_register_meta(env, meta->_subs[i]);
+static void l_register_proto(a_henv env, GProto* proto) {
+	assume(proto->_gnext == null, "duplicate root function.");
+	ai_gc_register_object(env, proto);
+	for (a_u32 i = 0; i < proto->_nsub; ++i) {
+		l_register_proto(env, proto->_subs[i]);
 	}
 }
 
 GFun* ai_code_build_and_close(Parser* par) {
-	GFunMeta* meta = g_cast(GFunMeta, par->_rq._head); /* Get root function metadata. */
-	l_register_meta(par->_env, meta);
+	GProto* proto = g_cast(GProto, par->_rq._head); /* Get root prototype. */
+	l_register_proto(par->_env, proto);
 	parser_close(par);
-	GFun* fun = meta->_cache;
+	GFun* fun = proto->_cache;
 	g_set_white(G(par->_env), gobj_cast(fun));
 	return fun;
-}
-
-void ai_code_close(Parser* par) {
-	/* Destroy queued prototypes. */
-	rq_for(obj, &par->_rq) { l_del_meta(par->_env, g_cast(GFunMeta, obj)); }
-	/* Close queued string buffers. */
-	for (QBuf* qb = par->_qbq; qb != null; qb = qb->_last) {
-		ai_buf_close(par->_env, qb);
-	}
-	/* Close parser. */
-	parser_close(par);
 }
 
 static a_none l_error_unit_expr(Parser* par, a_u32 line) {

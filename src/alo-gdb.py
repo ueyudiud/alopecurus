@@ -36,23 +36,10 @@ def gstr_to_pystr(val):
     p = val['_data']
     return p.cast(PChar).string(length=l)
 
-####################################
-#   typedef union Value {
-# 	    a_f64 _f;
-# 	    a_u64 _u;
-# 	    struct {
-# 	    	union {
-# 	    		a_u32 _l;
-# 	    		a_i32 _i;
-# 	    	};
-# 	    	a_u32 _h;
-# 	    };
-#   } Value;
-####################################
 class ValuePrinter:
     def __init__(self, val: gdb.Value):
         self.val = val
-        self.tag = ~val['_h'] >> 15
+        self.tag = ~val['_'] >> 47
 
     def to_string(self):
         if self.tag == 0:

@@ -24,8 +24,6 @@ intern a_msg ai_buf_putf_(a_henv env, void* buf, char const* fmt, ...);
 
 intern GRefArray* ai_ref_array_new(a_henv env, a_usize len);
 
-intern VTable const ai_ref_array_vtable;
-
 struct GRefArray {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
@@ -54,7 +52,7 @@ always_inline a_msg ai_buf_resize0_(a_henv env, void* buf, a_usize new_cap, a_us
     return ALO_SOK;
 }
 
-always_inline void ai_buf_close_(Global* g, void* buf, a_usize size) {
+always_inline void ai_buf_deinit_(Global* g, void* buf, a_usize size) {
 	CBuf* cbuf = buf;
 	ai_mem_dealloc(g, cbuf->BUF_DATA_REF, cbuf->_cap * size);
 	cbuf->BUF_DATA_REF = null;
@@ -62,19 +60,12 @@ always_inline void ai_buf_close_(Global* g, void* buf, a_usize size) {
 	cbuf->_len = 0;
 }
 
-always_inline void ai_buf_copy_(void* dst, void* buf, a_usize size) {
-	CBuf* cbuf = buf;
-	memcpy(dst, cbuf->BUF_DATA_REF, cbuf->_len * size);
-}
-
-#define ai_buf_open(b) (*(b) = new(typeof(*(b))) { .BUF_DATA_REF = null, .BUF_LEN_REF = 0, ._cap = 0 })
-#define ai_buf_close(env,b) ai_buf_close_(G(env), b, sizeof((b)->_arr[0]))
+#define ai_buf_init(b) (*(b) = new(typeof(*(b))) { .BUF_DATA_REF = null, .BUF_LEN_REF = 0, ._cap = 0 })
+#define ai_buf_deinit(env,b) ai_buf_deinit_(G(env), b, sizeof((b)->_arr[0]))
 
 #define ai_buf_resize_(env,b,n) ai_buf_resize0_(env, b, n, sizeof((b)->BUF_DATA_REF[0]), SIZE_MAX / sizeof((b)->BUF_DATA_REF[0]))
 #define ai_buf_resizex(env,b,n) check(ai_buf_resize_(env, b, n))
 #define ai_buf_resize(env,b,n) ({ if (ai_buf_resize_(env, b, n) != ALO_SOK) ai_mem_nomem(env); })
-
-#define ai_buf_copy(dst,b) ai_buf_copy_(dst, b, sizeof((b)->_arr[0]))
 
 #define ai_buf_put(env,b,v)  ({ \
     typeof(b) _buf = (b); \

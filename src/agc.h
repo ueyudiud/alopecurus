@@ -74,9 +74,9 @@ always_inline void g_set_white(Global* g, a_hobj v) {
 
 always_inline void v_check_alive(Global* g, Value v) {
 	if (v_is_obj(v)) {
-		GObj* obj = cast(GObj*, v_as_hnd(v));
-		a_u32 tag = v_raw_tag(v);
-		assume((tag == obj->_meta->_tid || (tag == T_OTHER && obj->_meta->_tid >= T_OTHER)) && !g_is_other(g, obj));
+		GObj* obj = v_as_obj(v);
+		a_u32 tag = v_get_tag(v);
+		assume((tag == obj->_vtable->_tid) && !g_is_other(g, obj));
 	}
 }
 
@@ -107,7 +107,7 @@ intern void ai_gc_clean(Global* g);
 #define ai_gc_trace_mark(g,obj) ai_gc_trace_mark_(g, gobj_cast(obj))
 
 always_inline void ai_gc_trace_mark_val(Global* g, Value v) {
-	if (v_is_obj(v)) ai_gc_trace_mark_(g, v_as_obj(g, v));
+	if (v_is_obj(v)) ai_gc_trace_mark_(g, v_as_obj(v));
 }
 
 #define ai_gc_should_run(g) unlikely((g)->_mem_debt >= 0)
@@ -134,7 +134,7 @@ always_inline void ai_gc_barrier_(a_henv env, a_hobj obj1, a_hobj obj2) {
 
 always_inline void ai_gc_barrier_val_(a_henv env, GObj* obj, Value val) {
 	if (v_is_obj(val)) {
-		ai_gc_barrier_(env, obj, v_as_obj(G(env), val));
+		ai_gc_barrier_(env, obj, v_as_obj(val));
 	}
 }
 
@@ -151,7 +151,7 @@ always_inline void ai_gc_barrier_back_(a_henv env, a_hobj obj1, a_hobj obj2) {
 
 always_inline void ai_gc_barrier_back_val_(a_henv env, GObj* obj, Value val) {
 	if (v_is_obj(val)) {
-		ai_gc_barrier_back_(env, obj, v_as_obj(G(env), val));
+		ai_gc_barrier_back_(env, obj, v_as_obj(val));
 	}
 }
 

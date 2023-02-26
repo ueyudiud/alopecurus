@@ -17,8 +17,6 @@ struct GList {
 intern GList* ai_list_new(a_henv env);
 intern void ai_list_hint(a_henv env, GList* self, a_usize len);
 intern void ai_list_insert(a_henv env, GList* self, Value value);
-intern Value const* ai_list_refi(a_henv env, GList* self, a_isize pos);
-
-intern VTable const ai_list_vtable;
+intern Value* ai_list_refi(a_henv env, GList* self, a_isize pos);
 
 #endif /* alist_h_ */

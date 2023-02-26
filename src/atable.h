@@ -40,6 +40,4 @@ intern Value const* ai_table_refs(a_henv env, GTable* self, a_lstr const* key);
 intern Value const* ai_table_ref(a_henv env, GTable* self, Value key);
 intern void ai_table_set(a_henv env, GTable* self, Value key, Value value);
 
-intern VTable const ai_table_vtable;
-
 #endif /* atable_h_ */

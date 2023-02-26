@@ -67,7 +67,7 @@ typedef a_i32 a_tag;
 #define ALO_TFUNC 9
 #define ALO_TROUTE 10
 #define ALO_TMOD 11
-#define ALO_TOTHER 12
+#define ALO_TUSER 12
 
 #define ALO_EIO ((a_msg) -9) /* Foreign IO Error */
 #define ALO_ERAISE ((a_msg) -8) /* User Raised Error */
@@ -182,15 +182,11 @@ ALO_EXPORT void (alo_closemod)(a_henv env, a_hmod mod);
 ALO_EXPORT void (alo_fullgc)(a_henv env);
 
 #define ALO_COMP_OPT_NOTHING 0x0
-#define ALO_COMP_OPT_CONST_ENV 0x1
-#define ALO_COMP_OPT_STATIC_LINK 0x3
-#define ALO_COMP_OPT_STRICT_NAME 0x4
-#define ALO_COMP_OPT_MODULE 0x8
-
-#define ALO_COMP_OPT_DROP_DEBUG_FILE 0x100
-#define ALO_COMP_OPT_DROP_DEBUG_LINE 0x200
-#define ALO_COMP_OPT_DROP_DEBUG_NAME 0x400
-#define ALO_COMP_OPT_DROP_DEBUG 0xff00
+#define ALO_COMP_OPT_STATIC_LINK 0x1
+#define ALO_COMP_OPT_STRICT_NAME 0x2
+#define ALO_COMP_OPT_MODULE 0x4
+#define ALO_COMP_OPT_CALL_EXACTLY_ONCE 0x8
+#define ALO_COMP_OPT_STRIP_DEBUG 0x10
 
 #define ALO_COMP_OPT_STOP_JIT 0x10000
 

@@ -20,8 +20,8 @@
 #define MAX_SHOW_LEN 16
 #define MAX_SHOW_DEPTH 16
 
-static void l_show_impl(Global* g, Value v, a_u32 depth) {
-	switch (v_raw_tag(v)) {
+static void l_show_impl(Value v, a_u32 depth) {
+	switch (v_get_tag(v)) {
 		case T_NIL: {
 			aloi_show("nil");
 			break;
@@ -44,7 +44,7 @@ static void l_show_impl(Global* g, Value v, a_u32 depth) {
 		}
 		case T_HSTR:
 		case T_ISTR: {
-			GStr* val = v_as_str(g, v);
+			GStr* val = v_as_str(v);
 			aloi_show("%s", ai_str_tocstr(val));
 			break;
 		}
@@ -53,14 +53,14 @@ static void l_show_impl(Global* g, Value v, a_u32 depth) {
 				aloi_show("(...)");
 			}
 			else {
-				GTuple* val = v_as_tuple(g, v);
+				GTuple* val = v_as_tuple(v);
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("(");
-					l_show_impl(g, val->_body[0], depth + 1);
+					l_show_impl(val->_body[0], depth + 1);
 					for (a_u32 i = 1; i < n; ++i) {
 						aloi_show(", ");
-						l_show_impl(g, val->_body[i], depth + 1);
+						l_show_impl(val->_body[i], depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -78,14 +78,14 @@ static void l_show_impl(Global* g, Value v, a_u32 depth) {
 				aloi_show("[...]");
 			}
 			else {
-				GList* val = v_as_list(g, v);
+				GList* val = v_as_list(v);
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("[");
-					l_show_impl(g, val->_data[0], depth + 1);
+					l_show_impl(val->_data[0], depth + 1);
 					for (a_u32 i = 1; i < n; ++i) {
 						aloi_show(", ");
-						l_show_impl(g, val->_data[i], depth + 1);
+						l_show_impl(val->_data[i], depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -103,21 +103,21 @@ static void l_show_impl(Global* g, Value v, a_u32 depth) {
 				aloi_show("{...}");
 			}
 			else {
-				GTable* val = v_as_table(g, v);
+				GTable* val = v_as_table(v);
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("{");
 					TNode* itr = ai_link_first(val);
-					l_show_impl(g, itr->_key, depth + 1);
+					l_show_impl(itr->_key, depth + 1);
 					aloi_show(" -> ");
-					l_show_impl(g, itr->_value, depth + 1);
+					l_show_impl(itr->_value, depth + 1);
 					while (--n > 0) {
 						assume(itr != null);
 						itr = ai_link_next(itr);
 						aloi_show(", ");
-						l_show_impl(g, itr->_key, depth + 1);
+						l_show_impl(itr->_key, depth + 1);
 						aloi_show(" -> ");
-						l_show_impl(g, itr->_value, depth + 1);
+						l_show_impl(itr->_value, depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -131,15 +131,16 @@ static void l_show_impl(Global* g, Value v, a_u32 depth) {
 			break;
 		}
 		case T_FUNC: {
-			aloi_show("<func:%p>", v_as_hnd(v));
+			aloi_show("<func:%p>", v_as_obj(v));
 			break;
 		}
 		case T_MOD: {
-			aloi_show("<mod:%s>", ai_str_tocstr(v_as_mod(g, v)->_name));
+			aloi_show("<mod:%s>", ai_str_tocstr(v_as_mod(v)->_name));
 			break;
 		}
-		case T_OTHER: {
-			aloi_show("<%p>", v_as_hnd(v));
+		case T_USER_TEQ:
+		case T_USER_NEQ: {
+			aloi_show("<%p>", v_as_obj(v));
 			break;
 		}
 		default: {
@@ -157,7 +158,7 @@ static void l_show_impl(Global* g, Value v, a_u32 depth) {
 void aloL_base_show(a_henv env, a_isize id) {
 	Value const* v = api_roslot(env, id);
 	api_check(v != null, "bad slot id.");
-	l_show_impl(G(env), *v, 0);
+	l_show_impl(*v, 0);
 }
 
 static a_u32 base_print(a_henv env) {

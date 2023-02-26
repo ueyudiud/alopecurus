@@ -5,7 +5,7 @@
 #ifndef aio_h_
 #define aio_h_
 
-#include "astr.h"
+#include "aobj.h"
 
 typedef struct {
     a_henv _env;

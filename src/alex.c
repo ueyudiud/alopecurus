@@ -219,7 +219,7 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 
 void ai_lex_close(Lexer* lex) {
 	strs_close(lex->_in._env, &lex->_strs);
-	ai_buf_close(lex->_in._env, &lex->_buf);
+	ai_buf_deinit(lex->_in._env, &lex->_buf);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {
@@ -292,7 +292,7 @@ GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len) {
 		strs_grow(env, strs);
 	}
 
-	GStr* str = ai_str_create(env, src, len);
+	GStr* str = ai_str_new(env, src, len);
 	strs_add(strs, str);
 	strs->_nstr += 1;
 	return str;

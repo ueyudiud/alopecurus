@@ -22,7 +22,7 @@ intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_line line);
 intern void ai_code_constI(Parser* par, OutExpr e, a_int val, a_line line);
 intern void ai_code_constF(Parser* par, OutExpr e, a_float val, a_line line);
 intern void ai_code_constS(Parser* par, OutExpr e, GStr* val, a_line line);
-intern void ai_code_loadfunc(Parser* par, OutExpr e, GFunMeta* fun);
+intern void ai_code_loadfunc(Parser* par, OutExpr e, GProto* fun);
 intern void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line);
 
 intern void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line);
@@ -38,6 +38,8 @@ intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a
 intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line);
 intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line);
 
+intern void ai_code_unpack(Parser* par, InoutExpr e, a_line line);
+
 intern void ai_code_gotoD(Parser* par, a_u32 label, a_line line);
 intern a_u32 ai_code_gotoU(Parser* par, a_u32 label, a_line line);
 intern a_u32 ai_code_label(Parser* par, a_u32 label, a_line line);
@@ -49,14 +51,14 @@ intern void ai_code_let_nils(Parser* par, LetStat* s, a_line line);
 intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
 intern void ai_code_local(Parser* par, OutExpr e, GStr* name, a_line line);
 intern void ai_code_bind_param(Parser* par, GStr* name, a_line line);
+intern void ai_code_discard(Parser* par);
 
-intern void ai_code_enter(Parser* par, Scope* scope);
-intern void ai_code_leave(Parser* par);
+intern void ai_code_enter(Parser* par, Scope* scope, a_line line);
+intern void ai_code_leave(Parser* par, a_line line);
 intern void ai_code_prologue(Parser* par, FnScope* fnscope, a_line line);
-intern GFunMeta* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line);
+intern GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line);
 intern void ai_code_open(Parser* par);
 intern GFun* ai_code_build_and_close(Parser* par);
-intern void ai_code_close(Parser* par);
 
 /**
  ** Volatility:
@@ -130,7 +132,7 @@ enum {
 	 */
 	EXPR_CAP,
 	/**
-	 ** The variable length sequence of registers.
+	 ** The sequence of temporary registers.
 	 ** REPR: R[_base:_base+_len]
 	 *@param _pack the register pack.
 	 */
@@ -218,14 +220,14 @@ enum {
 	/**
 	 ** The partial evaluated expression, used for function applying.
 	 ** REPR: R[_label(a):_label(a)+_label(c)]
-	 *@param the label of instruction.
+	 *@param _label the label of instruction.
 	 */
 	EXPR_DST_AC,
 	/**
 	 ** The partial evaluated expression, used for function applying.
 	 ** Different from EXPR_DST_AC, variable a is immutable.
 	 ** REPR: R[_label(a):_label(a)+_label(c)]
-	 *@param the label of instruction.
+	 *@param _label the label of instruction.
 	 */
 	EXPR_DST_C,
 /*=========================Pattern Expressions==========================*/
@@ -279,8 +281,8 @@ struct LetNode {
 	union {
 		Expr _expr;
 		struct {
-			a_u32 _kind;
-			a_u32 _line;
+			a_u16 _kind;
+			a_line _line;
 			a_u32 _succ_tag; /* Successive tag. */
 		};
 	};
@@ -301,6 +303,11 @@ enum {
 	 *@param _index the register index.
 	 */
 	SYM_LOCAL,
+	/**
+	 ** The top capture value.
+	 *@param _index the capture index in top scope.
+	 */
+	SYM_CAPTURE,
 };
 
 enum {
@@ -318,14 +325,15 @@ struct Sym {
 
 #define SCOPE_STRUCT_HEAD \
     Scope* _up;           \
-	a_u16 _bot_reg; \
+	a_u16 _bot_reg;          \
 	a_u16 _top_ntr; /* Top of non-temporary section. */ \
 	a_u16 _bot_fur; /* Bottom of fragmented section. */ \
 	a_u16 _num_fur; /* Number of temporary register in fragmented section. */ \
-	a_u16 _top_reg; \
-	a_u32 _begin_label; \
-	a_u32 _end_label; \
-	a_u32 _bot_sym
+	a_u16 _top_reg;          \
+	a_line _begin_line;      \
+	a_u32 _begin_label;      \
+	a_u32 _end_label;        \
+	a_u32 _sym_off
 
 struct Scope {
 	SCOPE_STRUCT_HEAD;
@@ -333,8 +341,8 @@ struct Scope {
 
 struct CompCapInfo {
 	a_u8 _scope; /* The depth of first captured scope. */
-	a_u8 _iname; /* Qualified variable index. */
-	a_u8 _index;
+	a_u8 _sym_index; /* Qualified variable index. */
+	a_u8 _src_index;
 	a_u16 _mods;
 	GStr* _name;
 };
@@ -348,16 +356,16 @@ struct FnScope {
 	};
 	FnScope* _fn_up;
 	Scope* _top_scope;
-	GFunMeta** _base_subs;
-	a_u32 _linedef;
-	a_u32 _begin_const;
-	a_u32 _begin_line;
-	a_u32 _begin_local;
-	a_u32 _begin_cap;
+	GProto** _base_subs;
+	CapInfoBuf _caps;
+	a_u32 _const_off;
+	a_u32 _line_off;
+	a_u32 _local_off;
 	a_u32 _head_jump;
 	a_u32 _head_land;
 	a_line _head_jump_line;
 	a_line _head_line;
+	a_line _close_line;
 	a_u16 _max_reg;
 	a_u16 _nsub;
 	union {
@@ -367,6 +375,7 @@ struct FnScope {
 			a_u8 _fland: 1;
 			a_u8 _fjump: 1;
 			a_u8 _fvarg: 1;
+			a_u8 _fclose: 1;
 		};
 	};
 	a_u8 _nparam;

@@ -7,9 +7,9 @@
 #endif
 
 #include <windef.h>
+#include <memoryapi.h>
+#include <sysinfoapi.h>
 #include <intrin.h>
-
-#include "agbl.h"
 
 /* Basic stack size alignment. */
 #define PAGE_SIZE usizec(0x1000)
@@ -57,12 +57,7 @@ typedef struct Route {
 	RCtx _ctx;
 } Route;
 
-intern a_none ai_ctx_jump(Route* from, Route* to);
 intern a_msg ai_ctx_swap(Route* from, Route* to);
-intern a_none ai_ctx_raise(Route* env, a_msg code);
-intern a_msg ai_ctx_catch(Route* env, a_pfun fun, void* ctx);
-intern a_msg ai_ctx_open(Route* env, a_usize stack_size);
-intern void ai_ctx_close(Route* env);
 
 always_inline void ai_ctx_swapx(Route* from, Route* to, a_msg msg) {
     register a_gpr p1 asm("rcx");

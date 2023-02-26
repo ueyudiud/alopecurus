@@ -20,8 +20,6 @@ intern void ai_mod_cache(a_henv env, GModLoader* loader, GMod* mod);
 intern void ai_mod_cache_splash(Global* g, ModCache* cache);
 intern void ai_mod_clean(Global* g);
 
-intern VTable const ai_mod_vtable;
-
 struct ModCache {
 	GMod** _table;
 	a_u32 _hmask;

@@ -53,7 +53,7 @@ void ai_gc_register_objects(a_henv env, RefQueue* rq) {
 	*rq->_tail = g->_gc_normal;
 	g->_gc_normal = rq->_head;
 
-#if defined(ALOI_DEBUG)
+#if ALO_DEBUG
 	rq_for(obj, rq) {
 		assume(g_is_white(g, obj) || g_is_gray(obj) || g_is_black(obj));
 	}
@@ -67,22 +67,22 @@ void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 }
 
 void ai_gc_trace_mark_(Global* g, a_hobj obj) {
-	if (g_is_white(g, obj) && obj->_meta->_vtable._splash != null) {
+	if (g_is_white(g, obj) && obj->_vtable->_splash != null) {
 		join_trace(&g->_tr_gray, obj);
 	}
 }
 
 always_inline void splash_object(Global* g, a_hobj obj) {
-	a_fp_splash splash = obj->_meta->_vtable._splash;
-	if (likely(splash != null)) {
+	a_fp_splash splash = obj->_vtable->_splash;
+	if (splash != null) {
 		(*splash)(g, obj);
 	}
 }
 
 always_inline void delete_object(Global* g, a_hobj obj) {
-	a_fp_destruct destruct = obj->_meta->_vtable._destruct;
-	if (destruct != null) {
-		(*destruct)(g, obj);
+	a_fp_delete delete = obj->_vtable->_delete;
+	if (likely(delete != null)) {
+		(*delete)(g, obj);
 	}
 }
 
@@ -104,7 +104,7 @@ static a_bool sweep_once(Global* g) {
 
 static void close_once(Global* g) {
 	GObj* obj = strip_gc(&g->_gc_closable);
-	(void) obj; //TODO
+	(*obj->_vtable->_close)(g->_active, obj);
 	join_gc(&g->_gc_normal, obj);
 }
 
@@ -178,7 +178,7 @@ static void begin_propagate(Global* g) {
 	/* Mark nonvolatile root. */
 	join_trace(&g->_tr_gray, gobj_cast(ai_env_mainof(g)));
 	if (v_is_obj(g->_global)) {
-		join_trace(&g->_tr_gray, v_as_obj(g, g->_global));
+		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
 	g->_gcstep = GCSTEP_PROPAGATE;
 }
@@ -206,11 +206,11 @@ static void propagate_atomic(Global* g) {
 	/* Mark volatile root. */
 	ai_gc_trace_mark_(g, gobj_cast(g->_active));
 	if (v_is_obj(g->_global)) {
-		join_trace(&g->_tr_gray, v_as_obj(g, g->_global));
+		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
 	ai_mod_cache_splash(g, &g->_mod_cache);
 	if (g->_gsplash != null) {
-		(*g->_gsplash)(g, g->_gsplash_ctx);
+		(*g->_gsplash)(g, g->_gprotect_ctx);
 	}
 	propagate_all(g, &g->_tr_gray);
 

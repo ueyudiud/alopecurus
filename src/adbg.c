@@ -11,7 +11,7 @@
 
 #include "adbg.h"
 
-#if defined(ALOI_DEBUG)
+#if ALO_DEBUG
 
 #include <stdio.h>
 
@@ -28,18 +28,18 @@ a_none ai_dbg_panic(char const* fmt, ...) {
 
 GFun* ai_dbg_get_func(a_henv env, Frame* frame) {
 	Value* bot = ptr_disp(Value, env->_stack._base, frame->_stack_bot_diff);
-	return bot > env->_stack._base ? v_as_func(G(env), bot[-1]) : null;
+	return bot > env->_stack._base ? v_as_func(bot[-1]) : null;
 }
 
-a_u32 ai_dbg_get_line(GFunMeta* meta, a_insn const* pc) {
-	if (meta->_dbg_lines != null) {
-		a_u32 disp = pc - meta->_code;
+a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc) {
+	if (proto->_dbg_lines != null) {
+		a_u32 disp = pc - proto->_code;
 		a_u32 lo = 0;
-		a_u32 hi = meta->_nline - 1;
+		a_u32 hi = proto->_nline - 1;
 		a_u32 mi;
 		while (lo < hi) {
 			mi = (lo + hi) >> 1;
-			LineInfo* info = &meta->_dbg_lines[mi];
+			LineInfo* info = &proto->_dbg_lines[mi];
 			if (disp >= info->_end) {
 				lo = mi + 1;
 			}
@@ -47,18 +47,18 @@ a_u32 ai_dbg_get_line(GFunMeta* meta, a_insn const* pc) {
 				hi = mi;
 			}
 		}
-		return meta->_dbg_lines[lo]._lineno;
+		return proto->_dbg_lines[lo]._lineno;
 	}
 	else {
 		return 0;
 	}
 }
 
-static void l_get_source(alo_Debug* dbg, GFun* func, a_insn* pc) {
-	if (likely(func != null)) {
-		GFunMeta* meta = g_cast(GFunMeta, func->_meta);
-		dbg->file = meta->_dbg_file != null ? ai_str_tocstr(meta->_dbg_file) : null;
-		dbg->line = ai_dbg_get_line(meta, pc);
+static void l_get_source(alo_Debug* dbg, GFun* fun, a_insn* pc) {
+	if (likely(fun != null)) {
+		GProto* proto = fun->_proto;
+		dbg->file = proto->_dbg_file != null ? ai_str_tocstr(proto->_dbg_file) : null;
+		dbg->line = ai_dbg_get_line(proto, pc);
 	}
 	else {
 		dbg->file = null;

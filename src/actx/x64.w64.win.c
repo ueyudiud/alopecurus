@@ -8,6 +8,8 @@
 #include "../actx.h"
 #include "../avm.h"
 
+#define ext(n) M_cat(ext_,n) /* Avoid for type redefinition. */
+
 typedef int NTSTATUS;
 
 #define CTX_NVGPR_LIST(_) \
@@ -32,11 +34,17 @@ typedef int NTSTATUS;
 	_(xmm14,Xmm14) \
 	_(xmm15,Xmm15)
 
-typedef struct _ctx_TEB {
+typedef struct ext(TEB) ext(TEB), *ext(PTEB);
+typedef struct ext(PEB) ext(PEB), *ext(PPEB);
+typedef struct ext(PROCESS_STACK_ALLOCATION_INFORMATION)
+	ext(PROCESS_STACK_ALLOCATION_INFORMATION),
+	*ext(PPROCESS_STACK_ALLOCATION_INFORMATION);
+
+struct ext(TEB) {
 	/* 0x0000 */ union {
-		struct _NT_TIB NtTib;
+		NT_TIB NtTib;
 		struct {
-      		struct _EXCEPTION_REGISTRATION_RECORD* ExceptionList;
+			PEXCEPTION_REGISTRATION_RECORD ExceptionList;
       		PVOID StackBase;
       		PVOID StackLimit;
       		PVOID SubSystemTib;
@@ -45,62 +53,42 @@ typedef struct _ctx_TEB {
 				DWORD Version;
       		};
       		PVOID ArbitraryUserPointer;
-      		struct _NT_TIB* Self;
+      		PNT_TIB Self;
 		};
 	};
 	/* 0x0038 */ PVOID _reserved1[5];
-	/* 0x0060 */ struct _ctx_PEB* ProcessEnvironmentBlock;
+	/* 0x0060 */ ext(PPEB) ProcessEnvironmentBlock;
 	/* 0x0068 */ PVOID _reserved2[642];
 	/* 0x1478 */ PVOID DeallocationStack;
-} _ctx_TEB, *_ctx_PTEB;
+};
 
-typedef struct _ctx_PEB {
+struct ext(PEB) {
 	/* 0x0000 */ BYTE _reserved1[16];
 	/* 0x0010 */ PVOID ImageBaseAddress;
-} _ctx_PEB, *_ctx_PPEB;
-
-#define TEB _ctx_TEB
-#define PTEB _ctx_PTEB
-
-#define PEB _ctx_PEB
-#define PPEB _ctx_PPEB
+};
 
 #undef WINSYSAPI
 #define WINSYSAPI __declspec(dllimport)
 
-typedef struct _ctx_PROCESS_STACK_ALLOCATION_INFORMATION {
+struct ext(PROCESS_STACK_ALLOCATION_INFORMATION) {
 	SIZE_T ReserveSize;
 	SIZE_T ZeroBits;
 	PVOID StackBase;
-} _ctx_PROCESS_STACK_ALLOCATION_INFORMATION, *_ctx_PPROCESS_STACK_ALLOCATION_INFORMATION;
+};
 
-#define PROCESS_STACK_ALLOCATION_INFORMATION _ctx_PROCESS_STACK_ALLOCATION_INFORMATION
-#define PPROCESS_STACK_ALLOCATION_INFORMATION _ctx_PPROCESS_STACK_ALLOCATION_INFORMATION
-
-typedef enum _ctx_PROCESS_INFORMATION_CLASS {
+typedef enum ext(PROCESS_INFORMATION_CLASS) {
 	ProcessThreadStackAllocation = 41
-} _ctx_PROCESS_INFORMATION_CLASS;
-
-#define PROCESS_INFORMATION_CLASS _ctx_PROCESS_INFORMATION_CLASS
-
-#define CON(a,b) CON1(a,b)
-#define CON1(a,b) a##b
-
-#define extname(n) CON(_ext_,n)
+} ext(PROCESS_INFORMATION_CLASS);
 
 #define IMPORT_LIST(_) \
-	_(NtSetInformationProcess, hntdll, NTSTATUS, (HANDLE, PROCESS_INFORMATION_CLASS, PVOID, ULONG)) \
+	_(NtSetInformationProcess, hntdll, NTSTATUS, (HANDLE, ext(PROCESS_INFORMATION_CLASS), PVOID, ULONG)) \
 	_(NtRaiseException, hntdll, VOID, (PEXCEPTION_RECORD, PCONTEXT, BOOLEAN)) \
-	_(NtAllocateVirtualMemory, hntdll, NTSTATUS, (HANDLE, PVOID*, ULONG_PTR, PSIZE_T, ULONG, ULONG)) \
-	_(NtFreeVirtualMemory, hntdll, NTSTATUS, (HANDLE, PVOID*, PSIZE_T, ULONG)) \
 	_(RtlLookupFunctionEntry, hntdll, PRUNTIME_FUNCTION, (DWORD64, PDWORD64, PUNWIND_HISTORY_TABLE)) \
 	_(RtlVirtualUnwind, hntdll, PEXCEPTION_ROUTINE, (DWORD, DWORD64, DWORD64, PRUNTIME_FUNCTION, PCONTEXT, PVOID*, PDWORD64, PKNONVOLATILE_CONTEXT_POINTERS)) \
 	_(RtlImageNtHeader, hntdll, PIMAGE_NT_HEADERS, (PVOID))
 
 #undef NtSetInformationProcess
 #undef NtRaiseException
-#undef NtAllocateVirtualMemory
-#undef NtFreeVirtualMemory
 #undef RtlLookupFunctionEntry
 #undef RtlVirtualUnwind
 #undef RtlImageNtHeader
@@ -110,36 +98,26 @@ typedef enum _ctx_PROCESS_INFORMATION_CLASS {
 WINSYSAPI HMODULE WINAPI GetModuleHandleA(LPCSTR);
 WINSYSAPI FARPROC WINAPI GetProcAddress(HANDLE, LPCSTR);
 
-#define CTX_DCL(name,owner,rtype,ptypes) static rtype (*WINAPI extname(name)) ptypes;
+#define CTX_DCL(name,owner,rtype,ptypes) static rtype (*WINAPI ext(name)) ptypes;
 IMPORT_LIST(CTX_DCL)
 #undef CTX_DCL
 
-#define NtSetInformationProcess (*extname(NtSetInformationProcess))
-#define NtRaiseException (*extname(NtRaiseException))
-#define NtAllocateVirtualMemory (*extname(NtAllocateVirtualMemory))
-#define NtFreeVirtualMemory (*extname(NtFreeVirtualMemory))
-#define RtlLookupFunctionEntry (*extname(RtlLookupFunctionEntry))
-#define RtlVirtualUnwind (*extname(RtlVirtualUnwind))
-#define RtlImageNtHeader (*extname(RtlImageNtHeader))
+#define NtSetInformationProcess (*ext(NtSetInformationProcess))
+#define NtRaiseException (*ext(NtRaiseException))
+#define RtlLookupFunctionEntry (*ext(RtlLookupFunctionEntry))
+#define RtlVirtualUnwind (*ext(RtlVirtualUnwind))
+#define RtlImageNtHeader (*ext(RtlImageNtHeader))
 
 #else
 
-#define CTX_DCL(name,owner,rtype,ptypes) WINSYSAPI rtype (WINAPI name) ptypes;
+#define CTX_DCL(name,owner,rtype,ptypes) WINSYSAPI rtype WINAPI name ptypes;
 IMPORT_LIST(CTX_DCL)
 #undef CTX_DCL
-
-#define NtSetInformationProcess NtSetInformationProcess
-#define NtRaiseException NtRaiseException
-#define NtAllocateVirtualMemory NtAllocateVirtualMemory
-#define NtFreeVirtualMemory NtFreeVirtualMemory
-#define RtlLookupFunctionEntry RtlLookupFunctionEntry
-#define RtlVirtualUnwind RtlVirtualUnwind
-#define RtlImageNtHeader RtlImageNtHeader
 
 #endif
 
 #define NtCurrentProcess() cast(HANDLE, isizec(-1))
-#define NtCurrentTeb() cast(_ctx_PTEB, __readgsqword(offsetof(_ctx_TEB, Self)))
+#define NtCurrentTeb() cast(ext(PTEB), __readgsqword(offsetof(ext(TEB), Self)))
 
 WINSYSAPI void WINAPI RaiseException(DWORD, DWORD, DWORD, ULONG_PTR const*);
 
@@ -151,13 +129,14 @@ a_msg ai_ctx_init(void) {
 #define CTX_GET(name,mod,...) run { \
 	void* _addr = cast(void*, GetProcAddress(mod, #name)); \
 	if (_addr == null) return ALO_EOUTER; \
-	extname(name) = _addr; \
+	ext(name) = _addr; \
 }
 
 	IMPORT_LIST(CTX_GET)
 #undef CTX_GET
 
 #endif
+
 	return ALO_SOK;
 }
 
@@ -168,7 +147,7 @@ a_msg ai_ctx_init(void) {
 #define Fenv(f) "i"(addr_of(&cast(GRoute*, null)->f))
 #define Fctx(f) "i"(addr_of(&cast(Route*, null)->_ctx.f))
 #define Fgbl(f) "i"(addr_of(&cast(Global*, null)->f))
-#define Fteb(f) "i"(addr_of(&cast(PTEB, null)->f))
+#define Fteb(f) "i"(addr_of(&cast(ext(PTEB), null)->f))
 
 naked a_none ai_ctx_jump(unused Route* from, unused Route* to) {
 	asm("jmp "L_ENTER);
@@ -269,7 +248,7 @@ static EXCEPTION_DISPOSITION start_except_hook(
 	ContextRecord->MxCsr = ctx->_mxcsr;
 	ContextRecord->FltSave.ControlWord = ctx->_fctrl;
 
-	PTEB teb = NtCurrentTeb();
+	ext(PTEB) teb = NtCurrentTeb();
 	teb->NtTib.StackBase = ctx->_stack_base;
 	teb->NtTib.StackLimit = ctx->_stack_limit;
 	teb->NtTib.ExceptionList = ctx->_except_list;
@@ -306,17 +285,24 @@ a_none ai_ctx_raise(unused Route* env, a_msg msg) {
 static EXCEPTION_DISPOSITION catch_except_hook(
 		PEXCEPTION_RECORD ExceptionRecord,
 		PVOID EstablisherFrame,
-		PCONTEXT unused ContextRecord,
+		PCONTEXT ContextRecord,
 		PDISPATCHER_CONTEXT DispatcherContext) {
 	a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
 	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
-	a_usize pc = DispatcherContext->ImageBase + *cast(a_u32*, DispatcherContext->HandlerData);
+	a_henv env = &ptr_of(Route, ContextRecord->Rsi)->_body;
+	Global* g = G(env);
+	if (g->_gexecpt != null) {
+		(*g->_gexecpt)(env, g->_gprotect_ctx, msg);
+	}
+
+	a_u32* prva = DispatcherContext->HandlerData;
+	a_usize pc = DispatcherContext->ImageBase + *prva;
 	RtlUnwind(EstablisherFrame, cast(PVOID, pc), ExceptionRecord, cast(PVOID, cast(a_isize, msg)));
 	unreachable();
 }
 
-a_msg ai_ctx_catch(Route* env, a_pfun pfun, void* pctx) {
+never_inline a_msg ai_ctx_catch(Route* env, a_pfun pfun, void* pctx) {
 	asm(".seh_handler %c0, @except"::"p"(catch_except_hook));
 	asm goto(
 		".seh_handlerdata\n"
@@ -324,6 +310,8 @@ a_msg ai_ctx_catch(Route* env, a_pfun pfun, void* pctx) {
 		".long 0\n"
 		".text"::::end_try);
 	a_msg msg = ALO_SOK;
+
+	asm("movq %0, %%rsi"::"r"(env):"rsi");
 	(*pfun)(&env->_body, pctx);
 
 	asm(""::"a"(msg));
@@ -342,7 +330,7 @@ a_msg ai_ctx_open(Route* route, a_usize stack_size) {
 
 	commit = (commit + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
-	PROCESS_STACK_ALLOCATION_INFORMATION alloc_info = {
+	ext(PROCESS_STACK_ALLOCATION_INFORMATION) alloc_info = {
 		.ReserveSize = max(reserve, commit),
 		.ZeroBits = 0,
 		.StackBase = null
@@ -352,14 +340,13 @@ a_msg ai_ctx_open(Route* route, a_usize stack_size) {
 	if (status != 0) return ALO_EINVAL;
 
 	PVOID addr = alloc_info.StackBase;
-	SIZE_T size = PAGE_SIZE;
 
-	NtAllocateVirtualMemory(NtCurrentProcess(), &addr, 0, &size, MEM_COMMIT, PAGE_NOACCESS);
-	addr = alloc_info.StackBase + PAGE_SIZE;
-	NtAllocateVirtualMemory(NtCurrentProcess(), &addr, 0, &size, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
-	addr = alloc_info.StackBase + 2 * PAGE_SIZE;
-	size = reserve - 2 * PAGE_SIZE;
-	NtAllocateVirtualMemory(NtCurrentProcess(), &addr, 0, &size, MEM_COMMIT, PAGE_READWRITE);
+	if (VirtualAlloc(addr, PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == null)
+		return ALO_ENOMEM;
+	if (VirtualAlloc(addr + PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == null)
+		return ALO_ENOMEM;
+	if (VirtualAlloc(addr + PAGE_SIZE * 2, reserve - 2 * PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
+		return ALO_ENOMEM;
 
 	void* stack_base = alloc_info.StackBase + reserve;
 	route->_ctx = new(RCtx) {
@@ -390,7 +377,7 @@ static void l_unwind(Route* route) {
 	Context.MxCsr = route->_ctx._mxcsr;
 	Context.FltSave.ControlWord = route->_ctx._fctrl;
 	/* Initialize unwind history table. */
-	UNWIND_HISTORY_TABLE          UnwindHistoryTable = {};
+	UNWIND_HISTORY_TABLE UnwindHistoryTable = {};
 	
 	loop {
     	PRUNTIME_FUNCTION RuntimeFunction = RtlLookupFunctionEntry(
@@ -425,6 +412,54 @@ static void l_unwind(Route* route) {
 
 void ai_ctx_close(Route* route) {
 	l_unwind(route);
-	SIZE_T size = 0;
-	NtFreeVirtualMemory(NtCurrentProcess(), &route->_ctx._stack_alloc_base, &size, MEM_RELEASE);
+	VirtualFree(route->_ctx._stack_alloc_base, 0, MEM_RELEASE);
 }
+
+static a_usize l_pad_size(a_usize size) {
+	return (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+}
+
+#if !ALO_STACK_DISABLE_MMAP
+
+a_bool ai_ctx_stack_init(unused a_henv env, Stack* stack) {
+	Value* base = VirtualAlloc(
+			NULL,
+			l_pad_size(sizeof(Value) * MAX_STACK_SIZE_WITH_RESERVED),
+			MEM_RESERVE,
+			PAGE_NOACCESS);
+	if (unlikely(base == null)) return true;
+	a_usize pad_size = l_pad_size(sizeof(Value) * INIT_STACK_SIZE_WITH_RESERVED);
+	LPVOID result = VirtualAlloc(
+			base,
+			pad_size,
+			MEM_COMMIT,
+			PAGE_READWRITE);
+	if (unlikely(result == null)) return true;
+	stack->_base = base;
+	stack->_limit = ptr_disp(Value, base, pad_size) - RESERVED_STACK_SIZE;
+	return false;
+}
+
+a_bool ai_ctx_stack_grow(unused a_henv env, Stack* stack, a_usize size) {
+	LPVOID to = ptr_disp(void, stack->_base, l_pad_size(sizeof(Value) * size));
+	LPVOID from = stack->_limit + RESERVED_STACK_SIZE;
+	a_usize pad_size = ptr_diff(to, from);
+	assume(size % PAGE_SIZE == 0, "not aligned to page size.");
+	LPVOID result = VirtualAlloc(
+			from,
+			pad_size,
+			MEM_COMMIT,
+			PAGE_READWRITE);
+	if (unlikely(result == null)) return true;
+	stack->_limit = cast(Value*, to) - RESERVED_STACK_SIZE;
+	return false;
+}
+
+void ai_ctx_stack_deinit(unused Global* g, Stack* stack) {
+	VirtualFree(
+			stack->_base,
+			0,
+			MEM_RELEASE);
+}
+
+#endif

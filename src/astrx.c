@@ -19,7 +19,7 @@ char const ai_strx_table[STRX_POS__MAX] = {
 static void* l_new_str(a_henv env, void* blk, GStr** dst, char const* src, a_u32 tag) {
 	a_usize len = strlen(src);
 	dst[tag - 1] = ai_str_intern(env, blk, src, len, tag);
-	return blk + sizeof(IStr) + len;
+	return blk + istr_size(len);
 }
 
 void ai_strx_open(a_henv env, void* blk, GStr** dst) {

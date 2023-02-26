@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 
 #include "astr.h"
+#include "astk.h"
 #include "afun.h"
 
 #define GLOBAL_FLAG_INCRGC u16c(0x0001)
@@ -22,13 +23,7 @@ intern a_henv ai_env_mainof(Global* g);
 intern a_msg ai_env_resume(a_henv env, GRoute* self);
 intern void ai_env_yield(a_henv env);
 intern a_msg ai_env_protect(a_henv env, a_pfun pfun, void* pctx);
-
-#define GROW_STACK_FLAG_OF1 1
-#define GROW_STACK_FLAG_OF2 2
-
 intern a_none ai_env_raise(a_henv env, a_msg msg);
-intern a_isize ai_env_grow_stack(a_henv env, Value* top);
-intern a_isize ai_env_check_stack(a_henv env, Value* top);
 
 #ifndef ALOI_DFL_GCSTEPMUL
 # define ALOI_DFL_GCSTEPMUL usizec(384)
@@ -38,29 +33,9 @@ intern a_isize ai_env_check_stack(a_henv env, Value* top);
 # define ALOI_DFL_GCPAUSEMUL usizec(512)
 #endif
 
-#ifndef ALOI_INIT_STACKSIZE
-# define ALOI_INIT_STACKSIZE usizec(256)
-#endif
-
 #ifndef ALOI_INIT_CFRAMESIZE
 # define ALOI_INIT_CFRAMESIZE usizec(8)
 #endif
-
-#ifndef ALOI_MAX_STACKSIZE
-# define ALOI_MAX_STACKSIZE usizec(100000)
-#endif
-
-/* Reserve stack size for VM use. */
-#define RESERVED_STACKSIZE 5
-/* Stack size for stack overflow error handling. */
-#define OVERFLOW_STACKSIZE 128
-
-typedef struct Stack {
-	Value* _base;
-	Value* _bot;
-	Value* _top;
-	Value* _limit;
-} Stack;
 
 #define RFLAG_COUNT_VARARG 255
 
@@ -80,8 +55,6 @@ struct Frame {
 	Value* _bound;
 #endif
 };
-
-#define GROUTE_FLAGS_YIELDABLE u16c(0x0001)
 
 struct alo_Env {
 	GOBJ_STRUCT_HEADER;

@@ -12,8 +12,8 @@
 
 #include "abaselib.h"
 
-static void dump_const(a_henv env, Value v) {
-	switch (v_raw_tag(v)) {
+static void dump_const(Value v) {
+	switch (v_get_tag(v)) {
 		case T_NIL: {
 			aloi_show("nil");
 			break;
@@ -36,7 +36,7 @@ static void dump_const(a_henv env, Value v) {
 		}
 		case T_HSTR:
 		case T_ISTR: {
-			GStr* str = v_as_str(G(env), v);
+			GStr* str = v_as_str(v);
 			if (str->_len > 16) {
 				aloi_show("<%u bytes string>", str->_len);
 			}
@@ -52,21 +52,12 @@ static void dump_const(a_henv env, Value v) {
 	}
 }
 
-static void dump_func(GFunMeta* meta) {
-	if (meta->_name != null) {
-		aloi_show("<%s>", ai_str_tocstr(meta->_name));
-	}
-	else {
-		aloi_show("<%p>", meta);
-	}
-}
-
 typedef struct {
 	a_u32 _index;
 	a_u32 _limit;
 } LineItr;
 
-static void dump_line(GFunMeta* meta, LineItr* itr, a_u32 pc) {
+static void dump_line(GProto* meta, LineItr* itr, a_u32 pc) {
 	if (pc >= itr->_limit) {
 		a_u32 index = itr->_index++;
 		assume(index < meta->_nline);
@@ -76,7 +67,7 @@ static void dump_line(GFunMeta* meta, LineItr* itr, a_u32 pc) {
 	}
 }
 
-static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
+static void dump_code(GProto* meta, a_bool fline) {
 	static char const* g_names[] = {
 #define BCNAME(id,name,a,b,c) name,
 		ALO_BC_LIST(BCNAME)
@@ -102,14 +93,15 @@ static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 				break;
 			}
 			case BC_KF:
-			case BC_KT: {
+			case BC_KT:
+			case BC_CLOSE: {
 				aloi_show("%4u    _    _\n", bc_load_a(i));
 				break;
 			}
 			case BC_K: {
 				a_u32 b = bc_load_bx(i);
 				aloi_show("%4u %9u ; ", bc_load_a(i), b);
-				dump_const(env, meta->_consts[b]);
+				dump_const(meta->_consts[b]);
 				aloi_show("\n");
 				break;
 			}
@@ -123,9 +115,7 @@ static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 			}
 			case BC_LDF: {
 				a_u32 b = bc_load_bx(i);
-				aloi_show("%4u %4u    _ ; ", bc_load_a(i), b);
-				dump_func(meta->_subs[b]);
-				aloi_show("\n");
+				aloi_show("%4u %4u    _ ; %p\n", bc_load_a(i), b, meta->_subs[b]);
 				break;
 			}
 			case BC_BNZ:
@@ -170,7 +160,7 @@ static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 			case BC_SETK: {
 				a_u32 c = bc_load_c(i);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), c);
-				dump_const(env, meta->_consts[c]);
+				dump_const(meta->_consts[c]);
 				aloi_show("\n");
 				break;
 			}
@@ -225,35 +215,41 @@ static void dump_code(a_henv env, GFunMeta* meta, a_bool fline) {
 
 #define Ks(s,n) n, ((n) > 1 ? s"s" : s"")
 
-static void dump_meta(a_henv env, GFunMeta* meta, a_u32 options) {
-	aloi_show("function ");
-	dump_func(meta);
-	aloi_show("\n%u stack, %u %s, %u %s, %u %s, %u %s\n",
-		   meta->_nstack,
-		   Ks("local", meta->_nlocal),
-		   Ks("capture", meta->_ncap),
-		   Ks("constant", meta->_nconst),
-		   Ks("sub", meta->_nsub));
-	dump_code(env, meta, (options & ALO_DUMP_OPT_LINE) != 0);
+static void dump_proto(a_henv env, GProto* proto, a_u32 options) {
+	aloi_show("fn ");
+	if (proto->_name != null) {
+		aloi_show("%s ", ai_str_tocstr(proto->_name));
+	}
+	if (proto->_dbg_file != null) {
+		aloi_show("<%s:%u,%u>", ai_str_tocstr(proto->_dbg_file), proto->_dbg_lndef, proto->_dbg_lnldef);
+	}
+	aloi_show("\n%u %s, %u %s, %u %s, %u %s, %u %s, %u %s\n",
+			Ks("param", proto->_nparam),
+			Ks("slot", proto->_nstack),
+			Ks("local", proto->_nlocal),
+			Ks("capture", proto->_ncap),
+			Ks("constant", proto->_nconst),
+			Ks("sub", proto->_nsub));
+	dump_code(proto, (options & ALO_DUMP_OPT_LINE) != 0);
 	if (options & ALO_DUMP_OPT_CONST_POOL) {
-		aloi_show("constant pool <%p>\n", meta->_consts);
-		for (a_u32 i = 0; i < meta->_nconst; ++i) {
+		aloi_show("constant pool <%p>\n", proto->_consts);
+		for (a_u32 i = 0; i < proto->_nconst; ++i) {
 			aloi_show("\t%5u\t", i);
-			dump_const(env, meta->_consts[i]);
+			dump_const(proto->_consts[i]);
 			aloi_show("\n");
 		}
 	}
 	if (options & ALO_DUMP_OPT_LOCAL) {
-		if (meta->_dbg_locals != null) {
-			aloi_show("local info table <%p>\n", meta->_dbg_locals);
-			for (a_u32 i = 0; i < meta->_nlocal; ++i) {
-				LocalInfo* info = &meta->_dbg_locals[i];
+		if (proto->_dbg_locals != null) {
+			aloi_show("local info table <%p>\n", proto->_dbg_locals);
+			for (a_u32 i = 0; i < proto->_nlocal; ++i) {
+				LocalInfo* info = &proto->_dbg_locals[i];
 				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n", i, info->_reg, ai_str_tocstr(info->_name), info->_begin_label, info->_end_label);
 			}
-			printf("capture info table <%p>\n", meta->_caps);
-			for (a_u32 i = 0; i < meta->_ncap; ++i) {
-				CapInfo* info = &meta->_caps[i];
-				GStr* name = meta->_dbg_cap_names[i];
+			printf("capture info table <%p>\n", proto->_caps);
+			for (a_u32 i = 0; i < proto->_ncap; ++i) {
+				CapInfo* info = &proto->_caps[i];
+				GStr* name = proto->_dbg_cap_names[i];
 				aloi_show("\t%5u\t%c[%u]\t%s\n", i, info->_fup ? 'C' : 'R', info->_reg, ai_str_tocstr(name));
 			}
 		}
@@ -262,13 +258,13 @@ static void dump_meta(a_henv env, GFunMeta* meta, a_u32 options) {
 		}
 	}
 	/* Dump sub functions. */
-	for (a_u32 i = 0; i < meta->_nsub; ++i) {
+	for (a_u32 i = 0; i < proto->_nsub; ++i) {
 		aloi_show_newline();
-		dump_meta(env, meta->_subs[i], options);
+		dump_proto(env, proto->_subs[i], options);
 	}
 }
 
-void ai_dump_print(a_henv env, GFunMeta* meta, a_u32 options) {
-	dump_meta(env, meta, options);
+void ai_dump_print(a_henv env, GProto* proto, a_u32 options) {
+	dump_proto(env, proto, options);
 	aloi_show_flush();
 }

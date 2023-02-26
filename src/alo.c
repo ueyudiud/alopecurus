@@ -62,14 +62,16 @@ static void l_free_input() {
 
 #define LINE_BUF_SIZE 256
 
-static a_usize l_read_line_frag(char* buf) {
+static a_msg l_read_line_frag(void) {
+	char buf[LINE_BUF_SIZE];
+
 	if (fgets(buf, LINE_BUF_SIZE, stdin) == null)
-		return false;
+		return ALO_EIO;
 
 	a_usize len = strlen(buf);
 
 	InLine* frag = malloc(sizeof(InLine) + len);
-	if (frag == null) return false;
+	if (frag == null) return ALO_ENOMEM;
 
 	frag->_next = null;
 	frag->_len = len;
@@ -77,18 +79,16 @@ static a_usize l_read_line_frag(char* buf) {
 	*l_in._tail = frag;
 	l_in._tail = &frag->_next;
 
-	return len;
+	return buf[len - 1] == '\n' ? ALO_SEXIT : ALO_SOK;
 }
 
 static void l_read_line(a_henv env) {
-	char buf[LINE_BUF_SIZE];
+	a_i32 msg = l_read_line_frag();
+	if (msg < 0) goto error;
 
-	a_usize len = l_read_line_frag(buf);
-	if (len == 0) goto error;
-
-	while (buf[len - 1] != '\n') {
-		len = l_read_line_frag(buf);
-		if (len == 0) goto error;
+	while (msg == ALO_SOK) {
+		msg = l_read_line_frag();
+		if (msg < 0) goto error;
 	}
 
 	return;
@@ -124,7 +124,7 @@ static a_bool l_try_comp_console(a_henv env, a_bool expr, a_bool* psuccess) {
 		ALO_STACK_INDEX_GLOBAL, 
 		ALO_STACK_INDEX_EMPTY, 
 		0, 
-		ALO_COMP_OPT_CONST_ENV | ALO_COMP_OPT_ALOC1 | (expr ? ALO_COMP_OPT_EVAL : 0));
+		ALO_COMP_OPT_ALOC1 | (expr ? ALO_COMP_OPT_EVAL : 0));
 
 	switch (msg) {
 		case ALO_SOK: {
@@ -209,7 +209,6 @@ static void l_print_error(a_henv env) {
 static a_none l_run_console(a_henv env) {
 	loop {
 		if (l_comp_console(env)) {
-//			alo_dump(env, -1, ALO_DUMP_OPT_CONST_POOL | ALO_DUMP_OPT_LOCAL | ALO_DUMP_OPT_LINE);
 			a_msg msg = alo_pcall(env, 0, -1, 0);
 			if (msg == ALO_SOK) {
 				l_print_result(env);

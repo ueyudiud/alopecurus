@@ -37,28 +37,6 @@ struct InCtx {
     _v << 7 | _b; \
 })
 
-static a_msg l_geths(InCtx* ic, a_u32 len, GStr** pstr) {
-    assume(len > ALOI_SHTSTR_THRESHOLD);
-    Global* g = G(ic->_env);
-    GStr* str = ai_mem_xalloc(ic->_in._env, sizeof(GStr) + len);
-    if (str == null) return ALO_ENOMEM;
-    str->_meta = &g->_metas._hstr;
-    str->_len = len;
-    a_msg msg = ai_io_iget(&ic->_in, str->_data, len);
-    if (msg != ALO_SOK) {
-        ai_mem_xdealloc(g, str, sizeof(GStr) + len);
-        if (msg == ALO_ESTMUF) {
-            msg = ALO_EINVAL;
-        }
-        return msg;
-    }
-    str->_data[len] = '\0';
-    str->_hash = ai_str_hashof(g->_seed, str->_data, len);
-    ai_gc_register_object(ic->_in._env, str);
-	*pstr = str;
-    return ALO_SOK;
-}
-
 static a_msg l_load_const(InCtx* ic, Value* v) {
     a_u8 tag;
     switch (tag = l_get(ic, a_u8)) {
@@ -87,14 +65,13 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
         case LVTAG_LSTR: {
             a_u32 len = l_getvi(ic, a_u32) + LVLSTR_LEN_BIAS;
             GStr* val;
-            check(l_geths(ic, len, &val));
+            check(ai_str_load(ic->_env, &ic->_in, len, &val));
             v_setx(v, v_of_obj(val));
             break;
         }
         default: { /* For short string */
-            a_byte buf[256];
-            l_getv(ic, buf, tag);
-            GStr* val = ai_str_create(ic->_in._env, buf, tag);
+            GStr* val;
+			check(ai_str_load(ic->_env, &ic->_in, tag, &val));
             v_set(G(ic->_in._env), v, v_of_obj(val));
             break;
         }
@@ -102,8 +79,8 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
     return ALO_SOK;
 }
 
-static a_msg l_load_info(InCtx* ic, FnMetaCreateInfo* info, a_bool root) {
-	*info = new(FnMetaCreateInfo) {
+static a_msg l_load_info(InCtx* ic, ProtoCreateInfo* info, a_bool root) {
+	*info = new(ProtoCreateInfo) {
 		._nconst = l_getvi(ic, a_u32),
 		._ninsn = l_getvi(ic, a_u32),
 		._nsub = l_getvi(ic, a_u32),
@@ -111,16 +88,16 @@ static a_msg l_load_info(InCtx* ic, FnMetaCreateInfo* info, a_bool root) {
 		._nline = l_getvi(ic, a_u16),
 		._ncap = l_get(ic, a_u8),
 		._nstack = l_get(ic, a_u8),
-		._flags = l_get(ic, FnMetaCreateFlags)
+		._flags = l_get(ic, ProtoCreateFlags)
 	};
 	if (info->_flags._froot != root)
 		return ALO_EINVAL;
     return ALO_SOK;
 }
 
-static a_msg l_load_sub(InCtx* ic, GFunMeta** pf);
+static a_msg l_load_sub(InCtx* ic, GProto** pf);
 
-static a_msg l_load_meta(InCtx* ic, FnMetaCreateInfo const* info, GFunMeta* meta) {
+static a_msg l_load_meta(InCtx* ic, ProtoCreateInfo const* info, GProto* meta) {
     /* Noexcept code until here, add meta into object list. */
 	rq_push(&ic->_rq, meta);
     
@@ -135,12 +112,12 @@ static a_msg l_load_meta(InCtx* ic, FnMetaCreateInfo const* info, GFunMeta* meta
     return ALO_SOK;
 }
 
-static a_msg l_load_sub(InCtx* ic, GFunMeta** pf) {
+static a_msg l_load_sub(InCtx* ic, GProto** pf) {
     /* Load function header */
-    FnMetaCreateInfo info;
+    ProtoCreateInfo info;
     check(l_load_info(ic, &info, false));
 
-    GFunMeta* meta = ai_fmeta_xalloc(ic->_env, &info);
+    GProto* meta = ai_proto_xalloc(ic->_env, &info);
     if (meta == null) return ALO_ENOMEM;
 
     check(l_load_meta(ic, &info, meta));
@@ -150,10 +127,10 @@ static a_msg l_load_sub(InCtx* ic, GFunMeta** pf) {
 
 static a_msg l_load_root(InCtx* ic) {
     /* Load function header */
-    FnMetaCreateInfo info;
+    ProtoCreateInfo info;
     check(l_load_info(ic, &info, true));
 
-	GFunMeta* meta = ai_fmeta_xalloc(ic->_env, &info);
+	GProto* meta = ai_proto_xalloc(ic->_env, &info);
 	if (meta == null) return ALO_ENOMEM;
 
     check(l_load_meta(ic, &info, meta));
@@ -170,7 +147,7 @@ static a_msg l_load(InCtx* ic) {
 static void l_splash(Global* g, void* ctx) {
     InCtx* ic = ctx;
 	rq_for(obj, &ic->_rq) {
-		GFunMeta* meta = g_cast(GFunMeta, obj);
+		GProto* meta = g_cast(GProto, obj);
 		for (a_u32 i = 0; i < meta->_len; ++i) {
 			ai_gc_trace_mark_val(g, meta->_consts[i]);
 		}
@@ -180,7 +157,7 @@ static void l_splash(Global* g, void* ctx) {
 static void l_release(InCtx* ic) {
     Global* g = G(ic->_env);
 	rq_for(obj, &ic->_rq) {
-		GFunMeta* meta = g_cast(GFunMeta, obj);
+		GProto* meta = g_cast(GProto, obj);
 		ai_mem_xdealloc(g, meta, meta->_len);
 	}
 }
@@ -190,12 +167,12 @@ a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags)
 	rq_init(&ic._rq);
     ai_io_iinit(env, fun, ctx, &ic._in);
 
-	ai_env_gsplash(env, l_splash, &ic);
+	ai_env_gprotect(env, l_splash, null, &ic);
     a_msg msg = l_load(&ic);
-	ai_env_gsplash_clear(env);
+	ai_env_gprotect_clear(env);
     
     if (likely(msg == ALO_SOK)) {
-        *pval = g_cast(GFunMeta, ic._rq._head)->_cache;
+        *pval = g_cast(GProto, ic._rq._head)->_cache;
     }
     else {
         l_release(&ic);

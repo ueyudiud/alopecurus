@@ -19,6 +19,8 @@
 # define ALOI_TABLE_LOAD_FACTOR 0.75
 #endif
 
+static VTable const table_vtable;
+
 static a_u32 wrap_abs(GTable* self, TNode* node) {
 	return node != null ? cast(a_u32, node - self->BUF_DATA_REF) : 0;
 }
@@ -58,14 +60,14 @@ static void table_init(a_henv env, GTable* self, a_usize new_cap) {
 
 GTable* ai_table_new(a_henv env) {
     GTable* self = ai_mem_alloc(env, sizeof(GTable));
-	self->_meta = &G(env)->_metas._table;
+	self->_vtable = &table_vtable;
     self->_len = 0;
 	table_init(env, self, 0);
     return self;
 }
 
 static a_bool tnode_is_empty(TNode* node) {
-	return v_is_dead_key(node->_key);
+	return v_is_empty(node->_key);
 }
 
 static a_bool tnode_is_hhead(GTable* table, TNode* node, a_hash hash) {
@@ -185,15 +187,15 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 	}
 }
 
-typedef a_bool (*Pred)(a_henv env, void const* ctx, Value v);
+typedef a_bool (*Pred)(a_henv env, a_usize ctx, Value v);
 
-static TNode* table_findro(a_henv env, GTable* self, a_hash hash, Pred pred, void const* ctx) {
+static Value* table_find(a_henv env, GTable* self, a_hash hash, Pred pred, a_usize ctx) {
 	if (likely(self->_len > 0)) {
 		TNode* node = unwrap_abs(self, hash & self->_hmask);
 		if (!tnode_is_empty(node) && tnode_is_hhead(self, node, hash)) {
 			do {
 				if (node->_hash == hash && (*pred)(env, ctx, node->_key))
-					return node;
+					return &node->_value;
 			}
 			while ((node = ai_link_unwrap(node, node->_hnext)) != null);
 		}
@@ -201,79 +203,65 @@ static TNode* table_findro(a_henv env, GTable* self, a_hash hash, Pred pred, voi
     return null;
 }
 
-static a_bool l_id_eq(unused a_henv env, void const* ctx, Value vk) {
-	Value const* v1 = cast(Value const*, ctx);
-	return v_id_eq(*v1, vk);
+static a_bool pred_id(unused a_henv env, a_usize ctx, Value vk) {
+	return v_trivial_equals(new(Value) { ctx }, vk);
 }
 
-static TNode* table_findro_id(a_henv env, GTable* self, a_hash hash, Value const* key) {
-	return table_findro(env, self, hash, l_id_eq, key);
+static Value* table_find_id(a_henv env, GTable* self, a_hash hash, Value key) {
+	return table_find(env, self, hash, pred_id, key._);
 }
 
-static a_bool l_str_eq(unused a_henv env, void const* ctx, Value vk) {
-	a_lstr const* key = cast(a_lstr const*, ctx);
+static a_bool pred_str(unused a_henv env, a_usize ctx, Value vk) {
+	a_lstr const* key = ptr_of(a_lstr, ctx);
 	if (v_is_str(vk)) {
-		GStr* str = v_as_str(G(env), vk);
+		GStr* str = v_as_str(vk);
 		return key->_len == str->_len && memcmp(key->_ptr, str->_data, key->_len) == 0;
 	}
 	return false;
 }
 
-static TNode* table_findro_str(a_henv env, GTable* self, a_hash hash, char const* ptr, a_usize len) {
-	a_lstr key = { ._ptr = ptr, ._len = len };
-	return table_findro(env, self, hash, l_str_eq, &key);
+static Value* table_find_str(a_henv env, GTable* self, a_hash hash, a_lstr const* key) {
+	return table_find(env, self, hash, pred_str, addr_of(key));
 }
 
 Value const* ai_table_refi(a_henv env, GTable* self, a_int key) {
-    Value v = v_of_int(key);
-    TNode* node = table_findro_id(env, self, v_int_hash(key), &v);
-    return node != null ? &node->_value : null;
+    return table_find_id(env, self, v_trivial_hash(v_of_int(key)), v_of_int(key));
 }
 
 Value const* ai_table_refs(a_henv env, GTable* self, a_lstr const* key) {
-    TNode* node = table_findro_str(env, self, ai_str_hashof(G(env)->_seed, key->_ptr, key->_len), key->_ptr, key->_len);
-    return node != null ? &node->_value : null;
+    return table_find_str(env, self, ai_str_hashof(G(env)->_seed, key->_ptr, key->_len), key);
 }
 
 static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
-	TNode* node;
-	switch (v_raw_tag(key)) {
-		case T_NIL:
-		case T_FALSE:
-		case T_TRUE:
-		case T_INT:
-		case T_ISTR:
-		case T_FUNC:
-		case T_MOD: {
-			*phash = ai_vm_hash(env, key);
-			node = table_findro_id(env, self, *phash, &key);
-			break;
-		}
-		case T_HSTR: {
-			GStr* str = v_as_str(G(env), key);
-			*phash = str->_hash;
-			node = table_findro_str(env, self, str->_hash, ai_str_tocstr(str), str->_len);
-			break;
-		}
-		case T_OTHER: {
-			if (self->_meta->_flags & GMETA_FLAG_IDENTITY_EQUAL) {
-				*phash = ai_vm_hash(env, key);
-				node = table_findro_id(env, self, *phash, &key);
-			}
-			else {
-				panic("TODO"); //TODO
-			}
-			break;
-		}
-		default: {
-			if (unlikely(v_is_nan(key)))
-				return null;
-			*phash = v_float_hash(v_as_float(key));
-			node = table_findro_id(env, self, *phash, &key);
-			break;
-		}
+	if (likely(v_is_istr(key))) {
+		GStr* str = v_as_str(key);
+		*phash = str->_hash;
+		return table_find_id(env, self, str->_hash, key);
 	}
-	return node != null ? &node->_value : null;
+	else if (likely(v_is_hstr(key))) {
+		GStr* str = v_as_str(key);
+		*phash = str->_hash;
+		a_lstr lstr = { ._ptr = ai_str_tocstr(str), ._len = str->_len };
+		return table_find_str(env, self, str->_hash, &lstr);
+	}
+	else if (unlikely(v_is_float(key))) {
+		if (unlikely(v_is_nan(key))) {
+			return null;
+		}
+		return table_find_id(env, self, v_trivial_hash(key), key);
+	}
+	else if (likely(v_has_trivial_equals(key))) {
+		return table_find_id(env, self, v_trivial_hash(key), key);
+	}
+	else {
+		GObj* obj = v_as_obj(key);
+		a_fp_equals equals_fp = obj->_vtable->_equals;
+		a_fp_hash hash_fp = obj->_vtable->_hash;
+		a_u32 hash = hash_fp != null ? (*hash_fp)(env, obj) : v_trivial_hash(key);
+		Pred pred = fpcast(Pred, equals_fp);
+		a_usize ctx = addr_of(v_as_obj(key));
+		return table_find(env, self, hash, pred, ctx);
+	}
 }
 
 Value const* ai_table_ref(a_henv env, GTable* self, Value key) {
@@ -309,7 +297,7 @@ static void table_splash(Global* g, GTable* self) {
 	ai_gc_trace_work(g, sizeof(GTable) + sizeof(TNode) * len);
 }
 
-static void table_destruct(Global* g, GTable* self) {
+static void table_delete(Global* g, GTable* self) {
 	if (self->_arr != null) {
 		ai_mem_vdel(g, self->_arr, self->_hmask + 1);
 	}
@@ -322,8 +310,14 @@ static Value table_get(a_henv env, GTable* self, Value key) {
 	return value != null ? *value : v_of_nil();
 }
 
-VTable const ai_table_vtable = {
+static VTable const table_vtable = {
+	._tid = T_TABLE,
+	._api_tag = ALO_TTABLE,
+	._repr_id = REPR_TABLE,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._name = "table",
 	._splash = fpcast(a_fp_splash, table_splash),
-	._destruct = fpcast(a_fp_destruct, table_destruct),
-	._get = fpcast(a_fp_get, table_get)
+	._delete = fpcast(a_fp_delete, table_delete),
+	._get = fpcast(a_fp_get, table_get),
+	._set = fpcast(a_fp_set, ai_table_set)
 };

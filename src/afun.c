@@ -5,54 +5,52 @@
 #define afun_c_
 #define ALO_LIB
 
+#include "abc.h"
 #include "amem.h"
 #include "agc.h"
 
 #include "afun.h"
 
+static VTable const fun_vtable;
+static VTable const proto_vtable;
+
+static a_usize fun_size(a_usize ncap) {
+	return sizeof(GFun) + sizeof(Value) * ncap;
+}
+
 /**
  ** Hint function size with the minimum value.
  *@param info the information of function metadata.
  */
-static a_usize fmeta_hint_size(FnMetaCreateInfo* info) {
-	a_usize size = sizeof(GFunMeta) +
+static a_usize proto_size(ProtoCreateInfo* info) {
+	a_usize size = sizeof(GProto) +
 				   sizeof(Value) * info->_nconst +
 				   sizeof(a_insn) * info->_ninsn +
 				   sizeof(CapInfo) * info->_ncap +
-				   sizeof(GFunMeta*) * info->_nsub;
-	if (info->_flags._fline) {
-		size += sizeof(LineInfo) * info->_nline;
+				   sizeof(GProto*) * info->_nsub;
+	if (info->_flags._fdebug) {
+		size += sizeof(LineInfo) * info->_nline +
+				sizeof(LocalInfo) * info->_nlocal +
+				sizeof(GStr*) * info->_ncap;
 	}
 	else {
 		size += sizeof(LineInfo);
 	}
-	if (info->_flags._fname) {
-		size += sizeof(LocalInfo) * info->_nlocal +
-				sizeof(GStr*) * info->_ncap;
-	}
 	if (info->_flags._froot) {
 		assume(info->_ncap <= 1, "bad capture count.");
-		size += sizeof(GFun);
-		if (info->_ncap > 0) {
-			size += sizeof(Value);
-			if (!info->_flags._fconst_env) {
-				size += sizeof(Capture);
-			}
-		}
+		size += fun_size(info->_ncap);
 	}
 	return size;
 }
 
-GFunMeta* ai_fmeta_xalloc(a_henv env, FnMetaCreateInfo* info) {
-	a_usize total_size = fmeta_hint_size(info);
+GProto* ai_proto_xalloc(a_henv env, ProtoCreateInfo* info) {
+	a_usize total_size = proto_size(info);
 
-    GFunMeta* self = ai_mem_xalloc(env, total_size);
+    GProto* self = ai_mem_xalloc(env, total_size);
     if (self == null) return null;
     memclr(self, total_size);
 
-    self->_tid = T_FUNC;
-    self->_meta = &G(env)->_metas._fmeta;
-	self->_vtable = ai_fun_vtable;
+	self->_vtable = &proto_vtable;
     self->_len = total_size;
     self->_nconst = info->_nconst;
     self->_ninsn = info->_ninsn;
@@ -63,56 +61,41 @@ GFunMeta* ai_fmeta_xalloc(a_henv env, FnMetaCreateInfo* info) {
     self->_nstack = info->_nstack;
 
 	a_usize addr = addr_of(self)
-			+ sizeof(GFunMeta)
+			+ sizeof(GProto)
 			+ sizeof(Value) * info->_nconst;
 
-	self->_subs = ptr_of(GFunMeta*, addr);
-	addr += sizeof(GFunMeta*) * info->_nsub;
+	self->_subs = ptr_of(GProto*, addr);
+	addr += sizeof(GProto*) * info->_nsub;
 
-	if (info->_flags._fline) {
+	if (info->_flags._fdebug) {
 		self->_dbg_lines = ptr_of(LineInfo, addr);
 		addr += sizeof(LineInfo) * info->_nline;
-	}
-	else {
-		self->_dbg_lndef = self->_dbg_lnldef = 0;
-		self->_dbg_lines = ptr_of(LineInfo, addr);
-		addr += sizeof(LineInfo);
 
-		self->_dbg_lines[0] = new(LineInfo) { ._end = UINT32_MAX, ._lineno = 0 };
-	}
-
-	if (info->_flags._fname) {
 		self->_dbg_locals = ptr_of(LocalInfo, addr);
 		addr += sizeof(LocalInfo) * info->_nlocal;
 
 		self->_dbg_cap_names = ptr_of(GStr*, addr);
 		addr += sizeof(GStr*) * info->_ncap;
 	}
+	else {
+		self->_dbg_lndef = self->_dbg_lnldef = 0;
+
+		self->_dbg_lines = ptr_of(LineInfo, addr);
+		addr += sizeof(LineInfo);
+
+		self->_dbg_lines[0] = new(LineInfo) { ._end = UINT32_MAX, ._lineno = 0 };
+	}
 
 	if (info->_flags._froot) {
 		GFun* fun = ptr_of(GFun, addr);
-		addr += sizeof(GFun);
+		addr += sizeof(GFun) + sizeof(Value) * info->_ncap;
 
-		if (info->_ncap > 0) {
-			addr += sizeof(Value);
-
-			if (!info->_flags._fconst_env) {
-				Capture* cap = ptr_of(Capture, addr);
-				addr += sizeof(Capture);
-
-				*cap = new(Capture) {
-					._ptr = &cap->_slot,
-					._slot = v_of_nil()
-				};
-
-				v_set(G(env), &fun->_capval[0], v_of_cap(cap));
-			}
-			else {
-				v_set_nil(&fun->_capval[0]);
-			}
+		for (a_u32 i = 0; i < info->_ncap; ++i) {
+			v_set_nil(&fun->_capval[i]);
 		}
 
-		fun->_meta = g_cast(GMeta, self);
+		fun->_vtable = &fun_vtable;
+		fun->_proto = self;
 		fun->_len = info->_ncap;
 
 		self->_cache = fun;
@@ -129,18 +112,32 @@ GFunMeta* ai_fmeta_xalloc(a_henv env, FnMetaCreateInfo* info) {
 	return self;
 }
 
-static GFun* l_fun_new(a_henv env, a_u32 ncap) {
-	GFun* self = ai_mem_alloc(env, sizeof(GFun) + sizeof(Value) * ncap);
+static GFun* fun_new(a_henv env, GProto* proto, a_u32 ncap) {
+	GFun* self = ai_mem_alloc(env, fun_size(ncap));
+	self->_vtable = &fun_vtable;
+	self->_proto = proto;
 	self->_len = ncap;
 	return self;
 }
 
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
-	GFun* self = l_fun_new(env, ncap + 1);
+	static a_insn const codes[] = {
+		bc_make_iabc(BC_FC, 0, 0, 0)
+	};
 
-	self->_meta = g_cast(GMeta, &G(env)->_metas._cfun);
-	v_setx(self->_capval, bcast(Value, hnd));
-	v_cpy_multi(G(env), self->_capval + 1, pcap, ncap);
+	static GProto const proto = {
+		._nstack = ALOI_INIT_FRAME_STACKSIZE,
+		._nparam = 0,
+		._flags = PROTO_FLAG_VARARG,
+		._cache = null,
+		._ninsn = 1,
+		._code = cast(a_insn*, codes)
+	};
+
+	GFun* self = fun_new(env, cast(GProto*, &proto), ncap + 1);
+
+	v_cpy_multi(G(env), self->_capval, pcap, ncap);
+	v_setx(self->_capval + ncap, bcast(Value, hnd));
 
 	ai_gc_register_object(env, self);
 
@@ -173,23 +170,23 @@ static Value l_load_capture(a_henv env, CapInfo* info, Value* up, Capture** now,
 	}
 }
 
-GFun* ai_fun_new(a_henv env, GFunMeta* meta, Frame* frame) {
+GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame) {
 	Value* base = env->_stack._bot;
-	GFun* parent = v_as_func(G(env), base[-1]);
-	CapInfo* infos = meta->_caps;
+	GFun* parent = v_as_func(base[-1]);
+	CapInfo* infos = proto->_caps;
 
-	a_u32 len = meta->_ncap;
+	a_u32 len = proto->_ncap;
 
-	GFun* fun = l_fun_new(env, len);
-	fun->_meta = g_cast(GMeta, meta);
+	GFun* self = fun_new(env, proto, len);
+	self->_vtable = &fun_vtable;
 	for (a_u32 i = 0; i < len; ++i) {
 		Value capval = l_load_capture(env, &infos[i], parent->_capval, &frame->_captures, base);
-		v_setx(&fun->_capval[i], capval);
+		v_setx(&self->_capval[i], capval);
 	}
 
-	ai_gc_register_object(env, fun);
+	ai_gc_register_object(env, self);
 
-	return fun;
+	return self;
 }
 
 static a_bool cap_is_closed(Capture* self) {
@@ -201,12 +198,12 @@ static void cap_close(a_henv env, Capture* self) {
 	self->_ptr = &self->_slot;
 }
 
-static void cap_destruct(Global* g, Capture* self) {
+static void cap_delete(Global* g, Capture* self) {
 	ai_mem_dealloc(g, self, sizeof(Capture));
 }
 
 static void fun_splash(Global* g, GFun* self) {
-    ai_gc_trace_mark(g, self->_meta);
+    ai_gc_trace_mark(g, self->_proto);
     a_usize len = self->_len;
     for (a_usize i = 0; i < len; ++i) {
 		Value v = self->_capval[i];
@@ -220,21 +217,21 @@ static void fun_splash(Global* g, GFun* self) {
 	ai_gc_trace_work(g, sizeof(GFun) + sizeof(Value) * self->_len);
 }
 
-static void fun_destruct(Global* g, GFun* self) {
+static void fun_delete(Global* g, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
 		Value v = self->_capval[i];
 		if (v_is_cap(v)) {
 			Capture* cap = v_as_cap(v);
 			assume(cap->_rc > 0);
 			if (--cap->_rc == 0 && cap_is_closed(cap)) {
-				cap_destruct(g, cap);
+				cap_delete(g, cap);
 			}
 		}
 	}
     ai_mem_dealloc(g, self, sizeof(GFun) + sizeof(Value) * self->_len);
 }
 
-static void fmeta_splash(Global* g, GFunMeta* self) {
+static void proto_splash(Global* g, GProto* self) {
     for (a_u32 i = 0; i < self->_nconst; ++i) {
 		ai_gc_trace_mark_val(g, self->_consts[i]);
     }
@@ -253,7 +250,7 @@ static void fmeta_splash(Global* g, GFunMeta* self) {
 	ai_gc_trace_work(g, self->_len);
 }
 
-void ai_fmeta_destruct(Global* g, GFunMeta* self) {
+void ai_proto_delete(Global* g, GProto* self) {
     ai_mem_dealloc(g, self, self->_len);
 }
 
@@ -265,18 +262,26 @@ void ai_cap_close(a_henv env, Capture** pcap, Value const* base) {
 			cap_close(env, cap);
 		}
 		else {
-			cap_destruct(G(env), cap);
+			cap_delete(G(env), cap);
 		}
 		*pcap = next;
 	}
 }
 
-VTable const ai_fun_vtable = {
+static VTable const fun_vtable = {
+	._tid = T_FUNC,
+	._api_tag = ALO_TFUNC,
+	._repr_id = REPR_FUNC,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._name = "func",
 	._splash = fpcast(a_fp_splash, fun_splash),
-	._destruct = fpcast(a_fp_destruct, fun_destruct)
+	._delete = fpcast(a_fp_delete, fun_delete)
 };
 
-VTable const ai_fmeta_vtable = {
-	._splash = fpcast(a_fp_splash, fmeta_splash),
-	._destruct = fpcast(a_fp_destruct, ai_fmeta_destruct)
+static VTable const proto_vtable = {
+	._tid = T_USER_TEQ,
+	._api_tag = ALO_TUSER,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._splash = fpcast(a_fp_splash, proto_splash),
+	._delete = fpcast(a_fp_delete, ai_proto_delete)
 };

@@ -14,16 +14,20 @@
 #define M_false 0
 #define M_true 1
 
-#define M_cat(a,b) M_cat0(a,b)
 #define M_cat0(a,b) a##b
+#define M_cat(a,b) M_cat0(a,b)
 
-#define M_str(a) M_str0(a)
 #define M_str0(a) #a
-
-#define M_sym(a) M_cat(a,__LINE__)
+#define M_str(a) M_str0(a)
 
 #define ALO_COMP_OPT_ALOC1 0x1000000
 #define ALO_COMP_OPT_EVAL 0x2000000
+
+#ifdef ALOI_DEBUG
+# define ALO_DEBUG M_true
+#else
+# define ALO_DEBUG M_false
+#endif
 
 /**
  ** Check memory related function in strict mode.
@@ -44,6 +48,15 @@
 # define ALO_STRICT_STACK_CHECK M_true
 #else
 # define ALO_STRICT_STACK_CHECK M_false
+#endif
+
+/**
+ ** Create VM stack by map memory if it is possible.
+ */
+#ifdef ALOI_STACK_DISABLE_MMAP
+# define ALO_STACK_DISABLE_MMAP M_true
+#else
+# define ALO_STACK_DISABLE_MMAP M_false
 #endif
 
 /* Special attributes. */
@@ -143,9 +156,9 @@ typedef a_u32 a_insn;
 #define quiet(e...) ((void) ((void) 0, ##e))
 #define addr_of(e) cast(a_usize, (quiet((typeof(*(e))*) null), e))
 #define ptr_of(t,e) ({ typeof(e) _e = (e); quiet(&_e == zero(a_usize*)); cast(typeof(t)*, _e); })
-#define ptr_diff(p,q) ({ typeof((p) + 1) _p = (p), _q = (q); (&*_p - &*_q) * cast(a_isize, sizeof(*_p)); })
+#define ptr_diff(p,q) ({ typeof(&*(p)) _p = (p), _q = (q); (_p - _q) * cast(a_isize, sizeof(*_p)); })
 #define ptr_disp(t,p,d) ptr_of(t, cast(a_usize, p) + (d))
-#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &cast(typeof(t)*, null)->f); cast(typeof(t)*, cast(void*, v) - offsetof(t, f)); })
+#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &cast(typeof(t)*, null)->f); cast(typeof(t)*, cast(void*, _v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
 
 /**
@@ -189,7 +202,7 @@ typedef a_u32 a_insn;
 #define trap() __builtin_trap()
 #define unreachable() __builtin_unreachable()
 
-#if defined(ALOI_DEBUG)
+#if ALO_DEBUG
 intern a_none ai_dbg_panic(char const* fmt, ...);
 # define panic(m...) ai_dbg_panic(""m)
 #else
@@ -202,24 +215,18 @@ intern a_none ai_dbg_panic(char const* fmt, ...);
 
 #undef run
 #undef loop
-#undef defer
 
 #define run if (true)
 #define loop while (true)
-#define defer(e) for (a_bool M_sym(__) = true; M_sym(__); quiet(e), M_sym(__) = false)
 
 /* Extend arithmetic operations. */
 
 #undef memclr
 
-always_inline void* ai_def_memory_clear(void* dst, a_usize len) {
-	return __builtin_memset(dst, 0, len);
-}
-
 /**
  ** Fill memory with zero bits.
  */
-#define memclr(dst,len) ai_def_memory_clear(dst, len)
+#define memclr(dst,len) __builtin_memset(dst, 0, len)
 
 always_inline a_usize2 mul_usize(a_usize a, a_usize b) {
     return cast(a_usize2, a) * b;

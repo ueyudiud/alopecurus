@@ -7,31 +7,30 @@
 
 #include "aobj.h"
 
-typedef struct GFunMeta GFunMeta;
+typedef struct GProto GProto;
 
 typedef struct LocalInfo LocalInfo;
 typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
-typedef struct FnMetaCreateInfo FnMetaCreateInfo;
+typedef struct ProtoCreateInfo ProtoCreateInfo;
 
-intern GFunMeta* ai_fmeta_xalloc(a_henv env, FnMetaCreateInfo* info);
+intern GProto* ai_proto_xalloc(a_henv env, ProtoCreateInfo* info);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
-intern GFun* ai_fun_new(a_henv env, GFunMeta* meta, Frame* frame);
-intern void ai_fmeta_destruct(Global* g, GFunMeta* self);
+intern GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame);
+intern void ai_proto_delete(Global* g, GProto* self);
 intern void ai_cap_close(a_henv env, Capture** pcap, Value const* base);
 
-intern VTable const ai_fun_vtable;
-intern VTable const ai_fmeta_vtable;
+#define PROTO_FLAG_VARARG u16c(0x0001)
 
-#define GFUNMETA_FLAG_VARARG u32c(0x0100)
-
-struct GFunMeta {
-	GMETA_STRUCT_HEADER;
+struct GProto {
+	GOBJ_STRUCT_HEADER;
+	a_u32 _len;
 	a_u16 _nconst;
 	a_u16 _ninsn;
 	a_u16 _nsub;
 	a_u16 _nlocal;
 	a_u16 _nline;
+	a_u16 _flags;
 	a_u8 _ncap;
 	a_u8 _nparam;
 	a_u8 _nstack;
@@ -44,7 +43,7 @@ struct GFunMeta {
 	LineInfo* _dbg_lines;
 	LocalInfo* _dbg_locals;
 	GStr** _dbg_cap_names;
-	GFunMeta** _subs;
+	GProto** _subs;
 	GFun* _cache;
 	Value _consts[0];
 };
@@ -52,6 +51,7 @@ struct GFunMeta {
 struct GFun {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
+	GProto* _proto;
 	Value _capval[0];
 };
 
@@ -76,7 +76,7 @@ struct CapInfo {
 		a_u8 _flags;
 		struct {
 			a_u8 _fup: 1; /* Capture from upper closure. */
-			a_u8 _fro: 2; /* Readonly capture. */
+			a_u8 _fro: 1; /* Readonly capture. */
 		};
 	};
 	a_u8 _reg;
@@ -88,16 +88,14 @@ struct LineInfo {
 };
 
 typedef struct {
-	a_u8 _fline: 1;
-	a_u8 _fname: 1;
+	a_u8 _fdebug: 1;
 	a_u8 _froot: 1;
-	a_u8 _fconst_env: 1;
-} FnMetaCreateFlags;
+} ProtoCreateFlags;
 
 /**
  ** Function fixed sized information.
  */
-struct FnMetaCreateInfo {
+struct ProtoCreateInfo {
 	a_u32 _nconst;
 	a_u32 _ninsn;
 	a_u16 _nsub;
@@ -105,7 +103,7 @@ struct FnMetaCreateInfo {
 	a_u16 _nline;
 	a_u8 _ncap;
 	a_u8 _nstack;
-	FnMetaCreateFlags _flags;
+	ProtoCreateFlags _flags;
 };
 
 #endif /* afun_h_ */

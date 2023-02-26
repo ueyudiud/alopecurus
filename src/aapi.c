@@ -90,12 +90,20 @@ a_usize alo_stacksize(a_henv env) {
 }
 
 a_bool alo_ensure(a_henv env, a_usize n) {
+	Value* const top = env->_stack._top;
+	Value* const limit = env->_stack._limit;
+	assume(top <= limit);
 	Value* require = env->_stack._bot + n;
-	if (require > env->_stack._top) {
-		a_isize diff = ai_env_grow_stack(env, require);
-		if (diff & (GROW_STACK_FLAG_OF1 | GROW_STACK_FLAG_OF2)) return false;
+	if (require > top) {
+		if (require > limit) {
+			a_isize diff = ai_stk_grow(env, require);
+			if (diff & (GROW_STACK_FLAG_OF1 | GROW_STACK_FLAG_OF2)) return false;
 #if ALO_STRICT_STACK_CHECK
-		env->_frame->_bound += diff;
+			require = ptr_disp(Value, require, diff);
+#endif
+		}
+#if ALO_STRICT_STACK_CHECK
+		env->_frame->_bound = require;
 #endif
 	}
 	return true;
@@ -175,8 +183,8 @@ Value* api_wrslot(a_henv env, a_isize id) {
 	return v;
 }
 
-static a_tag tag_of(a_henv env, Value v) {
-	switch (v_raw_tag(v)) {
+static a_tag tag_of(Value v) {
+	switch (v_get_tag(v)) {
 		case T_NIL: 
 			return ALO_TNIL;
 		case T_FALSE:
@@ -199,11 +207,10 @@ static a_tag tag_of(a_henv env, Value v) {
 			return ALO_TFUNC;
 		case T_MOD:
 			return ALO_TMOD;
-		case T_OTHER:
-			return ALO_TOTHER;
+		case T_USER_TEQ:
+		case T_USER_NEQ:
+			return v_as_obj(v)->_vtable->_api_tag;
 		default:
-			if (v_is_route(G(env), v))
-				return ALO_TROUTE;
 			return ALO_TFLOAT;
 	}
 }
@@ -266,19 +273,19 @@ a_tag alo_pushvex(a_henv env, char const* sp, va_list varg) {
 		switch (*(sp++)) {
 			case '\0': { /* Terminate character. */
 				v_set(G(env), api_incr_stack(env), v);
-				return tag_of(env, v);
+				return tag_of(v);
 			}
 			case 'i': { /* Integer index. */
 				a_isize index = va_arg(varg, a_isize);
 				Value const* p;
-				switch (v_raw_tag(v)) {
+				switch (v_get_tag(v)) {
 					case T_TUPLE: {
-						GTuple* value = v_as_tuple(G(env), v);
+						GTuple* value = v_as_tuple(v);
 						p = ai_tuple_refi(env, value, index);
 						break;
 					}
 					case T_LIST: {
-						GList* value = v_as_list(G(env), v);
+						GList* value = v_as_list(v);
 						p = ai_list_refi(env, value, index);
 						break;
 					}
@@ -319,7 +326,7 @@ void alo_pushptr(a_henv env, void* val) {
 }
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
-	GStr* val = ai_str_create(env, src, len);
+	GStr* val = ai_str_new(env, src, len);
 	v_setx(api_incr_stack(env), v_of_obj(val));
 	ai_gc_trigger(env);
 	return ai_str_tocstr(val);
@@ -404,17 +411,17 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 
 a_usize alo_len(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
-	switch (v_raw_tag(v)) {
+	switch (v_get_tag(v)) {
 		case T_TUPLE: {
-			GTuple* value = v_as_tuple(G(env), v);
+			GTuple* value = v_as_tuple(v);
 			return cast(a_usize, value->_len);
 		}
 		case T_LIST: {
-			GList* value = v_as_list(G(env), v);
+			GList* value = v_as_list(v);
 			return cast(a_usize, value->_len);
 		}
 		case T_TABLE: {
-			GTable* value = v_as_table(G(env), v);
+			GTable* value = v_as_table(v);
 			return cast(a_usize, value->_len);
 		}
 		default:
@@ -428,19 +435,19 @@ a_tag alo_geti(a_henv env, a_isize id, a_int key) {
 	Value const* v = api_roslot(env, id);
 	if (v == null) return ALO_TEMPTY;
 
-	switch (v_raw_tag(*v)) {
+	switch (v_get_tag(*v)) {
 		case T_TUPLE: {
-			GTuple* value = v_as_tuple(G(env), *v);
+			GTuple* value = v_as_tuple(*v);
 			v = ai_tuple_refi(env, value, key);
 			break;
 		}
 		case T_LIST: {
-			GList* value = v_as_list(G(env), *v);
+			GList* value = v_as_list(*v);
 			v = ai_list_refi(env, value, key);
 			break;
 		}
 		case T_TABLE: {
-			GTable* value = v_as_table(G(env), *v);
+			GTable* value = v_as_table(*v);
 			v = ai_table_refi(env, value, key);
 			break;
 		}
@@ -448,14 +455,14 @@ a_tag alo_geti(a_henv env, a_isize id, a_int key) {
 			api_panic("unsupported operation.");
 	}
 	if (v != null) v_cpy(G(env), api_incr_stack(env), v);
-	return v != null ? tag_of(env, *v) : ALO_TEMPTY;
+	return v != null ? tag_of(*v) : ALO_TEMPTY;
 }
 
 void alo_insert(a_henv env, a_isize id) {
 	Value v1 = api_elem(env, id);
 	api_check(v_is_list(v1));
 	Value v2 = api_pre_decr_stack(env);
-	ai_list_insert(env, v_as_list(G(env), v1), v2);
+	ai_list_insert(env, v_as_list(v1), v2);
 	api_post_decr_stack(env);
 	ai_gc_trigger(env);
 }
@@ -518,7 +525,7 @@ void alo_yield(a_henv env) {
 
 a_tag alo_tagof(a_henv env, a_isize id) {
 	Value const* slot = api_roslot(env, id);
-	return slot != null ? tag_of(env, *slot) : ALO_TEMPTY;
+	return slot != null ? tag_of(*slot) : ALO_TEMPTY;
 }
 
 a_bool alo_tobool(a_henv env, a_isize id) {
@@ -528,7 +535,7 @@ a_bool alo_tobool(a_henv env, a_isize id) {
 
 a_int alo_toint(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
-	switch (expect(v_raw_tag(v), T_INT)) {
+	switch (expect(v_get_tag(v), T_INT)) {
 		case T_NIL:
 		case T_FALSE:
 			return 0;
@@ -545,7 +552,7 @@ a_int alo_toint(a_henv env, a_isize id) {
 
 a_float alo_tofloat(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
-	switch (expect(v_raw_tag(v), T_FLOAT)) {
+	switch (expect(v_get_tag(v), T_FLOAT)) {
 		case T_NIL:
 		case T_FALSE:
 			return 0;
@@ -563,7 +570,7 @@ a_float alo_tofloat(a_henv env, a_isize id) {
 char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	Value v = api_elem(env, id);
 	api_check(v_is_str(v), "cannot cast to string");
-	GStr* val = v_as_str(G(env), v);
+	GStr* val = v_as_str(v);
 	if (plen != null) {
 		*plen = cast(a_usize, val->_len);
 	}
@@ -573,28 +580,28 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 a_htype alo_typeof(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
 
-	a_usize tag = v_raw_tag(v);
-	if (tag != T_OTHER) return cast(a_htype, tag + 1);
+	if (!v_is_user(v)) {
+		a_usize addr = tag_of(v) + 1;
+		return cast(a_htype, addr);
+	}
 
 	//TODO
 	panic("not implemented.");
 }
 
 char const* const ai_obj_tag_name[] = {
-	[T_NIL] = "nil",
-	[T_FALSE] = "bool",
-	[T_TRUE] = "true",
-	[T_INT] = "int",
-	[T_PTR] = "ptr",
-	[T_FLOAT] = "float",
-	[T_ISTR] = "str",
-	[T_HSTR] = "str",
-	[T_TUPLE] = "tuple",
-	[T_LIST] = "list",
-	[T_TABLE] = "table",
-	[T_FUNC] = "func",
-	[T_MOD] = "mod",
-	[T_OTHER] = null
+	[ALO_TNIL] = "nil",
+	[ALO_TBOOL] = "bool",
+	[ALO_TINT] = "int",
+	[ALO_TPTR] = "ptr",
+	[ALO_TFLOAT] = "float",
+	[ALO_TSTR] = "str",
+	[ALO_TTUPLE] = "tuple",
+	[ALO_TLIST] = "list",
+	[ALO_TTABLE] = "table",
+	[ALO_TFUNC] = "func",
+	[ALO_TMOD] = "mod",
+	[ALO_TUSER] = "user"
 };
 
 char const* alo_typename(unused a_henv env, a_htype type) {
@@ -602,8 +609,7 @@ char const* alo_typename(unused a_henv env, a_htype type) {
 	if (type_addr == 0) {
 		return "empty";
 	}
-	else if (type_addr - 1 < T__MAX) {
-		api_check(type_addr != T_OTHER, "bad primitive tag.");
+	else if (type_addr - 1 < T__MAX_FAST) {
 		return ai_obj_tag_name[type_addr - 1];
 	}
 	else {
@@ -615,7 +621,7 @@ char const* alo_typename(unused a_henv env, a_htype type) {
 a_hmod alo_openmod(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
 	if (likely(v_is_mod(v))) {
-		GMod* mod = v_as_mod(G(env), v);
+		GMod* mod = v_as_mod(v);
 		if (unlikely(mod->_rc == UINT32_MAX))
 			return null;
 		mod->_rc += 1;
@@ -635,7 +641,7 @@ void alo_fullgc(a_henv env) {
 
 static GStr* l_get_str(a_henv env, a_isize id) {
 	Value const* v = api_roslot(env, id);
-	return v != null ? v_as_str(G(env), *v) : null;
+	return v != null ? v_as_str(*v) : null;
 }
 
 a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
@@ -647,11 +653,8 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	a_msg msg = ai_parse(env, fun, ctx, l_get_str(env, id_file), l_get_str(env, id_name), options, &out);
 	if (likely(msg == ALO_SOK)) {
 		v_set(G(env), api_incr_stack(env), v_of_obj(out));
-		if (g_cast(GFunMeta, out->_meta)->_ncap > 0) {
-			Value* vcap = &out->_capval[0];
-			if (!(options & ALO_COMP_OPT_CONST_ENV))
-				vcap = v_as_cap(*vcap)->_ptr;
-			v_cpy(G(env), vcap, api_rdslot(env, id_env));
+		if (out->_proto->_ncap > 0) {
+			v_cpy(G(env), &out->_capval[0], api_rdslot(env, id_env));
 		}
 	}
 	else {
@@ -663,6 +666,6 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 void alo_dump(a_henv env, a_isize id, a_flags options) {
 	Value const* v = api_rdslot(env, id);
 	api_check(v_is_func(*v), "only function can be dumped.");
-	GFun* fun = v_as_func(G(env), *v);
-	ai_dump_print(env, g_cast(GFunMeta, fun->_meta), options);
+	GFun* fun = v_as_func(*v);
+	ai_dump_print(env, fun->_proto, options);
 }
