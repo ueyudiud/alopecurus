@@ -21,13 +21,12 @@ a_none ai_err_raisef(a_henv env, a_msg code, char const* fmt, ...) {
 
 a_none ai_err_raisevf(a_henv env, a_msg code, char const* fmt, va_list varg) {
 	assume(code < 0, "cannot raise non error message.");
-    GStr* str = ai_str_formatv(env, fmt, varg);
+    GStr* str = ai_str_format(env, fmt, varg);
 	ai_err_raise(env, code, v_of_obj(str));
 }
 
 a_none ai_err_raise(a_henv env, a_msg code, Value err) {
-	Global* g = G(env);
-	v_set(g, &env->_error, err);
+	v_set(env, &env->_error, err);
 	ai_vm_hook(env, code, ALO_HMRAISE);
 	ai_env_raise(env, code);
 }

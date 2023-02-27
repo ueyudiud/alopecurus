@@ -48,7 +48,7 @@ struct Frame {
 	Frame* _prev;
 	a_insn* _pc;
 	a_isize _stack_bot_diff;
-	Capture* _captures;
+	CapVal* _caps;
 	RFlags _rflags;
 	/* In strict stack checking mode, the API will use frame bound to check index range. */
 #if ALO_STRICT_STACK_CHECK
@@ -71,7 +71,7 @@ struct alo_Env {
 #define G(env) ((env)->_g)
 
 always_inline void ai_env_pop_error(a_henv env, Value* d) {
-	v_cpy(G(env), d, &env->_error);
+	v_cpy(env, d, &env->_error);
 	env->_error = v_of_nil();
 }
 

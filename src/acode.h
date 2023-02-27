@@ -339,7 +339,7 @@ struct Scope {
 	SCOPE_STRUCT_HEAD;
 };
 
-struct CompCapInfo {
+struct RichCapInfo {
 	a_u8 _scope; /* The depth of first captured scope. */
 	a_u8 _sym_index; /* Qualified variable index. */
 	a_u8 _src_index;

@@ -415,51 +415,18 @@ void ai_ctx_close(Route* route) {
 	VirtualFree(route->_ctx._stack_alloc_base, 0, MEM_RELEASE);
 }
 
-static a_usize l_pad_size(a_usize size) {
-	return (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+void* ai_mem_nreserve(void* addr, a_usize size) {
+	return VirtualAlloc(addr, size, MEM_RESERVE, PAGE_NOACCESS);
 }
 
-#if !ALO_STACK_DISABLE_MMAP
-
-a_bool ai_ctx_stack_init(unused a_henv env, Stack* stack) {
-	Value* base = VirtualAlloc(
-			NULL,
-			l_pad_size(sizeof(Value) * MAX_STACK_SIZE_WITH_RESERVED),
-			MEM_RESERVE,
-			PAGE_NOACCESS);
-	if (unlikely(base == null)) return true;
-	a_usize pad_size = l_pad_size(sizeof(Value) * INIT_STACK_SIZE_WITH_RESERVED);
-	LPVOID result = VirtualAlloc(
-			base,
-			pad_size,
-			MEM_COMMIT,
-			PAGE_READWRITE);
-	if (unlikely(result == null)) return true;
-	stack->_base = base;
-	stack->_limit = ptr_disp(Value, base, pad_size) - RESERVED_STACK_SIZE;
-	return false;
+void* ai_mem_ncommit(void* addr, a_usize size, a_flags prot) {
+	return VirtualAlloc(addr, size, MEM_COMMIT, prot);
 }
 
-a_bool ai_ctx_stack_grow(unused a_henv env, Stack* stack, a_usize size) {
-	LPVOID to = ptr_disp(void, stack->_base, l_pad_size(sizeof(Value) * size));
-	LPVOID from = stack->_limit + RESERVED_STACK_SIZE;
-	a_usize pad_size = ptr_diff(to, from);
-	assume(size % PAGE_SIZE == 0, "not aligned to page size.");
-	LPVOID result = VirtualAlloc(
-			from,
-			pad_size,
-			MEM_COMMIT,
-			PAGE_READWRITE);
-	if (unlikely(result == null)) return true;
-	stack->_limit = cast(Value*, to) - RESERVED_STACK_SIZE;
-	return false;
+a_bool ai_mem_ndecommit(void* addr, a_usize size) {
+	return VirtualFree(addr, size, MEM_DECOMMIT);
 }
 
-void ai_ctx_stack_deinit(unused Global* g, Stack* stack) {
-	VirtualFree(
-			stack->_base,
-			0,
-			MEM_RELEASE);
+a_bool ai_mem_nrelease(void* addr, unused a_usize size) {
+	return VirtualFree(addr, 0, MEM_RELEASE);
 }
-
-#endif

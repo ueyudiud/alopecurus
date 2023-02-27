@@ -57,6 +57,9 @@ typedef struct Route {
 	RCtx _ctx;
 } Route;
 
+#define CTX_VA_RW PAGE_READWRITE
+#define CTX_VA_RX PAGE_EXECUTE_READ
+
 intern a_msg ai_ctx_swap(Route* from, Route* to);
 
 always_inline void ai_ctx_swapx(Route* from, Route* to, a_msg msg) {

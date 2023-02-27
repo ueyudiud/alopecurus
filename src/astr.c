@@ -82,7 +82,7 @@ static void istable_emplace(IStrTable* istable, IStr* self) {
 }
 
 static GStr* hstr_alloc(a_henv env, a_usize len) {
-	GStr* self = ai_mem_alloc(env, sizeof(GStr) + 1 + len);
+	GStr* self = ai_mem_alloc(env, hstr_size(len));
 	self->_vtable = &hstr_vtable;
 	self->_len = len;
 	self->_data[len] = '\0';
@@ -184,15 +184,7 @@ a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr) {
 	}
 }
 
-GStr* ai_str_format(a_henv env, char const* fmt, ...) {
-    va_list varg;
-    va_start(varg, fmt);
-    GStr* self = ai_str_formatv(env, fmt, varg);
-    va_end(varg);
-    return self;
-}
-
-GStr* ai_str_formatv(a_henv env, char const* fmt, va_list varg) {
+GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
     char buf[ALOI_SHTSTR_THRESHOLD + 1];
     va_list varg2;
     va_copy(varg2, varg);

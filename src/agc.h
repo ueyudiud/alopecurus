@@ -39,6 +39,8 @@ always_inline void rq_push(RefQueue* rq, void* ref) {
 #define WHITE2_COLOR 0x2
 #define BLACK_COLOR 0x4
 
+#define GRAY_NULL ((a_trmark) 0)
+
 always_inline a_trmark white_color(Global* g) {
     return cast(a_trmark, g->_white_color);
 }
@@ -72,11 +74,15 @@ always_inline void g_set_white(Global* g, a_hobj v) {
 	v->_tnext = white_color(g);
 }
 
-always_inline void v_check_alive(Global* g, Value v) {
+always_inline void g_set_gray(a_hobj v) {
+	v->_tnext = GRAY_NULL;
+}
+
+always_inline void v_check_alive(a_henv env, Value v) {
 	if (v_is_obj(v)) {
 		GObj* obj = v_as_obj(v);
 		a_u32 tag = v_get_tag(v);
-		assume((tag == obj->_vtable->_tid) && !g_is_other(g, obj));
+		assume((tag == obj->_vtable->_tid) && !g_is_other(G(env), obj));
 	}
 }
 
@@ -123,10 +129,24 @@ always_inline void ai_gc_trace_work(Global* g, a_usize size) {
 	g->_mem_work -= cast(a_isize, size);
 }
 
+always_inline a_bool ai_gc_is_tracing(Global* g) {
+	return g->_gcstep <= GCSTEP_PROPAGATE_ATOMIC;
+}
+
+always_inline a_bool ai_gc_is_sweeping(Global* g) {
+	return g->_gcstep >= GCSTEP_SWEEP_NORMAL && g->_gcstep <= GCSTEP_SWEEP_ATOMIC;
+}
+
 always_inline void ai_gc_barrier_(a_henv env, a_hobj obj1, a_hobj obj2) {
 	Global* g = G(env);
 	if (g_is_black(obj1) && g_is_white_with_assume_alive(g, obj2)) {
-		join_trace(&g->_tr_gray, obj2);
+		if (ai_gc_is_tracing(g)) {
+			join_trace(&g->_tr_gray, obj2);
+		}
+		else {
+			assume(ai_gc_is_sweeping(g));
+			g_set_gray(obj1);
+		}
 	}
 }
 

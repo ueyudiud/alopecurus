@@ -18,33 +18,29 @@ static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
 }
 
-/**
- ** Hint function size with the minimum value.
- *@param info the information of function metadata.
- */
-static a_usize proto_size(ProtoCreateInfo* info) {
+static a_usize proto_size(ProtoDesc* desc) {
 	a_usize size = sizeof(GProto) +
-				   sizeof(Value) * info->_nconst +
-				   sizeof(a_insn) * info->_ninsn +
-				   sizeof(CapInfo) * info->_ncap +
-				   sizeof(GProto*) * info->_nsub;
-	if (info->_flags._fdebug) {
-		size += sizeof(LineInfo) * info->_nline +
-				sizeof(LocalInfo) * info->_nlocal +
-				sizeof(GStr*) * info->_ncap;
+				   sizeof(Value) * desc->_nconst +
+				   sizeof(a_insn) * desc->_ninsn +
+				   sizeof(CapInfo) * desc->_ncap +
+				   sizeof(GProto*) * desc->_nsub;
+	if (desc->_flags._fdebug) {
+		size += sizeof(LineInfo) * desc->_nline +
+				sizeof(LocalInfo) * desc->_nlocal +
+				sizeof(GStr*) * desc->_ncap;
 	}
 	else {
 		size += sizeof(LineInfo);
 	}
-	if (info->_flags._froot) {
-		assume(info->_ncap <= 1, "bad capture count.");
-		size += fun_size(info->_ncap);
+	if (desc->_flags._froot) {
+		assume(desc->_ncap <= 1, "bad capture count.");
+		size += fun_size(desc->_ncap);
 	}
 	return size;
 }
 
-GProto* ai_proto_xalloc(a_henv env, ProtoCreateInfo* info) {
-	a_usize total_size = proto_size(info);
+GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
+	a_usize total_size = proto_size(desc);
 
     GProto* self = ai_mem_xalloc(env, total_size);
     if (self == null) return null;
@@ -52,30 +48,30 @@ GProto* ai_proto_xalloc(a_henv env, ProtoCreateInfo* info) {
 
 	self->_vtable = &proto_vtable;
     self->_len = total_size;
-    self->_nconst = info->_nconst;
-    self->_ninsn = info->_ninsn;
-    self->_nsub = info->_nsub;
-    self->_nlocal = info->_nlocal;
-    self->_ncap = info->_ncap;
-	self->_nline = info->_nline;
-    self->_nstack = info->_nstack;
+    self->_nconst = desc->_nconst;
+    self->_ninsn = desc->_ninsn;
+    self->_nsub = desc->_nsub;
+    self->_nlocal = desc->_nlocal;
+    self->_ncap = desc->_ncap;
+	self->_nline = desc->_nline;
+    self->_nstack = desc->_nstack;
 
 	a_usize addr = addr_of(self)
 			+ sizeof(GProto)
-			+ sizeof(Value) * info->_nconst;
+			+ sizeof(Value) * desc->_nconst;
 
 	self->_subs = ptr_of(GProto*, addr);
-	addr += sizeof(GProto*) * info->_nsub;
+	addr += sizeof(GProto*) * desc->_nsub;
 
-	if (info->_flags._fdebug) {
+	if (desc->_flags._fdebug) {
 		self->_dbg_lines = ptr_of(LineInfo, addr);
-		addr += sizeof(LineInfo) * info->_nline;
+		addr += sizeof(LineInfo) * desc->_nline;
 
 		self->_dbg_locals = ptr_of(LocalInfo, addr);
-		addr += sizeof(LocalInfo) * info->_nlocal;
+		addr += sizeof(LocalInfo) * desc->_nlocal;
 
 		self->_dbg_cap_names = ptr_of(GStr*, addr);
-		addr += sizeof(GStr*) * info->_ncap;
+		addr += sizeof(GStr*) * desc->_ncap;
 	}
 	else {
 		self->_dbg_lndef = self->_dbg_lnldef = 0;
@@ -86,17 +82,17 @@ GProto* ai_proto_xalloc(a_henv env, ProtoCreateInfo* info) {
 		self->_dbg_lines[0] = new(LineInfo) { ._end = UINT32_MAX, ._lineno = 0 };
 	}
 
-	if (info->_flags._froot) {
+	if (desc->_flags._froot) {
 		GFun* fun = ptr_of(GFun, addr);
-		addr += sizeof(GFun) + sizeof(Value) * info->_ncap;
+		addr += sizeof(GFun) + sizeof(Value) * desc->_ncap;
 
-		for (a_u32 i = 0; i < info->_ncap; ++i) {
+		for (a_u32 i = 0; i < desc->_ncap; ++i) {
 			v_set_nil(&fun->_capval[i]);
 		}
 
 		fun->_vtable = &fun_vtable;
 		fun->_proto = self;
-		fun->_len = info->_ncap;
+		fun->_len = desc->_ncap;
 
 		self->_cache = fun;
 	}
@@ -136,7 +132,7 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 
 	GFun* self = fun_new(env, cast(GProto*, &proto), ncap + 1);
 
-	v_cpy_multi(G(env), self->_capval, pcap, ncap);
+	v_cpy_multi(env, self->_capval, pcap, ncap);
 	v_setx(self->_capval + ncap, bcast(Value, hnd));
 
 	ai_gc_register_object(env, self);
@@ -144,7 +140,7 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 	return self;
 }
 
-static Value l_load_capture(a_henv env, CapInfo* info, Value* up, Capture** now, Value* stack) {
+static Value l_load_capture(a_henv env, CapInfo* info, Value* up, CapVal** now, Value* stack) {
 	if (info->_fup) {
 		return up[info->_reg];
 	}
@@ -153,12 +149,12 @@ static Value l_load_capture(a_henv env, CapInfo* info, Value* up, Capture** now,
 	}
 	else {
 		Value* dst = stack + info->_reg;
-		Capture* cap;
+		CapVal* cap;
 		while ((cap = *now) != null && cap->_ptr > dst) {
 			now = &cap->_next;
 		}
 		if (cap == null || cap->_ptr < dst) {
-			Capture* cap2 = ai_mem_alloc(env, sizeof(Capture));
+			CapVal* cap2 = ai_mem_alloc(env, sizeof(CapVal));
 
 			cap2->_ptr = dst;
 			cap2->_next = cap;
@@ -180,7 +176,7 @@ GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame) {
 	GFun* self = fun_new(env, proto, len);
 	self->_vtable = &fun_vtable;
 	for (a_u32 i = 0; i < len; ++i) {
-		Value capval = l_load_capture(env, &infos[i], parent->_capval, &frame->_captures, base);
+		Value capval = l_load_capture(env, &infos[i], parent->_capval, &frame->_caps, base);
 		v_setx(&self->_capval[i], capval);
 	}
 
@@ -189,17 +185,17 @@ GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame) {
 	return self;
 }
 
-static a_bool cap_is_closed(Capture* self) {
+static a_bool cap_is_closed(CapVal* self) {
 	return self->_ptr == &self->_slot;
 }
 
-static void cap_close(a_henv env, Capture* self) {
-	v_cpy(G(env), &self->_slot, self->_ptr);
+static void cap_close(a_henv env, CapVal* self) {
+	v_cpy(env, &self->_slot, self->_ptr);
 	self->_ptr = &self->_slot;
 }
 
-static void cap_delete(Global* g, Capture* self) {
-	ai_mem_dealloc(g, self, sizeof(Capture));
+static void cap_delete(Global* g, CapVal* self) {
+	ai_mem_dealloc(g, self, sizeof(CapVal));
 }
 
 static void fun_splash(Global* g, GFun* self) {
@@ -221,7 +217,7 @@ static void fun_delete(Global* g, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
 		Value v = self->_capval[i];
 		if (v_is_cap(v)) {
-			Capture* cap = v_as_cap(v);
+			CapVal* cap = v_as_cap(v);
 			assume(cap->_rc > 0);
 			if (--cap->_rc == 0 && cap_is_closed(cap)) {
 				cap_delete(g, cap);
@@ -254,10 +250,10 @@ void ai_proto_delete(Global* g, GProto* self) {
     ai_mem_dealloc(g, self, self->_len);
 }
 
-void ai_cap_close(a_henv env, Capture** pcap, Value const* base) {
-	Capture* cap;
+void ai_cap_close(a_henv env, CapVal** pcap, Value const* base) {
+	CapVal* cap;
 	while ((cap = *pcap) != null && cap->_ptr >= base) {
-		Capture* next = cap->_next;
+		CapVal* next = cap->_next;
 		if (cap->_rc > 0) {
 			cap_close(env, cap);
 		}

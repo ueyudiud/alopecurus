@@ -26,12 +26,11 @@ intern a_msg ai_ctx_catch(Route* env, a_pfun fun, void* ctx);
 intern a_msg ai_ctx_open(Route* env, a_usize stack_size);
 intern void ai_ctx_close(Route* env);
 
-#if !ALO_STACK_DISABLE_MMAP
+/* Page allocation functions. */
 
-intern a_bool ai_ctx_stack_init(a_henv env, Stack* stack);
-intern a_bool ai_ctx_stack_grow(a_henv env, Stack* stack, a_usize size);
-intern void ai_ctx_stack_deinit(Global* g, Stack* stack);
-
-#endif
+intern void* ai_mem_nreserve(void* addr, a_usize size);
+intern void* ai_mem_ncommit(void* addr, a_usize size, a_flags prot);
+intern a_bool ai_mem_ndecommit(void* addr, a_usize size);
+intern a_bool ai_mem_nrelease(void* addr, a_usize size);
 
 #endif /* actx_h_ */

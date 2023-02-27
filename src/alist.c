@@ -40,7 +40,7 @@ void ai_list_insert(a_henv env, GList* self, Value value) {
         a_usize new_cap = old_cap * 2;
         self->_data = ai_mem_vgrow(env, self->_data, old_cap, new_cap);
     }
-    v_set(G(env), &self->_data[self->_len++], value);
+    v_set(env, &self->_data[self->_len++], value);
 	ai_gc_barrier_val(env, self, value);
 }
 
@@ -88,7 +88,7 @@ static void list_set(a_henv env, GList* self, Value index, Value value) {
 	if (unlikely(ref == null)) {
 		ai_err_raisef(env, ALO_EINVAL, "list index out of bound.");
 	}
-	v_set(G(env), ref, value);
+	v_set(env, ref, value);
 	ai_gc_barrier_val(env, self, value);
 }
 

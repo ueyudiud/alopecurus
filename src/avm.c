@@ -160,7 +160,7 @@ static void l_move_ret(a_henv env, Value* dst, a_usize dst_len, Value* src, a_us
 	a_usize mov_len = min(dst_len, src_len);
 
 	while (i < mov_len) {
-		v_cpy(G(env), dst, src);
+		v_cpy(env, dst, src);
 		i += 1;
 		dst += 1;
 		src += 1;
@@ -188,7 +188,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 #define pc (frame._pc)
 #define load_stack() quiet(R = env->_stack._bot)
-#if ALO_STACK_DISABLE_MMAP
+#if ALO_STACK_RELOC
 # define reload_stack() load_stack()
 #else
 # define reload_stack() ((void) 0)
@@ -200,14 +200,19 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	run {
 		GProto* proto = fun->_proto;
 		a_isize diff = ai_stk_check(env, base + proto->_nstack);
+#if ALO_STACK_RELOC
 		env->_stack._bot = ptr_disp(Value, base, diff);
+#else
+		quiet(diff);
+		env->_stack._bot = base;
+#endif
 		if (!(proto->_flags & PROTO_FLAG_VARARG)) {
 			env->_stack._top = env->_stack._bot + proto->_nstack;
 		}
 		frame = new(Frame) {
 			._prev = env->_frame,
 			._stack_bot_diff = ptr_diff(env->_stack._bot, env->_stack._base),
-			._captures = env->_frame != null ? env->_frame->_captures : null,
+			._caps = env->_frame != null ? env->_frame->_caps : null,
 			._pc = proto->_code,
 			._rflags = rflags
 		};
@@ -231,19 +236,19 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			}
 			case BC_MOV: {
 				b = bc_load_b(insn);
-				v_cpy(G(env), &R[a], &R[b]);
+				v_cpy(env, &R[a], &R[b]);
 				break;
 			}
 			case BC_LDC: {
 				b = bc_load_b(insn);
-				Capture* cap = v_as_cap(fun->_capval[b]);
-				v_cpy(G(env), &R[a], cap->_ptr);
+				CapVal* cap = v_as_cap(fun->_capval[b]);
+				v_cpy(env, &R[a], cap->_ptr);
 				break;
 			}
 			case BC_STC: {
 				b = bc_load_b(insn);
-				Capture* cap = v_as_cap(fun->_capval[a]);
-				v_cpy(G(env), cap->_ptr, &R[b]);
+				CapVal* cap = v_as_cap(fun->_capval[a]);
+				v_cpy(env, cap->_ptr, &R[b]);
 				ai_gc_barrier_back_val(env, fun, R[b]);
 				break;
 			}
@@ -264,18 +269,18 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			}
 			case BC_KI: {
 				sb = bc_load_sbx(insn);
-				v_setx(&R[a], v_of_int(sb));
+				v_set_int(&R[a], sb);
 				break;
 			}
 			case BC_K: {
 				b = bc_load_bx(insn);
-				v_cpy(G(env), &R[a], &K[b]);
+				v_cpy(env, &R[a], &K[b]);
 				break;
 			}
 			case BC_LDF: {
 				b = bc_load_bx(insn);
 				GFun* v = ai_fun_new(env, fun->_proto->_subs[b], &frame);
-				v_set(G(env), &R[a], v_of_obj(v));
+				v_set_obj(env, &R[a], v);
 				check_gc();
 				break;
 			}
@@ -284,14 +289,14 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				c = bc_load_c(insn);
 				n = c != 0 ? c - 1 : cast(a_usize, env->_stack._top - &R[b]);
 				GTuple* v = ai_tuple_new(env, &R[b], n);
-				v_set(G(env), &R[a], v_of_obj(v));
+				v_set_obj(env, &R[a], v);
 				check_gc();
 				break;
 			}
 			case BC_LNEW: {
 				b = bc_load_bx(insn);
 				GList* v = ai_list_new(env);
-				v_set(G(env), &R[a], v_of_obj(v));
+				v_set_obj(env, &R[a], v);
 				ai_list_hint(env, v, b);
 				check_gc();
 				break;
@@ -300,42 +305,42 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
 				vt = l_vm_get(env, R[b], R[c]);
-				v_set(G(env), &R[a], vt);
+				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_GETI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
 				vt = l_vm_get(env, R[b], v_of_int(sc));
-				v_set(G(env), &R[a], vt);
+				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_GETK: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
 				vt = l_vm_get(env, R[b], K[c]);
-				v_set(G(env), &R[a], vt);
+				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_GETKX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
 				vt = l_vm_get(env, R[b], K[c]);
-				v_set(G(env), &R[a], vt);
+				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_CGETK: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
 				vt = l_vm_get(env, fun->_capval[b], K[c]);
-				v_set(G(env), &R[a], vt);
+				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_CGETKX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
 				vt = l_vm_get(env, fun->_capval[b], K[c]);
-				v_set(G(env), &R[a], vt);
+				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_SET: {
@@ -374,11 +379,11 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				if (v_is_int(vb) && v_is_int(vc)) {
 					a_int val = ai_op_bin_int(v_as_int(vb), v_as_int(vc), op);
-					v_setx(&R[a], v_of_int(val));
+					v_set_int(&R[a], val);
 				}
 				else if (v_is_num(vb) && v_is_num(vc)) {
 					a_float val = ai_op_bin_float(v_as_num(vb), v_as_num(vc), op);
-					v_setx(&R[a], v_of_float(val));
+					v_set_float(&R[a], val);
 				}
 				else {
 					//TODO
@@ -401,11 +406,11 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 						l_div_0_err(env);
 					}
 					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
-					v_setx(&R[a], v_of_int(val));
+					v_set_int(&R[a], val);
 				}
 				else if (v_is_num(vb) && v_is_num(vc)) {
 					a_float val = ai_op_bin_float(v_as_num(vb), v_as_num(vc), op);
-					v_setx(&R[a], v_of_float(val));
+					v_set_float(&R[a], val);
 				}
 				else {
 					//TODO
@@ -427,7 +432,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				if (v_is_int(vb) && v_is_int(vc)) {
 					a_int val = ai_op_bin_int(v_as_int(vb), v_as_int(vc), op);
-					v_setx(&R[a], v_of_int(val));
+					v_set_int(&R[a], val);
 				}
 				else {
 					//TODO
@@ -447,11 +452,11 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				if (v_is_int(vb)) {
 					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
-					v_setx(&R[a], v_of_int(val));
+					v_set_int(&R[a], val);
 				}
 				else if (v_is_float(vb)) {
 					a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
-					v_setx(&R[a], v_of_float(val));
+					v_set_float(&R[a], val);
 				}
 				else {
 					//TODO
@@ -473,11 +478,11 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 						l_div_0_err(env);
 					}
 					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
-					v_setx(&R[a], v_of_int(val));
+					v_set_int(&R[a], val);
 				}
 				else if (v_is_float(vb)) {
 					a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
-					v_setx(&R[a], v_of_float(val));
+					v_set_float(&R[a], val);
 				}
 				else {
 					//TODO
@@ -499,7 +504,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				if (v_is_int(vb)) {
 					a_int val = ai_op_bin_int(v_as_int(vb), ic, op);
-					v_setx(&R[a], v_of_int(val));
+					v_set_int(&R[a], val);
 				}
 				else {
 					//TODO
@@ -603,7 +608,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				break;
 			}
 			case BC_CLOSE: {
-				ai_cap_close(env, &frame._captures, &R[a]);
+				ai_cap_close(env, &frame._caps, &R[a]);
 				break;
 			}
 			case BC_CALL: {
@@ -650,6 +655,6 @@ vm_meta_call:
 vm_return:
 	env->_frame = frame._prev;
 	env->_stack._bot = ptr_disp(Value, env->_stack._base, env->_frame->_stack_bot_diff);
-	ai_cap_close(env, &frame._captures, R);
+	ai_cap_close(env, &frame._caps, R);
 #undef pc
 }

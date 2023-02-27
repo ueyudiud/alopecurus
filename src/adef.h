@@ -50,15 +50,6 @@
 # define ALO_STRICT_STACK_CHECK M_false
 #endif
 
-/**
- ** Create VM stack by map memory if it is possible.
- */
-#ifdef ALOI_STACK_DISABLE_MMAP
-# define ALO_STACK_DISABLE_MMAP M_true
-#else
-# define ALO_STACK_DISABLE_MMAP M_false
-#endif
-
 /* Special attributes. */
 
 #undef intern

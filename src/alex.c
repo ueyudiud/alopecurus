@@ -86,17 +86,6 @@ static a_i32 c_hdigit(a_i32 ch) {
     }
 }
 
-static a_bool c_isihead(a_i32 ch) {
-    switch (ch) {
-        case 'a' ... 'z':
-        case 'A' ... 'Z':
-        case '_':
-            return true;
-        default:
-            return false;
-    }
-}
-
 static a_bool c_isibody(a_i32 ch) {
     switch (ch) {
         case 'a' ... 'z':

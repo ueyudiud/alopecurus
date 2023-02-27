@@ -217,7 +217,7 @@ static a_tag tag_of(Value v) {
 
 void alo_push(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
-	v_set(G(env), api_incr_stack(env), v);
+	v_set(env, api_incr_stack(env), v);
 }
 
 /**
@@ -272,7 +272,7 @@ a_tag alo_pushvex(a_henv env, char const* sp, va_list varg) {
 	loop {
 		switch (*(sp++)) {
 			case '\0': { /* Terminate character. */
-				v_set(G(env), api_incr_stack(env), v);
+				v_set(env, api_incr_stack(env), v);
 				return tag_of(v);
 			}
 			case 'i': { /* Integer index. */
@@ -314,11 +314,11 @@ void alo_pushbool(a_henv env, a_bool val) {
 }
 
 void alo_pushint(a_henv env, a_int val) {
-	v_setx(api_incr_stack(env), v_of_int(val));
+	v_set_int(api_incr_stack(env), val);
 }
 
 void alo_pushfloat(a_henv env, a_float val) {
-	v_setx(api_incr_stack(env), v_of_float(val));
+	v_set_float(api_incr_stack(env), val);
 }
 
 void alo_pushptr(a_henv env, void* val) {
@@ -327,7 +327,7 @@ void alo_pushptr(a_henv env, void* val) {
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 	GStr* val = ai_str_new(env, src, len);
-	v_setx(api_incr_stack(env), v_of_obj(val));
+	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	return ai_str_tocstr(val);
 }
@@ -341,25 +341,25 @@ char const* alo_pushfstr(a_henv env, char const* fmt, ...) {
 }
 
 char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
-	GStr* val = ai_str_formatv(env, fmt, varg);
-	v_setx(api_incr_stack(env), v_of_obj(val));
+	GStr* val = ai_str_format(env, fmt, varg);
+	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	return ai_str_tocstr(val);
 }
 
 void alo_pushmod(a_henv env, a_hmod mod) {
-	v_set(G(env), api_incr_stack(env), v_of_obj(mod));
+	v_set_obj(env, api_incr_stack(env), mod);
 }
 
 void alo_pushroute(a_henv env) {
-	v_set(G(env), api_incr_stack(env), v_of_obj(env));
+	v_set_obj(env, api_incr_stack(env), env);
 }
 
 void alo_xmove(a_henv src, a_henv dst, a_usize n) {
 	api_check(src != dst, "same environment.");
 	api_check_elem(src, n);
 	api_check_slot(dst, n);
-	v_cpy_multi(G(src), dst->_stack._top, src->_stack._top - n, n);
+	v_cpy_multi(src, dst->_stack._top, src->_stack._top - n, n);
 	src->_stack._top -= n;
 	dst->_stack._top += n;
 }
@@ -368,27 +368,27 @@ void alo_pop(a_henv env, a_isize id) {
 	Value* d = api_wrslot(env, id);
 	api_check(env->_stack._top - 1 != d, "bad pop index.");
 	Value s = api_decr_stack(env);
-	v_set(G(env), d, s);
+	v_set(env, d, s);
 }
 
 void alo_newtuple(a_henv env, a_usize n) {
 	api_check_elem(env, n);
 	GTuple* val = ai_tuple_new(env, env->_stack._top - n, n);
 	env->_stack._top -= n;
-	v_set(G(env), api_incr_stack(env), v_of_obj(val));
+	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 }
 
 void alo_newlist(a_henv env, a_usize n) {
 	GList* val = ai_list_new(env);
-	v_set(G(env), api_incr_stack(env), v_of_obj(val));
+	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	ai_list_hint(env, val, n);
 }
 
 void alo_newtable(a_henv env, a_usize n) {
 	GTable* val = ai_table_new(env);
-	v_set(G(env), api_incr_stack(env), v_of_obj(val));
+	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	ai_table_hint(env, val, n);
 }
@@ -398,18 +398,18 @@ void alo_newcfun(a_henv env, a_cfun f, a_usize n) {
 	api_check_elem(env, n);
 	GFun* val = ai_cfun_create(env, f, n, env->_stack._top - n);
 	env->_stack._top -= n;
-	v_set(G(env), api_incr_stack(env), v_of_obj(val));
+	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 }
 
 a_henv alo_newroute(a_henv env, a_usize ss) {
 	GRoute* val = ai_env_new(env, ss);
-	v_set(G(env), api_incr_stack(env), v_of_obj(val));
+	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	return val;
 }
 
-a_usize alo_len(a_henv env, a_isize id) {
+a_usize alo_rawlen(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
@@ -424,12 +424,16 @@ a_usize alo_len(a_henv env, a_isize id) {
 			GTable* value = v_as_table(v);
 			return cast(a_usize, value->_len);
 		}
+		case T_MOD: {
+			GMod* value = v_as_mod(v);
+			return cast(a_usize, value->_table._len);
+		}
 		default:
 			api_panic("unsupported operation.");
 	}
 }
 
-a_tag alo_geti(a_henv env, a_isize id, a_int key) {
+a_tag alo_rawgeti(a_henv env, a_isize id, a_int key) {
 	api_check_elem(env, 1);
 
 	Value const* v = api_roslot(env, id);
@@ -454,7 +458,9 @@ a_tag alo_geti(a_henv env, a_isize id, a_int key) {
 		default:
 			api_panic("unsupported operation.");
 	}
-	if (v != null) v_cpy(G(env), api_incr_stack(env), v);
+	if (v != null) {
+		v_cpy(env, api_incr_stack(env), v);
+	}
 	return v != null ? tag_of(*v) : ALO_TEMPTY;
 }
 
@@ -652,9 +658,9 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	id_env = alo_absindex(env, id_env);
 	a_msg msg = ai_parse(env, fun, ctx, l_get_str(env, id_file), l_get_str(env, id_name), options, &out);
 	if (likely(msg == ALO_SOK)) {
-		v_set(G(env), api_incr_stack(env), v_of_obj(out));
+		v_set_obj(env, api_incr_stack(env), out);
 		if (out->_proto->_ncap > 0) {
-			v_cpy(G(env), &out->_capval[0], api_rdslot(env, id_env));
+			v_cpy(env, &out->_capval[0], api_rdslot(env, id_env));
 		}
 	}
 	else {

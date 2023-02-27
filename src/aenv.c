@@ -67,7 +67,7 @@ static a_bool route_init(a_henv env, GRoute* self) {
 
 static void route_destroy(Global* g, GRoute* self) {
 	ai_stk_deinit(g, &self->_stack);
-	ai_cap_close(g->_active, &self->_frame->_captures, null);
+	ai_cap_close(g->_active, &self->_frame->_caps, null);
 }
 
 static void route_splash_stack(Global* g, GRoute* self) {
@@ -77,7 +77,9 @@ static void route_splash_stack(Global* g, GRoute* self) {
 	for (Value const* v = from; v < to; ++v) {
 		ai_gc_trace_mark_val(g, *v);
 	}
+#if ALO_STACK_INNER
 	ai_gc_trace_work(g, sizeof(Value) * (stack->_limit - from + RESERVED_STACK_SIZE));
+#endif
 }
 
 static void route_splash(Global* g, GRoute* self) {
@@ -151,7 +153,7 @@ static void global_init(a_henv env, unused void* ctx) {
 	ai_strx_open(env, m->_strx_reserved, m->_global._strx);
 
 	GTable* gtable = ai_table_new(env);
-	v_set(G(env), &G(env)->_global, v_of_obj(gtable));
+	v_set_obj(env, &G(env)->_global, gtable);
 	ai_gc_register_object(env, gtable);
 }
 

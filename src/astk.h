@@ -45,6 +45,9 @@ struct Stack {
 	Value* _bot;
 	Value* _top;
 	Value* _limit;
+#if ALO_STACK_MMAP
+	a_usize _alloc_size;
+#endif
 };
 
 #endif /* astk_h_ */

@@ -54,33 +54,33 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
         }
         case LVTAG_INT: {
             a_int val = l_get(ic, a_int);
-            v_setx(v, v_of_int(val));
+            v_set_int(v, val);
             break;
         }
         case LVTAG_FLOAT: {
             a_float val = l_get(ic, a_float);
-            v_setx(v, v_of_float(val));
+            v_set_float(v, val);
             break;
         }
         case LVTAG_LSTR: {
             a_u32 len = l_getvi(ic, a_u32) + LVLSTR_LEN_BIAS;
             GStr* val;
             check(ai_str_load(ic->_env, &ic->_in, len, &val));
-            v_setx(v, v_of_obj(val));
+            v_set_obj(ic->_in._env, v, val);
             break;
         }
         default: { /* For short string */
             GStr* val;
 			check(ai_str_load(ic->_env, &ic->_in, tag, &val));
-            v_set(G(ic->_in._env), v, v_of_obj(val));
+            v_set_obj(ic->_in._env, v, val);
             break;
         }
     }
     return ALO_SOK;
 }
 
-static a_msg l_load_info(InCtx* ic, ProtoCreateInfo* info, a_bool root) {
-	*info = new(ProtoCreateInfo) {
+static a_msg l_load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
+	*info = new(ProtoDesc) {
 		._nconst = l_getvi(ic, a_u32),
 		._ninsn = l_getvi(ic, a_u32),
 		._nsub = l_getvi(ic, a_u32),
@@ -88,7 +88,7 @@ static a_msg l_load_info(InCtx* ic, ProtoCreateInfo* info, a_bool root) {
 		._nline = l_getvi(ic, a_u16),
 		._ncap = l_get(ic, a_u8),
 		._nstack = l_get(ic, a_u8),
-		._flags = l_get(ic, ProtoCreateFlags)
+		._flags = l_get(ic, ProtoFlags)
 	};
 	if (info->_flags._froot != root)
 		return ALO_EINVAL;
@@ -97,7 +97,7 @@ static a_msg l_load_info(InCtx* ic, ProtoCreateInfo* info, a_bool root) {
 
 static a_msg l_load_sub(InCtx* ic, GProto** pf);
 
-static a_msg l_load_meta(InCtx* ic, ProtoCreateInfo const* info, GProto* meta) {
+static a_msg l_load_meta(InCtx* ic, ProtoDesc const* info, GProto* meta) {
     /* Noexcept code until here, add meta into object list. */
 	rq_push(&ic->_rq, meta);
     
@@ -114,7 +114,7 @@ static a_msg l_load_meta(InCtx* ic, ProtoCreateInfo const* info, GProto* meta) {
 
 static a_msg l_load_sub(InCtx* ic, GProto** pf) {
     /* Load function header */
-    ProtoCreateInfo info;
+    ProtoDesc info;
     check(l_load_info(ic, &info, false));
 
     GProto* meta = ai_proto_xalloc(ic->_env, &info);
@@ -127,7 +127,7 @@ static a_msg l_load_sub(InCtx* ic, GProto** pf) {
 
 static a_msg l_load_root(InCtx* ic) {
     /* Load function header */
-    ProtoCreateInfo info;
+    ProtoDesc info;
     check(l_load_info(ic, &info, true));
 
 	GProto* meta = ai_proto_xalloc(ic->_env, &info);

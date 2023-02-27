@@ -24,7 +24,7 @@ GUserMeta* ai_umeta_new(a_henv env, GMeta* proto) {
 	return self;
 }
 
-Value const* ai_umeta_get(a_henv env, GUserMeta* self, GStr* key) {
+Value const* ai_umeta_get(unused a_henv env, GUserMeta* self, GStr* key) {
 	a_u32 const* pid = ai_dict_find(&self->_field_indices, key);
 	return pid != null ? &self->_fields[*pid] : null;
 }
@@ -41,5 +41,5 @@ static void umeta_check_capacity(a_henv env, GUserMeta* self) {
 void ai_umeta_set(a_henv env, GUserMeta* self, GStr* key, Value value) {
 	umeta_check_capacity(env, self);
 	a_u32 index = ai_dict_push(env, &self->_field_indices, key, &self->_field_hfree);
-	v_set(G(env), &self->_fields[index], value);
+	v_set(env, &self->_fields[index], value);
 }

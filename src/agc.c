@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include "amod.h"
+#include "amem.h"
 
 #include "agc.h"
 

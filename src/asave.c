@@ -89,11 +89,11 @@ static a_msg l_save(OutCtx* oc, GProto* proto, a_bool root) {
     l_putvi(oc, a_u16, proto->_nlocal);
     l_put(oc, a_u8, proto->_ncap);
     l_put(oc, a_u8, proto->_nstack);
-	ProtoCreateFlags flags = {
+	ProtoFlags flags = {
 		._fdebug = true,
 		._froot = root
 	};
-	l_put(oc, ProtoCreateFlags, flags);
+	l_put(oc, ProtoFlags, flags);
     for (a_u32 i = 0; i < proto->_nconst; ++i) {
         check(l_save_const(oc, proto->_consts[i]));
     }

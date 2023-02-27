@@ -546,7 +546,7 @@ static a_u32 l_local(Parser* par, Sym* sym) {
 static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
 	/* Find in captured values. */
 	for (a_u32 i = 0; i < scope->_caps._len; ++i) {
-		CompCapInfo* info = &scope->_caps._arr[i];
+		RichCapInfo* info = &scope->_caps._arr[i];
 		if (info->_sym_index == sym->_index) {
 			/* Already captured. */
 			return i;
@@ -554,7 +554,7 @@ static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth
 	}
 
 	/* Not found, create a new capture value. */
-	CompCapInfo info = {
+	RichCapInfo info = {
 		._scope = sym->_scope,
 		._sym_index = sym->_index,
 		._mods = sym->_mods,
@@ -2007,7 +2007,7 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 
 	scope_pop(par, line);
 
-	ProtoCreateInfo info = {
+	ProtoDesc desc = {
 		._nconst = par->_consts._len - scope->_const_off,
 		._ninsn = par->_head_label - scope->_begin_label,
 		._nsub = scope->_nsub,
@@ -2021,28 +2021,28 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 		}
 	};
 
-	GProto* proto = ai_proto_xalloc(par->_env, &info);
+	GProto* proto = ai_proto_xalloc(par->_env, &desc);
 	if (proto == null) {
 		l_nomem_error(par);
 	}
 
-	memcpy(proto->_consts, par->_consts._arr + scope->_const_off, sizeof(Value) * info._nconst);
-	memcpy(proto->_code, par->_code + scope->_begin_label, sizeof(a_insn) * info._ninsn);
-	if (info._flags._fdebug) {
+	memcpy(proto->_consts, par->_consts._arr + scope->_const_off, sizeof(Value) * desc._nconst);
+	memcpy(proto->_code, par->_code + scope->_begin_label, sizeof(a_insn) * desc._ninsn);
+	if (desc._flags._fdebug) {
 		proto->_dbg_lndef = scope->_begin_line;
 		proto->_dbg_lnldef = line;
-		memcpy(proto->_dbg_lines, par->_lines._arr + scope->_line_off, sizeof(LineInfo) * info._nline);
-		memcpy(proto->_dbg_locals, par->_locals._arr + scope->_local_off, sizeof(LocalInfo) * info._nlocal);
+		memcpy(proto->_dbg_lines, par->_lines._arr + scope->_line_off, sizeof(LineInfo) * desc._nline);
+		memcpy(proto->_dbg_locals, par->_locals._arr + scope->_local_off, sizeof(LocalInfo) * desc._nlocal);
 	}
 	run {
-		for (a_u32 i = 0; i < info._ncap; ++i) {
-			CompCapInfo* cap_info = &scope->_caps._arr[i];
+		for (a_u32 i = 0; i < desc._ncap; ++i) {
+			RichCapInfo* cap_info = &scope->_caps._arr[i];
 			proto->_caps[i] = new(CapInfo) {
 				._reg = cap_info->_src_index,
 				._fup = cap_info->_scope != par->_scope_depth,
 				._fro = (cap_info->_mods & SYM_MOD_READONLY) != 0
 			};
-			if (info._flags._fdebug) {
+			if (desc._flags._fdebug) {
 				proto->_dbg_cap_names[i] = cap_info->_name;
 			}
 		}
@@ -2057,7 +2057,7 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 		}
 	}
 	proto->_name = name;
-	if (info._flags._fdebug) {
+	if (desc._flags._fdebug) {
 		proto->_dbg_file = par->_lex._file;
 		proto->_dbg_lndef = scope->_begin_line;
 		proto->_dbg_lnldef = line;

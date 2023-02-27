@@ -27,7 +27,7 @@ typedef a_usize a_trmark;
 typedef a_hobj a_gcnext;
 typedef a_gcnext a_gclist;
 
-typedef struct Capture Capture;
+typedef struct CapVal CapVal;
 typedef struct Frame Frame;
 typedef struct Global Global;
 typedef struct alo_Alloc Alloc;
@@ -182,7 +182,7 @@ always_inline GMod* g_as_mod(a_hobj v) {
 	return g_cast(GMod, v);
 }
 
-always_inline void v_check_alive(Global* g, Value v);
+always_inline void v_check_alive(a_henv env, Value v);
 
 #define V_PAYLOAD_MASK (~(~u64c(0) << 47))
 #define V_INT_MASK (~(~u64c(0) << 32))
@@ -362,9 +362,9 @@ always_inline GMod* v_as_mod(Value v) {
 	return g_as_mod(v_as_obj(v));
 }
 
-always_inline Capture* v_as_cap(Value v) {
+always_inline CapVal* v_as_cap(Value v) {
 	assume(v_is_cap(v));
-	return cast(Capture*, v_as_ptr_raw(v));
+	return cast(CapVal*, v_as_ptr_raw(v));
 }
 
 #define v_of_nil() (new(Value) { V_STRICT_NIL })
@@ -374,19 +374,24 @@ always_inline Capture* v_as_cap(Value v) {
 #define v_of_float(v) (new(Value) { ._ = bcast(a_u64, v) })
 #define v_of_ptr(v) v_box_nan(T_PTR, addr_of(v))
 
-always_inline Value v_of_obj_(a_hobj v) {
+always_inline Value v_of_obj(a_hobj v) {
 	a_u32 id = cast(a_u32, v->_vtable->_tid);
 	return v_box_nan(min(id, T__MAX_OBJ), addr_of(v));
 }
 
-#define v_of_obj(v) v_of_obj_(gobj_cast(v))
+#define v_of_obj(v) v_of_obj(gobj_cast(v))
 
-always_inline Value v_of_cap(Capture* v) {
+always_inline Value v_of_cap(CapVal* v) {
 	return v_box_nan(T_CAP, addr_of(v));
 }
 
 always_inline void v_setx(Value* d, Value v) {
 	*d = v;
+}
+
+always_inline void v_set(a_henv env, Value* d, Value v) {
+	*d = v;
+	v_check_alive(env, v);
 }
 
 always_inline void v_set_nil(Value* d) {
@@ -397,18 +402,27 @@ always_inline void v_set_bool(Value* d, a_bool v) {
 	v_setx(d, v_of_bool(v));
 }
 
-always_inline void v_set(Global* g, Value* d, Value v) {
-	*d = v;
-	v_check_alive(g, v);
+always_inline void v_set_int(Value* d, a_int v) {
+	v_setx(d, v_of_int(v));
 }
 
-always_inline void v_cpy(Global* g, Value* d, Value const* s) {
-	v_set(g, d, *s);
+always_inline void v_set_float(Value* d, a_float v) {
+	v_setx(d, v_of_float(v));
 }
 
-always_inline void v_cpy_multi(Global* g, Value* d, Value const* s, a_usize n) {
+always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
+	v_set(env, d, v_of_obj(v));
+}
+
+#define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
+
+always_inline void v_cpy(a_henv env, Value* d, Value const* s) {
+	v_set(env, d, *s);
+}
+
+always_inline void v_cpy_multi(a_henv env, Value* d, Value const* s, a_usize n) {
 	for (a_usize i = 0; i < n; ++i) {
-		v_cpy(g, &d[i], &s[i]);
+		v_cpy(env, &d[i], &s[i]);
 	}
 }
 

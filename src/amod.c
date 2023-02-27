@@ -49,7 +49,7 @@ GMod* ai_mod_new(a_henv env, GStr* name, GStr** pkey, a_usize len) {
 	memclr(self->_table._arr, sizeof(DNode) * cap);
 
 	for (a_u32 i = 0; i < len; ++i) {
-		v_setx(&self->_values[i], v_of_nil());
+		v_set_nil(&self->_values[i]);
 	}
 
 	a_u32 hfree = 0;

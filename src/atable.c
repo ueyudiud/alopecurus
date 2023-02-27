@@ -75,8 +75,8 @@ static a_bool tnode_is_hhead(GTable* table, TNode* node, a_hash hash) {
 }
 
 static void tnode_emplace(a_henv env, TNode* node, Value key, a_hash hash, Value value) {
-    v_set(G(env), &node->_key, key);
-    v_set(G(env), &node->_value, value);
+    v_set(env, &node->_key, key);
+    v_set(env, &node->_value, value);
     node->_hash = hash;
 }
 
@@ -273,7 +273,7 @@ void ai_table_set(a_henv env, GTable* self, Value key, Value value) {
 	a_u32 hash;
 	Value* ref = table_get_opt(env, self, key, &hash);
 	if (ref != null) {
-		v_set(G(env), ref, value);
+		v_set(env, ref, value);
 		ai_gc_barrier_val(env, self, value);
 	}
 	else {

@@ -12,13 +12,13 @@ typedef struct GProto GProto;
 typedef struct LocalInfo LocalInfo;
 typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
-typedef struct ProtoCreateInfo ProtoCreateInfo;
+typedef struct ProtoDesc ProtoDesc;
 
-intern GProto* ai_proto_xalloc(a_henv env, ProtoCreateInfo* info);
+intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
 intern GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame);
 intern void ai_proto_delete(Global* g, GProto* self);
-intern void ai_cap_close(a_henv env, Capture** pcap, Value const* base);
+intern void ai_cap_close(a_henv env, CapVal** pcap, Value const* base);
 
 #define PROTO_FLAG_VARARG u16c(0x0001)
 
@@ -55,12 +55,12 @@ struct GFun {
 	Value _capval[0];
 };
 
-struct Capture {
+struct CapVal {
 	Value* _ptr;
 	a_u32 _rc;
 	union {
 		Value _slot;
-		Capture* _next;
+		CapVal* _next;
 	};
 };
 
@@ -75,7 +75,7 @@ struct CapInfo {
 	union {
 		a_u8 _flags;
 		struct {
-			a_u8 _fup: 1; /* Capture from upper closure. */
+			a_u8 _fup: 1; /* CapVal from upper closure. */
 			a_u8 _fro: 1; /* Readonly capture. */
 		};
 	};
@@ -90,12 +90,12 @@ struct LineInfo {
 typedef struct {
 	a_u8 _fdebug: 1;
 	a_u8 _froot: 1;
-} ProtoCreateFlags;
+} ProtoFlags;
 
 /**
  ** Function fixed sized information.
  */
-struct ProtoCreateInfo {
+struct ProtoDesc {
 	a_u32 _nconst;
 	a_u32 _ninsn;
 	a_u16 _nsub;
@@ -103,7 +103,7 @@ struct ProtoCreateInfo {
 	a_u16 _nline;
 	a_u8 _ncap;
 	a_u8 _nstack;
-	ProtoCreateFlags _flags;
+	ProtoFlags _flags;
 };
 
 #endif /* afun_h_ */

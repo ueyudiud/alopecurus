@@ -177,7 +177,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		}
 	}
 	GStr* str = ai_str_new(env, buf->_arr, buf->_len);
-	v_set(G(env), err, v_of_obj(str));
+	v_set_obj(env, err, str);
 	return ALO_SOK;
 }
 
@@ -197,7 +197,7 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 	api_check_slot(env, 1);
 
 	GRefArray* refs = ai_ref_array_new(env, nb + 1);
-	v_set(G(env), api_incr_stack(env), v_of_obj(refs));
+	v_set_obj(env, api_incr_stack(env), refs);
 
 	GStr* name_ref = ai_str_new(env, name, strlen(name));
 	refs->_data[0] = gobj_cast(name_ref);
@@ -207,13 +207,13 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 	}
 
 	GMod* mod = ai_mod_new(env, name_ref, cast(GStr**, &refs->_data[1]), nb);
-	v_set(G(env), api_wrslot(env, -1), v_of_obj(mod));
+	v_set_obj(env, api_wrslot(env, -1), mod);
 
 	for (a_u32 i = 0; i < nb; ++i) {
 		a_cfun fptr = bs[i].fptr;
 		if (fptr != null) {
 			GFun* fun = ai_cfun_create(env, fptr, 0, null);
-			v_set(G(env), &mod->_values[i], v_of_obj(fun));
+			v_set_obj(env, &mod->_values[i], fun);
 		}
 	}
 

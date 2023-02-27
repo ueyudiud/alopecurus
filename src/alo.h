@@ -155,8 +155,8 @@ ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 
 #define alo_pushlstr(env,src) alo_pushstr(env, ""src, sizeof(src) - sizeof((src)[0]))
 
-ALO_EXPORT a_usize (alo_len)(a_henv env, a_isize id);
-ALO_EXPORT a_tag (alo_geti)(a_henv env, a_isize id, a_int key);
+ALO_EXPORT a_usize (alo_rawlen)(a_henv env, a_isize id);
+ALO_EXPORT a_tag (alo_rawgeti)(a_henv env, a_isize id, a_int key);
 ALO_EXPORT void (alo_insert)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_call)(a_henv env, a_usize narg, a_isize nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsav);

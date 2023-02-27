@@ -20,14 +20,14 @@ intern a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name,
 
 typedef struct Sym Sym;
 
-typedef struct CompCapInfo CompCapInfo;
+typedef struct RichCapInfo RichCapInfo;
 
 BUF_STRUCT_DECLARE(SymBuf, Sym);
 BUF_STRUCT_DECLARE(ConstBuf, Value);
 BUF_STRUCT_DECLARE(InsnBuf, a_insn);
 BUF_STRUCT_DECLARE(LineInfoBuf, LineInfo);
 BUF_STRUCT_DECLARE(LocalInfoBuf, LocalInfo);
-BUF_STRUCT_DECLARE(CapInfoBuf, CompCapInfo, CapInfoBuf* _last);
+BUF_STRUCT_DECLARE(CapInfoBuf, RichCapInfo, CapInfoBuf* _last);
 
 struct Parser {
 	union {
