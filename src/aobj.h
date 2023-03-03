@@ -123,7 +123,7 @@ struct GObj {
 #define GMETA_STRUCT_HEADER \
 	GOBJ_STRUCT_HEADER; \
 	a_u32 _len; \
-    VTable _table
+    VTable _impl
 
 struct GMeta {
 	GMETA_STRUCT_HEADER;

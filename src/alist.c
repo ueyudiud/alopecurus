@@ -67,7 +67,7 @@ static void list_splash(Global* g, GList* self) {
 	ai_gc_trace_work(g, sizeof(GList) + sizeof(Value) * self->_cap);
 }
 
-static void list_destruct(Global* g, GList* self) {
+static void list_delete(Global* g, GList* self) {
     ai_mem_vdel(g, self->_data, self->_cap);
     ai_mem_dealloc(g, self, sizeof(GList));
 }
@@ -96,10 +96,10 @@ static VTable const list_vtable = {
 	._tid = T_LIST,
 	._api_tag = ALO_TLIST,
 	._repr_id = REPR_LIST,
-	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL | VTABLE_FLAG_FAST_LENGTH,
 	._name = "list",
 	._splash = fpcast(a_fp_splash, list_splash),
-	._delete = fpcast(a_fp_delete, list_destruct),
+	._delete = fpcast(a_fp_delete, list_delete),
 	._get = fpcast(a_fp_get, list_get),
 	._set = fpcast(a_fp_set, list_set)
 };
