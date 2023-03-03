@@ -52,7 +52,6 @@ static void route_new(GRoute* self, Global* g) {
 		._frame = &self->_base_frame,
 		._base_frame = new(Frame) {
 			._prev = null,
-			._stack_bot_diff = 0,
 			._pc = null
 		}
 	};
@@ -62,7 +61,9 @@ static VTable const route_vtable;
 
 static a_bool route_init(a_henv env, GRoute* self) {
 	self->_vtable = &route_vtable;
-	return ai_stk_init(env, &self->_stack);
+	if (ai_stk_init(env, &self->_stack)) return true;
+	self->_base_frame._stack_bot = val2stk(env, self->_stack._base);
+	return false;
 }
 
 static void route_destroy(Global* g, GRoute* self) {
@@ -115,7 +116,7 @@ a_msg ai_env_resume(a_henv env, GRoute* self) {
 	assume(self->_status == ALO_SYIELD && self->_from == null && route_is_active(env));
 	self->_status = ALO_SOK;
 	self->_from = env;
-	return ai_ctx_swap(env2route(env), env2route(self));
+	return ai_ctx_resume(env2route(env), env2route(self));
 }
 
 void ai_env_yield(a_henv env) {
@@ -123,7 +124,7 @@ void ai_env_yield(a_henv env) {
 	a_henv from_env = env->_from;
 	env->_status = ALO_SYIELD;
 	env->_from = null;
-	ai_ctx_swapx(env2route(env), env2route(from_env), ALO_SOK);
+	ai_ctx_yield(env2route(env), env2route(from_env), ALO_SOK);
 }
 
 a_msg ai_env_protect(a_henv env, a_pfun pfun, void* pctx) {
@@ -208,7 +209,7 @@ void alo_destroy(a_henv env) {
 
 	if (!route_is_main(env)) {
 		/* Swap user stack to ensure stack is keeping. */
-		swap(env2route(env)->_ctx, mr->_route._ctx);
+		ai_ctx_yield(env2route(env), &mr->_route, ALO_SEXIT);
 	}
 
 	/* Clean resources. */

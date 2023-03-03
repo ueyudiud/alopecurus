@@ -27,7 +27,7 @@ typedef a_usize a_trmark;
 typedef a_hobj a_gcnext;
 typedef a_gcnext a_gclist;
 
-typedef struct CapVal CapVal;
+typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Global Global;
 typedef struct alo_Alloc Alloc;
@@ -118,6 +118,7 @@ struct GObj {
 #define VTABLE_FLAG_NONE u16c(0)
 #define VTABLE_FLAG_IDENTITY_EQUAL u16c(0x0001)
 #define VTABLE_FLAG_FAST_LENGTH u16c(0x0002)
+#define VTABLE_FLAG_SPLASH_DIRECT u16c(0x0004)
 
 #define GMETA_STRUCT_HEADER \
 	GOBJ_STRUCT_HEADER; \
@@ -129,7 +130,7 @@ struct GMeta {
 };
 
 always_inline a_bool g_is_str(a_hobj v) {
-	return v->_vtable->_tid == T_ISTR || v->_vtable->_tid == T_HSTR;
+	return v->_vtable->_repr_id == REPR_STR;
 }
 
 always_inline GStr* g_as_str(a_hobj v) {
@@ -138,7 +139,7 @@ always_inline GStr* g_as_str(a_hobj v) {
 }
 
 always_inline a_bool g_is_tuple(a_hobj v) {
-	return v->_vtable->_tid == T_TUPLE;
+	return v->_vtable->_repr_id == REPR_TUPLE;
 }
 
 always_inline GTuple* g_as_tuple(a_hobj v) {
@@ -147,7 +148,7 @@ always_inline GTuple* g_as_tuple(a_hobj v) {
 }
 
 always_inline a_bool g_is_list(a_hobj v) {
-	return v->_vtable->_tid == T_LIST;
+	return v->_vtable->_repr_id == REPR_LIST;
 }
 
 always_inline GList* g_as_list(a_hobj v) {
@@ -156,7 +157,7 @@ always_inline GList* g_as_list(a_hobj v) {
 }
 
 always_inline a_bool g_is_table(a_hobj v) {
-	return v->_vtable->_tid == T_TABLE;
+	return v->_vtable->_repr_id == REPR_TABLE;
 }
 
 always_inline GTable* g_as_table(a_hobj v) {
@@ -165,7 +166,7 @@ always_inline GTable* g_as_table(a_hobj v) {
 }
 
 always_inline a_bool g_is_func(a_hobj v) {
-	return v->_vtable->_tid == T_FUNC;
+	return v->_vtable->_repr_id == REPR_FUNC;
 }
 
 always_inline GFun* g_as_func(a_hobj v) {
@@ -174,7 +175,7 @@ always_inline GFun* g_as_func(a_hobj v) {
 }
 
 always_inline a_bool g_is_mod(a_hobj v) {
-	return v->_vtable->_tid == T_MOD;
+	return v->_vtable->_repr_id == REPR_MOD;
 }
 
 always_inline GMod* g_as_mod(a_hobj v) {
@@ -328,43 +329,43 @@ always_inline void* v_as_ptr(Value v) {
 }
 
 always_inline GObj* v_as_obj(Value v) {
-	assume(v_is_obj(v));
+	assume(v_is_obj(v), "not object.");
 	return cast(GObj*, v_as_ptr_raw(v));
 }
 
 always_inline GStr* v_as_str(Value v) {
-	assume(v_is_str(v));
+	assume(v_is_str(v), "not string.");
 	return g_as_str(v_as_obj(v));
 }
 
 always_inline GTuple* v_as_tuple(Value v) {
-	assume(v_is_tuple(v));
+	assume(v_is_tuple(v), "not tuple.");
 	return g_as_tuple(v_as_obj(v));
 }
 
 always_inline GList* v_as_list(Value v) {
-	assume(v_is_list(v));
+	assume(v_is_list(v), "not list.");
 	return g_as_list(v_as_obj(v));
 }
 
 always_inline GTable* v_as_table(Value v) {
-	assume(v_is_table(v));
+	assume(v_is_table(v), "not table.");
 	return g_as_table(v_as_obj(v));
 }
 
 always_inline GFun* v_as_func(Value v) {
-	assume(v_is_func(v));
+	assume(v_is_func(v), "not function.");
 	return g_as_func(v_as_obj(v));
 }
 
 always_inline GMod* v_as_mod(Value v) {
-	assume(v_is_mod(v));
+	assume(v_is_mod(v), "not module.");
 	return g_as_mod(v_as_obj(v));
 }
 
-always_inline CapVal* v_as_cap(Value v) {
+always_inline RcCap* v_as_cap(Value v) {
 	assume(v_is_cap(v));
-	return cast(CapVal*, v_as_ptr_raw(v));
+	return cast(RcCap*, v_as_ptr_raw(v));
 }
 
 #define v_of_nil() (new(Value) { V_STRICT_NIL })
@@ -381,7 +382,7 @@ always_inline Value v_of_obj(a_hobj v) {
 
 #define v_of_obj(v) v_of_obj(gobj_cast(v))
 
-always_inline Value v_of_cap(CapVal* v) {
+always_inline Value v_of_cap(RcCap* v) {
 	return v_box_nan(T_CAP, addr_of(v));
 }
 

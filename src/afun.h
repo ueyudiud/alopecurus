@@ -9,6 +9,7 @@
 
 typedef struct GProto GProto;
 
+typedef union CapVal CapVal;
 typedef struct LocalInfo LocalInfo;
 typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
@@ -18,23 +19,32 @@ intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
 intern GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame);
 intern void ai_proto_delete(Global* g, GProto* self);
-intern void ai_cap_close(a_henv env, CapVal** pcap, Value const* base);
+intern void ai_cap_close(a_henv env, RcCap** pcap, Value const* base);
 
-#define PROTO_FLAG_VARARG u16c(0x0001)
+#define FUN_FLAG_VARARG u16c(0x0001)
+#define FUN_FLAG_NATIVE u16c(0x0002)
+
+#define GPROTO_STRUCT_HEADER \
+	GOBJ_STRUCT_HEADER;         \
+	a_u32 _len;                 \
+	a_u16 _flags;               \
+	a_u8 _nstack;               \
+	a_u8 _nparam;               \
+	Value* _consts;             \
+	a_insn* _code
+
+typedef struct {
+	GPROTO_STRUCT_HEADER;
+} GThinProto;
 
 struct GProto {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
+	GPROTO_STRUCT_HEADER;
 	a_u16 _nconst;
 	a_u16 _ninsn;
 	a_u16 _nsub;
 	a_u16 _nlocal;
 	a_u16 _nline;
-	a_u16 _flags;
 	a_u8 _ncap;
-	a_u8 _nparam;
-	a_u8 _nstack;
-	a_insn* _code;
 	CapInfo* _caps;
 	GStr* _name;
 	GStr* _dbg_file;
@@ -43,24 +53,37 @@ struct GProto {
 	LineInfo* _dbg_lines;
 	LocalInfo* _dbg_locals;
 	GStr** _dbg_cap_names;
-	GProto** _subs;
 	GFun* _cache;
-	Value _consts[0];
+	GProto* _subs[0];
+};
+
+union CapVal {
+	Value _imm; /* Immediate value. */
+	RcCap* _rc; /* Shared rc value. */
 };
 
 struct GFun {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
+	a_u16 _flags;
+	a_u16 _sym; /* Function symbol. */
 	GProto* _proto;
-	Value _capval[0];
+	union {
+		CapVal _caps[0];
+		Value _vals[0];
+	};
 };
 
-struct CapVal {
+/**
+ ** The capture value using reference counter.
+ */
+struct RcCap {
 	Value* _ptr;
 	a_u32 _rc;
+	a_u8 _touch;
 	union {
 		Value _slot;
-		CapVal* _next;
+		RcCap* _next;
 	};
 };
 
@@ -75,8 +98,8 @@ struct CapInfo {
 	union {
 		a_u8 _flags;
 		struct {
-			a_u8 _fup: 1; /* CapVal from upper closure. */
-			a_u8 _fro: 1; /* Readonly capture. */
+			a_u8 _fup: 1; /* Capture from upper closure. */
+			a_u8 _frc: 1; /* Use RcCap to capture. */
 		};
 	};
 	a_u8 _reg;

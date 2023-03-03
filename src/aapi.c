@@ -86,14 +86,14 @@ void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
  *@return the stack size.
  */
 a_usize alo_stacksize(a_henv env) {
-	return env->_stack._top - env->_stack._bot;
+	return env->_stack._top - ai_stk_bot(env);
 }
 
 a_bool alo_ensure(a_henv env, a_usize n) {
 	Value* const top = env->_stack._top;
 	Value* const limit = env->_stack._limit;
 	assume(top <= limit);
-	Value* require = env->_stack._bot + n;
+	Value* require = ai_stk_bot(env) + n;
 	if (require > top) {
 		if (require > limit) {
 			a_isize diff = ai_stk_grow(env, require);
@@ -110,8 +110,8 @@ a_bool alo_ensure(a_henv env, a_usize n) {
 }
 
 void alo_settop(a_henv env, a_isize n) {
-	Value* v = n >= 0 ? env->_stack._bot + n : env->_stack._top + n;
-	api_check(v >= env->_stack._bot && v <= api_stack_limit(env));
+	Value* v = n >= 0 ? ai_stk_bot(env) + n : env->_stack._top + n;
+	api_check(v >= ai_stk_bot(env) && v <= api_stack_limit(env));
 	Value* u = env->_stack._top;
 	while (u < v) { /* Fill nil value if stack grows. */
 		v_set_nil(u++);
@@ -124,8 +124,8 @@ void alo_settop(a_henv env, a_isize n) {
 a_isize alo_absindex(a_henv env, a_isize id) {
 	if (id < 0 && id >= MIN_NEG_STACK_INDEX) {
 		Value* v = env->_stack._top + id;
-		api_check(v >= env->_stack._bot);
-		id = v - env->_stack._bot;
+		api_check(v >= ai_stk_bot(env));
+		id = v - ai_stk_bot(env);
 	}
 	return id;
 }
@@ -133,13 +133,13 @@ a_isize alo_absindex(a_henv env, a_isize id) {
 Value const* api_roslot(a_henv env, a_isize id) {
 	Value const* v;
 	if (id >= 0) {
-		v = env->_stack._bot + id;
+		v = ai_stk_bot(env) + id;
 		if (v >= env->_stack._top) 
 			return null;
 	}
 	else if (id >= MIN_NEG_STACK_INDEX) {
 		v = env->_stack._top + id;
-		if (v < env->_stack._bot) 
+		if (v < ai_stk_bot(env))
 			return null;
 	}
 	else if (id == ALO_STACK_INDEX_GLOBAL) {
@@ -166,12 +166,12 @@ Value api_elem(a_henv env, a_isize id) {
 Value* api_wrslot(a_henv env, a_isize id) {
 	Value* v;
 	if (id >= 0) {
-		v = env->_stack._bot + id;
+		v = ai_stk_bot(env) + id;
 		api_check(v < env->_stack._top);
 	}
 	else if (id >= MIN_NEG_STACK_INDEX) {
 		v = env->_stack._top + id;
-		api_check(v >= env->_stack._bot);
+		api_check(v >= ai_stk_bot(env));
 	}
 	else if (id == ALO_STACK_INDEX_ERROR) {
 		v = &env->_error;
@@ -261,7 +261,7 @@ a_tag alo_pushvex(a_henv env, char const* sp, va_list varg) {
 		}
 		case 'b': { /* Frame base addressing. */
 			a_usize index = va_arg(varg, a_usize);
-			Value const* p = env->_stack._bot + index;
+			Value const* p = ai_stk_bot(env) + index;
 			if (p >= env->_stack._top) return ALO_TEMPTY;
 			v = *p;
 			break;
@@ -504,12 +504,10 @@ a_msg alo_pcall(a_henv env, a_usize narg, a_isize nres, a_usize nsav) {
 		._nres = cast(a_i32, nres)
 	};
 	Frame* frame = env->_frame;
-	a_isize stack_diff = ptr_diff(env->_stack._bot, env->_stack._base);
 	a_msg msg = ai_env_protect(env, l_pcall, &ctx);
 	if (unlikely(msg != ALO_SOK)) {
 		env->_frame = frame; /* Recover frame. */
-		env->_stack._bot = ptr_disp(Value, env->_stack._base, stack_diff);
-		env->_stack._top = env->_stack._bot + nsav;
+		env->_stack._top = ai_stk_bot(env) + nsav;
 		ai_env_pop_error(env, api_incr_stack(env));
 	}
 	return msg;
@@ -660,7 +658,7 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	if (likely(msg == ALO_SOK)) {
 		v_set_obj(env, api_incr_stack(env), out);
 		if (out->_proto->_ncap > 0) {
-			v_cpy(env, &out->_capval[0], api_rdslot(env, id_env));
+			v_cpy(env, &out->_vals[0], api_rdslot(env, id_env));
 		}
 	}
 	else {

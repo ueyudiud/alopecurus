@@ -60,15 +60,20 @@ typedef struct Route {
 #define CTX_VA_RW PAGE_READWRITE
 #define CTX_VA_RX PAGE_EXECUTE_READ
 
-intern a_msg ai_ctx_swap(Route* from, Route* to);
+intern a_msg ai_ctx_catch_(Route* env, a_pfun fun, void* ctx);
 
-always_inline void ai_ctx_swapx(Route* from, Route* to, a_msg msg) {
+always_inline a_msg ai_ctx_catch(Route* env, a_pfun fun, void* ctx) {
+	asm volatile("movq %0, %%rsi"::"r"(env):"rsi");
+	return ai_ctx_catch_(env, fun, ctx);
+}
+
+always_inline void ai_ctx_yield(Route* from, Route* to, a_msg msg) {
     register a_gpr p1 asm("rcx");
     register a_gpr p2 asm("rdx");
     register a_gpr p3 asm("rax");
     p1 = bcast(a_gpr, from);
     p2 = bcast(a_gpr, to);
     p3 = bcast(a_gpr, cast(a_isize, msg));
-    asm("call %c0"::"p"(ai_ctx_swap), "r"(p1), "r"(p2), "r"(p3));
+    asm("call %c0"::"p"(ai_ctx_resume), "r"(p1), "r"(p2), "r"(p3));
 	unreachable();
 }

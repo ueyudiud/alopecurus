@@ -2040,7 +2040,7 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 			proto->_caps[i] = new(CapInfo) {
 				._reg = cap_info->_src_index,
 				._fup = cap_info->_scope != par->_scope_depth,
-				._fro = (cap_info->_mods & SYM_MOD_READONLY) != 0
+				._frc = (cap_info->_mods & SYM_MOD_READONLY) == 0
 			};
 			if (desc._flags._fdebug) {
 				proto->_dbg_cap_names[i] = cap_info->_name;

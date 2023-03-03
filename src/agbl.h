@@ -70,6 +70,7 @@ always_inline void ai_env_gprotect(a_henv env, a_fp_gsplash splash, a_fp_gexecpt
 always_inline void ai_env_gprotect_clear(a_henv env) {
 	Global* g = G(env);
 	g->_gsplash = null;
+	g->_gexecpt = null;
 	g->_gprotect_ctx = null;
 }
 

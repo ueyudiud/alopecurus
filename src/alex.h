@@ -29,8 +29,6 @@ intern GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len);
 intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
 
-#define lex_file(lex) (lex)->_file->_data
-
 #define ai_lex_error(lex,fmt,args...) ai_par_report(from_member(Parser, _lex, lex), false, "%s:%u: "fmt, lex_file(lex), (lex)->_line, ##args)
 
 enum {
@@ -104,6 +102,10 @@ struct Lexer {
     LexScope* _scope;
     LexScope _scope0;
 };
+
+always_inline char const* lex_file(Lexer* lex) {
+	return lex->_file != null ? ai_str_tocstr(lex->_file) : "<in>";
+}
 
 always_inline void ai_lex_push_scope(Lexer* lex, LexScope* scope) {
     scope->_up = lex->_scope;

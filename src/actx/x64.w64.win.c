@@ -149,11 +149,7 @@ a_msg ai_ctx_init(void) {
 #define Fgbl(f) "i"(addr_of(&cast(Global*, null)->f))
 #define Fteb(f) "i"(addr_of(&cast(ext(PTEB), null)->f))
 
-naked a_none ai_ctx_jump(unused Route* from, unused Route* to) {
-	asm("jmp "L_ENTER);
-}
-
-naked a_msg ai_ctx_swap(unused Route* from, unused Route* to) {
+naked a_msg ai_ctx_resume(unused Route* from, unused Route* to) {
 	/* %rcx = caller, %rdx = callee */
 	/* Save TEB context. */
 	asm("movq %%gs:%c0, %%r8"::Fteb(DeallocationStack));
@@ -259,7 +255,7 @@ static EXCEPTION_DISPOSITION start_except_hook(
 }
 
 static never_inline void rmain(a_henv env) {
-	assume(env->_stack._base == env->_stack._bot);
+	assume(env->_stack._base == stk2val(env, env->_base_frame._stack_bot));
 	ai_vm_call(env, env->_stack._base, new(RFlags) {
 		._count = RFLAG_COUNT_VARARG
 	});
@@ -284,40 +280,41 @@ a_none ai_ctx_raise(unused Route* env, a_msg msg) {
 
 static EXCEPTION_DISPOSITION catch_except_hook(
 		PEXCEPTION_RECORD ExceptionRecord,
-		PVOID EstablisherFrame,
-		PCONTEXT ContextRecord,
+		unused PVOID EstablisherFrame,
+		unused PCONTEXT ContextRecord,
 		PDISPATCHER_CONTEXT DispatcherContext) {
 	a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
 	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
-	a_henv env = &ptr_of(Route, ContextRecord->Rsi)->_body;
+	a_henv env = &ptr_of(Route, DispatcherContext->ContextRecord->Rsi)->_body;
 	Global* g = G(env);
 	if (g->_gexecpt != null) {
 		(*g->_gexecpt)(env, g->_gprotect_ctx, msg);
 	}
 
-	a_u32* prva = DispatcherContext->HandlerData;
-	a_usize pc = DispatcherContext->ImageBase + *prva;
-	RtlUnwind(EstablisherFrame, cast(PVOID, pc), ExceptionRecord, cast(PVOID, cast(a_isize, msg)));
+	a_usize target_ip = DispatcherContext->ImageBase + *((a_u32*) DispatcherContext->HandlerData);
+
+	RtlUnwind(
+			EstablisherFrame,
+			cast(PVOID, target_ip),
+			ExceptionRecord,
+			cast(PVOID, cast(a_isize, msg)));
 	unreachable();
 }
 
-never_inline a_msg ai_ctx_catch(Route* env, a_pfun pfun, void* pctx) {
+never_inline a_msg ai_ctx_catch_(Route* env, a_pfun pfun, void* pctx) {
 	asm(".seh_handler %c0, @except"::"p"(catch_except_hook));
-	asm goto(
-		".seh_handlerdata\n"
-		".rva %c0\n"
-		".long 0\n"
-		".text"::::end_try);
+	asm goto(".seh_handlerdata\n"
+		".rva .final\n"
+		".text"::::final);
 	a_msg msg = ALO_SOK;
 
-	asm("movq %0, %%rsi"::"r"(env):"rsi");
 	(*pfun)(&env->_body, pctx);
 
 	asm(""::"a"(msg));
+final:
+	asm volatile(".final:":"=a"(msg));
 
-end_try:
-	asm volatile("":"=a"(msg));
 	return msg;
 }
 

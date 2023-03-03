@@ -98,32 +98,6 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	}
 }
 
-static a_bool l_vm_less_than(a_henv env, Value v1, Value v2) {
-	if (v_is_int(v1) && v_is_int(v2)) {
-		return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), OP_LT);
-	}
-	else if (v_is_num(v1) && v_is_num(v2)) {
-		return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LT);
-	}
-	else {
-		//TODO
-		l_bad_op_err(env, OP_LT);
-	}
-}
-
-static a_bool l_vm_less_equals(a_henv env, Value v1, Value v2) {
-	if (v_is_int(v1) && v_is_int(v2)) {
-		return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), OP_LE);
-	}
-	else if (v_is_num(v1) && v_is_num(v2)) {
-		return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LE);
-	}
-	else {
-		//TODO
-		l_bad_op_err(env, OP_LE);
-	}
-}
-
 static Value l_vm_get(a_henv env, Value v1, Value v2) {
 	if (unlikely(!v_is_obj(v1))) {
 		goto bad_op;
@@ -152,6 +126,43 @@ static void l_vm_set(a_henv env, Value v1, Value v2, Value v3) {
 
 bad_op:
 	l_bad_op_err(env, OP_GET);
+}
+
+static Value l_vm_bin(a_henv env, Value v1, Value v2, a_enum op) {
+	if (!v_is_obj(v1)) {
+		goto bad_op;
+	}
+	a_hobj obj = v_as_obj(v1);
+	a_fp_binary binary_fp = obj->_vtable->_binary;
+	if (unlikely(binary_fp == null)) {
+		goto bad_op;
+	}
+	return (*binary_fp)(env, obj, v2, op);
+
+bad_op:
+	l_bad_op_err(env, op);
+}
+
+static a_bool l_vm_cmp(a_henv env, Value v1, Value v2, a_enum op) {
+	if (v_is_int(v1) && v_is_int(v2)) {
+		return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), op);
+	}
+	else if (v_is_num(v1) && v_is_num(v2)) {
+		return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), op);
+	}
+
+	if (!v_is_obj(v1)) {
+		goto bad_op;
+	}
+	a_hobj obj = v_as_obj(v1);
+	a_fp_compare compare_fp = obj->_vtable->_compare;
+	if (unlikely(compare_fp == null)) {
+		goto bad_op;
+	}
+	return (*compare_fp)(env, obj, v2, op);
+
+bad_op:
+	l_bad_op_err(env, op);
 }
 
 static void l_move_ret(a_henv env, Value* dst, a_usize dst_len, Value* src, a_usize src_len) {
@@ -183,14 +194,17 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 	GFun* fun = v_as_func(*base);
 	a_insn insn;
-	Value* R;
 	Value const* K;
 
 #define pc (frame._pc)
-#define load_stack() quiet(R = env->_stack._bot)
 #if ALO_STACK_RELOC
+ 	Value* R;
+# define R R
+# define load_stack() quiet(R = env->_stack._bot)
 # define reload_stack() load_stack()
 #else
+# define R stk2val(env, frame._stack_bot)
+# define load_stack() ((void) 0)
 # define reload_stack() ((void) 0)
 #endif
 #define check_gc() ai_gc_trigger_ext(env, (void) 0, reload_stack())
@@ -201,17 +215,16 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		GProto* proto = fun->_proto;
 		a_isize diff = ai_stk_check(env, base + proto->_nstack);
 #if ALO_STACK_RELOC
-		env->_stack._bot = ptr_disp(Value, base, diff);
+		base = ptr_disp(Value, base, diff);
 #else
-		quiet(diff);
-		env->_stack._bot = base;
+		assume(diff == 0, "stack moved.");
 #endif
-		if (!(proto->_flags & PROTO_FLAG_VARARG)) {
-			env->_stack._top = env->_stack._bot + proto->_nstack;
+		if (!(proto->_flags & FUN_FLAG_VARARG)) {
+			env->_stack._top = base + proto->_nstack;
 		}
 		frame = new(Frame) {
 			._prev = env->_frame,
-			._stack_bot_diff = ptr_diff(env->_stack._bot, env->_stack._base),
+			._stack_bot = val2stk(env, base),
 			._caps = env->_frame != null ? env->_frame->_caps : null,
 			._pc = proto->_code,
 			._rflags = rflags
@@ -223,14 +236,16 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	}
 
 	loop {
-		insn = *(pc++);
 		a_u32 bc;
 		a_bool z;
 		a_usize n, a, b, c;
 		a_isize sa, sb, sc;
 		Value vt;
-		a  = bc_load_a(insn);
-		switch (bc = bc_load_op(insn)) {
+
+		insn = *(pc++);
+		a = bc_load_a(insn);
+		bc = bc_load_op(insn);
+		switch (bc) {
 			case BC_NOP: {
 				break;
 			}
@@ -241,13 +256,13 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			}
 			case BC_LDC: {
 				b = bc_load_b(insn);
-				CapVal* cap = v_as_cap(fun->_capval[b]);
+				RcCap* cap = fun->_caps[b]._rc;
 				v_cpy(env, &R[a], cap->_ptr);
 				break;
 			}
 			case BC_STC: {
 				b = bc_load_b(insn);
-				CapVal* cap = v_as_cap(fun->_capval[a]);
+				RcCap* cap = fun->_caps[a]._rc;
 				v_cpy(env, cap->_ptr, &R[b]);
 				ai_gc_barrier_back_val(env, fun, R[b]);
 				break;
@@ -332,14 +347,14 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_CGETK: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				vt = l_vm_get(env, fun->_capval[b], K[c]);
+				vt = l_vm_get(env, fun->_caps[b]._imm, K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_CGETKX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
-				vt = l_vm_get(env, fun->_capval[b], K[c]);
+				vt = l_vm_get(env, fun->_caps[b]._imm, K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -386,8 +401,9 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					//TODO
-					l_bad_op_err(env, op);
+					vt = l_vm_bin(env, vb, vc, op);
+					reload_stack();
+					v_set(env, &R[a], vt);
 				}
 				break;
 			}
@@ -413,8 +429,9 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					//TODO
-					l_bad_op_err(env, op);
+					vt = l_vm_bin(env, vb, vc, op);
+					reload_stack();
+					v_set(env, &R[a], vt);
 				}
 				break;
 			}
@@ -435,8 +452,8 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_int(&R[a], val);
 				}
 				else {
-					//TODO
-					l_bad_op_err(env, op);
+					vt = l_vm_bin(env, vb, vc, op);
+					v_set(env, &R[a], vt);
 				}
 				break;
 			}
@@ -459,8 +476,9 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					//TODO
-					l_bad_op_err(env, op);
+					vt = l_vm_bin(env, vb, v_of_int(ic), op);
+					reload_stack();
+					v_set(env, &R[a], vt);
 				}
 				break;
 			}
@@ -485,8 +503,9 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					//TODO
-					l_bad_op_err(env, op);
+					vt = l_vm_bin(env, vb, v_of_int(ic), op);
+					reload_stack();
+					v_set(env, &R[a], vt);
 				}
 				break;
 			}
@@ -507,8 +526,9 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_int(&R[a], val);
 				}
 				else {
-					//TODO
-					l_bad_op_err(env, op);
+					vt = l_vm_bin(env, vb, v_of_int(ic), op);
+					reload_stack();
+					v_set(env, &R[a], vt);
 				}
 				break;
 			}
@@ -535,7 +555,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLT: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				z = l_vm_less_than(env, R[b], R[c]);
+				z = l_vm_cmp(env, R[b], R[c], OP_LT);
 				goto jump_or_test;
 			}
 			case BC_BLE:
@@ -544,7 +564,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLE: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				z = l_vm_less_equals(env, R[b], R[c]);
+				z = l_vm_cmp(env, R[b], R[c], OP_LE);
 				goto jump_or_test;
 			}
 			case BC_BEQI:
@@ -562,7 +582,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLTI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_less_than(env, R[b], v_of_int(sc));
+				z = l_vm_cmp(env, R[b], v_of_int(sc), OP_LT);
 				goto jump_or_test;
 			}
 			case BC_BLEI:
@@ -571,7 +591,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLEI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_less_equals(env, R[b], v_of_int(sc));
+				z = l_vm_cmp(env, R[b], v_of_int(sc), OP_LE);
 				goto jump_or_test;
 			}
 			case BC_BGTI:
@@ -580,7 +600,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNGTI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_less_than(env, v_of_int(sc), R[b]);
+				z = l_vm_cmp(env, v_of_int(sc), R[b], OP_LT);
 				goto jump_or_test;
 			}
 			case BC_BGEI:
@@ -589,7 +609,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNGEI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_less_equals(env, v_of_int(sc), R[b]);
+				z = l_vm_cmp(env, v_of_int(sc), R[b], OP_LE);
 				goto jump_or_test;
 			}
 			jump_or_test: {
@@ -635,11 +655,10 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				goto vm_return;
 			}
 			case BC_FC: {
-				a_cfun cf = bcast(a_cfun, fun->_capval[fun->_len - 1]);
+				a_cfun cf = bcast(a_cfun, fun->_caps[fun->_len - 1]);
 				a_usize m = (*cf)(env);
 				n = frame._rflags._count != RFLAG_COUNT_VARARG ? cast(a_usize, frame._rflags._count) : m;
 				api_check_elem(env, m);
-				R = env->_stack._bot;
 				l_move_ret(env, R - 1, n, env->_stack._top - m, m);
 				goto vm_return;
 			}
@@ -654,7 +673,7 @@ vm_meta_call:
 
 vm_return:
 	env->_frame = frame._prev;
-	env->_stack._bot = ptr_disp(Value, env->_stack._base, env->_frame->_stack_bot_diff);
 	ai_cap_close(env, &frame._caps, R);
 #undef pc
+#undef R
 }

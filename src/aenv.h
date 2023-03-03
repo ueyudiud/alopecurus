@@ -47,12 +47,12 @@ typedef struct {
 struct Frame {
 	Frame* _prev;
 	a_insn* _pc;
-	a_isize _stack_bot_diff;
-	CapVal* _caps;
+	StkPtr _stack_bot;
+	RcCap* _caps;
 	RFlags _rflags;
 	/* In strict stack checking mode, the API will use frame bound to check index range. */
 #if ALO_STRICT_STACK_CHECK
-	Value* _bound;
+	StkPtr _bound;
 #endif
 };
 
@@ -69,6 +69,36 @@ struct alo_Env {
 };
 
 #define G(env) ((env)->_g)
+
+always_inline void check_in_stack(a_henv env, Value* v) {
+	assume(v >= env->_stack._base && v < env->_stack._limit + RESERVED_STACK_SIZE);
+}
+
+always_inline StkPtr val2stk(a_henv env, Value* v) {
+	check_in_stack(env, v);
+#if ALO_STACK_RELOC
+	return ptr_diff(v, env->_stack._base);
+#else
+	quiet(env);
+	return v;
+#endif
+}
+
+always_inline Value* stk2val(a_henv env, StkPtr p) {
+	Value* v;
+#if ALO_STACK_RELOC
+	v = ptr_disp(Value, env->_stack._base, p);
+#else
+	quiet(env);
+	v = p;
+#endif
+	check_in_stack(env, v);
+	return v;
+}
+
+always_inline Value* ai_stk_bot(a_henv env) {
+	return stk2val(env, env->_frame->_stack_bot);
+}
 
 always_inline void ai_env_pop_error(a_henv env, Value* d) {
 	v_cpy(env, d, &env->_error);

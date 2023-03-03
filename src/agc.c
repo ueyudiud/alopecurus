@@ -67,16 +67,21 @@ void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 	join_gc(&g->_gc_fixed, strip_gc(&g->_gc_normal));
 }
 
-void ai_gc_trace_mark_(Global* g, a_hobj obj) {
-	if (g_is_white(g, obj) && obj->_vtable->_splash != null) {
-		join_trace(&g->_tr_gray, obj);
-	}
+always_inline void splash_object(Global* g, a_hobj obj) {
+	a_fp_splash splash_fp = obj->_vtable->_splash;
+	assume(splash_fp != null);
+	(*splash_fp)(g, obj);
 }
 
-always_inline void splash_object(Global* g, a_hobj obj) {
-	a_fp_splash splash = obj->_vtable->_splash;
-	if (splash != null) {
-		(*splash)(g, obj);
+void ai_gc_trace_mark_(Global* g, a_hobj obj) {
+	if (g_is_white(g, obj) && obj->_vtable->_splash != null) {
+		if (obj->_vtable->_flags & VTABLE_FLAG_SPLASH_DIRECT) {
+			obj->_tnext = trmark_null; /* Mark object to gray. */
+			splash_object(g, obj);
+		}
+		else {
+			join_trace(&g->_tr_gray, obj);
+		}
 	}
 }
 

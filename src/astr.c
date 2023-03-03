@@ -186,19 +186,20 @@ a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr) {
 
 GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
     char buf[ALOI_SHTSTR_THRESHOLD + 1];
+
     va_list varg2;
     va_copy(varg2, varg);
-    a_usize len = cast(a_usize, cast(a_isize, vsnprintf(buf, sizeof(buf), fmt, varg)));
+    a_usize len = cast(a_isize, vsnprintf(buf, sizeof(buf), fmt, varg2));
+	va_end(varg2);
+
     if (len <= ALOI_SHTSTR_THRESHOLD) {
-        va_end(varg2);
         return ai_istr_new(env, buf, len);
     }
     else {
         GStr* self = ai_mem_alloc(env, sizeof(GStr) + len);
 		self->_vtable = &hstr_vtable;
         self->_len = len;
-        vsprintf(cast(char*, self->_data), fmt, varg2);
-        va_end(varg2);
+        vsprintf(cast(char*, self->_data), fmt, varg);
         self->_hash = ai_str_hashof(G(env)->_seed, self->_data, len);
         ai_gc_register_object(env, self);
         return self;

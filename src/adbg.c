@@ -27,12 +27,12 @@ a_none ai_dbg_panic(char const* fmt, ...) {
 #endif
 
 GFun* ai_dbg_get_func(a_henv env, Frame* frame) {
-	Value* bot = ptr_disp(Value, env->_stack._base, frame->_stack_bot_diff);
+	Value* bot = stk2val(env, frame->_stack_bot);
 	return bot > env->_stack._base ? v_as_func(bot[-1]) : null;
 }
 
 a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc) {
-	if (proto->_dbg_lines != null) {
+	if (!(proto->_flags & FUN_FLAG_NATIVE) && proto->_dbg_lines != null) {
 		a_u32 disp = pc - proto->_code;
 		a_u32 lo = 0;
 		a_u32 hi = proto->_nline - 1;

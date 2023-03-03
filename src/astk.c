@@ -28,6 +28,7 @@ static a_usize l_to_page_size(a_usize stack_size) {
 
 a_bool ai_stk_init(a_henv env, Stack* stack) {
 	Value* base;
+
 #if ALO_STACK_INNER
 	base = ai_mem_vxnew(env, Value, INIT_STACK_SIZE_WITH_RESERVED);
 	if (unlikely(base == null)) return true;
@@ -38,7 +39,7 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	a_usize init_page_size = l_to_page_size(INIT_STACK_SIZE_WITH_RESERVED);
 	void* result = ai_mem_ncommit(base, init_page_size, CTX_VA_RW);
 	if (unlikely(result == null)) {
-		ai_mem_nrelease(base, sizeof(Value) * MAX_STACK_SIZE_WITH_RESERVED);
+		ai_mem_nrelease(base, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));
 		return true;
 	}
 	stack->_alloc_size = init_page_size;
@@ -47,13 +48,14 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	*stack = new(Stack) {
 		._base = base,
 		._limit = base + INIT_STACK_SIZE,
-		._bot = base,
 		._top = base
 	};
 
 # if ALO_STRICT_STACK_CHECK
 	self->_base_frame._bound = stack->_base + ALOI_INIT_CFRAMESIZE;
 # endif
+
+
 
 	return false;
 }
@@ -63,7 +65,8 @@ static void stack_reloc(a_henv env, a_isize diff) {
 	Stack* stack = &env->_stack;
 	stack->_bot = ptr_disp(Value, stack->_bot, diff);
 	stack->_top = ptr_disp(Value, stack->_top, diff);
-	for (CapVal* cap = env->_frame->_caps; cap != null; cap = cap->_next) {
+
+	for (RcCap* cap = env->_frame->_caps; cap != null; cap = cap->_next) {
 		cap->_ptr = ptr_disp(Value, cap->_ptr, diff);
 	}
 }
@@ -71,6 +74,7 @@ static void stack_reloc(a_henv env, a_isize diff) {
 
 static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	a_isize diff;
+
 #if ALO_STACK_INNER
 	a_usize size_old = stack->_limit - stack->_base + RESERVED_STACK_SIZE;
 	Value* stack_old = stack->_base;

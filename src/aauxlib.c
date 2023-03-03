@@ -135,7 +135,8 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		assume(fun != null);
 		GProto* proto = fun->_proto;
 		char const* file = proto->_dbg_file != null ? ai_str_tocstr(proto->_dbg_file) : null;
-		a_u32 line = ai_dbg_get_line(proto, frame->_pc);
+		a_insn const* pc = head ? frame->_pc : frame->_pc - 1;
+		a_u32 line = ai_dbg_get_line(proto, pc);
 		if (head) {
 			if (file != null) {
 				ai_buf_putf(env, buf, "%s:%u: ", file, line);

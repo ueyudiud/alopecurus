@@ -42,12 +42,17 @@ intern void ai_stk_deinit(Global* g, Stack* stack);
 
 struct Stack {
 	Value* _base;
-	Value* _bot;
 	Value* _top;
 	Value* _limit;
 #if ALO_STACK_MMAP
 	a_usize _alloc_size;
 #endif
 };
+
+#if ALO_STACK_RELOC
+typedef a_isize StkPtr;
+#else
+typedef Value* StkPtr;
+#endif
 
 #endif /* astk_h_ */

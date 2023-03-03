@@ -33,7 +33,7 @@ static void l_report(char const* fmt, ...) {
 }
 
 static void l_hook(a_henv env, a_msg msg, unused a_hctx ctx) {
-	if (msg != ALO_ECHUNK) {
+	if (msg < 0) {
 		aloL_traceerror(env, ALO_STACK_INDEX_ERROR, 6);
 	}
 }
@@ -99,12 +99,12 @@ error:
 }
 
 static a_i32 l_source_input(unused a_henv env, void* rctx, void const** pdst, a_usize* plen) {
-	InLine** pfrag = rctx;
-	InLine* frag = *pfrag;
-	if (frag != null) {
-		*pdst = frag->_body;
-		*plen = frag->_len;
-		*pfrag = frag->_next;
+	InLine** pline = rctx;
+	InLine* line = *pline;
+	if (line != null) {
+		*pdst = line->_body;
+		*plen = line->_len;
+		*pline = line->_next;
 	}
 	else {
 		*pdst = null;
@@ -122,8 +122,8 @@ static a_bool l_try_comp_console(a_henv env, a_bool expr, a_bool* psuccess) {
 		l_source_input, 
 		&ctx, 
 		ALO_STACK_INDEX_GLOBAL, 
-		ALO_STACK_INDEX_EMPTY, 
-		0, 
+		0,
+		1,
 		ALO_COMP_OPT_ALOC1 | (expr ? ALO_COMP_OPT_EVAL : 0));
 
 	switch (msg) {
@@ -136,7 +136,7 @@ static a_bool l_try_comp_console(a_henv env, a_bool expr, a_bool* psuccess) {
 			fallthrough;
 		}
 		case ALO_ESTMUF: {
-			alo_settop(env, 1);
+			alo_settop(env, 2);
 			return false;
 		}
 		default: {
@@ -154,8 +154,10 @@ static a_bool l_comp_console(a_henv env) {
 	a_bool success;
 	/* stack: <empty> */
 
+	alo_pushlstr(env, "__main__");
 	alo_pushlstr(env, "stdin");
-	/* stack: name */
+
+	/* stack: file name */
 
 	l_in = new(InFull) { ._head = null, ._tail = &l_in._head };
 
@@ -173,6 +175,7 @@ static a_bool l_comp_console(a_henv env) {
 end:
 	if (success) {
 		alo_pop(env, 0); /* Drop arguments. */
+		alo_settop(env, 1);
 	}
 	else {
 		alo_settop(env, 0);

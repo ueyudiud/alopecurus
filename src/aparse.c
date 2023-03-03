@@ -45,8 +45,8 @@ static a_bool l_test_skip(Parser* par, a_i32 tk) {
 }
 
 a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...) {
-	va_list varg;
 	if (!eof || !(par->_options & ALO_COMP_OPT_ALOC1)) {
+		va_list varg;
 		va_start(varg, fmt);
 		ai_err_raisevf(par->_env, ALO_ECHUNK, fmt, varg);
 		va_end(varg);

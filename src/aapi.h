@@ -28,7 +28,7 @@ always_inline void api_check_slot(a_henv env, a_usize size) {
 }
 
 always_inline void api_check_elem(a_henv env, a_usize size) {
-    api_check(env->_stack._bot + size <= env->_stack._top, "no enough stack element.");
+    api_check(ai_stk_bot(env) + size <= env->_stack._top, "no enough stack element.");
 }
 
 always_inline Value* api_incr_stack(a_henv env) {
