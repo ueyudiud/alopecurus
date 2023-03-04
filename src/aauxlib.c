@@ -134,7 +134,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		GFun* fun = ai_dbg_get_func(env, frame);
 		assume(fun != null);
 		GProto* proto = fun->_proto;
-		char const* file = proto->_dbg_file != null ? ai_str_tocstr(proto->_dbg_file) : null;
+		char const* file = proto->_dbg_file != null ? str2ntstr(proto->_dbg_file) : null;
 		a_insn const* pc = head ? frame->_pc : frame->_pc - 1;
 		a_u32 line = ai_dbg_get_line(proto, pc);
 		if (head) {
@@ -174,7 +174,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 			ai_buf_putf(env, buf, "at %s", file ?: "?");
 		}
 		if (proto->_name != null) {
-			ai_buf_putf(env, buf, " (%s)", ai_str_tocstr(proto->_name));
+			ai_buf_putf(env, buf, " (%s)", str2ntstr(proto->_name));
 		}
 	}
 	GStr* str = ai_str_new(env, buf->_arr, buf->_len);

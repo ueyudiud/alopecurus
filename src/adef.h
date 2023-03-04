@@ -114,8 +114,8 @@ typedef a_u32 a_insn;
 #define usizec u64c
 #define isizec i64c
 
-#define ISIZE_MAX INT64_MAX
-#define ISIZE_MIN INT64_MIN
+#define ISIZE_MAX PTRDIFF_MAX
+#define ISIZE_MIN PTRDIFF_MIN
 
 /* Other literals. */
 

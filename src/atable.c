@@ -241,7 +241,7 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 	else if (likely(v_is_hstr(key))) {
 		GStr* str = v_as_str(key);
 		*phash = str->_hash;
-		a_lstr lstr = { ._ptr = ai_str_tocstr(str), ._len = str->_len };
+		a_lstr lstr = { ._ptr = str2ntstr(str), ._len = str->_len };
 		return table_find_str(env, self, str->_hash, &lstr);
 	}
 	else if (unlikely(v_is_float(key))) {

@@ -151,7 +151,7 @@ GRoute* ai_env_new(a_henv env, a_usize stack_size) {
 static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env2route(env));
 	ai_str_boost(env);
-	ai_strx_open(env, m->_strx_reserved, m->_global._strx);
+	ai_strx_boost(env, m->_strx_reserved, m->_global._strx - 1);
 
 	GTable* gtable = ai_table_new(env);
 	v_set_obj(env, &G(env)->_global, gtable);

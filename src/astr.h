@@ -12,16 +12,10 @@
 # define ALOI_INIT_SHTSTR_TABLE_CAPACITY 64
 #endif
 
-#ifndef ALOI_SHTSTR_THRESHOLD
-# define ALOI_SHTSTR_THRESHOLD 40
-#endif
-
 typedef struct IStr IStr;
 
 intern a_hash ai_str_hashof(a_hash seed, void const* src, a_usize len);
 intern GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 tag);
-intern GStr* ai_str_new2(a_henv env, void const* src, a_usize len, a_hash hash);
-intern GStr* ai_istr_new(a_henv env, void const* src, a_usize len);
 intern GStr* ai_str_new(a_henv env, void const* src, a_usize len);
 intern a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr);
 intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
@@ -44,6 +38,8 @@ struct IStr {
 	GStr _body;
 };
 
+#define ISTR_MAX_LEN 255
+
 always_inline a_usize hstr_size(a_usize len) {
 	return sizeof(GStr) + len + 1;
 }
@@ -52,7 +48,7 @@ always_inline a_usize istr_size(a_usize len) {
 	return sizeof(IStr) + len + 1;
 }
 
-always_inline char const* ai_str_tocstr(GStr* self) {
+always_inline char const* str2ntstr(GStr* self) {
 	return cast(char const*, self->_data);
 }
 

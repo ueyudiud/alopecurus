@@ -330,28 +330,28 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				v_set(env, &R[a], vt);
 				break;
 			}
-			case BC_GETK: {
+			case BC_GETS: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
 				vt = l_vm_get(env, R[b], K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
-			case BC_GETKX: {
+			case BC_GETSX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
 				vt = l_vm_get(env, R[b], K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
-			case BC_CGETK: {
+			case BC_CGETS: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
 				vt = l_vm_get(env, fun->_caps[b]._imm, K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
-			case BC_CGETKX: {
+			case BC_CGETSX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
 				vt = l_vm_get(env, fun->_caps[b]._imm, K[c]);

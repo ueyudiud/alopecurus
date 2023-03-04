@@ -104,7 +104,7 @@ struct Lexer {
 };
 
 always_inline char const* lex_file(Lexer* lex) {
-	return lex->_file != null ? ai_str_tocstr(lex->_file) : "<in>";
+	return lex->_file != null ? str2ntstr(lex->_file) : "<in>";
 }
 
 always_inline void ai_lex_push_scope(Lexer* lex, LexScope* scope) {

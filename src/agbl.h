@@ -18,7 +18,7 @@ typedef struct {
 	IStr** _table;
 	a_usize _len;
 	a_usize _hmask; /* Hash code mask. */
-} IStrTable;
+} IStrCache;
 
 typedef void (*a_fp_gexecpt)(a_henv env, void* ctx, a_msg msg);
 typedef void (*a_fp_gsplash)(Global* g, void* ctx);
@@ -46,7 +46,7 @@ struct Global {
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
 	ModCache _mod_cache;
-	IStrTable _istable;
+	IStrCache _istr_cache;
 	a_hash _seed;
 	a_u16 _gcpausemul;
 	a_u16 _gcstepmul;
@@ -54,7 +54,7 @@ struct Global {
 	a_u8 _white_color;
 	a_u8 _gcstep;
 	volatile atomic_uint_fast8_t _hookm;
-	GStr* _strx[STRX__MAX - 1];
+	GStr* _strx[STRX__END - 1];
 };
 
 #define ALO_HMSWAP 0x80

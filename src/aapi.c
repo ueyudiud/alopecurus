@@ -329,7 +329,7 @@ char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 	GStr* val = ai_str_new(env, src, len);
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
-	return ai_str_tocstr(val);
+	return str2ntstr(val);
 }
 
 char const* alo_pushfstr(a_henv env, char const* fmt, ...) {
@@ -344,7 +344,7 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 	GStr* val = ai_str_format(env, fmt, varg);
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
-	return ai_str_tocstr(val);
+	return str2ntstr(val);
 }
 
 void alo_pushmod(a_henv env, a_hmod mod) {
@@ -578,7 +578,7 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	if (plen != null) {
 		*plen = cast(a_usize, val->_len);
 	}
-	return ai_str_tocstr(val);
+	return str2ntstr(val);
 }
 
 a_htype alo_typeof(a_henv env, a_isize id) {

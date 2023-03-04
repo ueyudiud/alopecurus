@@ -232,7 +232,7 @@ char const* ai_lex_tagname(a_i32 tag) {
 char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
     switch (tk->_tag) {
 		case TK_IDENT: {
-			return ai_str_tocstr(tk->_str);
+			return str2ntstr(tk->_str);
 		}
 		case TK_INTEGER: {
 			a_usize len = ai_fmt_i2s(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_int);
@@ -251,7 +251,7 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 				sprintf(src, "<string with %u bytes>", str->_len);
 			}
 			else {
-				sprintf(src, "\"%s\"", ai_str_tocstr(str));
+				sprintf(src, "\"%s\"", str2ntstr(str));
 			}
 			return src;
 		}

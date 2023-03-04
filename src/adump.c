@@ -41,7 +41,7 @@ static void dump_const(Value v) {
 				aloi_show("<%u bytes string>", str->_len);
 			}
 			else {
-				aloi_show("\"%s\"", ai_str_tocstr(str));
+				aloi_show("\"%s\"", str2ntstr(str));
 			}
 			break;
 		}
@@ -155,12 +155,20 @@ static void dump_code(GProto* meta, a_bool fline) {
 				aloi_show("%4u %4u %4u\n", bc_load_a(i), bc_load_b(i), bc_load_c(i));
 				break;
 			}
-			case BC_GETK:
-			case BC_CGETK:
+			case BC_GETS:
+			case BC_CGETS:
 			case BC_SETK: {
 				a_u32 c = bc_load_c(i);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), c);
 				dump_const(meta->_consts[c]);
+				aloi_show("\n");
+				break;
+			}
+			case BC_GETSX:
+			case BC_CGETSX: {
+				a_u32 ex = bc_load_ax(*p++);
+				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), ex);
+				dump_const(meta->_consts[ex]);
 				aloi_show("\n");
 				break;
 			}
@@ -218,10 +226,10 @@ static void dump_code(GProto* meta, a_bool fline) {
 static void dump_proto(a_henv env, GProto* proto, a_u32 options) {
 	aloi_show("fn ");
 	if (proto->_name != null) {
-		aloi_show("%s ", ai_str_tocstr(proto->_name));
+		aloi_show("%s ", str2ntstr(proto->_name));
 	}
 	if (proto->_dbg_file != null) {
-		aloi_show("<%s:%u,%u>", ai_str_tocstr(proto->_dbg_file), proto->_dbg_lndef, proto->_dbg_lnldef);
+		aloi_show("<%s:%u,%u>", str2ntstr(proto->_dbg_file), proto->_dbg_lndef, proto->_dbg_lnldef);
 	}
 	aloi_show("\n%u %s, %u %s, %u %s, %u %s, %u %s, %u %s\n",
 			Ks("param", proto->_nparam),
@@ -244,13 +252,13 @@ static void dump_proto(a_henv env, GProto* proto, a_u32 options) {
 			aloi_show("local info table <%p>\n", proto->_dbg_locals);
 			for (a_u32 i = 0; i < proto->_nlocal; ++i) {
 				LocalInfo* info = &proto->_dbg_locals[i];
-				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n", i, info->_reg, ai_str_tocstr(info->_name), info->_begin_label, info->_end_label);
+				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n", i, info->_reg, str2ntstr(info->_name), info->_begin_label, info->_end_label);
 			}
 			printf("capture info table <%p>\n", proto->_caps);
 			for (a_u32 i = 0; i < proto->_ncap; ++i) {
 				CapInfo* info = &proto->_caps[i];
 				GStr* name = proto->_dbg_cap_names[i];
-				aloi_show("\t%5u\t%c[%u]\t%s\n", i, info->_fup ? 'C' : 'R', info->_reg, ai_str_tocstr(name));
+				aloi_show("\t%5u\t%c[%u]\t%s\n", i, info->_fup ? 'C' : 'R', info->_reg, str2ntstr(name));
 			}
 		}
 		else {

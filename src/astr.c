@@ -41,11 +41,11 @@ a_hash ai_str_hashof(a_hash seed, void const* src, a_usize len) {
     return hash;
 }
 
-static void grow_istable(a_henv env, IStrTable* istable) {
-    a_usize old_size = istable->_hmask + 1;
+static void cache_grow(a_henv env, IStrCache* cache) {
+    a_usize old_size = cache->_hmask + 1;
     a_usize new_size = old_size * 2;
 
-    IStr** table = ai_mem_vgrow(env, istable->_table, old_size, new_size);
+    IStr** table = ai_mem_vgrow(env, cache->_table, old_size, new_size);
 
     /* Move strings. */
     for (a_usize i = 0; i < old_size; ++i) {
@@ -66,19 +66,19 @@ static void grow_istable(a_henv env, IStrTable* istable) {
         *p = *q = null;
     }
 
-    istable->_table = table;
-    istable->_hmask = new_size - 1;
+	cache->_table = table;
+	cache->_hmask = new_size - 1;
 }
 
-static IStr** istable_slot(IStrTable* istable, a_hash hash) {
-    return &istable->_table[hash & istable->_hmask];
+static IStr** cache_head(IStrCache* cache, a_hash hash) {
+    return &cache->_table[hash & cache->_hmask];
 }
 
-static void istable_emplace(IStrTable* istable, IStr* self) {
-	IStr** slot = istable_slot(istable, self->_body._hash);
+static void cache_emplace(IStrCache* cache, IStr* self) {
+	IStr** slot = cache_head(cache, self->_body._hash);
 	self->_next = *slot;
 	*slot = self;
-	istable->_len += 1;
+	cache->_len += 1;
 }
 
 static GStr* hstr_alloc(a_henv env, a_usize len) {
@@ -96,9 +96,11 @@ static void istr_init(IStr* self, void const* src, a_usize len, a_hash hash) {
     self->_body._data[len] = '\0';
 }
 
-static GStr* istr_of(a_henv env, void const* src, a_usize len, a_hash hash) {
+static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
+	assume(len <= ISTR_MAX_LEN);
+
     Global* g = G(env);
-    IStrTable* istable = &g->_istable;
+    IStrCache* istable = &g->_istr_cache;
 
     /* Try lookup string in intern table. */
     for (IStr* str = istable->_table[hash & istable->_hmask]; str != null; str = str->_next) {
@@ -112,14 +114,14 @@ static GStr* istr_of(a_henv env, void const* src, a_usize len, a_hash hash) {
     }
 
     if (unlikely(istable->_len == istable->_hmask)) {
-        grow_istable(env, istable);
+		cache_grow(env, istable);
     }
 
 	/* String not found, create new string. */
 	IStr* self = ai_mem_alloc(env, istr_size(len));
 	self->_body._vtable = &istr_vtable;
 	istr_init(self, src, len, hash);
-	istable_emplace(istable, self);
+	cache_emplace(istable, self);
     ai_gc_register_object(env, &self->_body);
     return &self->_body;
 }
@@ -140,32 +142,25 @@ GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 t
 	self->_body._vtable = &dstr_vtable;
 	istr_init(self, src, len, hash);
 	strx_id_set(&self->_body, tag);
-	istable_emplace(&g->_istable, self);
+	cache_emplace(&g->_istr_cache, self);
 	return &self->_body;
 }
 
-GStr* ai_str_new2(a_henv env, void const* src, a_usize len, a_hash hash) {
-    assume(hash == ai_str_hashof(G(env)->_seed, src, len));
-    return likely(len <= ALOI_SHTSTR_THRESHOLD) ?
-		   istr_of(env, src, len, hash) :
-		   hstr_new(env, src, len, hash);
-}
-
-GStr* ai_istr_new(a_henv env, void const* src, a_usize len) {
+static GStr* istr_get(a_henv env, void const* src, a_usize len) {
 	a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
-	return istr_of(env, src, len, hash);
+	return istr_get2(env, src, len, hash);
 }
 
 GStr* ai_str_new(a_henv env, void const* src, a_usize len) {
     a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
-	return ai_str_new2(env, src, len, hash);
+	return likely(len <= ISTR_MAX_LEN) ? istr_get2(env, src, len, hash) : hstr_new(env, src, len, hash);
 }
 
 a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr) {
-	if (len <= ALOI_SHTSTR_THRESHOLD) {
-		char buf[ALOI_SHTSTR_THRESHOLD];
+	if (len <= ISTR_MAX_LEN) {
+		char buf[ISTR_MAX_LEN + 1];
 		check(ai_io_iget(in, buf, len));
-		*pstr = ai_istr_new(env, buf, len);
+		*pstr = istr_get(env, buf, len);
 		return ALO_SOK;
 	}
 	else {
@@ -185,15 +180,15 @@ a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr) {
 }
 
 GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
-    char buf[ALOI_SHTSTR_THRESHOLD + 1];
+    char buf[ISTR_MAX_LEN + 1];
 
     va_list varg2;
     va_copy(varg2, varg);
     a_usize len = cast(a_isize, vsnprintf(buf, sizeof(buf), fmt, varg2));
 	va_end(varg2);
 
-    if (len <= ALOI_SHTSTR_THRESHOLD) {
-        return ai_istr_new(env, buf, len);
+    if (len <= ISTR_MAX_LEN) {
+        return istr_get(env, buf, len);
     }
     else {
         GStr* self = ai_mem_alloc(env, sizeof(GStr) + len);
@@ -217,19 +212,19 @@ a_bool ai_str_equals(GStr* self, GStr* other) {
 void ai_str_boost(a_henv env) {
     Global* g = G(env);
     
-    IStrTable* istable = &g->_istable;
-    istable->_table = ai_mem_vnew(env, IStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
-    istable->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
-    memset(istable->_table, 0, sizeof(IStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+    IStrCache* cache = &g->_istr_cache;
+	cache->_table = ai_mem_vnew(env, IStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+	cache->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
+    memset(cache->_table, 0, sizeof(IStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
     
     g->_nomem_error = ai_str_newl(env, "out of memory.");
     ai_gc_fix_object(env, g->_nomem_error);
 }
 
 void ai_str_clean(Global* g) {
-    IStrTable* istable = &g->_istable;
-    assume(istable->_len == STRX__MAX - 1);
-    ai_mem_vdel(g, istable->_table, istable->_hmask + 1);
+    IStrCache* cache = &g->_istr_cache;
+    assume(cache->_len == STRX__END - 1);
+    ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 }
 
 static void istr_splash(Global* g, GStr* self) {
@@ -237,11 +232,11 @@ static void istr_splash(Global* g, GStr* self) {
 }
 
 static void istr_delete(Global* g, GStr* self) {
-	IStrTable* istable = &g->_istable;
+	IStrCache* istable = &g->_istr_cache;
 	IStr* self0 = from_member(IStr, _body, self);
 
 	/* Remove string from intern table. */
-	IStr** slot = istable_slot(istable, self->_hash);
+	IStr** slot = cache_head(istable, self->_hash);
 	loop {
 		IStr* str = *slot;
 		assume(str != null);
@@ -253,22 +248,22 @@ static void istr_delete(Global* g, GStr* self) {
 	}
 	istable->_len -= 1;
 
-	ai_mem_dealloc(g, self0, sizeof(IStr) + 1 + self->_len);
+	ai_mem_dealloc(g, self0, istr_size(self->_len));
 }
 
 static void hstr_splash(Global* g, GStr* self) {
-	ai_gc_trace_work(g, sizeof(GStr) + 1 + self->_len);
+	ai_gc_trace_work(g, hstr_size(self->_len));
 }
 
 static void hstr_delete(Global* g, GStr* self) {
-    ai_mem_dealloc(g, self, sizeof(GStr) + 1 + self->_len);
+    ai_mem_dealloc(g, self, hstr_size(self->_len));
 }
 
 static VTable const dstr_vtable = {
 	._tid = T_ISTR,
 	._api_tag = ALO_TSTR,
 	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL | VTABLE_FLAG_FAST_LENGTH,
 	._name = "str",
 	._splash = null,
 	._delete = null
@@ -278,7 +273,7 @@ static VTable const istr_vtable = {
 	._tid = T_ISTR,
 	._api_tag = ALO_TSTR,
 	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL | VTABLE_FLAG_FAST_LENGTH,
 	._name = "str",
 	._splash = fpcast(a_fp_splash, istr_splash),
 	._delete = fpcast(a_fp_delete, istr_delete)

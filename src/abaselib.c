@@ -45,7 +45,7 @@ static void l_show_impl(Value v, a_u32 depth) {
 		case T_HSTR:
 		case T_ISTR: {
 			GStr* val = v_as_str(v);
-			aloi_show("%s", ai_str_tocstr(val));
+			aloi_show("%s", str2ntstr(val));
 			break;
 		}
 		case T_TUPLE: {
@@ -135,7 +135,7 @@ static void l_show_impl(Value v, a_u32 depth) {
 			break;
 		}
 		case T_MOD: {
-			aloi_show("<mod:%s>", ai_str_tocstr(v_as_mod(v)->_name));
+			aloi_show("<mod:%s>", str2ntstr(v_as_mod(v)->_name));
 			break;
 		}
 		case T_USER_TEQ:

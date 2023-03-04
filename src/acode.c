@@ -1712,7 +1712,7 @@ void ai_code_drop(Parser* par, InExpr e) {
 static void l_check_writable(Parser* par, a_u32 id, a_line line) {
 	Sym* sym = &par->_syms._arr[id];
 	if (sym->_mods & SYM_MOD_READONLY) {
-		ai_par_error(par, "cannot assign to readonly variable %s.", line, ai_str_tocstr(sym->_name));
+		ai_par_error(par, "cannot assign to readonly variable %s.", line, str2ntstr(sym->_name));
 	}
 }
 
@@ -2236,23 +2236,40 @@ static void l_dynR(Parser* par, InoutExpr e) {
 		case EXPR_REFK_ALL: {
 			a_u32 k = e->_ref._key;
 			l_drop_ref(par, e);
-			if (likely(k <= BC_MAX_C)) {
-				expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETK, DYN, e->_ref._base, k), e->_line));
+			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
+				if (likely(k <= BC_MAX_C)) {
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETS, DYN, e->_ref._base, k), e->_line));
+				}
+				else {
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETSX, DYN, e->_ref._base, DMB), e->_line));
+					l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
+				}
 			}
 			else {
-				expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETKX, DYN, e->_ref._base, DMB), e->_line));
-				l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
+				a_u32 reg = l_alloc_stack(par, e->_line);
+				l_emit(par, bc_make_iabx(BC_K, reg, k), e->_line);
+				l_emit_fast(par, bc_make_iabc(BC_GET, DYN, e->_ref._base, reg), e->_line);
+				l_free_stack(par, reg);
 			}
 			break;
 		}
 		case EXPR_REFCK: {
 			a_u32 k = e->_ref._key;
-			if (likely(k < BC_MAX_C)) {
-				expr_dyn(e,  l_emit(par, bc_make_iabc(BC_CGETK, DYN, e->_ref._base, k), e->_line));
+			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
+				if (likely(k <= BC_MAX_C)) {
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETS, DYN, e->_ref._base, k), e->_line));
+				}
+				else {
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETSX, DYN, e->_ref._base, DMB), e->_line));
+					l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
+				}
 			}
 			else {
-				expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETKX, DYN, e->_ref._base, DMB), e->_line));
-				l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
+				a_u32 reg = l_succ_alloc_stack(par, 2, e->_line);
+				l_emit(par, bc_make_iabx(BC_K, reg, k), e->_line);
+				l_emit_fast(par, bc_make_iab(BC_CMOV, reg + 1, e->_ref._base), e->_line);
+				l_emit_fast(par, bc_make_iabc(BC_GET, DYN, reg + 1, reg), e->_line);
+				l_succ_free_stack(par, reg, 2);
 			}
 			break;
 		}
