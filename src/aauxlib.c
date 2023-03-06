@@ -139,18 +139,18 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		a_u32 line = ai_dbg_get_line(proto, pc);
 		if (head) {
 			if (file != null) {
-				ai_buf_putf(env, buf, "%s:%u: ", file, line);
+				ai_buf_xputfs(env, buf, "%s:%u: ", file, line);
 			}
 			switch (v_get_tag(*err)) {
 				case T_HSTR:
 				case T_ISTR: {
 					GStr* str = v_as_str(*err);
-					ai_buf_putls(env, buf, str->_data, str->_len);
+					ai_buf_xputls(env, buf, str->_data, str->_len);
 					break;
 				}
 				case T_INT: {
 					a_u32 code = cast(a_u32, v_as_int(*err));
-					ai_buf_putf(env, buf, "error code: %08x", code);
+					ai_buf_xputfs(env, buf, "error code: %08x", code);
 					break;
 				}
 				default: {
@@ -158,23 +158,23 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 				}
 			}
 			if (limit == 0) break;
-			ai_buf_puts(env, buf, "\nstack trace:");
+			ai_buf_xputs(env, buf, "\nstack trace:");
 			head = false;
 		}
-		ai_buf_puts(env, buf, "\n\t");
+		ai_buf_xputs(env, buf, "\n\t");
 		if (limit-- == 0) {
-			ai_buf_puts(env, buf, "...");
+			ai_buf_xputs(env, buf, "...");
 			break;
 		}
 		if (line != 0) {
 			assume(file != null);
-			ai_buf_putf(env, buf, "at %s:%u", file, line);
+			ai_buf_xputfs(env, buf, "at %s:%u", file, line);
 		}
 		else {
-			ai_buf_putf(env, buf, "at %s", file ?: "?");
+			ai_buf_xputfs(env, buf, "at %s", file ?: "?");
 		}
 		if (proto->_name != null) {
-			ai_buf_putf(env, buf, " (%s)", str2ntstr(proto->_name));
+			ai_buf_xputfs(env, buf, " (%s)", str2ntstr(proto->_name));
 		}
 	}
 	GStr* str = ai_str_new(env, buf->_arr, buf->_len);
@@ -187,7 +187,7 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 		Buf buf;
 		ai_buf_init(&buf);
 		a_msg msg = l_wrap_error(env, id, limit, &buf);
-		ai_buf_deinit(env, &buf);
+		ai_buf_deinit(G(env), &buf);
 		return msg;
 	}
 
@@ -197,24 +197,21 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize nb) {
 	api_check_slot(env, 1);
 
-	GRefArray* refs = ai_ref_array_new(env, nb + 1);
-	v_set_obj(env, api_incr_stack(env), refs);
+	GMod* mod = ai_mod_alloc(env, nb);
+	v_set_obj(env, api_incr_stack(env), mod);
 
-	GStr* name_ref = ai_str_new(env, name, strlen(name));
-	refs->_data[0] = gobj_cast(name_ref);
-	for (a_usize i = 0; i < nb; ++i) {
-		char const* field_name = bs[i].name;
-		refs->_data[i + 1] = gobj_cast(ai_str_new(env, field_name, strlen(field_name)));
-	}
-
-	GMod* mod = ai_mod_new(env, name_ref, cast(GStr**, &refs->_data[1]), nb);
-	v_set_obj(env, api_wrslot(env, -1), mod);
+	mod->_name = ai_str_new(env, name, strlen(name));
 
 	for (a_u32 i = 0; i < nb; ++i) {
-		a_cfun fptr = bs[i].fptr;
-		if (fptr != null) {
-			GFun* fun = ai_cfun_create(env, fptr, 0, null);
-			v_set_obj(env, &mod->_values[i], fun);
+		aloL_Binding const* b = &bs[i];
+		assume(b->name != null);
+
+		GStr* key = ai_str_new(env, b->name, strlen(b->name));
+		Value* slot = ai_mod_emplace(env, mod, key);
+
+		if (b->fptr != null) {
+			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
+			v_set_obj(env, slot, fun);
 		}
 	}
 

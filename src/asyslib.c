@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <process.h>
 
-#include "amod.h"
 #include "avm.h"
 #include "aapi.h"
 

@@ -55,13 +55,13 @@ static void cache_grow(a_henv env, IStrCache* cache) {
         while (s != null) {
             if (s->_body._hash & old_size) {
                 *q = s;
-                q = &s->_next;
+                q = &s->_cache_next;
             }
             else {
                 *p = s;
-                p = &s->_next;
+                p = &s->_cache_next;
             }
-            s = s->_next;
+            s = s->_cache_next;
         }
         *p = *q = null;
     }
@@ -76,7 +76,7 @@ static IStr** cache_head(IStrCache* cache, a_hash hash) {
 
 static void cache_emplace(IStrCache* cache, IStr* self) {
 	IStr** slot = cache_head(cache, self->_body._hash);
-	self->_next = *slot;
+	self->_cache_next = *slot;
 	*slot = self;
 	cache->_len += 1;
 }
@@ -103,10 +103,10 @@ static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
     IStrCache* istable = &g->_istr_cache;
 
     /* Try lookup string in intern table. */
-    for (IStr* str = istable->_table[hash & istable->_hmask]; str != null; str = str->_next) {
+    for (IStr* str = istable->_table[hash & istable->_hmask]; str != null; str = str->_cache_next) {
         if (str->_body._hash == hash && likely(str->_body._len == len && memcmp(str->_body._data, src, len) == 0)) {
             /* Revive string object if it is dead. */
-            if (unlikely(g_is_other(g, gobj_cast(&str->_body)))) {
+            if (unlikely(g_has_other_color(g, gobj_cast(&str->_body)))) {
                 str->_body._tnext = white_color(g);
             }
             return &str->_body;
@@ -138,10 +138,12 @@ GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 t
     Global* g = G(env);
     IStr* self = cast(IStr*, blk);
     a_hash hash = ai_str_hashof(g->_seed, src, len);
+
 	self->_body._gnext = null;
 	self->_body._vtable = &dstr_vtable;
 	istr_init(self, src, len, hash);
 	strx_id_set(&self->_body, tag);
+
 	cache_emplace(&g->_istr_cache, self);
 	return &self->_body;
 }
@@ -227,36 +229,41 @@ void ai_str_clean(Global* g) {
     ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 }
 
-static void istr_splash(Global* g, GStr* self) {
+static void istr_mark(Global* g, GStr* self) {
 	ai_gc_trace_work(g, sizeof(IStr) + 1 + self->_len);
 }
 
-static void istr_delete(Global* g, GStr* self) {
-	IStrCache* istable = &g->_istr_cache;
-	IStr* self0 = from_member(IStr, _body, self);
-
+static void cache_remove(IStrCache* cache, IStr* str) {
 	/* Remove string from intern table. */
-	IStr** slot = cache_head(istable, self->_hash);
+	IStr** slot = cache_head(cache, str->_body._hash);
 	loop {
-		IStr* str = *slot;
-		assume(str != null);
-		if (self0 == str) {
-			*slot = self0->_next;
+		IStr* str1 = *slot;
+		assume(str1 != null);
+		if (str == str1) {
+			*slot = str->_cache_next;
 			break;
 		}
-		slot = &str->_next;
+		slot = &str->_cache_next;
 	}
-	istable->_len -= 1;
-
-	ai_mem_dealloc(g, self0, istr_size(self->_len));
+	cache->_len -= 1;
 }
 
-static void hstr_splash(Global* g, GStr* self) {
+static void istr_drop(Global* g, a_hobj raw_self) {
+	IStr* self = g_cast(IStr, raw_self);
+	cache_remove(&g->_istr_cache, self);
+	ai_mem_dealloc(g, self, istr_size(self->_body._len));
+}
+
+static void hstr_mark(Global* g, GStr* self) {
 	ai_gc_trace_work(g, hstr_size(self->_len));
 }
 
-static void hstr_delete(Global* g, GStr* self) {
+static void hstr_drop(Global* g, GStr* self) {
     ai_mem_dealloc(g, self, hstr_size(self->_len));
+}
+
+static void str_tostr(a_henv env, GStr* self, GBuf* buf) {
+	ai_buf_putls(env, buf, self->_data, self->_len);
 }
 
 static VTable const dstr_vtable = {
@@ -265,8 +272,9 @@ static VTable const dstr_vtable = {
 	._repr_id = REPR_STR,
 	._flags = VTABLE_FLAG_IDENTITY_EQUAL | VTABLE_FLAG_FAST_LENGTH,
 	._name = "str",
-	._splash = null,
-	._delete = null
+	._mark = null,
+	._drop = null,
+	._tostr = fpcast(a_fp_tostr, str_tostr)
 };
 
 static VTable const istr_vtable = {
@@ -275,8 +283,9 @@ static VTable const istr_vtable = {
 	._repr_id = REPR_STR,
 	._flags = VTABLE_FLAG_IDENTITY_EQUAL | VTABLE_FLAG_FAST_LENGTH,
 	._name = "str",
-	._splash = fpcast(a_fp_splash, istr_splash),
-	._delete = fpcast(a_fp_delete, istr_delete)
+	._mark = fpcast(a_fp_mark, istr_mark),
+	._drop = istr_drop,
+	._tostr = fpcast(a_fp_tostr, str_tostr)
 };
 
 static VTable const hstr_vtable = {
@@ -285,6 +294,7 @@ static VTable const hstr_vtable = {
 	._repr_id = REPR_STR,
 	._flags = VTABLE_FLAG_NONE,
 	._name = "str",
-	._splash = fpcast(a_fp_splash, hstr_splash),
-	._delete = fpcast(a_fp_delete, hstr_delete)
+	._mark = fpcast(a_fp_mark, hstr_mark),
+	._drop = fpcast(a_fp_drop, hstr_drop),
+	._tostr = fpcast(a_fp_tostr, str_tostr)
 };

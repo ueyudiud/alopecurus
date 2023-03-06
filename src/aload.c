@@ -158,7 +158,7 @@ static void l_release(InCtx* ic) {
     Global* g = G(ic->_env);
 	rq_for(obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
-		ai_mem_xdealloc(g, meta, meta->_len);
+		ai_mem_ndealloc(g, meta, meta->_len);
 	}
 }
 

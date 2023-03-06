@@ -10,8 +10,8 @@
 
 #include "astr.h"
 #include "astrx.h"
+#include "atable.h"
 #include "afun.h"
-#include "amod.h"
 #include "aenv.h"
 
 typedef struct {
@@ -28,6 +28,7 @@ struct Global {
 	void* _ac;
 	a_hfun _hookf;
 	a_hctx _hookc;
+	a_cfun _panic;
 	a_henv _active;
 	a_usize _mem_base;
 	a_isize _mem_debt;

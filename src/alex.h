@@ -19,7 +19,7 @@ typedef struct LexScope LexScope;
 
 #define MAX_TOKEN_STR_BUF_SIZE 31
 
-typedef a_byte a_tkbuf[MAX_TOKEN_STR_BUF_SIZE + 1];
+typedef char a_tkbuf[MAX_TOKEN_STR_BUF_SIZE + 1];
 
 intern void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx);
 intern void ai_lex_close(Lexer* lex);

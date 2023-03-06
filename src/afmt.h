@@ -11,9 +11,11 @@
 #include "abuf.h"
 #include "astr.h"
 
-intern a_usize ai_fmt_i2s(a_byte* p, a_int v);
-intern a_usize ai_fmt_f2s(a_byte* p, a_float v);
-intern a_msg ai_fmt_puti(a_henv env, void* buf, a_int v);
-intern a_msg ai_fmt_putf(a_henv env, void* buf, a_float v);
+intern a_usize ai_fmt_int2str(char* p, a_int v);
+intern a_msg ai_fmt_nputi(a_henv env, void* buf, a_int v);
+intern a_usize ai_fmt_float2str(char* p, a_float v);
+intern a_msg ai_fmt_nputf(a_henv env, void* buf, a_float v);
+intern a_usize ai_fmt_ptr2str(char* p, void* v);
+intern a_msg ai_fmt_nputp(a_henv env, void* buf, void* v);
 
 #endif /* afmt_h_ */

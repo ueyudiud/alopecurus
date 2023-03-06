@@ -9,77 +9,98 @@
 
 #include "amem.h"
 
-#define BUF_DATA_NAME _arr
-#define BUF_DATA_DEF(t) typeof(t)* BUF_DATA_NAME
-#define BUF_DATA_REF BUF_DATA_NAME
+#define BUF_PTR_NAME _arr
+#define BUF_PTR_DEF(t) typeof(t)* BUF_PTR_NAME
+#define BUF_PTR_REF BUF_PTR_NAME
 
 #define BUF_LEN_NAME _len
 #define BUF_LEN_REF BUF_LEN_NAME
 
-typedef struct GRefArray GRefArray;
-
-intern a_msg ai_buf_putsx_(a_henv env, void* buf, void const* src, a_usize len);
-intern a_msg ai_buf_putvf_(a_henv env, void* buf, char const* fmt, va_list varg);
-intern a_msg ai_buf_putf_(a_henv env, void* buf, char const* fmt, ...);
-
-intern GRefArray* ai_ref_array_new(a_henv env, a_usize len);
-
-struct GRefArray {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_hobj _data[];
-};
+intern a_msg ai_buf_nputi(a_henv env, void* raw_buf, a_int val);
+intern a_msg ai_buf_nputf(a_henv env, void* raw_buf, a_float val);
+intern a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add);
+intern a_msg ai_buf_nputfs(a_henv env, void* buf, char const* fmt, ...);
+intern a_msg ai_buf_nputvfs(a_henv env, void* raw_buf, char const* fmt, va_list varg);
+intern GBuf* ai_buf_new(a_henv env);
+intern void ai_buf_cats(a_henv env, GBuf* self, GStr* str);
+intern GStr* ai_buf_tostr(a_henv env, GBuf* self);
 
 #define BUF_STRUCT_DECLARE(n,t,e...) \
     typedef struct n n; \
-    struct n { BUF_DATA_DEF(t); a_usize BUF_LEN_NAME; a_usize _cap; e; }
+    struct n { BUF_PTR_DEF(t); a_usize BUF_LEN_NAME; a_usize _cap; e; }
 
 BUF_STRUCT_DECLARE(Buf, a_byte);
 BUF_STRUCT_DECLARE(QBuf, a_byte, QBuf* _last);
-BUF_STRUCT_DECLARE(CBuf, char);
+BUF_STRUCT_DECLARE(GBuf, a_byte, GOBJ_STRUCT_HEADER);
 
-always_inline a_msg ai_buf_resize0_(a_henv env, void* buf, a_usize new_cap, a_usize size, a_usize limit) {
-	CBuf* cbuf = buf;
-    if (unlikely(cbuf->_cap >= limit))
-        return ALO_EINVAL;
-    a_usize old_cap = cbuf->_cap;
-    void* p = ai_mem_xrealloc(env, cbuf->BUF_DATA_REF, size * old_cap, size * new_cap);
-    if (unlikely(p == null)) {
+#define buf_fdst(b) cast(char*, (b)->_arr + (b)->_len)
+
+always_inline a_msg ai_buf_ngrow(a_henv env, void* raw_buf, a_usize new_cap, a_usize size) {
+	Buf* buf = raw_buf;
+    if (unlikely(buf->_cap >= SIZE_MAX / size))
+        return ALO_ENOMEM;
+    a_usize old_cap = buf->_cap;
+    void* ptr = ai_mem_nrealloc(env, buf->BUF_PTR_REF, size * old_cap, size * new_cap);
+    if (unlikely(ptr == null)) {
 		return ALO_ENOMEM;
 	}
-	cbuf->BUF_DATA_REF = p;
-	cbuf->_cap = new_cap;
+	buf->BUF_PTR_REF = ptr;
+	buf->_cap = new_cap;
     return ALO_SOK;
 }
 
-always_inline void ai_buf_deinit_(Global* g, void* buf, a_usize size) {
-	CBuf* cbuf = buf;
-	ai_mem_dealloc(g, cbuf->BUF_DATA_REF, cbuf->_cap * size);
-	cbuf->BUF_DATA_REF = null;
-	cbuf->_cap = 0;
-	cbuf->_len = 0;
+always_inline a_msg ai_buf_nputls(a_henv env, void* raw_buf, void const* src, a_usize len) {
+	Buf* buf = raw_buf;
+	check(ai_buf_ncheck(env, buf, len));
+	memcpy(buf_fdst(buf), src, len);
+	buf->_len += len;
+	return ALO_SOK;
 }
 
-#define ai_buf_init(b) (*(b) = new(typeof(*(b))) { .BUF_DATA_REF = null, .BUF_LEN_REF = 0, ._cap = 0 })
-#define ai_buf_deinit(env,b) ai_buf_deinit_(G(env), b, sizeof((b)->_arr[0]))
+#define ai_buf_nputs(env,b,s) ai_buf_nputls(env, b, s, strlen(s))
 
-#define ai_buf_resize_(env,b,n) ai_buf_resize0_(env, b, n, sizeof((b)->BUF_DATA_REF[0]), SIZE_MAX / sizeof((b)->BUF_DATA_REF[0]))
-#define ai_buf_resizex(env,b,n) check(ai_buf_resize_(env, b, n))
-#define ai_buf_resize(env,b,n) ({ if (ai_buf_resize_(env, b, n) != ALO_SOK) ai_mem_nomem(env); })
+always_inline void ai_buf_init(void* raw_buf) {
+	Buf* buf = raw_buf;
+	buf->BUF_PTR_REF = null;
+	buf->BUF_LEN_REF = 0;
+	buf->_cap = 0;
+}
 
-#define ai_buf_put(env,b,v)  ({ \
+always_inline void ai_buf_deinit(Global* g, void* raw_buf, a_usize size) {
+	Buf* buf = raw_buf;
+	ai_mem_dealloc(g, buf->BUF_PTR_REF, buf->_cap * size);
+	buf->BUF_PTR_REF = null;
+	buf->_cap = 0;
+}
+
+#define ai_buf_deinit(g,b) ai_buf_deinit(g, b, sizeof((b)->BUF_PTR_REF[0]))
+
+#define ai_buf_ngrow(env,b,n) ai_buf_ngrow(env, b, n, sizeof((b)->BUF_PTR_REF[0]))
+
+#define ai_buf_xput(env,b,v)  ({ \
     typeof(b) _buf = (b); \
-    if (unlikely(_buf->_len == _buf->_cap)) { \
-        ai_buf_resizex(env, _buf, max(_buf->_cap * 2, 16)); \
+    if (unlikely(_buf->BUF_LEN_REF == _buf->_cap)) { \
+        check(ai_buf_ngrow(env, _buf, max(_buf->_cap * 2, 16))); \
     } \
-    quiet(_buf->BUF_DATA_REF[_buf->BUF_LEN_REF ++] = (v)); \
+    quiet(_buf->BUF_PTR_REF[_buf->BUF_LEN_REF ++] = (v)); \
 })
 
-#define ai_buf_putls(env,b,s,l) check(ai_buf_putsx_(env, b, s, l))
-#define ai_buf_puts(env,b,s) ai_buf_putls(env, b, s, strlen(s))
-#define ai_buf_putvf(env,b,f,v) check(ai_buf_putvf_(env, b, f, v))
-#define ai_buf_putf(env,b,f,a...) check(ai_buf_putf_(env, b, f, ##a))
+#define ai_buf_xputls(env,b,s,l) check(ai_buf_nputls(env, b, s, l))
+#define ai_buf_xputs(env,b,s) ai_buf_xputls(env, b, s, strlen(s))
+#define ai_buf_xputvfs(env,b,f,v) check(ai_buf_nputvfs(env, b, f, v))
+#define ai_buf_xputfs(env,b,f,a...) check(ai_buf_nputfs(env, b, f, ##a))
 
-#define ai_buf_reset(b) quiet((b)->_len = 0)
+always_inline void ai_buf_putls(a_henv env, void* raw_buf, void const* src, a_usize len) {
+	a_msg msg = ai_buf_nputls(env, raw_buf, src, len);
+	if (unlikely(msg != ALO_SOK)) {
+		assume(msg == ALO_ENOMEM);
+		ai_mem_nomem(env);
+	}
+}
+
+#define ai_buf_puts(env,b,s) ai_buf_putls(env, b, s, strlen(s))
+#define ai_buf_tostr(env,b) ai_str_new(env, (b)->BUF_PTR_REF, (b)->BUF_LEN_REF)
+
+#define ai_buf_reset(b) quiet((b)->BUF_LEN_REF = 0)
 
 #endif /* abuf_h_ */

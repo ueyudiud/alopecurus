@@ -99,7 +99,7 @@ static a_bool c_isibody(a_i32 ch) {
 }
 
 always_inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
-    ai_buf_put(lex->_in._env, &lex->_buf, ch);
+    ai_buf_xput(lex->_in._env, &lex->_buf, ch);
 	return ALO_SOK;
 }
 
@@ -115,10 +115,6 @@ static void l_bput(Lexer* lex, a_i32 ch) {
 	}
 }
 
-static a_u32 strs_index(LexStrs* strs, a_hash hash) {
-	return ((hash - 1) & strs->_hmask) + 1;
-}
-
 static a_u32 strs_next_free(LexStrs* strs) {
     a_u32 head = strs->_hfree;
     StrNode* node = &strs->_table[head];
@@ -131,7 +127,7 @@ static a_u32 strs_next_free(LexStrs* strs) {
 
 static void strs_add(LexStrs* strs, GStr* str) {
     assume(strs->_hfree <= strs->_hmask);
-    a_u32 index = strs_index(strs, str->_hash);
+	a_u32 index = str->_hash & strs->_hmask;
     StrNode* node = &strs->_table[index];
     if (node->_str == null) {
         *node = new(StrNode) {str, ai_link_new() };
@@ -194,13 +190,13 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 	lex->_channel = CHANNEL_NORMAL;
 	lex->_scope = &lex->_scope0;
 	lex->_scope0 = new(LexScope) {
-		_up: null
+		._up = null
 	};
     lex->_strs = new(LexStrs) {
-        _table: ai_mem_vnew(lex->_in._env, StrNode, STRS_INIT_CAP),
-        _hmask: STRS_INIT_CAP - 1,
-        _hfree: 0,
-        _nstr: 0
+        ._table = ai_mem_vnew(lex->_in._env, StrNode, STRS_INIT_CAP),
+        ._hmask = STRS_INIT_CAP - 1,
+        ._hfree = 0,
+        ._nstr = 0
     };
 	memclr(lex->_strs._table, STRS_INIT_CAP * sizeof(StrNode));
     l_pollx(lex);
@@ -208,7 +204,7 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 
 void ai_lex_close(Lexer* lex) {
 	strs_close(lex->_in._env, &lex->_strs);
-	ai_buf_deinit(lex->_in._env, &lex->_buf);
+	ai_buf_deinit(G(lex->_in._env), &lex->_buf);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {
@@ -235,12 +231,12 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 			return str2ntstr(tk->_str);
 		}
 		case TK_INTEGER: {
-			a_usize len = ai_fmt_i2s(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_int);
+			a_usize len = ai_fmt_int2str(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_int);
 			buf[MAX_TOKEN_STR_BUF_SIZE] = '\0';
 			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
 		}
 		case TK_FLOAT: {
-			a_usize len = ai_fmt_f2s(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_float);
+			a_usize len = ai_fmt_float2str(buf + MAX_TOKEN_STR_BUF_SIZE, tk->_float);
 			buf[MAX_TOKEN_STR_BUF_SIZE] = '\0';
 			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
 		}
@@ -266,7 +262,7 @@ GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len) {
 	LexStrs* strs = &lex->_strs;
 	a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
 
-	StrNode* node = &strs->_table[strs_index(strs, hash)];
+	StrNode* node = &strs->_table[hash & strs->_hmask];
 	if (node->_str != null) {
 		do {
 			if (node->_str->_hash == hash && ai_str_requals(node->_str, src, len)) {

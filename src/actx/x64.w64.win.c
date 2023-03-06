@@ -325,7 +325,7 @@ a_msg ai_ctx_open(Route* route, a_usize stack_size) {
 	a_usize commit = stack_size;
 	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
 
-	commit = (commit + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+	commit = pad_to(commit, PAGE_SIZE);
 
 	ext(PROCESS_STACK_ALLOCATION_INFORMATION) alloc_info = {
 		.ReserveSize = max(reserve, commit),

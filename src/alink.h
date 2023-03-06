@@ -28,7 +28,6 @@ typedef struct {
 #define ai_link_new() (new(Link) { nil, nil })
 
 always_inline a_isize ai_link__diff(void* p, void* q, a_usize s) {
-	assume(s > 0);
 	a_byte (*const p_sized)[s] = p;
 	a_byte (*const q_sized)[s] = q;
 	return p_sized - q_sized;
@@ -54,7 +53,7 @@ always_inline void* ai_link__unwrap(void* b, a_x32 d, a_usize s) {
     ai_link_unwrap(_n1, _n1->LINK_REF.p); \
 })
 
-#define ai_link_first(h) ({ typeof(h) _h = (h); _h->BUF_LEN_REF > 0 ? &_h->BUF_DATA_REF[_h->LHEAD_REF._first] : null; })
+#define ai_link_first(h) ({ typeof(h) _h = (h); _h->BUF_LEN_REF > 0 ? &_h->BUF_PTR_REF[_h->LHEAD_REF._first] : null; })
 #define ai_link_prev(n) ai_link__get(n, _prev)
 #define ai_link_next(n) ai_link__get(n, _next)
 
@@ -78,17 +77,24 @@ always_inline void ai_link__move(void* ns, void* nd, a_usize s, a_usize f) {
 }
 
 always_inline void ai_link__push_last(LHead* h, void* b, void* n, a_usize s, a_usize f, a_bool e) {
-	void* nt = b + h->_last * s;
-	Link* lt = cast(Link*, nt + f);
 	Link* l = cast(Link*, n + f);
-	lt->_next = ai_link__wrap(nt, n, s);
-	*l = new(Link) {
-		._prev = ai_link__wrap(n, nt, s),
-		._next = nil
-	};
-	h->_last = ai_link__diff(n, b, s);
-	if (e) {
-		h->_first = h->_last;
+	if (!e) {
+		void* nt = b + h->_last * s;
+		Link* lt = cast(Link*, nt + f);
+		lt->_next = ai_link__wrap(nt, n, s);
+		*l = new(Link) {
+			._prev = ai_link__wrap(n, nt, s),
+			._next = nil
+		};
+		h->_last = ai_link__diff(n, b, s);
+
+	}
+	else {
+		*l = new(Link) {
+			._prev = nil,
+			._next = nil
+		};
+		h->_first = h->_last = ai_link__diff(n, b, s);
 	}
 }
 
@@ -110,7 +116,7 @@ always_inline void ai_link__insert_after(void* nb, void* n, a_usize s, a_usize f
 #define ai_link_move(ns,nd) ai_link__move(ns, nd, sizeof((ns)[0]), offsetof(typeof((ns)[0]), LINK_NAME))
 #define ai_link_push_last(h,n,e) ({ \
     typeof(h) _h = (h);            \
-	typeof(_h->BUF_DATA_REF) _b = _h->BUF_DATA_REF; \
+	typeof(_h->BUF_PTR_REF) _b = _h->BUF_PTR_REF; \
 	ai_link__push_last(&_h->LHEAD_REF, _b, n, sizeof(_b[0]), offsetof(typeof(_b[0]), LINK_NAME), e); \
 })
 #define ai_link_insert_after(nb,n) ai_link__insert_after(nb, n, sizeof((nb)[0]), offsetof(typeof((nb)[0]), LINK_NAME))

@@ -121,6 +121,7 @@ typedef a_i32 (*a_ifun)(a_henv env, void* ctx, void const** pdst, a_usize* plen)
 ALO_EXPORT a_msg (alo_init)(void);
 ALO_EXPORT a_msg (alo_create)(a_alloc const* af, void* ac, a_henv* penv);
 ALO_EXPORT void (alo_destroy)(a_henv env);
+ALO_EXPORT void (alo_setpanic)(a_henv env, a_cfun f);
 ALO_EXPORT void (alo_sethook)(a_henv env, a_hfun kf, a_hctx kc, a_flags mask);
 
 #define ALO_ATTR_VERSION 0x0001

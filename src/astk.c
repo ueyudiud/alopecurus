@@ -21,7 +21,7 @@
 #if ALO_STACK_OUTER
 
 static a_usize l_to_page_size(a_usize stack_size) {
-	return (sizeof(Value) * stack_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+	return pad_to(sizeof(Value) * stack_size, PAGE_SIZE);
 }
 
 #endif
@@ -30,7 +30,7 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	Value* base;
 
 #if ALO_STACK_INNER
-	base = ai_mem_vxnew(env, Value, INIT_STACK_SIZE_WITH_RESERVED);
+	base = ai_mem_vnnew(env, Value, INIT_STACK_SIZE_WITH_RESERVED);
 	if (unlikely(base == null)) return true;
 #else
 	quiet(env);
@@ -66,7 +66,7 @@ static void stack_reloc(a_henv env, a_isize diff) {
 	stack->_bot = ptr_disp(Value, stack->_bot, diff);
 	stack->_top = ptr_disp(Value, stack->_top, diff);
 
-	for (RcCap* cap = env->_frame->_caps; cap != null; cap = cap->_next) {
+	for (RcCap* cap = env->_frame->_caps; cap != null; cap = cap->_cache_next) {
 		cap->_ptr = ptr_disp(Value, cap->_ptr, diff);
 	}
 }
@@ -82,7 +82,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 #if ALO_STRICT_MEMORY_CHECK
 	stack_new = ai_mem_vnew(env, Value, size_new);
 	memcpy(stack_new, stack_old, sizeof(Value) * (stack->_top - stack->_base));
-	ai_mem_vxdel(env, stack_old, size_old);
+	ai_mem_vndel(env, stack_old, size_old);
 #else
 	stack_new = ai_mem_vgrow(env, stack->_base, size_old, size_new);
 #endif
@@ -156,7 +156,7 @@ a_isize ai_stk_check(a_henv env, Value* top) {
 
 void ai_stk_deinit(Global* g, Stack* stack) {
 #if ALO_STACK_INNER
-	ai_mem_vxdel(g, stack->_base, stack->_limit - stack->_base + RESERVED_STACK_SIZE);
+	ai_mem_vndel(g, stack->_base, stack->_limit - stack->_base + RESERVED_STACK_SIZE);
 #else
 	quiet(g);
 	ai_mem_ndecommit(stack->_base, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));

@@ -11,7 +11,7 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
+#include "afmt.h"
 #include "agc.h"
 #include "aapi.h"
 
@@ -98,7 +98,7 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	}
 }
 
-static Value l_vm_get(a_henv env, Value v1, Value v2) {
+static Value vm_get(a_henv env, Value v1, Value v2) {
 	if (unlikely(!v_is_obj(v1))) {
 		goto bad_op;
 	}
@@ -113,7 +113,7 @@ bad_op:
 	l_bad_op_err(env, OP_GET);
 }
 
-static void l_vm_set(a_henv env, Value v1, Value v2, Value v3) {
+static void vm_set(a_henv env, Value v1, Value v2, Value v3) {
 	if (unlikely(!v_is_obj(v1))) {
 		goto bad_op;
 	}
@@ -128,22 +128,27 @@ bad_op:
 	l_bad_op_err(env, OP_GET);
 }
 
-static Value l_vm_bin(a_henv env, Value v1, Value v2, a_enum op) {
+#define RFLAGS_META_CALL (new(RFlags) { ._count = 0 })
+
+static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum op) {
 	if (!v_is_obj(v1)) {
 		goto bad_op;
 	}
+
 	a_hobj obj = v_as_obj(v1);
-	a_fp_binary binary_fp = obj->_vtable->_binary;
-	if (unlikely(binary_fp == null)) {
+	Value mf = (*obj->_vtable->_vlook)(env, obj, op);
+	if (unlikely(v_is_nil(mf))) {
 		goto bad_op;
 	}
-	return (*binary_fp)(env, obj, v2, op);
+
+	Value* base = vm_push_args(env, mf, v1, v2);
+	return ai_vm_call(env, base, RFLAGS_META_CALL);
 
 bad_op:
 	l_bad_op_err(env, op);
 }
 
-static a_bool l_vm_cmp(a_henv env, Value v1, Value v2, a_enum op) {
+static a_bool vm_cmp(a_henv env, Value v1, Value v2, a_enum op) {
 	if (v_is_int(v1) && v_is_int(v2)) {
 		return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), op);
 	}
@@ -155,18 +160,134 @@ static a_bool l_vm_cmp(a_henv env, Value v1, Value v2, a_enum op) {
 		goto bad_op;
 	}
 	a_hobj obj = v_as_obj(v1);
-	a_fp_compare compare_fp = obj->_vtable->_compare;
-	if (unlikely(compare_fp == null)) {
+	Value mf = (*obj->_vtable->_vlook)(env, obj, op);
+	if (unlikely(v_is_nil(mf))) {
 		goto bad_op;
 	}
-	return (*compare_fp)(env, obj, v2, op);
+
+	Value* base = vm_push_args(env, mf, v1, v2);
+	return v_to_bool(ai_vm_call(env, base, RFLAGS_META_CALL));
 
 bad_op:
 	l_bad_op_err(env, op);
 }
 
-static void l_move_ret(a_henv env, Value* dst, a_usize dst_len, Value* src, a_usize src_len) {
+static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
+	a_usize i = 0;
+	GStr* cache = null;
+	Value v;
+
+	run {
+		while (i < n) {
+			v = base[i++];
+			if (likely(v_is_str(v))) {
+				GStr* val = v_as_str(v);
+				if (val->_len > 0) {
+					cache = val;
+					goto cached;
+				}
+			}
+			else {
+				switch (v_get_tag(v)) {
+					case T_NIL: {
+						cache = ai_env_strx(G(env), STRX_KW_NIL);
+						i += 1;
+						goto cached;
+					}
+					case T_FALSE: {
+						cache = ai_env_strx(G(env), STRX_KW_FALSE);
+						i += 1;
+						goto cached;
+					}
+					case T_TRUE: {
+						cache = ai_env_strx(G(env), STRX_KW_TRUE);
+						i += 1;
+						goto cached;
+					}
+					default: goto buffered;
+				}
+			}
+		}
+		return ai_env_strx(G(env), STRX__EMPTY); /* Empty string. */
+	}
+
+	run cached: {
+		Value const str_empty = v_of_obj(ai_env_strx(G(env), STRX__EMPTY));
+		while (i < n) {
+			v = base[i++];
+			if (!v_trivial_equals(v, str_empty))
+				goto buffered;
+		}
+		return cache;
+	}
+
+	run buffered: { /* Cannot build string trivially, try to compute string size and create buffer. */
+		GBuf* buf = ai_buf_new(env);
+		vm_push_args(env, v_of_obj(buf));
+
+		if (cache != null) {
+			ai_buf_putls(env, buf, cache->_data, cache->_len);
+		}
+
+		do {
+			if (likely(v_is_str(v))) {
+				GStr* val = v_as_str(v);
+				ai_buf_putls(env, buf, val->_data, val->_len);
+			}
+			else switch (v_get_tag(v)) {
+				case T_NIL: {
+					ai_buf_puts(env, buf, "nil");
+					break;
+				}
+				case T_FALSE: {
+					ai_buf_puts(env, buf, "false");
+					break;
+				}
+				case T_TRUE: {
+					ai_buf_puts(env, buf, "true");
+					break;
+				}
+				case T_INT: {
+					if (unlikely(ai_fmt_nputi(env, buf, v_as_int(v))))
+						ai_mem_nomem(env);
+					break;
+				}
+				case T_PTR: {
+					if (unlikely(ai_fmt_nputp(env, buf, v_as_ptr(v))))
+						ai_mem_nomem(env);
+					break;
+				}
+				case T__MIN_OBJ ... T__MAX_OBJ: {
+					GObj* obj = v_as_obj(v);
+					a_fp_tostr tostr_fp = obj->_vtable->_tostr;
+					if (tostr_fp == null) {
+						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", obj->_vtable->_name);
+					}
+					(*tostr_fp)(env, obj, buf);
+					break;
+				}
+				default: {
+					if (unlikely(ai_fmt_nputf(env, buf, v_as_float(v))))
+						ai_mem_nomem(env);
+					break;
+				}
+			}
+		}
+		while (i < n && (v = base[i++], true));
+
+		GStr* result = ai_buf_tostr(env, buf);
+		ai_buf_deinit(G(env), buf);
+		env->_stack._top -= 1;
+
+		return result;
+	}
+}
+
+static Value vm_move_ret(a_henv env, Value* dst, a_usize dst_len, Value* src, a_usize src_len) {
 	assume(dst <= src);
+
+	Value v_first = src_len > 0 ? src[0] : v_of_nil();
+
 	a_usize i = 0;
 	a_usize mov_len = min(dst_len, src_len);
 
@@ -184,9 +305,17 @@ static void l_move_ret(a_henv env, Value* dst, a_usize dst_len, Value* src, a_us
 	}
 
 	env->_stack._top = dst;
+	return v_first;
 }
 
-void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
+/**
+ ** Do 'call' operation on the stack.
+ *@param env the environment.
+ *@param base the base pointer of function and arguments.
+ *@param rflags the return flags.
+ *@return The first result.
+ */
+Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	Frame frame;
 
 	if (!v_is_func(*base))
@@ -195,6 +324,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	GFun* fun = v_as_func(*base);
 	a_insn insn;
 	Value const* K;
+	Value ret1; /* First result. */
 
 #define pc (frame._pc)
 #if ALO_STACK_RELOC
@@ -264,7 +394,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				b = bc_load_b(insn);
 				RcCap* cap = fun->_caps[a]._rc;
 				v_cpy(env, cap->_ptr, &R[b]);
-				ai_gc_barrier_back_val(env, fun, R[b]);
+				ai_gc_barrier_backward_val(env, fun, R[b]);
 				break;
 			}
 			case BC_KN: {
@@ -319,67 +449,67 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_GET: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				vt = l_vm_get(env, R[b], R[c]);
+				vt = vm_get(env, R[b], R[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_GETI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				vt = l_vm_get(env, R[b], v_of_int(sc));
+				vt = vm_get(env, R[b], v_of_int(sc));
 				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_GETS: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				vt = l_vm_get(env, R[b], K[c]);
+				vt = vm_get(env, R[b], K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_GETSX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
-				vt = l_vm_get(env, R[b], K[c]);
+				vt = vm_get(env, R[b], K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_CGETS: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				vt = l_vm_get(env, fun->_caps[b]._imm, K[c]);
+				vt = vm_get(env, fun->_caps[b]._imm, K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_CGETSX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
-				vt = l_vm_get(env, fun->_caps[b]._imm, K[c]);
+				vt = vm_get(env, fun->_caps[b]._imm, K[c]);
 				v_set(env, &R[a], vt);
 				break;
 			}
 			case BC_SET: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				l_vm_set(env, R[b], R[c], R[a]);
+				vm_set(env, R[b], R[c], R[a]);
 				break;
 			}
 			case BC_SETI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				l_vm_set(env, R[b], v_of_int(sc), R[a]);
+				vm_set(env, R[b], v_of_int(sc), R[a]);
 				break;
 			}
 			case BC_SETK: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				l_vm_set(env, R[b], K[c], R[a]);
+				vm_set(env, R[b], K[c], R[a]);
 				break;
 			}
 			case BC_SETKX: {
 				b = bc_load_b(insn);
 				c = bc_load_ax(*pc++);
-				l_vm_set(env, R[b], K[c], R[a]);
+				vm_set(env, R[b], K[c], R[a]);
 				break;
 			}
 			case BC_ADD:
@@ -401,7 +531,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					vt = l_vm_bin(env, vb, vc, op);
+					vt = vm_meta_bin(env, vb, vc, op);
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -429,7 +559,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					vt = l_vm_bin(env, vb, vc, op);
+					vt = vm_meta_bin(env, vb, vc, op);
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -452,7 +582,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_int(&R[a], val);
 				}
 				else {
-					vt = l_vm_bin(env, vb, vc, op);
+					vt = vm_meta_bin(env, vb, vc, op);
 					v_set(env, &R[a], vt);
 				}
 				break;
@@ -476,7 +606,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					vt = l_vm_bin(env, vb, v_of_int(ic), op);
+					vt = vm_meta_bin(env, vb, v_of_int(ic), op);
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -503,7 +633,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					vt = l_vm_bin(env, vb, v_of_int(ic), op);
+					vt = vm_meta_bin(env, vb, v_of_int(ic), op);
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -526,7 +656,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_int(&R[a], val);
 				}
 				else {
-					vt = l_vm_bin(env, vb, v_of_int(ic), op);
+					vt = vm_meta_bin(env, vb, v_of_int(ic), op);
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -555,7 +685,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLT: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				z = l_vm_cmp(env, R[b], R[c], OP_LT);
+				z = vm_cmp(env, R[b], R[c], OP_LT);
 				goto jump_or_test;
 			}
 			case BC_BLE:
@@ -564,7 +694,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLE: {
 				b = bc_load_b(insn);
 				c = bc_load_c(insn);
-				z = l_vm_cmp(env, R[b], R[c], OP_LE);
+				z = vm_cmp(env, R[b], R[c], OP_LE);
 				goto jump_or_test;
 			}
 			case BC_BEQI:
@@ -582,7 +712,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLTI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_cmp(env, R[b], v_of_int(sc), OP_LT);
+				z = vm_cmp(env, R[b], v_of_int(sc), OP_LT);
 				goto jump_or_test;
 			}
 			case BC_BLEI:
@@ -591,7 +721,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNLEI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_cmp(env, R[b], v_of_int(sc), OP_LE);
+				z = vm_cmp(env, R[b], v_of_int(sc), OP_LE);
 				goto jump_or_test;
 			}
 			case BC_BGTI:
@@ -600,7 +730,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNGTI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_cmp(env, v_of_int(sc), R[b], OP_LT);
+				z = vm_cmp(env, v_of_int(sc), R[b], OP_LT);
 				goto jump_or_test;
 			}
 			case BC_BGEI:
@@ -609,7 +739,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_TNGEI: {
 				b = bc_load_b(insn);
 				sc = bc_load_sc(insn);
-				z = l_vm_cmp(env, v_of_int(sc), R[b], OP_LE);
+				z = vm_cmp(env, v_of_int(sc), R[b], OP_LE);
 				goto jump_or_test;
 			}
 			jump_or_test: {
@@ -637,13 +767,22 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (b != 0) {
 					env->_stack._top = &R[a + b];
 				}
-				ai_vm_call(env, &R[a], new(RFlags) {
+				vt = ai_vm_call(env, &R[a], new(RFlags) {
 					._count = c != 0 ? c - 1 : RFLAG_COUNT_VARARG
 				});
 				reload_stack();
+				R[a] = vt;
 				if (c != 0) {
 					env->_stack._top = &R[fun->_proto->_nstack];
 				}
+				break;
+			}
+			case BC_CAT: {
+				b = bc_load_b(insn);
+				c = bc_load_c(insn);
+				GStr* st = vm_cat(env, &R[b], c != 0 ? c - 1 : cast(a_usize, env->_stack._top - &R[b]));
+				check_gc();
+				v_set_obj(env, &R[a], st);
 				break;
 			}
 			case BC_RET: {
@@ -651,7 +790,7 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				c = bc_load_c(insn);
 				a_usize m = c != 0 ? c - 1 : cast(a_usize, env->_stack._top - &R[b]);
 				n = frame._rflags._count != RFLAG_COUNT_VARARG ? cast(a_usize, frame._rflags._count) : m;
-				l_move_ret(env, R - 1, n, &R[b], m);
+				ret1 = vm_move_ret(env, R - 1, n, &R[b], m);
 				goto vm_return;
 			}
 			case BC_FC: {
@@ -659,7 +798,8 @@ void ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				a_usize m = (*cf)(env);
 				n = frame._rflags._count != RFLAG_COUNT_VARARG ? cast(a_usize, frame._rflags._count) : m;
 				api_check_elem(env, m);
-				l_move_ret(env, R - 1, n, env->_stack._top - m, m);
+				Value* r = env->_stack._top - m;
+				ret1 = vm_move_ret(env, R - 1, n, r, m);
 				goto vm_return;
 			}
 			default: {
@@ -674,6 +814,8 @@ vm_meta_call:
 vm_return:
 	env->_frame = frame._prev;
 	ai_cap_close(env, &frame._caps, R);
+	return ret1;
+
 #undef pc
 #undef R
 }

@@ -23,15 +23,6 @@ static void l_hint(char const* msg) {
 	fflush(stdout);
 }
 
-static void l_report(char const* fmt, ...) {
-	va_list varg;
-	va_start(varg, fmt);
-	vfprintf(stderr, fmt, varg);
-	va_end(varg);
-	fputc('\n', stderr);
-	fflush(stderr);
-}
-
 static void l_hook(a_henv env, a_msg msg, unused a_hctx ctx) {
 	if (msg < 0) {
 		aloL_traceerror(env, ALO_STACK_INDEX_ERROR, 6);

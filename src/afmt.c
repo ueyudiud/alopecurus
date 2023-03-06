@@ -9,7 +9,9 @@
 
 #include "afmt.h"
 
-a_usize ai_fmt_i2s(a_byte* p, a_int v) {
+static char const l_digits[] = "0123456789abcdef";
+
+a_usize ai_fmt_int2str(char* p, a_int v) {
 	a_bool neg;
 
 	a_u32 rem;
@@ -22,10 +24,10 @@ a_usize ai_fmt_i2s(a_byte* p, a_int v) {
 		neg = false;
 	}
 
-	a_byte* q = p;
+	char* q = p;
 
 	do {
-		*(--q) = rem % 10 + '0';
+		*(--q) = cast(char, rem % 10 + '0');
 	}
 	while ((rem = rem / 10) > 0);
 
@@ -36,22 +38,46 @@ a_usize ai_fmt_i2s(a_byte* p, a_int v) {
 	return p - q;
 }
 
-a_msg ai_fmt_puti(a_henv env, void* buf, a_int v) {
-	a_byte cs[16];
-	a_usize len = ai_fmt_i2s(cs + 16, v);
-	ai_buf_putls(env, buf, cs + 16 - len, len);
+a_msg ai_fmt_nputi(a_henv env, void* buf, a_int v) {
+	char cs[16];
+	a_usize len = ai_fmt_int2str(cs + 16, v);
+	ai_buf_xputls(env, buf, cs + 16 - len, len);
 	return ALO_SOK;
 }
 
-a_usize ai_fmt_f2s(a_byte* p, a_float v) {
+a_usize ai_fmt_float2str(char* p, a_float v) {
 	a_usize n = cast(a_usize, snprintf(null, 0, "%g", v));
 	sprintf(cast(char*, p - n), "%g", v);
 	return n;
 }
 
-a_msg ai_fmt_putf(a_henv env, void* buf, a_float v) {
-	a_byte cs[32];
-	a_usize len = ai_fmt_f2s(cs + 32, v);
-	ai_buf_putls(env, buf, cs + 32 - len, len);
+a_msg ai_fmt_nputf(a_henv env, void* buf, a_float v) {
+	char cs[32];
+	a_usize len = ai_fmt_float2str(cs + 32, v);
+	ai_buf_xputls(env, buf, cs + 32 - len, len);
+	return ALO_SOK;
+}
+
+#if ALO_M32
+# define BUFF_SIZE_FOR_PTR 8
+#else
+# define BUFF_SIZE_FOR_PTR 12
+#endif
+
+a_usize ai_fmt_ptr2str(char* p, void* v) {
+	char* q = p;
+	a_usize addr = addr_of(v);
+
+	for (a_u32 i = 0; i < BUFF_SIZE_FOR_PTR; ++i) {
+		*(--q) = l_digits[addr & 0xf];
+		addr >>= 4;
+	}
+	return BUFF_SIZE_FOR_PTR;
+}
+
+a_msg ai_fmt_nputp(a_henv env, void* raw_buf, void* v) {
+	Buf* buf = raw_buf;
+	check(ai_buf_ncheck(env, buf, BUFF_SIZE_FOR_PTR));
+	buf->_len += ai_fmt_ptr2str(buf_fdst(buf) + BUFF_SIZE_FOR_PTR, v);
 	return ALO_SOK;
 }

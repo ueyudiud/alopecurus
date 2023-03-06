@@ -18,6 +18,7 @@ typedef struct GFun GFun;
 typedef struct alo_Env GRoute;
 typedef struct GMeta GMeta;
 typedef struct alo_Mod GMod;
+typedef struct GBuf GBuf;
 
 /* Object pointer. */
 typedef GObj* a_hobj;
@@ -31,6 +32,7 @@ typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Global Global;
 typedef struct alo_Alloc Alloc;
+typedef struct Buf Buf;
 
 #define T_NIL u32c(0)
 #define T_FALSE u32c(1)
@@ -65,46 +67,45 @@ enum {
 	REPR_TUPLE,
 	REPR_LIST,
 	REPR_TABLE,
-	REPR_MOD,
 	REPR_FUNC,
 
 	REPR_EMPTY = UINT8_MAX /* The layout of struct is empty, use for trait to mixin. */
 };
 
-#define g_cast(t,e) cast(typeof(t)*, (e)->_obj_head_mark)
+#define g_cast(t,e) from_member(t, _obj_head_mark, &(e)->_obj_head_mark)
 #define gobj_cast(e) cast(a_hobj, (e)->_obj_head_mark)
 
 typedef struct { a_u64 _; } Value;
 
-typedef void (*a_fp_splash)(Global* g, a_hobj self);
-typedef void (*a_fp_delete)(Global* g, a_hobj self);
+typedef void (*a_fp_mark)(Global* g, a_hobj self);
+typedef void (*a_fp_drop)(Global* g, a_hobj self);
 typedef void (*a_fp_close)(a_henv env, a_hobj self);
-typedef a_u32 (*a_fp_len)(a_henv env, a_hobj self);
+typedef Value (*a_fp_vlook)(a_henv env, a_hobj self, a_enum op);
 typedef Value (*a_fp_get)(a_henv env, a_hobj self, Value index);
 typedef void (*a_fp_set)(a_henv env, a_hobj self, Value index, Value value);
 typedef a_hash (*a_fp_hash)(a_henv env, a_hobj self);
 typedef a_bool (*a_fp_equals)(a_henv env, a_hobj self, Value other);
-typedef Value (*a_fp_unary)(a_henv env, a_hobj self, a_enum op);
-typedef Value (*a_fp_binary)(a_henv env, a_hobj self, Value other, a_enum op);
-typedef a_bool (*a_fp_compare)(a_henv env, a_hobj self, Value other, a_enum op);
+typedef void (*a_fp_tostr)(a_henv env, a_hobj self, GBuf* buf);
 
-typedef struct {
+typedef struct VTable {
 	a_u8 _tid; /* The value type id. */
 	a_u8 _api_tag; /* The tag for API. */
 	a_u8 _repr_id; /* The layout index for object. */
+	a_u8 _vl_flags; /* Mark for existence of virtual lookup function. */
 	a_u16 _flags;
 	char const* _name;
-	a_fp_splash _splash;
-	a_fp_delete _delete;
+	/* Resource management functions. */
+	a_fp_mark _mark;
+	a_fp_drop _drop;
 	a_fp_close _close;
-	a_fp_len _len;
+	/* Virtual function lookup function. */
+	a_fp_vlook _vlook;
+	/* Virtual functions. */
 	a_fp_get _get;
 	a_fp_set _set;
 	a_fp_hash _hash;
 	a_fp_equals _equals;
-	a_fp_unary _unary;
-	a_fp_binary _binary;
-	a_fp_compare _compare;
+	a_fp_tostr _tostr;
 } VTable;
 
 typedef struct { a_usize _; } ObjHeadMark[0];
@@ -118,7 +119,7 @@ struct GObj {
 #define VTABLE_FLAG_NONE u16c(0)
 #define VTABLE_FLAG_IDENTITY_EQUAL u16c(0x0001)
 #define VTABLE_FLAG_FAST_LENGTH u16c(0x0002)
-#define VTABLE_FLAG_SPLASH_DIRECT u16c(0x0004)
+#define VTABLE_FLAG_MARK_DIRECT u16c(0x0004)
 
 #define GMETA_STRUCT_HEADER \
 	GOBJ_STRUCT_HEADER; \
@@ -128,60 +129,6 @@ struct GObj {
 struct GMeta {
 	GMETA_STRUCT_HEADER;
 };
-
-always_inline a_bool g_is_str(a_hobj v) {
-	return v->_vtable->_repr_id == REPR_STR;
-}
-
-always_inline GStr* g_as_str(a_hobj v) {
-	assume(g_is_str(v));
-	return g_cast(GStr, v);
-}
-
-always_inline a_bool g_is_tuple(a_hobj v) {
-	return v->_vtable->_repr_id == REPR_TUPLE;
-}
-
-always_inline GTuple* g_as_tuple(a_hobj v) {
-	assume(g_is_tuple(v));
-	return g_cast(GTuple, v);
-}
-
-always_inline a_bool g_is_list(a_hobj v) {
-	return v->_vtable->_repr_id == REPR_LIST;
-}
-
-always_inline GList* g_as_list(a_hobj v) {
-	assume(g_is_list(v));
-	return g_cast(GList, v);
-}
-
-always_inline a_bool g_is_table(a_hobj v) {
-	return v->_vtable->_repr_id == REPR_TABLE;
-}
-
-always_inline GTable* g_as_table(a_hobj v) {
-	assume(g_is_table(v));
-	return g_cast(GTable, v);
-}
-
-always_inline a_bool g_is_func(a_hobj v) {
-	return v->_vtable->_repr_id == REPR_FUNC;
-}
-
-always_inline GFun* g_as_func(a_hobj v) {
-	assume(g_is_func(v));
-	return g_cast(GFun, v);
-}
-
-always_inline a_bool g_is_mod(a_hobj v) {
-	return v->_vtable->_repr_id == REPR_MOD;
-}
-
-always_inline GMod* g_as_mod(a_hobj v) {
-	assume(g_is_mod(v));
-	return g_cast(GMod, v);
-}
 
 always_inline void v_check_alive(a_henv env, Value v);
 
@@ -333,36 +280,6 @@ always_inline GObj* v_as_obj(Value v) {
 	return cast(GObj*, v_as_ptr_raw(v));
 }
 
-always_inline GStr* v_as_str(Value v) {
-	assume(v_is_str(v), "not string.");
-	return g_as_str(v_as_obj(v));
-}
-
-always_inline GTuple* v_as_tuple(Value v) {
-	assume(v_is_tuple(v), "not tuple.");
-	return g_as_tuple(v_as_obj(v));
-}
-
-always_inline GList* v_as_list(Value v) {
-	assume(v_is_list(v), "not list.");
-	return g_as_list(v_as_obj(v));
-}
-
-always_inline GTable* v_as_table(Value v) {
-	assume(v_is_table(v), "not table.");
-	return g_as_table(v_as_obj(v));
-}
-
-always_inline GFun* v_as_func(Value v) {
-	assume(v_is_func(v), "not function.");
-	return g_as_func(v_as_obj(v));
-}
-
-always_inline GMod* v_as_mod(Value v) {
-	assume(v_is_mod(v), "not module.");
-	return g_as_mod(v_as_obj(v));
-}
-
 always_inline RcCap* v_as_cap(Value v) {
 	assume(v_is_cap(v));
 	return cast(RcCap*, v_as_ptr_raw(v));
@@ -421,7 +338,7 @@ always_inline void v_cpy(a_henv env, Value* d, Value const* s) {
 	v_set(env, d, *s);
 }
 
-always_inline void v_cpy_multi(a_henv env, Value* d, Value const* s, a_usize n) {
+always_inline void v_cpy_multi(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
 	for (a_usize i = 0; i < n; ++i) {
 		v_cpy(env, &d[i], &s[i]);
 	}

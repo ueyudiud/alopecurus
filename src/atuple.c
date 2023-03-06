@@ -12,9 +12,11 @@
 
 #include "atuple.h"
 
+static VTable const tuple_vtable;
+
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
-    GTuple* self = ai_mem_alloc(env, sizeof(GTuple) + sizeof(Value) * len);
-	self->_vtable = &ai_tuple_vtable;
+    GTuple* self = ai_mem_alloc(env, tuple_size(len));
+	self->_vtable = &tuple_vtable;
     self->_len = len;
 	self->_hash = 0;
 	v_cpy_multi(env, self->_body, src, len);
@@ -62,16 +64,16 @@ static a_bool tuple_equals(a_henv env, GTuple* self, Value other) {
 	return v_is_tuple(other) && ai_tuple_equals(env, self, v_as_tuple(other));
 }
 
-static void tuple_splash(Global* g, GTuple* self) {
-    a_usize len = self->_len;
-    for (a_usize i = 0; i < len; ++i) {
+static void tuple_mark(Global* g, GTuple* self) {
+    a_u32 len = self->_len;
+    for (a_u32 i = 0; i < len; ++i) {
 		ai_gc_trace_mark_val(g, self->_body[i]);
     }
-	ai_gc_trace_work(g, sizeof(GTuple) + sizeof(Value) * len);
+	ai_gc_trace_work(g, tuple_size(len));
 }
 
-static void tuple_delete(Global* g, GTuple* self) {
-    ai_mem_dealloc(g, self, sizeof(GTuple) + sizeof(Value) * self->_len);
+static void tuple_drop(Global* g, GTuple* self) {
+    ai_mem_dealloc(g, self, tuple_size(self->_len));
 }
 
 static Value tuple_get(a_henv env, GTuple* self, Value key) {
@@ -85,14 +87,14 @@ static Value tuple_get(a_henv env, GTuple* self, Value key) {
 	return *value;
 }
 
-VTable const ai_tuple_vtable = {
+static VTable const tuple_vtable = {
 	._tid = T_TUPLE,
 	._api_tag = ALO_TTUPLE,
 	._repr_id = REPR_TUPLE,
 	._flags = VTABLE_FLAG_NONE,
 	._name = "tuple",
-	._splash = fpcast(a_fp_splash, tuple_splash),
-	._delete = fpcast(a_fp_delete, tuple_delete),
+	._mark = fpcast(a_fp_mark, tuple_mark),
+	._drop = fpcast(a_fp_drop, tuple_drop),
 	._get = fpcast(a_fp_get, tuple_get),
 	._hash = fpcast(a_fp_hash, ai_tuple_hash),
 	._equals = fpcast(a_fp_equals, tuple_equals)

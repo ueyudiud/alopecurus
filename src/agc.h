@@ -49,24 +49,24 @@ always_inline a_trmark other_color(Global* g) {
     return white_color(g) ^ (WHITE1_COLOR | WHITE2_COLOR);
 }
 
-always_inline a_bool g_is_black(a_hobj v) {
+always_inline a_bool g_has_black_color(a_hobj v) {
     return (v->_tnext & BLACK_COLOR) != 0;
 }
 
-always_inline a_bool g_is_gray(a_hobj v) {
+always_inline a_bool g_has_gray_color(a_hobj v) {
     return (v->_tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
 
-always_inline a_bool g_is_white(Global* g, a_hobj v) {
+always_inline a_bool g_has_white_color(Global* g, a_hobj v) {
     return (v->_tnext & white_color(g)) != 0;
 }
 
-always_inline a_bool g_is_other(Global* g, a_hobj v) {
+always_inline a_bool g_has_other_color(Global* g, a_hobj v) {
     return (v->_tnext & other_color(g)) != 0;
 }
 
 always_inline a_bool g_is_white_with_assume_alive(Global* g, a_hobj v) {
-	assume(g_is_white(g, v));
+	assume(g_has_white_color(g, v));
 	return (v->_tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
 
@@ -82,16 +82,16 @@ always_inline void v_check_alive(a_henv env, Value v) {
 	if (v_is_obj(v)) {
 		GObj* obj = v_as_obj(v);
 		a_u32 tag = v_get_tag(v);
-		assume((tag == obj->_vtable->_tid) && !g_is_other(G(env), obj));
+		assume((tag == obj->_vtable->_tid) && !g_has_other_color(G(env), obj));
 	}
 }
 
-always_inline void join_trace_(a_trmark* list, GObj* elem) {
+always_inline void join_trace(a_trmark* list, GObj* elem) {
 	elem->_tnext = *list;
 	*list = addr_of(elem);
 }
 
-#define join_trace(list,elem) join_trace_(list, g_cast(GObj, elem))
+#define join_trace(list,elem) join_trace(list, gobj_cast(elem))
 
 always_inline GObj* strip_trace(a_trmark* list) {
 	GObj* elem = ptr_of(GObj, *list);
@@ -137,9 +137,9 @@ always_inline a_bool ai_gc_is_sweeping(Global* g) {
 	return g->_gcstep >= GCSTEP_SWEEP_NORMAL && g->_gcstep <= GCSTEP_SWEEP_ATOMIC;
 }
 
-always_inline void ai_gc_barrier_(a_henv env, a_hobj obj1, a_hobj obj2) {
+always_inline void ai_gc_barrier_forward(a_henv env, a_hobj obj1, a_hobj obj2) {
 	Global* g = G(env);
-	if (g_is_black(obj1) && g_is_white_with_assume_alive(g, obj2)) {
+	if (g_has_black_color(obj1) && g_is_white_with_assume_alive(g, obj2)) {
 		if (ai_gc_is_tracing(g)) {
 			join_trace(&g->_tr_gray, obj2);
 		}
@@ -150,31 +150,31 @@ always_inline void ai_gc_barrier_(a_henv env, a_hobj obj1, a_hobj obj2) {
 	}
 }
 
-#define ai_gc_barrier(env,obj1,obj2) ai_gc_barrier_(env, gobj_cast(obj1), gobj_cast(obj2))
+#define ai_gc_barrier_forward(env,obj1,obj2) ai_gc_barrier_forward(env, gobj_cast(obj1), gobj_cast(obj2))
 
-always_inline void ai_gc_barrier_val_(a_henv env, GObj* obj, Value val) {
+always_inline void ai_gc_barrier_forward_val(a_henv env, GObj* obj, Value val) {
 	if (v_is_obj(val)) {
-		ai_gc_barrier_(env, obj, v_as_obj(val));
+		ai_gc_barrier_forward(env, obj, v_as_obj(val));
 	}
 }
 
-#define ai_gc_barrier_val(env,obj,val) ai_gc_barrier_val_(env, gobj_cast(obj), val)
+#define ai_gc_barrier_forward_val(env,obj,val) ai_gc_barrier_forward_val(env, gobj_cast(obj), val)
 
-always_inline void ai_gc_barrier_back_(a_henv env, a_hobj obj1, a_hobj obj2) {
+always_inline void ai_gc_barrier_backward(a_henv env, a_hobj obj1, a_hobj obj2) {
 	Global* g = G(env);
-	if (g_is_black(obj1) && g_is_white_with_assume_alive(g, obj2)) {
+	if (g_has_black_color(obj1) && g_is_white_with_assume_alive(g, obj2)) {
 		join_trace(&g->_tr_regray, obj1);
 	}
 }
 
-#define ai_gc_barrier_back(env,obj1,obj2) ai_gc_barrier_back_(env, gobj_cast(obj1), gobj_cast(obj2))
+#define ai_gc_barrier_backward(env,obj1,obj2) ai_gc_barrier_backward(env, gobj_cast(obj1), gobj_cast(obj2))
 
-always_inline void ai_gc_barrier_back_val_(a_henv env, GObj* obj, Value val) {
+always_inline void ai_gc_barrier_backward_val(a_henv env, GObj* obj, Value val) {
 	if (v_is_obj(val)) {
-		ai_gc_barrier_back_(env, obj, v_as_obj(val));
+		ai_gc_barrier_backward(env, obj, v_as_obj(val));
 	}
 }
 
-#define ai_gc_barrier_back_val(env,obj,val) ai_gc_barrier_back_val_(env, gobj_cast(obj), val)
+#define ai_gc_barrier_backward_val(env,obj,val) ai_gc_barrier_backward_val(env, gobj_cast(obj), val)
 
 #endif /* agc_h_ */

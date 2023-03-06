@@ -24,12 +24,6 @@ enum {
     STRX__END = STRX_KW__END
 };
 
-enum {
-#define KWLEN(id,name) + (sizeof(IStr) + sizeof(name))
-	STRX_RESERVE_SPACE = KEYWORD_LIST(KWLEN) /* Add keyword size. */
-#undef KWLEN
-};
-
 #define strx_id(str) ((str)->_tnext >> 32)
 #define strx_iskw(str) (strx_id(str) >= STRX_KW__FIRST && strx_id(str) <= STRX_KW__LAST)
 #define strx_totk(str) (cast(a_i32, strx_id(str)) + TK_IF - STRX_KW_IF)
@@ -51,5 +45,16 @@ intern char const ai_strx_table[STRX_POS__MAX];
 
 #define strx_raw(p) (&ai_strx_table[p])
 #define strx_raw_kw(id) strx_raw(STRX_POS_KW_##id)
+
+__attribute__((__pure__))
+always_inline a_usize ai_strx_reserve_space(void) {
+	a_usize len = pad_to(istr_size(0), sizeof(a_usize)); /* For empty string. */
+#define KWSIZE(id,name) len += pad_to(istr_size(sizeof(name) - 1), sizeof(a_usize));
+	KEYWORD_LIST(KWSIZE)
+#undef KWSIZE
+	return len;
+}
+
+#define STRX_RESERVE_SPACE ai_strx_reserve_space()
 
 #endif /* astrx_h_ */

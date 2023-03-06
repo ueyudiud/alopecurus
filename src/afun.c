@@ -43,7 +43,7 @@ static a_usize proto_size(ProtoDesc* desc) {
 GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	a_usize total_size = proto_size(desc);
 
-    GProto* self = ai_mem_xalloc(env, total_size);
+    GProto* self = ai_mem_nalloc(env, total_size);
     if (self == null) return null;
     memclr(self, total_size);
 
@@ -126,7 +126,7 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 		._code = cast(a_insn*, l_codes)
 	};
 
-	GFun* self = fun_new(env, &cfun_vtable, cast(GProto*, &l_proto), ncap + 1);
+	GFun* self = fun_new(env, &cfun_vtable, g_cast(GProto, &l_proto), ncap + 1);
 
 	v_cpy_multi(env, self->_vals, pcap, ncap);
 	v_setx(self->_vals + ncap, bcast(Value, hnd));
@@ -191,7 +191,7 @@ static void cap_close(a_henv env, RcCap* self) {
 	self->_ptr = &self->_slot;
 }
 
-static void cap_splash(Global* g, RcCap* self) {
+static void cap_mark(Global* g, RcCap* self) {
 	if (cap_is_closed(self) || g->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
 		ai_gc_trace_mark_val(g, *self->_ptr);
 	}
@@ -200,7 +200,7 @@ static void cap_splash(Global* g, RcCap* self) {
 	}
 }
 
-static void cap_delete(Global* g, RcCap* self) {
+static void cap_drop(Global* g, RcCap* self) {
 	ai_mem_dealloc(g, self, sizeof(RcCap));
 }
 
@@ -208,18 +208,18 @@ static void cap_release(Global* g, RcCap* self) {
 	assume(self->_rc > 0);
 	self->_rc -= 1;
 	if (self->_rc == 0 && cap_is_closed(self)) {
-		cap_delete(g, self);
+		cap_drop(g, self);
 	}
 }
 
-static void afun_splash(Global* g, GFun* self) {
+static void afun_mark(Global* g, GFun* self) {
     ai_gc_trace_mark(g, self->_proto);
     a_u32 len = self->_len;
     for (a_u32 i = 0; i < len; ++i) {
 		CapInfo* info = &self->_proto->_caps[i];
 		CapVal* val = &self->_caps[i];
 		if (info->_frc) {
-			cap_splash(g, val->_rc);
+			cap_mark(g, val->_rc);
 		}
 		else {
 			ai_gc_trace_mark_val(g, val->_imm);
@@ -228,7 +228,7 @@ static void afun_splash(Global* g, GFun* self) {
 	ai_gc_trace_work(g, fun_size(self->_len));
 }
 
-static void afun_delete(Global* g, GFun* self) {
+static void afun_drop(Global* g, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
 		CapInfo* info = &self->_proto->_caps[i];
 		CapVal* val = &self->_caps[i];
@@ -239,7 +239,7 @@ static void afun_delete(Global* g, GFun* self) {
     ai_mem_dealloc(g, self, fun_size(self->_len));
 }
 
-static void cfun_splash(Global* g, GFun* self) {
+static void cfun_mark(Global* g, GFun* self) {
 	a_u32 len = self->_len;
 	for (a_u32 i = 0; i < len - 1; ++i) {
 		ai_gc_trace_mark_val(g, self->_vals[i]);
@@ -247,11 +247,11 @@ static void cfun_splash(Global* g, GFun* self) {
 	ai_gc_trace_work(g, fun_size(len));
 }
 
-static void cfun_delete(Global* g, GFun* self) {
+static void cfun_drop(Global* g, GFun* self) {
 	ai_mem_dealloc(g, self, fun_size(self->_len));
 }
 
-static void proto_splash(Global* g, GProto* self) {
+static void proto_mark(Global* g, GProto* self) {
     for (a_u32 i = 0; i < self->_nconst; ++i) {
 		ai_gc_trace_mark_val(g, self->_consts[i]);
     }
@@ -270,7 +270,7 @@ static void proto_splash(Global* g, GProto* self) {
 	ai_gc_trace_work(g, self->_len);
 }
 
-void ai_proto_delete(Global* g, GProto* self) {
+void ai_proto_drop(Global* g, GProto* self) {
     ai_mem_dealloc(g, self, self->_len);
 }
 
@@ -282,7 +282,7 @@ void ai_cap_close(a_henv env, RcCap** pcap, Value const* base) {
 			cap_close(env, cap);
 		}
 		else {
-			cap_delete(G(env), cap);
+			cap_drop(G(env), cap);
 		}
 		*pcap = next;
 	}
@@ -294,8 +294,8 @@ static VTable const afun_vtable = {
 	._repr_id = REPR_FUNC,
 	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
 	._name = "func",
-	._splash = fpcast(a_fp_splash, afun_splash),
-	._delete = fpcast(a_fp_delete, afun_delete)
+	._mark = fpcast(a_fp_mark, afun_mark),
+	._drop = fpcast(a_fp_drop, afun_drop)
 };
 
 static VTable const cfun_vtable = {
@@ -304,14 +304,14 @@ static VTable const cfun_vtable = {
 	._repr_id = REPR_FUNC,
 	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
 	._name = "func",
-	._splash = fpcast(a_fp_splash, cfun_splash),
-	._delete = fpcast(a_fp_delete, cfun_delete)
+	._mark = fpcast(a_fp_mark, cfun_mark),
+	._drop = fpcast(a_fp_drop, cfun_drop)
 };
 
 static VTable const proto_vtable = {
 	._tid = T_USER_TEQ,
 	._api_tag = ALO_TUSER,
 	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
-	._splash = fpcast(a_fp_splash, proto_splash),
-	._delete = fpcast(a_fp_delete, ai_proto_delete)
+	._mark = fpcast(a_fp_mark, proto_mark),
+	._drop = fpcast(a_fp_drop, ai_proto_drop)
 };

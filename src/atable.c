@@ -12,6 +12,7 @@
 #include "amem.h"
 #include "agc.h"
 #include "avm.h"
+#include "aerr.h"
 
 #include "atable.h"
 
@@ -20,49 +21,54 @@
 #endif
 
 static VTable const table_vtable;
+static VTable const mod_vtable;
 
 static a_u32 wrap_abs(GTable* self, TNode* node) {
-	return node != null ? cast(a_u32, node - self->BUF_DATA_REF) : 0;
+	return node != null ? cast(a_u32, node - self->BUF_PTR_REF) : 0;
 }
 
 static TNode* unwrap_abs(GTable* self, a_u32 id) {
-	return &self->BUF_DATA_REF[id];
+	return &self->BUF_PTR_REF[id];
 }
 
-static void table_init(a_henv env, GTable* self, a_usize new_cap) {
-	if (likely(new_cap > 0)) {
-		TNode* arr = ai_mem_vnew(env, TNode, new_cap);
+static void table_init_array(GTable* self, TNode* array, a_usize cap) {
+	assume(array != null);
 
-		self->BUF_DATA_REF = arr;
-		self->_hmask = new_cap - 1;
+	self->_arr = array;
+	self->_hmask = cap - 1;
+	self->_hfree = 0;
 
-		for (a_u32 i = 0; i < new_cap; ++i) {
-			arr[i] = new(TNode) {
+	self->_lhead = new(LHead) { ._first = 0, ._last = 0 };
+
+	for (a_u32 i = 0; i < cap; ++i) {
+		array[i] = new(TNode) {
 				._key = v_of_empty(),
 				._hnext = nil,
 				._link = new(Link) {
-					._prev = i > 0 ? x32c(-1) : nil,
-					._next = i < new_cap - 1 ? x32c(1) : nil
+						._prev = i > 0 ? x32c(-1) : nil,
+						._next = i < cap - 1 ? x32c(1) : nil
 				}
-			};
-		}
+		};
+	}
+}
+
+static void table_alloc_array(a_henv env, GTable* self, a_usize new_cap) {
+	if (likely(new_cap > 0)) {
+		TNode* array = ai_mem_vnew(env, TNode, new_cap);
+		table_init_array(self, array, new_cap);
 	}
 	else {
-		self->BUF_DATA_REF = null;
+		self->BUF_PTR_REF = null;
 		self->_hmask = 0;
+		self->_hfree = 0;
 	}
-	self->_hfree = 0;
-	self->_lhead = new(LHead) {
-		._first = 0,
-		._last = 0
-	};
 }
 
 GTable* ai_table_new(a_henv env) {
     GTable* self = ai_mem_alloc(env, sizeof(GTable));
 	self->_vtable = &table_vtable;
     self->_len = 0;
-	table_init(env, self, 0);
+	table_alloc_array(env, self, 0);
     return self;
 }
 
@@ -126,7 +132,7 @@ static TNode* table_get_hprev(GTable* self, TNode* node) {
 	return nodep;
 }
 
-static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
+static TNode* table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
     TNode* nodeh = unwrap_abs(self, hash & self->_hmask);
     if (tnode_is_hhead(self, nodeh, hash)) {
         /* Insert into hash list. */
@@ -143,6 +149,7 @@ static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Valu
 		nodeh->_hnext = ai_link_wrap(nodeh, nodet);
 
 		table_link_tail(self, nodet);
+		return nodet;
     }
     else {
 		if (!tnode_is_empty(nodeh)) {
@@ -162,6 +169,7 @@ static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Valu
 		tnode_emplace(env, nodeh, key, hash, value);
         nodeh->_hnext = nil;
 		table_link_tail(self, nodeh);
+		return nodeh;
     }
 }
 
@@ -175,7 +183,7 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 		TNode* arr = self->_arr;
 		TNode* node = ai_link_first(self);
 
-		table_init(env, self, new_cap);
+		table_alloc_array(env, self, new_cap);
 
 		if (arr != null) {
 			for (; node != null; node = ai_link_next(node)) {
@@ -274,18 +282,18 @@ void ai_table_set(a_henv env, GTable* self, Value key, Value value) {
 	Value* ref = table_get_opt(env, self, key, &hash);
 	if (ref != null) {
 		v_set(env, ref, value);
-		ai_gc_barrier_val(env, self, value);
+		ai_gc_barrier_backward_val(env, self, value);
 	}
 	else {
 		ai_table_hint(env, self, 1);
 		table_emplace(env, self, key, hash, value);
-		ai_gc_barrier_val(env, self, key);
-		ai_gc_barrier_val(env, self, value);
+		ai_gc_barrier_backward_val(env, self, key);
+		ai_gc_barrier_backward_val(env, self, value);
 		self->_len += 1;
 	}
 }
 
-static void table_splash(Global* g, GTable* self) {
+static void table_mark(Global* g, GTable* self) {
     a_usize len = self->_arr != null ? self->_hmask + 1 : 0;
     for (a_usize i = 0; i < len; ++i) {
         TNode* node = &self->_arr[i];
@@ -297,7 +305,7 @@ static void table_splash(Global* g, GTable* self) {
 	ai_gc_trace_work(g, sizeof(GTable) + sizeof(TNode) * len);
 }
 
-static void table_delete(Global* g, GTable* self) {
+static void table_drop(Global* g, GTable* self) {
 	if (self->_arr != null) {
 		ai_mem_vdel(g, self->_arr, self->_hmask + 1);
 	}
@@ -310,14 +318,185 @@ static Value table_get(a_henv env, GTable* self, Value key) {
 	return value != null ? *value : v_of_nil();
 }
 
+static a_usize mod_capacity_hint(a_usize len) {
+	return ceil_pow2m1_usize(len * 6 / 5) + 1;
+}
+
+static a_usize mod_size(a_usize cap) {
+	return sizeof(GMod) + sizeof(TNode) * cap;
+}
+
+GMod* ai_mod_alloc(a_henv env, a_usize len) {
+	a_usize cap = mod_capacity_hint(len);
+	if (cap > (UINT32_MAX >> 1)) ai_err_raisef(env, ALO_EINVAL, "module size too large.");
+
+	GMod* self = ai_mem_alloc(env, mod_size(cap));
+	self->_vtable = &mod_vtable;
+
+	table_init_array(&self->_table, self->_data, cap);
+	self->_len = len;
+
+	self->_mc = 0;
+	self->_rc = 0;
+	self->_next = null;
+	self->_name = null;
+	self->_loader = null;
+
+	ai_gc_register_object(env, self);
+
+	return self;
+}
+
+Value* ai_mod_emplace(a_henv env, GMod* self, GStr* key) {
+	TNode* node = table_emplace(env, &self->_table, v_of_obj(key), key->_hash, v_of_nil());
+	return &node->_value;
+}
+
+static void mod_mark(Global* g, GMod* self) {
+	if (self->_loader != null) {
+		ai_gc_trace_mark(g, self->_loader);
+	}
+	if (self->_name != null) {
+		ai_gc_trace_mark(g, self->_name);
+	}
+	for (a_usize i = 0; i <= self->_hmask; ++i) {
+		TNode* node = &self->_arr[i];
+		if (!tnode_is_empty(node)) {
+			ai_gc_trace_mark_val(g, node->_key);
+			ai_gc_trace_mark_val(g, node->_value);
+		}
+	}
+	ai_gc_trace_work(g, mod_size(self->_hmask + 1));
+}
+
+static void mod_drop(Global* g, GMod* self) {
+	ai_mem_dealloc(g, self, mod_size(self->_hmask + 1));
+}
+
+static GMod* cache_get_mod(ModCache* cache, GStr* name) {
+	a_u32 index = name->_hash & cache->_hmask;
+	for (GMod* mod = cache->_table[index]; mod != null; mod = mod->_next) {
+		if (ai_str_equals(name, mod->_name)) {
+			return mod;
+		}
+	}
+	return null;
+}
+
+static GMod* loader_load_mod(a_henv env, GModLoader* loader, GStr* name, a_bool load) {
+	if (loader == null) {
+		return cache_get_mod(&G(env)->_mod_cache, name);
+	}
+	else {
+		GMod* mod = cache_get_mod(&loader->_body._cache, name);
+		if (mod == null) {
+			mod = loader_load_mod(env, loader->_body._parent, name, load);
+			if (mod == null && load) {
+				panic("TODO"); //TODO
+				if (mod != null) {
+					ai_mod_cache(env, loader, mod);
+				}
+			}
+		}
+		return mod;
+	}
+}
+
+GMod* ai_mod_load(a_henv env, GModLoader* loader, GStr* name, a_bool load) {
+	return loader_load_mod(env, loader, name, load);
+}
+
+static void cache_put_in_place(ModCache* cache, GMod* mod) {
+	a_u32 id = mod->_name->_hash & cache->_hmask;
+	GMod** pmod = &cache->_table[id];
+	GMod* mod2;
+	while ((mod2 = *pmod) != null) {
+		pmod = &mod2->_next;
+	}
+	*pmod = mod;
+}
+
+static void cache_grow(a_henv env, ModCache* cache) {
+	a_usize old_cap = cache->_table != null ? cache->_hmask + 1 : 0;
+	GMod** old_ptr = cache->_table;
+
+	a_usize new_cap = max((cache->_hmask + 1) * 2, 4);
+	GMod** new_ptr = ai_mem_vnew(env, GMod*, new_cap);
+
+	memclr(new_ptr, sizeof(GMod*) * new_cap);
+
+	cache->_table = new_ptr;
+	cache->_hmask = new_cap - 1;
+
+	for (a_usize i = 0; i < old_cap; ++i) {
+		GMod* mod = old_ptr[i];
+		while (mod != null) {
+			GMod* next = mod->_next;
+			mod->_next = null;
+			cache_put_in_place(cache, mod);
+			mod = next;
+		}
+	}
+
+	ai_mem_vdel(G(env), old_ptr, old_cap);
+}
+
+static void cache_put(a_henv env, ModCache* cache, GMod* mod) {
+	if (cache->_len >= cache->_hmask) {
+		cache_grow(env, cache);
+	}
+	cache_put_in_place(cache, mod);
+	cache->_len += 1;
+}
+
+void ai_mod_cache(a_henv env, GModLoader* loader, GMod* mod) {
+	assume(mod->_mc == 0, "module already registered.");
+	ModCache* cache = loader != null ? &loader->_body._cache : &G(env)->_mod_cache;
+	cache_put(env, cache, mod);
+	mod->_loader = loader;
+	mod->_mc += 1;
+}
+
+void ai_mod_cache_mark(Global* g, ModCache* cache) {
+	for (a_u32 i = 0; i <= cache->_hmask; ++i) {
+		GMod** pmod = &cache->_table[i];
+		GMod* mod;
+		while ((mod = *pmod) != null) {
+			ai_gc_trace_mark(g, mod);
+			pmod = &mod->_next;
+		}
+	}
+}
+
+static void mod_cache_drop(Global* g, ModCache* cache) {
+	if (cache->_table != null) {
+		ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
+	}
+}
+
+void ai_mod_clean(Global* g) {
+	mod_cache_drop(g, &g->_mod_cache);
+}
+
 static VTable const table_vtable = {
 	._tid = T_TABLE,
 	._api_tag = ALO_TTABLE,
 	._repr_id = REPR_TABLE,
 	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
 	._name = "table",
-	._splash = fpcast(a_fp_splash, table_splash),
-	._delete = fpcast(a_fp_delete, table_delete),
+	._mark = fpcast(a_fp_mark, table_mark),
+	._drop = fpcast(a_fp_drop, table_drop),
 	._get = fpcast(a_fp_get, table_get),
 	._set = fpcast(a_fp_set, ai_table_set)
+};
+
+static VTable const mod_vtable = {
+	._tid = T_MOD,
+	._api_tag = ALO_TMOD,
+	._repr_id = REPR_TABLE,
+	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._name = "mod",
+	._mark = fpcast(a_fp_mark, mod_mark),
+	._drop = fpcast(a_fp_drop, mod_drop),
+	._get = fpcast(a_fp_get, table_get)
 };

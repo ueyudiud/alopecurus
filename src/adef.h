@@ -23,6 +23,9 @@
 #define ALO_COMP_OPT_ALOC1 0x1000000
 #define ALO_COMP_OPT_EVAL 0x2000000
 
+/**
+ ** Debug build mode. If enabled, all assumption will be checked and panic if failed.
+ */
 #ifdef ALOI_DEBUG
 # define ALO_DEBUG M_true
 #else
@@ -179,7 +182,6 @@ typedef a_u32 a_insn;
 #undef expect
 #undef likely
 #undef unlikely
-#undef check
 #undef trap
 #undef unreachable
 
@@ -189,9 +191,14 @@ typedef a_u32 a_insn;
 #define expect(e,v) __builtin_expect(e, v)
 #define likely(e) expect(!!(e), true)
 #define unlikely(e) expect(!!(e), false)
-#define check(e) ({ typeof(e) _e = (e); if (unlikely(_e != ALO_SOK)) return _e; })
 #define trap() __builtin_trap()
 #define unreachable() __builtin_unreachable()
+
+/* Error handling functions. */
+
+#undef check
+
+#define check(e) ({ typeof(e) _e = (e); if (unlikely(_e != ALO_SOK)) return _e; })
 
 #if ALO_DEBUG
 intern a_none ai_dbg_panic(char const* fmt, ...);
@@ -256,6 +263,12 @@ always_inline a_u32 clz_usize(a_usize a) {
 
 always_inline a_usize ceil_pow2m1_usize(a_usize a) {
     return likely(a != 0) ? ~usizec(0) >> clz_usize(a) : 0;
+}
+
+always_inline a_usize pad_to(a_usize size, a_usize granularity) {
+	a_usize mask = granularity - 1;
+	assume(granularity != 0 && (granularity & mask) == 0, "bad granularity.");
+	return (size + mask) & ~mask;
 }
 
 #endif /* adef_h_ */

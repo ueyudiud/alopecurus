@@ -5,7 +5,7 @@
 #define agc_c_
 #define ALO_LIB
 
-#include "amod.h"
+#include "atable.h"
 #include "amem.h"
 
 #include "agc.h"
@@ -26,12 +26,12 @@
 # define ALOI_CLOSECOST usizec(256)
 #endif
 
-always_inline void join_gc_(a_gclist* list, a_hobj elem) {
+always_inline void join_gc(a_gclist* list, a_hobj elem) {
 	elem->_gnext = *list;
 	*list = elem;
 }
 
-#define join_gc(list,elem) join_gc_(list, g_cast(GObj, elem))
+#define join_gc(list,elem) join_gc(list, gobj_cast(elem))
 
 always_inline a_hobj strip_gc(a_gclist* list) {
 	a_hobj elem = *list;
@@ -56,7 +56,7 @@ void ai_gc_register_objects(a_henv env, RefQueue* rq) {
 
 #if ALO_DEBUG
 	rq_for(obj, rq) {
-		assume(g_is_white(g, obj) || g_is_gray(obj) || g_is_black(obj));
+		assume(!g_has_other_color(g, obj), "object is already dead.");
 	}
 #endif
 }
@@ -64,20 +64,21 @@ void ai_gc_register_objects(a_henv env, RefQueue* rq) {
 void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 	Global* g = G(env);
 	assume(g->_gc_normal == obj);
-	join_gc(&g->_gc_fixed, strip_gc(&g->_gc_normal));
+	strip_gc(&g->_gc_normal);
+	join_gc(&g->_gc_fixed, obj);
 }
 
-always_inline void splash_object(Global* g, a_hobj obj) {
-	a_fp_splash splash_fp = obj->_vtable->_splash;
-	assume(splash_fp != null);
-	(*splash_fp)(g, obj);
+always_inline void really_mark_object(Global* g, a_hobj obj) {
+	a_fp_mark mark_fp = obj->_vtable->_mark;
+	assume(mark_fp != null);
+	(*mark_fp)(g, obj);
 }
 
 void ai_gc_trace_mark_(Global* g, a_hobj obj) {
-	if (g_is_white(g, obj) && obj->_vtable->_splash != null) {
-		if (obj->_vtable->_flags & VTABLE_FLAG_SPLASH_DIRECT) {
-			obj->_tnext = trmark_null; /* Mark object to gray. */
-			splash_object(g, obj);
+	if (g_has_white_color(g, obj) && obj->_vtable->_mark != null) {
+		if (obj->_vtable->_flags & VTABLE_FLAG_MARK_DIRECT) {
+			obj->_tnext = trmark_null; /* Mark object to gray before propagation. */
+			really_mark_object(g, obj);
 		}
 		else {
 			join_trace(&g->_tr_gray, obj);
@@ -86,19 +87,19 @@ void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 }
 
 always_inline void delete_object(Global* g, a_hobj obj) {
-	a_fp_delete delete = obj->_vtable->_delete;
-	if (likely(delete != null)) {
-		(*delete)(g, obj);
+	a_fp_drop drop_fp = obj->_vtable->_drop;
+	if (likely(drop_fp != null)) {
+		(*drop_fp)(g, obj);
 	}
 }
 
 static void propagagte_once(Global* g, a_trmark* list) {
-	splash_object(g, strip_trace(list));
+	really_mark_object(g, strip_trace(list));
 }
 
 static a_bool sweep_once(Global* g) {
 	GObj* obj = strip_gc(g->_gc_sweep);
-	if (g_is_other(g, obj)) {
+	if (g_has_other_color(g, obj)) {
 		delete_object(g, obj);
 		return true;
 	}
@@ -172,7 +173,7 @@ static void halt_propagate(Global* g, GObj** list) {
 	while (*list != null) {
 		GObj* obj = *list;
 		list = &obj->_gnext;
-		if (g_is_other(g, obj)) {
+		if (g_has_other_color(g, obj)) {
 			obj->_tnext = white;
 		}
 	}
@@ -214,7 +215,7 @@ static void propagate_atomic(Global* g) {
 	if (v_is_obj(g->_global)) {
 		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
-	ai_mod_cache_splash(g, &g->_mod_cache);
+	ai_mod_cache_mark(g, &g->_mod_cache);
 	if (g->_gsplash != null) {
 		(*g->_gsplash)(g, g->_gprotect_ctx);
 	}

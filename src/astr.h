@@ -26,19 +26,41 @@ intern void ai_str_clean(Global* g);
 
 #define ai_str_newl(env,src) ai_str_new(env, ""src, sizeof(src) - sizeof(char))
 
+#define GSTR_STRUCT_HEADER \
+	GOBJ_STRUCT_HEADER;       \
+	a_u32 _len;               \
+	a_hash _hash;             \
+	a_byte _data[]
+
 struct GStr {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_hash _hash;
-	a_byte _data[];
+	GSTR_STRUCT_HEADER;
 };
 
 struct IStr {
-	IStr* _next; /* Next node of overflow chain in intern table. */
-	GStr _body;
+	IStr* _cache_next; /* Next node of overflow chain in intern table. */
+	union {
+		GStr _body;
+		struct {
+			GSTR_STRUCT_HEADER;
+		};
+	};
 };
 
 #define ISTR_MAX_LEN 255
+
+always_inline a_bool g_is_str(a_hobj v) {
+	return v->_vtable->_repr_id == REPR_STR;
+}
+
+always_inline GStr* g_as_str(a_hobj v) {
+	assume(g_is_str(v));
+	return g_cast(GStr, v);
+}
+
+always_inline GStr* v_as_str(Value v) {
+	assume(v_is_str(v), "not string.");
+	return g_as_str(v_as_obj(v));
+}
 
 always_inline a_usize hstr_size(a_usize len) {
 	return sizeof(GStr) + len + 1;

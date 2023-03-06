@@ -10,7 +10,6 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
 #include "actx.h"
 #include "agc.h"
 #include "aerr.h"
@@ -54,6 +53,16 @@ a_bool alo_attri(unused a_henv env, a_enum n, a_int* pi) {
 		default:
 			return false;
 	}
+}
+
+/**
+ ** Set panic behavior for the virtual machine.
+ *@param env the environment.
+ *@param f the panic function.
+ */
+void alo_setpanic(a_henv env, a_cfun f) {
+	Global* g = G(env);
+	g->_panic = f;
 }
 
 /**

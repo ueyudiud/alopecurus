@@ -18,7 +18,7 @@ typedef struct ProtoDesc ProtoDesc;
 intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
 intern GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame);
-intern void ai_proto_delete(Global* g, GProto* self);
+intern void ai_proto_drop(Global* g, GProto* self);
 intern void ai_cap_close(a_henv env, RcCap** pcap, Value const* base);
 
 #define FUN_FLAG_VARARG u16c(0x0001)
@@ -128,5 +128,19 @@ struct ProtoDesc {
 	a_u8 _nstack;
 	ProtoFlags _flags;
 };
+
+always_inline a_bool g_is_func(a_hobj v) {
+	return v->_vtable->_repr_id == REPR_FUNC;
+}
+
+always_inline GFun* g_as_func(a_hobj v) {
+	assume(g_is_func(v));
+	return g_cast(GFun, v);
+}
+
+always_inline GFun* v_as_func(Value v) {
+	assume(v_is_func(v), "not function.");
+	return g_as_func(v_as_obj(v));
+}
 
 #endif /* afun_h_ */

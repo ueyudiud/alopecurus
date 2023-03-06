@@ -34,14 +34,14 @@ static void l_nomem_error(Parser* par) {
 #define l_bput(par,b,v,u)  ({ \
     typeof(b)* _buf = &(b); \
     if (unlikely(_buf->_len == _buf->_cap)) { \
-        l_check_alloc(ai_buf_resize_((par)->_env, _buf, _buf->_cap + u)); \
+        l_check_alloc(ai_buf_ngrow((par)->_env, _buf, _buf->_cap + u)); \
     } \
 	a_usize _index = _buf->_len++; \
     _buf->_arr[_index] = (v); \
 	_index; \
 })
 
-#define l_bdel(par,buf) ai_buf_deinit((par)->_env, &(buf))
+#define l_bdel(par,buf) ai_buf_deinit(G((par)->_env), &(buf))
 
 always_inline void expr_copy(OutExpr dst, InExpr src) {
 	*dst = *src;
@@ -1487,16 +1487,16 @@ a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line l
 static a_bool l_try_append(Parser* par, QBuf* buf, InExpr e) {
 	switch (e->_kind) {
 		case EXPR_INT: {
-			l_check_alloc(ai_fmt_puti(par->_env, buf, e->_int));
+			l_check_alloc(ai_fmt_nputi(par->_env, buf, e->_int));
 			return true;
 		}
 		case EXPR_FLOAT: {
-			l_check_alloc(ai_fmt_putf(par->_env, buf, e->_float));
+			l_check_alloc(ai_fmt_nputf(par->_env, buf, e->_float));
 			return true;
 		}
 		case EXPR_STR: {
 			GStr* str = e->_str;
-			l_check_alloc(ai_buf_putsx_(par->_env, buf, str->_data, str->_len));
+			l_check_alloc(ai_buf_nputls(par->_env, buf, str->_data, str->_len));
 			return true;
 		}
 		default: {
@@ -1554,7 +1554,7 @@ void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 			l_emit_k(par, reg, v_of_obj(str), line);
 			ce->_head._len += 1;
 		}
-		expr_dyn(e, l_emit(par, bc_make_iabc(BC_CAT, DYN, ce->_head._base, ce->_head._len), line));
+		expr_dyn(e, l_emit(par, bc_make_iabc(BC_CAT, DYN, ce->_head._base, ce->_head._len + 1), line));
 		l_drop_pack(par, &ce->_head);
 	}
 	/* Check and drop string buffer. */
@@ -2084,7 +2084,7 @@ static void l_del_proto(a_henv env, GProto* proto) {
 	for (a_u32 i = 0; i < proto->_nsub; ++i) {
 		l_del_proto(env, proto->_subs[i]);
 	}
-	ai_proto_delete(G(env), proto);
+	ai_proto_drop(G(env), proto);
 }
 
 static void parser_close(Parser* par) {

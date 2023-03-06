@@ -147,8 +147,6 @@ ALO_O= alo.o
 ALO_A= alo.a
 ALO_SO= alo.so
 ALO_T= alo
-ALO_DB= $(TARGET_SONAME)-$(DEBUGMODE).py
-ALO_DB_SRC=alo-$(DEBUGMODE).py
 
 ifeq (Windows,$(TARGET_OS))
 	ALO_T= alo.exe
@@ -157,7 +155,6 @@ ifeq (Windows,$(TARGET_OS))
 	else
 		ALO_SO= $(TARGET_DLLNAME)
 	endif
-	ALO_DB= $(ALO_SO)-$(DEBUGMODE).py
 endif
 
 ##############################################################
@@ -189,17 +186,13 @@ endif
 
 ifeq (debug,$(LEVEL))
   TARGET_STRIP= @:
-  ifneq (static,$(BUILDMODE))
-  	TARGET_T+= $(ALO_DB)
-  endif
 endif
 
 ACTX_C= actx/x64.w64.win.c
 
 KER_O= aapi.o adump.o acode.o aparse.o alex.o adbg.o aerr.o aload.o \
-asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o aenv.o astk.o amod.o \
-ameta.o afun.o atable.o alist.o atuple.o astr.o adict.o abuf.o aio.o \
-actx.o
+asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o aenv.o astk.o ameta.o \
+afun.o atable.o alist.o atuple.o astr.o abuf.o aio.o actx.o
 LIB_O= asyslib.o adbglib.o abaselib.o aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
 
@@ -207,7 +200,7 @@ ALO_O= alo.o
 
 ALL_O= $(BASE_O) $(ALO_O)
 ALL_T= $(TARGET_T)
-ALL_RM= $(ALL_O) $(ALL_O:.o=_dyn.o) $(ALO_T) $(ALO_A) $(ALO_SO) $(ALO_DB)
+ALL_RM= $(ALL_O) $(ALL_O:.o=_dyn.o) $(ALO_T) $(ALO_A) $(ALO_SO)
 
 E=@
 Q=@echo
@@ -268,12 +261,6 @@ include makefile.dep
 $(ALO_A): $(BASE_O)
 	$(Q) "AR      $@"
 	$(E) cd $(OUT) && $(TARGET_AR) $@ $(BASE_O)
-
-ifneq (debug,$(BUILDMODE))
-$(ALO_DB): $(ALO_DB_SRC) check
-	$(Q) "CP      $(ALO_DB_SRC) $@"
-	$(E) $(call CP, $(ALO_DB_SRC), "$(OUT)/$@")
-endif
 
 $(ALO_SO): $(BASE_O)
 	$(Q) "DYLINK  $@"
