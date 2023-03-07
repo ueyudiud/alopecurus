@@ -27,14 +27,19 @@ intern void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line);
 
 intern void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line);
 intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line);
+intern void ai_code_new_tuple(Parser* par, InoutExpr e, a_line line);
+intern void ai_code_new_list(Parser* par, InoutExpr e, a_line line);
 intern void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line);
 intern void ai_code_binary1(Parser* par, InoutExpr e, a_u32 op, a_line line);
 intern void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line);
 intern void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line line);
 intern void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line line);
+intern void ai_code_call(Parser* par, InExpr e, a_line line);
+intern void ai_code_return(Parser* par, InExpr e, a_line line);
 intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_line line);
-intern void ai_code_multi(Parser* par, InoutExpr es, InoutExpr e, a_u32 op, a_line line);
 intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line line);
+intern void ai_code_va_push(Parser* par, InoutExpr e1, InExpr e2, a_line line);
+intern void ai_code_va_pop(Parser* par, InoutExpr es, InoutExpr e, a_line line);
 intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line);
 intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line);
 
@@ -66,7 +71,7 @@ intern GFun* ai_code_build_and_close(Parser* par);
  ** any unrelated operations. Nonvolatile expressions are required to
  ** retain the values across any operations.
  */
-enum {
+enum ExprKind {
 /*==========================Duality Expression==========================*/
 	/**
 	 ** Unit expression.
@@ -133,13 +138,13 @@ enum {
 	EXPR_CAP,
 	/**
 	 ** The sequence of temporary registers.
-	 ** REPR: R[_base:_base+_len]
+	 ** REPR: R[_impl:_impl+_len]
 	 *@param _pack the register pack.
 	 */
 	EXPR_PACK,
 /*===========================Lazy Expressions===========================*/
 	/**
-	 ** The value indexed expression. REPR: R[_base][R[_key]]
+	 ** The value indexed expression. REPR: R[_impl][R[_key]]
 	 *@param _base the base register index.
 	 *@param _key the key register index.
 	 */
@@ -150,7 +155,7 @@ enum {
 #define EXPR_REFR_ALL EXPR_REFVV ... EXPR_REFTT
 	/**
 	 ** The integer indexed expression.
-	 ** REPR: R[_base][_key]
+	 ** REPR: R[_impl][_key]
 	 *@param _base the base register index.
 	 *@param _key the integer key.
 	 */
@@ -160,7 +165,7 @@ enum {
 	EXPR_REFTI_,
 #define EXPR_REFI_ALL EXPR_REFVI ... EXPR_REFTI
 	/**
-	 ** The constant indexed expression. REPR: R[_base][K[_key]]
+	 ** The constant indexed expression. REPR: R[_impl][K[_key]]
 	 *@param _base the base register index.
 	 *@param _key the key constant index.
 	 */
@@ -297,7 +302,7 @@ struct LetStat {
 	a_u32 _ftest : 1;
 };
 
-enum {
+enum SymKind {
 	/**
 	 ** Local variable.
 	 *@param _index the register index.

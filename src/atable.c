@@ -8,6 +8,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "aop.h"
 #include "astr.h"
 #include "amem.h"
 #include "agc.h"
@@ -132,7 +133,7 @@ static TNode* table_get_hprev(GTable* self, TNode* node) {
 	return nodep;
 }
 
-static TNode* table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
+static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
     TNode* nodeh = unwrap_abs(self, hash & self->_hmask);
     if (tnode_is_hhead(self, nodeh, hash)) {
         /* Insert into hash list. */
@@ -149,7 +150,6 @@ static TNode* table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Va
 		nodeh->_hnext = ai_link_wrap(nodeh, nodet);
 
 		table_link_tail(self, nodet);
-		return nodet;
     }
     else {
 		if (!tnode_is_empty(nodeh)) {
@@ -169,7 +169,6 @@ static TNode* table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Va
 		tnode_emplace(env, nodeh, key, hash, value);
         nodeh->_hnext = nil;
 		table_link_tail(self, nodeh);
-		return nodeh;
     }
 }
 
@@ -331,13 +330,12 @@ GMod* ai_mod_alloc(a_henv env, a_usize len) {
 	if (cap > (UINT32_MAX >> 1)) ai_err_raisef(env, ALO_EINVAL, "module size too large.");
 
 	GMod* self = ai_mem_alloc(env, mod_size(cap));
-	self->_vtable = &mod_vtable;
+	memclr(self, sizeof(GMod));
 
+	self->_vtable = &mod_vtable;
 	table_init_array(&self->_table, self->_data, cap);
 	self->_len = len;
 
-	self->_mc = 0;
-	self->_rc = 0;
 	self->_next = null;
 	self->_name = null;
 	self->_loader = null;
@@ -347,12 +345,84 @@ GMod* ai_mod_alloc(a_henv env, a_usize len) {
 	return self;
 }
 
-Value* ai_mod_emplace(a_henv env, GMod* self, GStr* key) {
-	TNode* node = table_emplace(env, &self->_table, v_of_obj(key), key->_hash, v_of_nil());
-	return &node->_value;
+static void generic_close(a_henv env, a_hobj self) {
+	Value vf = ai_obj_vlookup(env, self, TM_CLOSE);
+	Value* base = vm_push_args(env, vf, v_of_obj(self));
+	ai_vm_call(env, base, RFLAGS_META_CALL);
 }
 
-static void mod_mark(Global* g, GMod* self) {
+static Value generic_get(a_henv env, a_hobj self, Value key) {
+	Value vf = ai_obj_vlookup(env, self, TM_GET);
+	Value* base = vm_push_args(env, vf, v_of_obj(self), key);
+	return ai_vm_call(env, base, RFLAGS_META_CALL);
+}
+
+static void generic_set(a_henv env, a_hobj self, Value key, Value value) {
+	Value vf = ai_obj_vlookup(env, self, TM_GET);
+	Value* base = vm_push_args(env, vf, v_of_obj(self), key, value);
+	ai_vm_call(env, base, RFLAGS_META_CALL);
+}
+
+static a_hash generic_hash(a_henv env, a_hobj self) {
+	Value vf = ai_obj_vlookup(env, self, TM_HASH);
+	Value* base = vm_push_args(env, vf, v_of_obj(self));
+	Value vh = ai_vm_call(env, base, RFLAGS_META_CALL);
+	if (!v_is_int(vh)) ai_err_raisef(env, ALO_EINVAL, "bad hash code.");
+	return cast(a_hash, v_as_int(vh));
+}
+
+static a_bool generic_equals(a_henv env, a_hobj self, Value other) {
+	Value vf = ai_obj_vlookup(env, self, TM_EQ);
+	Value* base = vm_push_args(env, vf, v_of_obj(self), other);
+	return v_to_bool(ai_vm_call(env, base, RFLAGS_META_CALL));
+}
+
+void ai_mod_ready(a_henv env, GMod* self, VTable const* impl) {
+	quiet(env);
+	a_u32 op_flags = self->_impl._flags;
+	self->_impl = new(VTable) {
+		._tid = op_flags & VTABLE_FLAG_OVERRIDE(TM_EQ) ? T_USER_NEQ : T_USER_TEQ,
+		._api_tag = ALO_TUSER,
+		._repr_id = impl->_repr_id,
+		._flags = op_flags | (impl->_flags & VTABLE_FLAG_FAST_LEN) | VTABLE_FLAG_VLOOKUP,
+		._name = str2ntstr(self->_name),
+		._mark = impl->_mark,
+		._drop = impl->_drop,
+		._close = op_flags & VTABLE_FLAG_OVERRIDE(TM_CLOSE) ? generic_close : impl->_close,
+		._get = op_flags & VTABLE_FLAG_OVERRIDE(TM_GET) ? generic_get : null,
+		._set = op_flags & VTABLE_FLAG_OVERRIDE(TM_SET) ? generic_set : null,
+		._hash = op_flags & VTABLE_FLAG_OVERRIDE(TM_HASH) ? generic_hash : impl->_hash,
+		._equals = op_flags & VTABLE_FLAG_OVERRIDE(TM_EQ) ? generic_equals : impl->_equals
+	};
+	self->_mc = 0;
+	self->_rc = 0;
+}
+
+void ai_mod_emplace(a_henv env, GMod* self, GStr* key, Value value) {
+	table_emplace(env, &self->_table, v_of_obj(key), key->_hash, value);
+	if (strx_istm(key)) {
+		a_enum tm = strx_totm(key);
+		if (tm <= TM__FAST_MAX) {
+			self->_impl._flags |= 1 << tm;
+		}
+	}
+}
+
+static Value* mod_vlookup(a_henv env, GMod* self, a_enum op) {
+	GStr* key = ai_env_strx(G(env),  STRX_KW__BEGIN + op);
+	return table_find_id(env, &self->_table, key->_hash, v_of_obj(key));
+}
+
+Value ai_obj_vlookup(a_henv env, a_hobj self, a_enum tm) {
+	if (!(self->_vtable->_flags & VTABLE_FLAG_VLOOKUP))
+		return v_of_nil();
+
+	Value* ret = mod_vlookup(env, from_member(GMod, _impl, self->_vtable), tm);
+	return ret != null ? *ret : v_of_nil();
+}
+
+static void mod_mark(Global* g, a_hobj raw_self) {
+	GMod* self = g_cast(GMod, raw_self);
 	if (self->_loader != null) {
 		ai_gc_trace_mark(g, self->_loader);
 	}
@@ -369,7 +439,8 @@ static void mod_mark(Global* g, GMod* self) {
 	ai_gc_trace_work(g, mod_size(self->_hmask + 1));
 }
 
-static void mod_drop(Global* g, GMod* self) {
+static void mod_drop(Global* g, a_hobj raw_self) {
+	GMod* self = g_cast(GMod, raw_self);
 	ai_mem_dealloc(g, self, mod_size(self->_hmask + 1));
 }
 
@@ -482,7 +553,7 @@ static VTable const table_vtable = {
 	._tid = T_TABLE,
 	._api_tag = ALO_TTABLE,
 	._repr_id = REPR_TABLE,
-	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._flags = VTABLE_FLAG_FAST_LEN | VTABLE_FLAG_OVERRIDE(TM_LEN) | VTABLE_FLAG_OVERRIDE(TM_GET) | VTABLE_FLAG_OVERRIDE(TM_SET),
 	._name = "table",
 	._mark = fpcast(a_fp_mark, table_mark),
 	._drop = fpcast(a_fp_drop, table_drop),
@@ -494,9 +565,9 @@ static VTable const mod_vtable = {
 	._tid = T_MOD,
 	._api_tag = ALO_TMOD,
 	._repr_id = REPR_TABLE,
-	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._flags = VTABLE_FLAG_FAST_LEN | VTABLE_FLAG_OVERRIDE(TM_LEN) | VTABLE_FLAG_OVERRIDE(TM_GET),
 	._name = "mod",
-	._mark = fpcast(a_fp_mark, mod_mark),
-	._drop = fpcast(a_fp_drop, mod_drop),
+	._mark = mod_mark,
+	._drop = mod_drop,
 	._get = fpcast(a_fp_get, table_get)
 };

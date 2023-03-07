@@ -55,8 +55,6 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	self->_base_frame._bound = stack->_base + ALOI_INIT_CFRAMESIZE;
 # endif
 
-
-
 	return false;
 }
 

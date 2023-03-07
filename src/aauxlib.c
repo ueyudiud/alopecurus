@@ -54,9 +54,11 @@ static char const* l_typename(a_henv env, a_isize id) {
 	if (p == null) return "empty";
 
 	Value v = *p;
-	if (!v_is_user(v)) return ai_obj_tag_name[v_get_tag(v)];
+	if (!v_is_user(v)) {
+		return ai_obj_tag_name[v_get_tag(v)];
+	}
 
-	panic("unimplemented"); //TODO
+	return v_as_obj(v)->_vtable->_name;
 }
 
 void aloL_typeerror(a_henv env, a_usize id, char const* name) {
@@ -207,11 +209,10 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 		assume(b->name != null);
 
 		GStr* key = ai_str_new(env, b->name, strlen(b->name));
-		Value* slot = ai_mod_emplace(env, mod, key);
 
 		if (b->fptr != null) {
 			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
-			v_set_obj(env, slot, fun);
+			ai_mod_emplace(env, mod, key, v_of_obj(fun));
 		}
 	}
 

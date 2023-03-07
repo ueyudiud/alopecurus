@@ -778,6 +778,15 @@ static ExprPack l_move_to_pack(Parser* par, InoutExpr e) {
 	}
 }
 
+void ai_code_new_tuple(Parser* par, InoutExpr e, a_line line) {
+	ExprPack pack = l_move_to_pack(par, e);
+	expr_dyn(e, l_emit_tnew(par, DYN, pack._base, pack._len, line));
+}
+
+void ai_code_new_list(Parser* par, InoutExpr e, a_line line) {
+	expr_dyn(e, l_emit(par, bc_make_iabx(BC_LNEW, DYN, 0), line));
+}
+
 void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 	switch (op) {
 		case OP_NEG: {
@@ -876,42 +885,6 @@ void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 			e->_kind = EXPR_DST_A;
 			e->_label = l_emit(par, bc_make_iab(BC_LEN, DYN, e->_reg), line);
 			e->_line = line;
-			break;
-		}
-		case OP_TNEW: {
-			ExprPack pack = l_move_to_pack(par, e);
-			expr_dyn(e, l_emit_tnew(par, DYN, pack._base, pack._len, line));
-			break;
-		}
-		case OP_LNEW: {
-			expr_dyn(e, l_emit(par, bc_make_iabx(BC_LNEW, DYN, 0), line));
-			break;
-		}
-		case OP_RETURN: {
-			ExprPack pack = l_move_to_pack(par, e);
-			l_emit_ret(par, pack._base, pack._len, line);
-			break;
-		}
-		case OP_CALL: { /* Only fptr for empty argument call. */
-			switch (e->_kind) {
-				case EXPR_NEVER: {
-					break;
-				}
-				case EXPR_PACK: {
-					ExprPack* pack = &e->_pack;
-					e->_kind = EXPR_DST_C;
-					e->_label = l_emit(par, bc_make_iabc(BC_CALL, pack->_base, pack->_len, DYN), line);
-					e->_line = line;
-					break;
-				}
-				default: {
-					l_topR(par, e);
-					e->_kind = EXPR_DST_C;
-					e->_label = l_emit(par, bc_make_iabc(BC_CALL, e->_reg, 1, DYN), line);
-					e->_line = line;
-					break;
-				}
-			}
 			break;
 		}
 		default: unreachable();
@@ -1090,38 +1063,6 @@ static void l_compare_suffix(Parser* par, InExpr e1, InExpr e2, OutExpr e3,
 	e3->_label = l_emit_jump_direct(par, NO_LABEL, line);
 }
 
-static void l_va_push(Parser* par, ExprPack* es, InExpr e2, a_line line) {
-	if (unlikely(es->_len == VARARG)) {
-		ai_par_error(par, "cannot add argument after vararg.", line);
-	}
-	switch (e2->_kind) {
-		case EXPR_UNIT: {
-			break;
-		}
-		case EXPR_PACK: {
-			assume(e2->_pack._len == VARARG);
-			es->_len = VARARG;
-			break;
-		}
-		case EXPR_DST_AC: {
-			bc_swap_a(&par->_code[e2->_label], es->_base + es->_len);
-			fallthrough;
-		}
-		case EXPR_DST_C: {
-			assume(bc_load_a(par->_code[e2->_label]) == es->_base + es->_len);
-			bc_swap_c(&par->_code[e2->_label], par->_fnscope->_fvarg ? 0 : 2);
-			es->_len = par->_fnscope->_fvarg ? VARARG : es->_len + 1;
-			break;
-		}
-		default: {
-			l_topR(par, e2);
-			assume(e2->_reg == es->_base + es->_len);
-			es->_len += 1;
-			break;
-		}
-	}
-}
-
 /**
  ** Post evaluate expression `e1 op e2` and bind result to e1.
  ** The left hand expression should be a constant or a non-volatile expression.
@@ -1254,32 +1195,6 @@ void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line
 			}
 			break;
 		}
-		case OP_VA_PUSH: {
-			if (unlikely(e2->_kind == EXPR_NEVER)) {
-				expr_never(e1, line);
-				return;
-			}
-			if (unlikely(e1->_kind != EXPR_PACK)) {
-				switch (e1->_kind) {
-					case EXPR_NEVER: {
-						return;
-					}
-					case EXPR_UNIT: {
-						expr_copy(e1, e2);
-						return;
-					}
-					default: {
-						assume(e1->_kind != EXPR_PACK);
-						l_topR(par, e1);
-						e1->_kind = EXPR_PACK;
-						e1->_pack = new(ExprPack) { e1->_reg, 1 };
-						break;
-					}
-				}
-			}
-			l_va_push(par, &e1->_pack, e2, line);
-			break;
-		}
 		default: unreachable();
 	}
 }
@@ -1332,7 +1247,7 @@ void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line lin
 
 void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line line) {
 	switch (op) {
-		case OP_OPTION: {
+		case OP_OR_NIL: {
 			a_u32 kind = l_condT(par, e, plabel, line);
 			if (unlikely(kind == EXPR_RESIDUAL_FALSE)) {
 				e->_kind = EXPR_NEVER;
@@ -1398,27 +1313,66 @@ void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line lin
 	}
 }
 
-static void l_va_pop(unused Parser* par, InoutExpr es, InoutExpr e, a_line line) {
-	if (es->_kind == EXPR_PACK) {
-		ExprPack* pack = &es->_pack;
-		assume(pack->_len > 0);
-		pack->_len -= 1;
-		expr_tmp(e, pack->_base + pack->_len, line);
-	}
-	else {
-		expr_copy(e, es);
+void ai_code_call(Parser* par, InExpr e, a_line line) {
+	switch (e->_kind) {
+		case EXPR_NEVER: {
+			break;
+		}
+		case EXPR_PACK: {
+			ExprPack* pack = &e->_pack;
+			e->_kind = EXPR_DST_C;
+			e->_label = l_emit(par, bc_make_iabc(BC_CALL, pack->_base, pack->_len, DYN), line);
+			e->_line = line;
+			break;
+		}
+		default: {
+			l_topR(par, e);
+			e->_kind = EXPR_DST_C;
+			e->_label = l_emit(par, bc_make_iabc(BC_CALL, e->_reg, 1, DYN), line);
+			e->_line = line;
+			break;
+		}
 	}
 }
 
-void ai_code_multi(Parser* par, InoutExpr es, InoutExpr e, a_u32 op, a_line line) {
-	switch (op) {
-		case OP_VA_POP: {
-			l_va_pop(par, es, e, line);
+void ai_code_return(Parser* par, InExpr e, a_line line) {
+	ExprPack pack = l_move_to_pack(par, e);
+	l_emit_ret(par, pack._base, pack._len, line);
+}
+
+static void l_va_push(Parser* par, ExprPack* es, InExpr e2, a_line line) {
+	if (unlikely(es->_len == VARARG)) {
+		ai_par_error(par, "cannot add argument after vararg.", line);
+	}
+	switch (e2->_kind) {
+		case EXPR_UNIT: {
 			break;
 		}
-		default: unreachable();
+		case EXPR_PACK: {
+			assume(e2->_pack._len == VARARG);
+			es->_len = VARARG;
+			break;
+		}
+		case EXPR_DST_AC: {
+			bc_swap_a(&par->_code[e2->_label], es->_base + es->_len);
+					fallthrough;
+		}
+		case EXPR_DST_C: {
+			assume(bc_load_a(par->_code[e2->_label]) == es->_base + es->_len);
+			bc_swap_c(&par->_code[e2->_label], par->_fnscope->_fvarg ? 0 : 2);
+			es->_len = par->_fnscope->_fvarg ? VARARG : es->_len + 1;
+			break;
+		}
+		default: {
+			l_topR(par, e2);
+			assume(e2->_reg == es->_base + es->_len);
+			es->_len += 1;
+			break;
+		}
 	}
 }
+
+#define l_va_pop ai_code_va_pop
 
 /**
  ** Take expected argument.
@@ -1481,6 +1435,44 @@ a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line l
 			assume(m + 1 <= n);
 			return m + 1 == n;
 		}
+	}
+}
+
+void ai_code_va_push(Parser* par, InoutExpr e1, InExpr e2, a_line line) {
+	if (unlikely(e2->_kind == EXPR_NEVER)) {
+		expr_never(e1, line);
+		return;
+	}
+	if (unlikely(e1->_kind != EXPR_PACK)) {
+		switch (e1->_kind) {
+			case EXPR_NEVER: {
+				return;
+			}
+			case EXPR_UNIT: {
+				expr_copy(e1, e2);
+				return;
+			}
+			default: {
+				assume(e1->_kind != EXPR_PACK);
+				l_topR(par, e1);
+				e1->_kind = EXPR_PACK;
+				e1->_pack = new(ExprPack) { e1->_reg, 1 };
+				break;
+			}
+		}
+	}
+	l_va_push(par, &e1->_pack, e2, line);
+}
+
+void ai_code_va_pop(unused Parser* par, InoutExpr es, InoutExpr e, a_line line) {
+	if (es->_kind == EXPR_PACK) {
+		ExprPack* pack = &es->_pack;
+		assume(pack->_len > 0);
+		pack->_len -= 1;
+		expr_tmp(e, pack->_base + pack->_len, line);
+	}
+	else {
+		expr_copy(e, es);
 	}
 }
 

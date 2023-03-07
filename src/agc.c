@@ -76,7 +76,7 @@ always_inline void really_mark_object(Global* g, a_hobj obj) {
 
 void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 	if (g_has_white_color(g, obj) && obj->_vtable->_mark != null) {
-		if (obj->_vtable->_flags & VTABLE_FLAG_MARK_DIRECT) {
+		if (obj->_vtable->_flags & VTABLE_FLAG_PLAIN_MARK) {
 			obj->_tnext = trmark_null; /* Mark object to gray before propagation. */
 			really_mark_object(g, obj);
 		}

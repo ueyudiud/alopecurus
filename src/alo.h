@@ -92,6 +92,7 @@ typedef int a_bool;
 
 /* VM integer number type. */
 typedef a_i32 a_int;
+typedef a_u32 a_uint;
 /* VM float point number type. */
 typedef a_f64 a_float;
 

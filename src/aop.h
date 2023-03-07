@@ -8,60 +8,72 @@
 #include "adef.h"
 #include "aerr.h"
 
-typedef a_u32 a_uint;
+#define TM_LIST(_) \
+	_(GET, "__get__")     \
+	_(SET, "__set__")     \
+	_(LEN, "__len__")     \
+	_(CLOSE, "__close__") \
+	_(HASH, "__hash__")   \
+	_(EQ, "__eq__")       \
+	_(LT, "__lt__")       \
+	_(LE, "__le__")       \
+	_(IN, "__in__")       \
+	_(ADD, "__add__")     \
+	_(SUB, "__sub__")     \
+	_(MUL, "__mul__")     \
+	_(DIV, "__div__")     \
+	_(MOD, "__mod__")     \
+	_(SHL, "__shl__")     \
+	_(SHR, "__shr__")     \
+	_(BIT_AND, "__band__")\
+	_(BIT_OR, "__bor__")  \
+	_(BIT_XOR, "__bxor__")\
+	_(NEG, "__neg__")     \
+	_(BIT_INV, "__inv__") \
+	_(UNBOX, "__unbox__") \
+	_(CALL, "__call__")
 
 enum {
-	OP__NONE,
+#define TMDEF(id,name) M_cat(TM_,id),
+	TM_LIST(TMDEF)
+#undef TMDEF
+	TM__FAST_MAX = TM_EQ
+};
 
-	OP_ADD,
-	OP_SUB,
-	OP_MUL,
-	OP_DIV,
-	OP_MOD,
-	OP_SHL,
-	OP_SHR,
-	OP_BIT_AND,
-	OP_BIT_OR,
-	OP_BIT_XOR,
-	OP_AND,
-	OP_OR,
+enum BinaryOp {
+	OP__NOT_BIN,
+	/* Arithmetic operators */
+	OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_MOD, OP_POW,
+	/* Bitwise operators */
+	OP_SHL, OP_SHR, OP_BIT_AND, OP_BIT_OR, OP_BIT_XOR,
+	/* Compare operators */
+	OP_EQ, OP_NE, OP_LT, OP_LE, OP_GT, OP_GE,
+	/* Relation operations */
+	OP_IS, OP_IS_NOT, OP_IN, OP_NOT_IN,
+	/* Logical operators */
+	OP_AND, OP_OR,
+};
 
-	OP_LT,
-	OP_GE,
-	OP_LE,
-	OP_GT,
-	OP_EQ,
-	OP_NE,
-	OP_IS,
-	OP_IS_NOT,
-	OP_AS,
-	OP_AS_OR,
-	OP_IN,
-	OP_NOT_IN,
+always_inline a_enum bin_op2tm(a_enum op) {
+	assume(op >= OP_ADD && op <= OP_BIT_XOR);
+	return op - OP_ADD + TM_ADD;
+}
 
+enum UnaryOp {
+	/* Arithmetic operator */
 	OP_NEG,
+	/* Bitwise operator */
 	OP_BIT_INV,
+	/* Collection operator */
+	OP_LEN, OP_UNBOX,
+	/* Logical operators */
+	OP_NOT
+};
 
-	OP_NOT,
-
-	OP_UNBOX,
-	OP_LEN,
-	OP_GET,
-	OP_SET,
-
-	OP_CALL,
-
-	/* Builtin operator. */
-	OP_OPTION,
-	OP_MERGE,
+enum MonadOp {
+	OP_OR_NIL,
 	OP_OR_ELSE,
-
-	OP_VA_PUSH,
-	OP_VA_POP,
-	OP_RETURN,
-
-	OP_TNEW,
-	OP_LNEW
+	OP_MERGE
 };
 
 #ifdef aloi_op_neg_int
@@ -289,7 +301,5 @@ always_inline a_bool ai_op_cmp_float(a_float a, a_float b, a_enum op) {
 			panic("bad operation.");
 	}
 }
-
-intern char const* const ai_op_names[];
 
 #endif /* aop_h_ */

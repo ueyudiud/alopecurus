@@ -77,7 +77,7 @@ static void buf_drop(Global* g, a_hobj raw_self) {
 static VTable const buf_vtable = {
 	._tid = T_USER_TEQ,
 	._api_tag = ALO_TUSER,
-	._flags = VTABLE_FLAG_IDENTITY_EQUAL,
+	._flags = VTABLE_FLAG_NONE,
 	._name = "str_buf",
 	._mark = buf_mark,
 	._drop = buf_drop

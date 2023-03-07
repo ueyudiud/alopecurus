@@ -46,7 +46,7 @@ typedef struct {
 
 struct Frame {
 	Frame* _prev;
-	a_insn* _pc;
+	a_insn const* _pc;
 	StkPtr _stack_bot;
 	RcCap* _caps;
 	RFlags _rflags;
@@ -77,7 +77,7 @@ always_inline void check_in_stack(a_henv env, Value* v) {
 always_inline StkPtr val2stk(a_henv env, Value* v) {
 	check_in_stack(env, v);
 #if ALO_STACK_RELOC
-	return ptr_diff(v, env->_stack._base);
+	return ptr_diff(v, env->_stack._impl);
 #else
 	quiet(env);
 	return v;
@@ -87,7 +87,7 @@ always_inline StkPtr val2stk(a_henv env, Value* v) {
 always_inline Value* stk2val(a_henv env, StkPtr p) {
 	Value* v;
 #if ALO_STACK_RELOC
-	v = ptr_disp(Value, env->_stack._base, p);
+	v = ptr_disp(Value, env->_stack._impl, p);
 #else
 	quiet(env);
 	v = p;

@@ -21,13 +21,18 @@ intern Value const* ai_table_ref(a_henv env, GTable* self, Value key);
 intern void ai_table_set(a_henv env, GTable* self, Value key, Value value);
 
 intern GMod* ai_mod_alloc(a_henv env, a_usize len);
-intern Value* ai_mod_emplace(a_henv env, GMod* self, GStr* key);
-intern a_i32 ai_mod_find(a_henv env, GMod* self, GStr* key);
+intern void ai_mod_ready(a_henv env, GMod* self, VTable const* impl);
+intern void ai_mod_emplace(a_henv env, GMod* self, GStr* key, Value value);
+intern Value ai_obj_vlookup(a_henv env, a_hobj self, a_enum tm);
 
 intern GMod* ai_mod_load(a_henv env, GModLoader* loader, GStr* name, a_bool load);
 intern void ai_mod_cache(a_henv env, GModLoader* loader, GMod* mod);
 intern void ai_mod_cache_mark(Global* g, ModCache* cache);
 intern void ai_mod_clean(Global* g);
+
+always_inline Value ai_obj_vlookup_val(a_henv env, Value val, a_enum tm) {
+	return v_is_obj(val) ? ai_obj_vlookup(env, v_as_obj(val), tm) : v_of_nil();
+}
 
 typedef struct TNode TNode;
 
@@ -77,6 +82,7 @@ struct GModLoader {
  ** Module.
  */
 struct alo_Mod {
+	VTable _impl;
 	union {
 		struct {
 			GTABLE_STRUCT_HEADER;

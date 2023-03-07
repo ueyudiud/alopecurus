@@ -16,7 +16,6 @@ typedef struct GList GList;
 typedef struct GTable GTable;
 typedef struct GFun GFun;
 typedef struct alo_Env GRoute;
-typedef struct GMeta GMeta;
 typedef struct alo_Mod GMod;
 typedef struct GBuf GBuf;
 
@@ -87,26 +86,26 @@ typedef a_hash (*a_fp_hash)(a_henv env, a_hobj self);
 typedef a_bool (*a_fp_equals)(a_henv env, a_hobj self, Value other);
 typedef void (*a_fp_tostr)(a_henv env, a_hobj self, GBuf* buf);
 
-typedef struct VTable {
+typedef struct VTable VTable;
+
+struct VTable {
 	a_u8 _tid; /* The value type id. */
 	a_u8 _api_tag; /* The tag for API. */
 	a_u8 _repr_id; /* The layout index for object. */
-	a_u8 _vl_flags; /* Mark for existence of virtual lookup function. */
 	a_u16 _flags;
 	char const* _name;
+	VTable const* _impl;
 	/* Resource management functions. */
 	a_fp_mark _mark;
 	a_fp_drop _drop;
 	a_fp_close _close;
-	/* Virtual function lookup function. */
-	a_fp_vlook _vlook;
 	/* Virtual functions. */
 	a_fp_get _get;
 	a_fp_set _set;
 	a_fp_hash _hash;
 	a_fp_equals _equals;
 	a_fp_tostr _tostr;
-} VTable;
+};
 
 typedef struct { a_usize _; } ObjHeadMark[0];
 
@@ -117,18 +116,10 @@ struct GObj {
 };
 
 #define VTABLE_FLAG_NONE u16c(0)
-#define VTABLE_FLAG_IDENTITY_EQUAL u16c(0x0001)
-#define VTABLE_FLAG_FAST_LENGTH u16c(0x0002)
-#define VTABLE_FLAG_MARK_DIRECT u16c(0x0004)
-
-#define GMETA_STRUCT_HEADER \
-	GOBJ_STRUCT_HEADER; \
-	a_u32 _len; \
-    VTable _impl
-
-struct GMeta {
-	GMETA_STRUCT_HEADER;
-};
+#define VTABLE_FLAG_OVERRIDE(tm) (u32c(1) << (tm))
+#define VTABLE_FLAG_PLAIN_MARK u16c(0x0100)
+#define VTABLE_FLAG_FAST_LEN u16c(0x0200)
+#define VTABLE_FLAG_VLOOKUP u16c(0x0400)
 
 always_inline void v_check_alive(a_henv env, Value v);
 
