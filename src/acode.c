@@ -17,7 +17,7 @@
 
 enum {
 	/* Mark operand which is not determined. */
-	DYN = 0,
+	DYN = 255,
 	/* Mark unused operand. */
 	DMB = 0
 };
@@ -254,7 +254,26 @@ static a_u32 l_emit_tnew(Parser* par, a_u32 dst, a_u32 base, a_u32 len, a_line l
 
 static void l_emit_ret(Parser* par, a_u32 base, a_u32 len, a_line line) {
 	l_clear_close(par); /* The captures will be close automatically after return. */
-	l_emit_leave(par, bc_make_iabc(BC_RET, DMB, base, len + 1), line);
+	a_insn i;
+	switch (len) {
+		case 0: {
+			i = bc_make_iabc(BC_RET0, DMB, DMB, DMB);
+			break;
+		}
+		case 1: {
+			i = bc_make_iabc(BC_RET1, DMB, base, DMB);
+			break;
+		}
+		case VARARG: {
+			i = bc_make_iabc(BC_RETV, DMB, base, DMB);
+			break;
+		}
+		default: {
+			i = bc_make_iabc(BC_RET, DMB, base, len);
+			break;
+		}
+	}
+	l_emit_leave(par, i, line);
 }
 
 static a_u32 l_emit_kn(Parser* par, a_u32 dst, a_u32 len, a_line line) {
@@ -291,7 +310,7 @@ static a_u32 l_emit_test(Parser* par, a_u32 op, a_u32 reg, a_u32 label, a_u32 li
 	return l_emit_branch(par, bc_make_iabc(op, DMB, reg, DMB), label, line);
 }
 
-static void l_merge_label(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) {
+static void l_merge_branch(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) {
 	if (label2 == NO_LABEL)
 		return;
 
@@ -352,7 +371,7 @@ always_inline void expr_tmp(OutExpr e, a_u32 reg, a_line line) {
 }
 
 always_inline void expr_dyn(OutExpr e, a_u32 label) {
-	e->_kind = EXPR_DST_A;
+	e->_kind = EXPR_DYN;
 	e->_label = label;
 }
 
@@ -429,7 +448,7 @@ static a_u32 l_alloc_stack(Parser* par, a_u32 line) {
 	return l_succ_alloc_stack(par, 1, line);
 }
 
-static a_bool l_is_tmpR(Parser* par, a_u32 reg) {
+static a_bool l_is_in_tmp(Parser* par, a_u32 reg) {
 	return reg >= par->_scope->_top_ntr;
 }
 
@@ -454,7 +473,7 @@ static void l_check_free_used_stack(Scope* scope) {
  */
 static void l_free_stack(Parser* par, a_u32 reg) {
 	Scope* scope = par->_scope;
-	assume(reg < scope->_top_reg && l_is_tmpR(par, reg));
+	assume(reg < scope->_top_reg && l_is_in_tmp(par, reg));
 	/* The registers are likely freed with the reversed order of allocation. */
 	if (likely(reg + 1 == scope->_top_reg)) {
 		scope->_top_reg = reg;
@@ -477,7 +496,7 @@ static void l_free_stack(Parser* par, a_u32 reg) {
  */
 static void l_succ_free_stack(Parser* par, a_u32 reg, a_u32 num) {
 	Scope* scope = par->_scope;
-	assume(l_is_tmpR(par, reg));
+	assume(l_is_in_tmp(par, reg));
 	assume(reg + num == scope->_top_reg, "not in successive allocation.");
 
 	scope->_top_reg = reg;
@@ -513,7 +532,7 @@ static void l_drop(Parser* par, Expr* e) {
  *@param ep the register list.
  */
 static void l_drop_pack(Parser* par, ExprPack* ep) {
-	if (ep->_len != 0) {
+	if (ep->_len > 0) {
 		a_u32 len = ep->_len;
 		if (unlikely(len == VARARG)) {
 			assume(par->_fnscope->_fvarg);
@@ -530,14 +549,9 @@ static void l_tmpR(Parser* par, InoutExpr e);
 static void l_anyR(Parser* par, InoutExpr e);
 static void l_anyRK(Parser* par, InoutExpr e);
 static void l_fixR(Parser* par, InExpr e, a_u32 reg);
-static a_u32 l_condT(Parser* par, InoutExpr e, a_u32* plabel, a_u32 line);
-static a_u32 l_condF(Parser* par, InoutExpr e, a_u32* plabel, a_u32 line);
+static a_u32 l_condT(Parser* par, InExpr e, a_u32* plabel, a_u32 line);
+static a_u32 l_condF(Parser* par, InExpr e, a_u32* plabel, a_u32 line);
 static a_u32 l_try(Parser* par, InoutExpr e, a_u32 line);
-
-static a_u32 l_reg_bit(InExpr e) {
-	assume(e->_kind == EXPR_VAR || e->_kind == EXPR_TMP || e->_kind == EXPR_NEVER);
-	return e->_kind & 0x1;
-}
 
 static a_u32 l_local(Parser* par, Sym* sym) {
 	return par->_locals._arr[par->_fnscope->_local_off + sym->_index]._reg;
@@ -632,8 +646,8 @@ void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line) {
 	}
 
 	e->_kind = EXPR_REFCK;
-	e->_ref._base = l_capture(par, l_env_name(par));
-	e->_ref._key = l_const_index(par, v_of_obj(name));
+	e->_base = l_capture(par, l_env_name(par));
+	e->_key = l_const_index(par, v_of_obj(name));
 	e->_line = line;
 }
 
@@ -645,17 +659,17 @@ void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line) {
 		}
 		case EXPR_CAP: {
 			e->_kind = EXPR_REFCK;
-			e->_ref._base = e->_reg;
+			e->_base = e->_reg;
 			break;
 		}
 		default: {
 			l_anyR(par, e);
-			e->_kind = EXPR_REFTK | l_reg_bit(e);
-			e->_ref._base = e->_reg;
+			e->_kind = EXPR_REFK(expr_has_tmp_val(e));
+			e->_base = e->_reg;
 			break;
 		}
 	}
-	e->_ref._key = l_const_index(par, v_of_obj(name));
+	e->_key = l_const_index(par, v_of_obj(name));
 	e->_line = line;
 }
 
@@ -680,14 +694,14 @@ void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line) {
 			l_anyR(par, ev);
 			a_int val = ek->_int;
 			if (val >= 0 && val <= BC_MAX_C) {
-				ev->_kind = EXPR_REFTI | l_reg_bit(ev);
-				ev->_ref._key = cast(a_u32, val);
+				ev->_kind = EXPR_REFI(expr_has_tmp_val(ev));
+				ev->_key = cast(a_u32, val);
 			}
 			else {
-				ev->_kind = EXPR_REFTT | l_reg_bit(ev);
-				ev->_ref._key = l_const_index(par, v_of_int(val));
+				ev->_kind = EXPR_REF(false, expr_has_tmp_val(ev));
+				ev->_key = l_const_index(par, v_of_int(val));
 			}
-			ev->_ref._base = ev->_reg;
+			ev->_base = ev->_reg;
 			ev->_line = line;
 			break;
 		}
@@ -700,9 +714,9 @@ void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line) {
 			l_anyR(par, ev);
 			l_anyR(par, ek);
 			if (likely(ev->_kind != EXPR_NEVER)) {
-				ev->_kind = EXPR_REFTT | l_reg_bit(ek) << 1 | l_reg_bit(ev);
-				ev->_ref._base = ev->_reg;
-				ev->_ref._key = ek->_reg;
+				ev->_kind = EXPR_REF(expr_has_tmp_val(ek), expr_has_tmp_val(ev));
+				ev->_base = ev->_reg;
+				ev->_key = ek->_reg;
 				ev->_line = line;
 			}
 			break;
@@ -710,7 +724,7 @@ void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line) {
 	}
 }
 
-static void l_negate_branch(Parser* par, a_u32 label, a_u32* plabel, a_line line) {
+static void l_negate_branch(Parser* par, a_u32* plabel, a_u32 label, a_line line) {
 	if (label + 1 == par->_head_label) {
 		/* Try to swap duality opcodes for */
 		a_insn* pi = &par->_code[label - 1];
@@ -718,7 +732,9 @@ static void l_negate_branch(Parser* par, a_u32 label, a_u32* plabel, a_line line
 		a_u32 op = bc_load_op(*pi);
 		if (bc_is_branch_op(op)) {
 			bc_swap_op(pi, op ^ 1);
-			l_merge_label(par, plabel, label - 1, line);
+			l_mark_label(par, l_next_jump(par, label), line);
+			l_redirect(par, label, *plabel, line);
+			*plabel = label;
 			return;
 		}
 	}
@@ -727,17 +743,18 @@ static void l_negate_branch(Parser* par, a_u32 label, a_u32* plabel, a_line line
 	l_mark_label(par, label, line);
 }
 
-static void l_instantiate_branch(Parser* par, InoutExpr e, a_bool flip) {
+static void l_instantiate_branch(Parser* par, InoutExpr e, a_u32 reg) {
 	assume(par->_head_label == e->_label + 1);
-	a_u32 label = e->_label - 1;
-	a_insn* pi = &par->_code[label];
+	assume(bc_is_branch_op(bc_load_op(par->_code[e->_label - 1])));
 
-	a_u32 op = bc_load_op(*pi);
-	assume(bc_is_branch_op(op));
-	bc_swap_op(pi, (op + 2) ^ flip);
+	a_u32 label = l_next_jump(par, e->_label);
+	if (label != NO_LABEL) {
+		l_redirect_chain(par, label, e->_label, e->_line);
+	}
 
-	par->_head_label = label + 1;
-	expr_dyn(e, label);
+	/* Swap last instruction. */
+	par->_code[par->_head_label - 1] = bc_make_iab(e->_kind == EXPR_TRY_TRUE ? BC_BKF : BC_BKT, reg, DMB);
+	l_emit(par, bc_make_iab(e->_kind == EXPR_TRY_TRUE ? BC_KT : BC_KF, reg, DMB), e->_line);
 }
 
 /**
@@ -746,7 +763,7 @@ static void l_instantiate_branch(Parser* par, InoutExpr e, a_bool flip) {
  *@param e the expression to move
  *@return the result pack moved from expression.
  */
-static ExprPack l_move_to_pack(Parser* par, InoutExpr e) {
+static ExprPack l_move_to_pack(Parser* par, InoutExpr e, a_bool top) {
 	switch (e->_kind) {
 		case EXPR_UNIT: {
 			return new(ExprPack) { DMB, 0 };
@@ -756,13 +773,13 @@ static ExprPack l_move_to_pack(Parser* par, InoutExpr e) {
 			l_drop_pack(par, &e->_pack);
 			return pack;
 		}
-		case EXPR_DST_C: {
+		case EXPR_VARG: {
 			a_insn* pi = &par->_code[e->_label];
 			a_u32 len = par->_fnscope->_fvarg ? VARARG : 1;
 			bc_swap_c(pi, len + 1);
 			return new(ExprPack) { bc_load_a(*pi), len };
 		}
-		case EXPR_DST_AC: {
+		case EXPR_VA_DYN: {
 			a_insn* pi = &par->_code[e->_label];
 			a_u32 base = par->_scope->_top_reg;
 			a_u32 len = par->_fnscope->_fvarg ? VARARG : 1;
@@ -771,7 +788,12 @@ static ExprPack l_move_to_pack(Parser* par, InoutExpr e) {
 			return new(ExprPack) { base, len };
 		}
 		default: {
-			l_anyR(par, e);
+			if (top) {
+				l_topR(par, e);
+			}
+			else {
+				l_anyR(par, e);
+			}
 			l_drop(par, e);
 			return new(ExprPack) { e->_reg, 1 };
 		}
@@ -779,7 +801,7 @@ static ExprPack l_move_to_pack(Parser* par, InoutExpr e) {
 }
 
 void ai_code_new_tuple(Parser* par, InoutExpr e, a_line line) {
-	ExprPack pack = l_move_to_pack(par, e);
+	ExprPack pack = l_move_to_pack(par, e, false);
 	expr_dyn(e, l_emit_tnew(par, DYN, pack._base, pack._len, line));
 }
 
@@ -873,7 +895,7 @@ void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 			l_anyR(par, e);
 			l_drop(par, e);
 
-			e->_kind = EXPR_DST_AC;
+			e->_kind = EXPR_VA_DYN;
 			e->_label = l_emit(par, bc_make_iabc(BC_UNBOX, DYN, e->_reg, DYN), line);
 			e->_line = line;
 			break;
@@ -882,7 +904,7 @@ void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 			l_anyR(par, e);
 			l_drop(par, e);
 
-			e->_kind = EXPR_DST_A;
+			e->_kind = EXPR_DYN;
 			e->_label = l_emit(par, bc_make_iab(BC_LEN, DYN, e->_reg), line);
 			e->_line = line;
 			break;
@@ -903,6 +925,8 @@ void ai_code_binary1(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 		case OP_BIT_AND:
 		case OP_BIT_OR:
 		case OP_BIT_XOR:
+		case OP_EQ:
+		case OP_NE:
 		case OP_LT:
 		case OP_LE:
 		case OP_GT:
@@ -986,7 +1010,7 @@ static void l_compute_int(Parser* par , a_int a, a_int b, OutExpr e, a_u32 op, a
 		case OP_LE:
 		case OP_GT:
 		case OP_GE: {
-			e->_kind = ai_op_cmp_int(a, b, op) ? EXPR_TRUE : EXPR_FALSE;
+			e->_kind = EXPR_BOOL(ai_op_cmp_int(a, b, op));
 			break;
 		}
 		default: unreachable();
@@ -1011,7 +1035,7 @@ static void l_compute_float(a_henv env, a_float a, a_float b, OutExpr e, a_u32 o
 		case OP_LE:
 		case OP_GT:
 		case OP_GE: {
-			e->_kind = ai_op_cmp_float(a, b, op) ? EXPR_TRUE : EXPR_FALSE;
+			e->_kind = EXPR_BOOL(ai_op_cmp_float(a, b, op));
 			break;
 		}
 		default: unreachable();
@@ -1038,29 +1062,38 @@ static a_bool l_fold_const_float(Parser* par, InoutExpr e1, InExpr e2, a_u32 op,
 	return false;
 }
 
-static void l_compare_suffix(Parser* par, InExpr e1, InExpr e2, OutExpr e3,
-							 InExpr ord1, InExpr ord2,
-							 a_u32 oprr, a_u32 oprk, a_u32 opkr, a_line line) {
-	if (e2->_kind == EXPR_INT && e2->_int >= BC_MIN_SC && e2->_int <= BC_MAX_SC) {
+
+static a_bool l_compare_const(Parser* par, InExpr e1, InExpr e2, a_u32 bc1, a_u32 bc2, a_line line) {
+	if (e2->_kind == EXPR_INT && e2->_int >= BC_MIN_SBX && e2->_int <= BC_MAX_SBX) {
 		l_anyR(par, e1);
 		l_drop(par, e1);
-		l_emit(par, bc_make_iabsc(oprk, DYN, e1->_reg, e2->_int), line);
+		l_emit(par, bc_make_iasbx(bc1, e1->_reg, e2->_int), line);
+		return false;
 	}
-	else if (e1->_kind == EXPR_INT && e1->_int >= BC_MIN_SC && e1->_int <= BC_MAX_SC) {
+	else if (e1->_kind == EXPR_INT && e1->_int >= BC_MIN_SBX && e1->_int <= BC_MAX_SBX) {
 		l_anyR(par, e2);
 		l_drop(par, e2);
-		l_emit(par, bc_make_iabsc(opkr, DYN, e2->_reg, e1->_int), line);
-	}
-	else {
-		l_anyR(par, ord1);
-		l_anyR(par, ord2);
-		l_drop(par, e1);
-		l_drop(par, e2);
-		l_emit(par, bc_make_iabc(oprr, DYN, e1->_reg, e2->_reg), line);
+		l_emit(par, bc_make_iasbx(bc2, e2->_reg, e1->_int), line);
+		return false;
 	}
 
-	e3->_kind = EXPR_TRY_TRUE;
-	e3->_label = l_emit_jump_direct(par, NO_LABEL, line);
+	return true;
+}
+
+static void l_emit_bin(Parser* par, InoutExpr e1, InExpr e2, a_u32 bc, a_line line) {
+	l_anyR(par, e2);
+	l_anyR(par, e1);
+	l_drop(par, e1);
+	l_drop(par, e2);
+	expr_dyn(e1, l_emit(par, bc_make_iabc(bc, DYN, e1->_reg, e2->_reg), line));
+}
+
+static void l_compare(Parser* par, InoutExpr e1, InExpr e2, a_u32 bc, a_line line) {
+	l_anyR(par, e2);
+	l_anyR(par, e1);
+	l_drop(par, e1);
+	l_drop(par, e2);
+	l_emit(par, bc_make_iab(bc, e1->_reg, e2->_reg), line);
 }
 
 /**
@@ -1088,11 +1121,7 @@ void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line
 				expr_dyn(e1, l_emit(par, bc_make_iabsc(BC_ADDI + op - OP_ADD, DYN, e1->_reg, e2->_int), line));
 			}
 			else {
-				l_anyR(par, e2);
-				l_anyR(par, e1);
-				l_drop(par, e2);
-				l_drop(par, e1);
-				expr_dyn(e1, l_emit(par, bc_make_iabc(BC_ADD + op - OP_ADD, DYN, e1->_reg, e2->_reg), line));
+				l_emit_bin(par, e1, e2, BC_ADD + (op - OP_ADD), line);
 			}
 			break;
 		}
@@ -1109,48 +1138,64 @@ void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line
 				expr_dyn(e1, l_emit(par, bc_make_iabsc(BC_SHLI + op - OP_SHL, DYN, e1->_reg, e2->_int), line));
 			}
 			else {
-				l_anyR(par, e2);
-				l_anyR(par, e1);
-				l_drop(par, e2);
-				l_drop(par, e1);
-				expr_dyn(e1, l_emit(par, bc_make_iabc(BC_SHL + op - OP_SHL, DYN, e1->_reg, e2->_reg), line));
+				l_emit_bin(par, e1, e2, BC_ADD + (op - OP_ADD), line);
 			}
 			break;
 		}
 		case OP_EQ: {
 			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
 				return;
-			l_compare_suffix(par, e1, e2, e1, e2, e1, BC_BEQ, BC_BEQI, BC_BEQI, line);
-			break;
+			if (l_compare_const(par, e1, e2, BC_BEQI, BC_BEQI, line)) {
+				l_compare(par, e1, e2, BC_BEQ, line);
+			}
+
+			goto try_true;
 		}
 		case OP_NE: {
 			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
 				return;
-			l_compare_suffix(par, e1, e2, e1, e2, e1, BC_BNE, BC_BNEI, BC_BNEI, line);
-			break;
+			if (l_compare_const(par, e1, e2, BC_BNEI, BC_BNEI, line)) {
+				l_compare(par, e1, e2, BC_BNE, line);
+			}
+
+			goto try_true;
 		}
 		case OP_LT: {
 			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
 				return;
-			l_compare_suffix(par, e1, e2, e1, e2, e1, BC_BLT, BC_BLTI, BC_BGTI, line);
-			break;
-		}
-		case OP_GT: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
-				return;
-			l_compare_suffix(par, e2, e1, e1, e2, e1, BC_BLT, BC_BLTI, BC_BGTI, line);
-			break;
+			if (l_compare_const(par, e1, e2, BC_BLTI, BC_BGTI, line)) {
+				l_compare(par, e1, e2, BC_BLT, line);
+			}
+			goto try_true;
 		}
 		case OP_LE: {
 			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
 				return;
-			l_compare_suffix(par, e1, e2, e1, e2, e1, BC_BLE, BC_BLEI, BC_BGEI, line);
-			break;
+			if (l_compare_const(par, e1, e2, BC_BLEI, BC_BGEI, line)) {
+				l_compare(par, e1, e2, BC_BLE, line);
+			}
+			goto try_true;
+		}
+		case OP_GT: {
+			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+				return;
+			if (l_compare_const(par, e1, e2, BC_BGTI, BC_BLTI, line)) {
+				l_compare(par, e2, e1, BC_BLT, line);
+			}
+			goto try_true;
 		}
 		case OP_GE: {
 			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
 				return;
-			l_compare_suffix(par, e2, e1, e1, e2, e1, BC_BLE, BC_BLEI, BC_BGEI, line);
+			if (l_compare_const(par, e1, e2, BC_BGEI, BC_BLEI, line)) {
+				l_compare(par, e2, e1, BC_BLE, line);
+			}
+			goto try_true;
+		}
+		try_true: {
+			e1->_kind = EXPR_TRY_TRUE;
+			e1->_label = l_emit_jump_direct(par, NO_LABEL, line);
+			e1->_line = line;
 			break;
 		}
 		case OP_AND: {
@@ -1159,11 +1204,8 @@ void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line
 				case EXPR_RESIDUAL_FALSE:
 					break;
 				case EXPR_TRUE: {
-					a_u32 label = NO_LABEL;
-					e1->_kind = l_condT(par, e2, &label, line);
-					e1->_label = label;
-					ai_code_drop(par, e2);
-					break;
+					e1->_label = NO_LABEL;
+					fallthrough;
 				}
 				case EXPR_TRY_TRUE: {
 					e1->_kind = l_condT(par, e2, &e1->_label, line);
@@ -1180,11 +1222,8 @@ void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line
 				case EXPR_RESIDUAL_TRUE:
 					break;
 				case EXPR_FALSE: {
-					a_u32 label = NO_LABEL;
-					e1->_kind = l_condF(par, e2, &label, line);
-					e1->_label = label;
-					ai_code_drop(par, e2);
-					break;
+					e1->_label = NO_LABEL;
+					fallthrough;
 				}
 				case EXPR_TRY_FALSE: {
 					e1->_kind = l_condF(par, e2, &e1->_label, line);
@@ -1207,33 +1246,47 @@ static void l_merge_optR(Parser* par, a_u32 label, a_u32 reg, a_line line) {
 }
 
 void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line line) {
+	if (e2->_kind == EXPR_NEVER) {
+		assume(label == NO_LABEL, "unreachable code provide value.");
+		return;
+	}
 	switch (e1->_kind) {
 		case EXPR_NEVER: {
 			assume(label == NO_LABEL);
 			expr_copy(e1, e2);
 			break;
 		}
-		case EXPR_DST_OR_NIL: {
-			a_u32 label2 = l_try(par, e1, line);
-			l_merge_label(par, &e1->_cond._whenf, label2, line);
-			l_dynR(par, e2);
-			l_merge_optR(par, e1->_cond._whenf, e1->_reg, line);
+		case EXPR_DYN_OR_NIL: {
+			a_u32 label2 = l_try(par, e2, line);
+			l_merge_branch(par, &e1->_residual, label2, line);
+
+			l_tmpR(par, e2);
+			a_u32 reg = e2->_reg;
+			l_merge_optR(par, e1->_residual, reg, line);
+
+			l_mark_label(par, label, line);
+			expr_tmp(e1, reg, line);
 			break;
 		}
 		case EXPR_TMP_OR_NIL: {
-			a_u32 label2 = l_try(par, e1, line);
-			l_merge_label(par, &e1->_cond._whenf, label2, line);
-			l_fixR(par, e2, e1->_reg);
-			l_merge_optR(par, e1->_cond._whenf, e1->_reg, line);
+			a_u32 label2 = l_try(par, e2, line);
+			l_merge_branch(par, &e1->_residual, label2, line);
+
+			a_u32 reg = e1->_reg;
+			l_fixR(par, e2, reg);
+			l_merge_optR(par, e1->_residual, reg, line);
+
+			l_mark_label(par, label, line);
+			expr_tmp(e1, reg, line);
 			break;
 		}
 		case EXPR_TMP: {
-			assume(l_is_tmpR(par, e1->_reg));
+			assume(l_is_in_tmp(par, e1->_reg));
 			l_fixR(par, e2, e1->_reg);
 			l_mark_label(par, label, line);
 			break;
 		}
-		case EXPR_DST_A: {
+		case EXPR_DYN: {
 			a_u32 reg = l_alloc_stack(par, line);
 			l_fixR(par, e1, reg);
 			l_fixR(par, e2, reg);
@@ -1268,23 +1321,23 @@ void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line lin
 				}
 				case EXPR_TMP: {
 					e->_kind = EXPR_TMP_OR_NIL;
-					e->_cond._whent = e->_reg;
-					e->_cond._whenf = label;
+					e->_try = e->_reg;
+					e->_residual = label;
 					break;
 				}
 				default: {
 					l_dynR(par, e);
 					fallthrough;
 				}
-				case EXPR_DST_A: {
-					e->_kind = EXPR_DST_OR_NIL;
-					e->_cond._whent = e->_label;
-					e->_cond._whenf = label;
+				case EXPR_DYN: {
+					e->_kind = EXPR_DYN_OR_NIL;
+					e->_try = e->_label;
+					e->_residual = label;
 					break;
 				}
 				case EXPR_TMP_OR_NIL:
-				case EXPR_DST_OR_NIL: {
-					l_merge_label(par, &e->_cond._whenf, label, line);
+				case EXPR_DYN_OR_NIL: {
+					l_merge_branch(par, &e->_residual, label, line);
 					break;
 				}
 			}
@@ -1298,7 +1351,7 @@ void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line lin
 					break;
 				}
 				case EXPR_TMP_OR_NIL: {
-					l_free_stack(par, e->_cond._whent);
+					l_free_stack(par, e->_try);
 					break;
 				}
 				default: {
@@ -1314,65 +1367,54 @@ void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line lin
 }
 
 void ai_code_call(Parser* par, InExpr e, a_line line) {
-	switch (e->_kind) {
-		case EXPR_NEVER: {
-			break;
-		}
-		case EXPR_PACK: {
-			ExprPack* pack = &e->_pack;
-			e->_kind = EXPR_DST_C;
-			e->_label = l_emit(par, bc_make_iabc(BC_CALL, pack->_base, pack->_len, DYN), line);
-			e->_line = line;
-			break;
-		}
-		default: {
-			l_topR(par, e);
-			e->_kind = EXPR_DST_C;
-			e->_label = l_emit(par, bc_make_iabc(BC_CALL, e->_reg, 1, DYN), line);
-			e->_line = line;
-			break;
-		}
-	}
+	ExprPack pack = l_move_to_pack(par, e, true);
+	e->_kind = EXPR_VARG;
+	e->_label = l_emit(par, bc_make_iabc(BC_CALL, pack._base, pack._len, DYN), line);
+	e->_line = line;
 }
 
 void ai_code_return(Parser* par, InExpr e, a_line line) {
-	ExprPack pack = l_move_to_pack(par, e);
+	ExprPack pack = l_move_to_pack(par, e, false);
 	l_emit_ret(par, pack._base, pack._len, line);
 }
 
-static void l_va_push(Parser* par, ExprPack* es, InExpr e2, a_line line) {
-	if (unlikely(es->_len == VARARG)) {
+static void l_va_push(Parser* par, ExprPack* pack, InExpr e2, a_line line) {
+	if (unlikely(pack->_len == VARARG)) {
 		ai_par_error(par, "cannot add argument after vararg.", line);
 	}
 	switch (e2->_kind) {
 		case EXPR_UNIT: {
-			break;
+			return;
 		}
 		case EXPR_PACK: {
 			assume(e2->_pack._len == VARARG);
-			es->_len = VARARG;
-			break;
+			pack->_len = VARARG;
+			return;
 		}
-		case EXPR_DST_AC: {
-			bc_swap_a(&par->_code[e2->_label], es->_base + es->_len);
-					fallthrough;
+		case EXPR_VA_DYN: {
+			bc_swap_a(&par->_code[e2->_label], pack->_base + pack->_len);
+			fallthrough;
 		}
-		case EXPR_DST_C: {
-			assume(bc_load_a(par->_code[e2->_label]) == es->_base + es->_len);
+		case EXPR_VARG: {
+			assume(bc_load_a(par->_code[e2->_label]) == pack->_base + pack->_len);
 			bc_swap_c(&par->_code[e2->_label], par->_fnscope->_fvarg ? 0 : 2);
-			es->_len = par->_fnscope->_fvarg ? VARARG : es->_len + 1;
+			if (par->_fnscope->_fvarg) {
+				pack->_len = VARARG;
+				return;
+			}
 			break;
 		}
 		default: {
 			l_topR(par, e2);
-			assume(e2->_reg == es->_base + es->_len);
-			es->_len += 1;
+			assume(e2->_reg == pack->_base + pack->_len);
 			break;
 		}
 	}
+	if (unlikely(pack->_len == VARARG - 1)) {
+		ai_par_error(par, "too many arguments.", line);
+	}
+	pack->_len += 1;
 }
-
-#define l_va_pop ai_code_va_pop
 
 /**
  ** Take expected argument.
@@ -1425,7 +1467,7 @@ a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line l
 			assume(m <= n);
 			if (m == n) {
 				if (n > 0) {
-					l_va_pop(par, es, e, line);
+					ai_code_va_pop(par, es, e, line);
 				}
 				return true;
 			}
@@ -1557,7 +1599,7 @@ void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 }
 
 void ai_code_unpack(Parser* par, InoutExpr e, a_line line) {
-	if (e->_kind == EXPR_DST_C || e->_kind == EXPR_DST_AC) {
+	if (e->_kind == EXPR_VARG || e->_kind == EXPR_VA_DYN) {
 		assume(!par->_fnscope->_fvarg, "already unpacked.");
 		par->_fnscope->_fvarg = true;
 	}
@@ -1571,7 +1613,11 @@ static a_insn l_is_leave(Parser* par, a_u32 label) {
 		return 0;
 	a_insn i = par->_code[label];
 	a_u32 op = bc_load_op(i);
-	return (op == BC_RET) ? i : 0;
+	return (
+			op == BC_RET ||
+			op == BC_RETV ||
+			op == BC_RET0 ||
+			op == BC_RET1) ? i : 0;
 }
 
 /**
@@ -1607,13 +1653,13 @@ a_u32 ai_code_gotoU(Parser* par, a_u32 label, a_line line) {
 			par->_fnscope->_fpass = false;
 			par->_fnscope->_fjump = true;
 			par->_fnscope->_head_jump = label;
-			l_merge_label(par, &par->_fnscope->_head_jump, par->_fnscope->_head_land, line);
+			l_merge_branch(par, &par->_fnscope->_head_jump, par->_fnscope->_head_land, line);
 			l_clear_land(par);
 			return par->_head_label; /* Return next instruction as pseudo label. */
 		}
 		else {
 			assume(par->_fnscope->_fland);
-			l_merge_label(par, &label, par->_fnscope->_head_land, line);
+			l_merge_branch(par, &label, par->_fnscope->_head_land, line);
 			l_clear_land(par);
 			return label;
 		}
@@ -1625,14 +1671,14 @@ a_u32 ai_code_label(Parser* par, a_u32 label, a_line line) {
 	if (label != NO_LABEL) {
 		if (label != par->_head_label) { /* If from label is not pseudo head label, merge with head jump label. */
 			par->_fnscope->_fland = true;
-			l_merge_label(par, &par->_fnscope->_head_land, label, line);
+			l_merge_branch(par, &par->_fnscope->_head_land, label, line);
 		}
 		else {
 			/* Pseudo head jump. */
 			assume(par->_fnscope->_fjump && !par->_fnscope->_fpass);
 			par->_fnscope->_fpass = true;
 			par->_fnscope->_fland = par->_fnscope->_head_jump != NO_LABEL;
-			l_merge_label(par, &par->_fnscope->_head_land, par->_fnscope->_head_jump, line);
+			l_merge_branch(par, &par->_fnscope->_head_land, par->_fnscope->_head_jump, line);
 			l_clear_jump(par);
 		}
 	}
@@ -1656,31 +1702,14 @@ a_u32 ai_code_testT(Parser* par, InoutExpr e, a_line line) {
 	return label;
 }
 
-static void l_drop_ref(Parser* par, InExpr e) {
-	switch (e->_kind) {
-		case EXPR_REF_ALL: {
-			if (e->_kind & 0x2) {
-				l_free_stack(par, e->_ref._key);
-			}
-			if (e->_kind & 0x1) {
-				l_free_stack(par, e->_ref._base);
-			}
-			break;
-		}
-		default: {
-			panic("not index expression.");
-		}
-	}
-}
-
 void ai_code_drop(Parser* par, InExpr e) {
 	switch (e->_kind) {
-		case EXPR_DST_C:
-		case EXPR_DST_AC: {
+		case EXPR_VARG:
+		case EXPR_VA_DYN: {
 			bc_swap_c(&par->_code[e->_label], 1);
 			break;
 		}
-		case EXPR_DST_A: {
+		case EXPR_DYN: {
 			a_u32 reg = l_alloc_stack(par, e->_line);
 			bc_swap_a(&par->_code[e->_label], reg);
 			l_free_stack(par, reg);
@@ -1690,8 +1719,20 @@ void ai_code_drop(Parser* par, InExpr e) {
 			l_free_stack(par, e->_reg);
 			break;
 		}
-		case EXPR_REF_ALL: {
-			l_drop_ref(par, e);
+		case EXPR_REFR_ALL: {
+			if (expr_has_tmp_key(e)) {
+				l_free_stack(par, e->_key);
+			}
+			if (expr_has_tmp_val(e)) {
+				l_free_stack(par, e->_base);
+			}
+			break;
+		}
+		case EXPR_REFI_ALL:
+		case EXPR_REFK_ALL: {
+			if (expr_has_tmp_val(e)) {
+				l_free_stack(par, e->_base);
+			}
 			break;
 		}
 		default: {
@@ -1727,25 +1768,25 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 		}
 		case EXPR_REFR_ALL: {
 			l_anyR(par, e2);
-			l_emit(par, bc_make_iabc(BC_SET, e1->_ref._base, e1->_ref._key, e2->_reg), line);
+			l_emit(par, bc_make_iabc(BC_SET, e1->_base, e1->_key, e2->_reg), line);
 			l_drop(par, e2);
 			break;
 		}
 		case EXPR_REFI_ALL: {
 			l_anyR(par, e2);
-			l_emit(par, bc_make_iabc(BC_SETI, e1->_ref._base, e1->_ref._key, e2->_reg), line);
+			l_emit(par, bc_make_iabc(BC_SETI, e1->_base, e1->_key, e2->_reg), line);
 			l_drop(par, e2);
 			break;
 		}
 		case EXPR_REFK_ALL: {
 			l_anyR(par, e2);
 
-			a_u32 k = e1->_ref._key;
+			a_u32 k = e1->_key;
 			if (likely(k <= BC_MAX_C)) {
-				l_emit(par, bc_make_iabc(BC_SETK, e2->_reg, e1->_ref._base, k), line);
+				l_emit(par, bc_make_iabc(BC_SETK, e2->_reg, e1->_base, k), line);
 			}
 			else {
-				l_emit(par, bc_make_iabc(BC_SETKX, e2->_reg, e1->_ref._base, DMB), line);
+				l_emit(par, bc_make_iabc(BC_SETKX, e2->_reg, e1->_base, DMB), line);
 				l_emit_fast(par, bc_make_iax(BC_EX, k), line);
 			}
 
@@ -1756,10 +1797,10 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 			l_anyR(par, e2);
 
 			a_u32 reg = l_alloc_stack(par, line);
-			l_emit(par, bc_make_iab(BC_LDC, reg, e1->_ref._base), line);
+			l_emit(par, bc_make_iab(BC_LDC, reg, e1->_base), line);
 			expr_tmp(e1, reg, line);
 
-			a_u32 k = e1->_ref._key;
+			a_u32 k = e1->_key;
 			if (likely(k <= BC_MAX_C)) {
 				l_emit(par, bc_make_iabc(BC_SETK, e2->_reg, reg, k), line);
 			}
@@ -2201,78 +2242,88 @@ static void l_dynR(Parser* par, InoutExpr e) {
 			expr_dyn(e, l_emit(par, bc_make_iab(BC_LDC, DYN, e->_reg), e->_line));
 			break;
 		}
-		case EXPR_TRY_FALSE:  {
-			l_instantiate_branch(par, e, true);
-			break;
-		}
-		case EXPR_TRY_TRUE:  {
-			l_instantiate_branch(par, e, false);
+		case EXPR_TRY_FALSE:
+		case EXPR_TRY_TRUE: {
+			a_u32 reg = l_alloc_stack(par, e->_line);
+			l_instantiate_branch(par, e, reg);
+			expr_dyn(e, l_emit_mov(par, DYN, reg, e->_line));
 			break;
 		}
 		case EXPR_TMP_OR_NIL: {
-			e->_kind = EXPR_DST_OR_NIL;
-			e->_cond._whent = l_emit_mov(par, DYN, e->_cond._whent, e->_line);
+			e->_kind = EXPR_DYN_OR_NIL;
+			e->_try = l_emit_mov(par, DYN, e->_try, e->_line);
 			break;
 		}
 		case EXPR_REFR_ALL: {
-			l_drop_ref(par, e);
-			expr_dyn(e, l_emit(par, bc_make_iabc(BC_GET, DYN, e->_ref._base, e->_ref._key), e->_line));
+			if (expr_has_tmp_key(e)) {
+				l_free_stack(par, e->_key);
+			}
+			if (expr_has_tmp_val(e)) {
+				l_free_stack(par, e->_base);
+			}
+			expr_dyn(e, l_emit(par, bc_make_iabc(BC_GET, DYN, e->_base, e->_key), e->_line));
 			ai_code_drop(par, e);
 			break;
 		}
-		case EXPR_REFI_ALL: {
-			l_drop_ref(par, e);
-			expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETI, DYN, e->_ref._base, e->_ref._key), e->_line));
+		case EXPR_REFI(true): {
+			l_free_stack(par, e->_base);
+			fallthrough;
+		}
+		case EXPR_REFI(false): {
+			expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETI, DYN, e->_base, e->_key), e->_line));
 			break;
 		}
-		case EXPR_REFK_ALL: {
-			a_u32 k = e->_ref._key;
-			l_drop_ref(par, e);
+		case EXPR_REFK(true): {
+			l_free_stack(par, e->_base);
+			fallthrough;
+		}
+		case EXPR_REFK(false): {
+			a_u32 k = e->_key;
 			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
 				if (likely(k <= BC_MAX_C)) {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETS, DYN, e->_ref._base, k), e->_line));
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETS, DYN, e->_base, k), e->_line));
 				}
 				else {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETSX, DYN, e->_ref._base, DMB), e->_line));
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETSX, DYN, e->_base, DMB), e->_line));
 					l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
 				}
 			}
 			else {
 				a_u32 reg = l_alloc_stack(par, e->_line);
 				l_emit(par, bc_make_iabx(BC_K, reg, k), e->_line);
-				l_emit_fast(par, bc_make_iabc(BC_GET, DYN, e->_ref._base, reg), e->_line);
+				l_emit_fast(par, bc_make_iabc(BC_GET, DYN, e->_base, reg), e->_line);
 				l_free_stack(par, reg);
 			}
 			break;
 		}
 		case EXPR_REFCK: {
-			a_u32 k = e->_ref._key;
+			a_u32 k = e->_key;
 			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
 				if (likely(k <= BC_MAX_C)) {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETS, DYN, e->_ref._base, k), e->_line));
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETS, DYN, e->_base, k), e->_line));
 				}
 				else {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETSX, DYN, e->_ref._base, DMB), e->_line));
+					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETSX, DYN, e->_base, DMB), e->_line));
 					l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
 				}
 			}
 			else {
 				a_u32 reg = l_succ_alloc_stack(par, 2, e->_line);
 				l_emit(par, bc_make_iabx(BC_K, reg, k), e->_line);
-				l_emit_fast(par, bc_make_iab(BC_CMOV, reg + 1, e->_ref._base), e->_line);
+				l_emit_fast(par, bc_make_iab(BC_CMOV, reg + 1, e->_base), e->_line);
 				l_emit_fast(par, bc_make_iabc(BC_GET, DYN, reg + 1, reg), e->_line);
 				l_succ_free_stack(par, reg, 2);
 			}
 			break;
 		}
-		case EXPR_DST_AC: {
+		case EXPR_VA_DYN: {
 			a_u32 label = e->_label;
 			bc_swap_c(&par->_code[label], 2);
 			par->_fnscope->_fvarg = false;
 			expr_dyn(e, label);
 			break;
 		}
-		case EXPR_DST_C: {
+		case EXPR_VARG: {
 			a_insn* pi = &par->_code[e->_label];
 			bc_swap_c(pi, 2);
 			par->_fnscope->_fvarg = false;
@@ -2287,23 +2338,23 @@ static void l_dynR(Parser* par, InoutExpr e) {
 
 static void l_bindR(Parser* par, InoutExpr e, a_u32 reg) {
 	switch (e->_kind) {
-		case EXPR_DST_A: {
+		case EXPR_DYN: {
 			bc_swap_a(&par->_code[e->_label], reg);
 			break;
 		}
 		case EXPR_TMP_OR_NIL: {
-			a_u32 reg2 = e->_cond._whent;
+			a_u32 reg2 = e->_try;
 			if (reg == reg2) {
-				l_merge_optR(par, e->_cond._whenf, reg, e->_line);
+				l_merge_optR(par, e->_residual, reg, e->_line);
 				break;
 			}
 			l_free_stack(par, reg2);
-			e->_cond._whent = l_emit_mov(par, DYN, reg2, e->_line);
+			e->_try = l_emit_mov(par, DYN, reg2, e->_line);
 			fallthrough;
 		}
-		case EXPR_DST_OR_NIL: {
-			bc_swap_a(&par->_code[e->_cond._whent], reg);
-			l_merge_optR(par, e->_cond._whenf, reg, e->_line);
+		case EXPR_DYN_OR_NIL: {
+			bc_swap_a(&par->_code[e->_try], reg);
+			l_merge_optR(par, e->_residual, reg, e->_line);
 			break;
 		}
 		default: unreachable();
@@ -2321,11 +2372,11 @@ static void l_bindR(Parser* par, InoutExpr e, a_u32 reg) {
 static void l_fixR(Parser* par, InExpr e, a_u32 reg) {
 	switch (e->_kind) {
 		case EXPR_TMP_OR_NIL: {
-			if (e->_cond._whent != reg) {
-				l_free_stack(par, e->_cond._whent);
-				l_emit_mov(par, reg, e->_cond._whent, e->_line);
+			if (e->_try != reg) {
+				l_free_stack(par, e->_try);
+				l_emit_mov(par, reg, e->_try, e->_line);
 			}
-			l_merge_optR(par, e->_cond._whenf, reg, e->_line);
+			l_merge_optR(par, e->_residual, reg, e->_line);
 			expr_tmp(e, reg, e->_line);
 			break;
 		}
@@ -2333,7 +2384,7 @@ static void l_fixR(Parser* par, InExpr e, a_u32 reg) {
 		case EXPR_TMP: {
 			if (e->_reg != reg) {
 				l_drop(par, e);
-				l_emit_mov(par, reg, e->_cond._whent, e->_line);
+				l_emit_mov(par, reg, e->_try, e->_line);
 			}
 			e->_reg = reg;
 			break;
@@ -2381,15 +2432,22 @@ static void l_topR(Parser* par, InoutExpr e) {
 			}
 			break;
 		}
+		case EXPR_TRY_TRUE:
+		case EXPR_TRY_FALSE: {
+			a_u32 reg = l_alloc_stack(par, e->_line);
+			l_instantiate_branch(par, e, reg);
+			expr_tmp(e, reg, e->_line);
+			break;
+		}
 		default: {
 			l_dynR(par, e);
 			fallthrough;
 		}
-		case EXPR_DST_A: {
+		case EXPR_DYN: {
 			l_bindR(par, e, l_alloc_stack(par, e->_line));
 			break;
 		}
-		case EXPR_DST_C: {
+		case EXPR_VARG: {
 			a_insn* pi = &par->_code[e->_label];
 			bc_swap_c(pi, 2);
 
@@ -2415,12 +2473,12 @@ static void l_anyR(Parser* par, InoutExpr e) {
 			l_error_unit_expr(par, e->_line);
 		}
 		case EXPR_TMP_OR_NIL: {
-			a_u32 reg = e->_cond._whent;
-			l_merge_optR(par, e->_cond._whenf, reg, e->_line);
+			a_u32 reg = e->_try;
+			l_merge_optR(par, e->_residual, reg, e->_line);
 			expr_tmp(e, reg, e->_line);
 			break;
 		}
-		case EXPR_DST_C: {
+		case EXPR_VARG: {
 			a_insn* pc = &par->_code[e->_label];
 			a_u32 reg = bc_load_a(*pc);
 			bc_swap_c(pc, 2);
@@ -2459,7 +2517,7 @@ static void l_anyRK(Parser* par, InoutExpr e) {
 	}
 }
 
-static a_u32 l_condT(Parser* par, InoutExpr e, a_u32* plabel, a_u32 line) {
+static a_u32 l_condT(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 	switch (e->_kind) {
 		case EXPR_NEVER:
 		case EXPR_TRUE:
@@ -2468,20 +2526,17 @@ static a_u32 l_condT(Parser* par, InoutExpr e, a_u32* plabel, a_u32 line) {
 		case EXPR_STR: {
 			return EXPR_TRUE;
 		}
-		case EXPR_NIL: {
-			e->_kind = EXPR_FALSE;
-			fallthrough;
-		}
+		case EXPR_NIL:
 		case EXPR_FALSE: {
 			*plabel = l_lazy_jump(par, *plabel, line);
 			return EXPR_RESIDUAL_FALSE;
 		}
 		case EXPR_TRY_TRUE: {
-			*plabel = e->_label;
+			l_merge_branch(par, plabel, e->_label, line);
 			return EXPR_TRY_TRUE;
 		}
 		case EXPR_TRY_FALSE: {
-			l_negate_branch(par, e->_label, plabel, line);
+			l_negate_branch(par, plabel, e->_label, line);
 			return EXPR_TRY_TRUE;
 		}
 		default: {
@@ -2493,7 +2548,7 @@ static a_u32 l_condT(Parser* par, InoutExpr e, a_u32* plabel, a_u32 line) {
 	}
 }
 
-static a_u32 l_condF(Parser* par, InoutExpr e, a_u32* plabel, a_u32 line) {
+static a_u32 l_condF(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 	switch (e->_kind) {
 		case EXPR_NEVER:
 		case EXPR_NIL:
@@ -2508,10 +2563,11 @@ static a_u32 l_condF(Parser* par, InoutExpr e, a_u32* plabel, a_u32 line) {
 			return EXPR_RESIDUAL_TRUE;
 		}
 		case EXPR_TRY_FALSE: {
+			l_merge_branch(par, plabel, e->_label, line);
 			return EXPR_TRY_FALSE;
 		}
 		case EXPR_TRY_TRUE: {
-			l_negate_branch(par, e->_label, plabel, line);
+			l_negate_branch(par, plabel, e->_label, line);
 			return EXPR_TRY_FALSE;
 		}
 		default: {
@@ -2529,14 +2585,14 @@ static a_u32 l_try(Parser* par, InoutExpr e, a_u32 line) {
 			e->_kind = EXPR_NIL;
 			return label;
 		}
-		case EXPR_DST_OR_NIL: {
-			a_u32 label = e->_cond._whenf;
-			expr_dyn(e, e->_cond._whent);
+		case EXPR_DYN_OR_NIL: {
+			a_u32 label = e->_residual;
+			expr_dyn(e, e->_try);
 			return label;
 		}
 		case EXPR_TMP_OR_NIL: {
-			a_u32 label = e->_cond._whenf;
-			expr_tmp(e, e->_cond._whent, line);
+			a_u32 label = e->_residual;
+			expr_tmp(e, e->_try, line);
 			return label;
 		}
 		default: {

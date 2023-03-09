@@ -128,7 +128,7 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 
 	GFun* self = fun_new(env, &cfun_vtable, g_cast(GProto, &l_proto), ncap + 1);
 
-	v_cpy_multi(env, self->_vals, pcap, ncap);
+	v_mov_all(env, self->_vals, pcap, ncap);
 	v_setx(self->_vals + ncap, bcast(Value, hnd));
 
 	ai_gc_register_object(env, self);

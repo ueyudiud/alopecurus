@@ -13,9 +13,9 @@ typedef struct ExprPack ExprPack;
 typedef struct ConExpr ConExpr;
 typedef struct LetStat LetStat;
 
-typedef Expr* InExpr;
-typedef Expr* OutExpr;
-typedef Expr* InoutExpr;
+typedef Expr* restrict InExpr;
+typedef Expr* restrict OutExpr;
+typedef Expr* restrict InoutExpr;
 
 intern void ai_code_never(Parser* par, OutExpr e, a_line line);
 intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_line line);
@@ -72,148 +72,125 @@ intern GFun* ai_code_build_and_close(Parser* par);
  ** retain the values across any operations.
  */
 enum ExprKind {
-/*==========================Duality Expression==========================*/
 	/**
 	 ** Unit expression.
 	 ** REPR: unit
 	 */
-	EXPR_UNIT,
-	/**
-	 ** Unreachable expression.
-	 ** REPR: !
-	 */
-	EXPR_NEVER,
-	/**
-	 ** False constant expression.
-	 ** REPR: false
-	 */
-	EXPR_FALSE,
-	/**
-	 ** True constant expression.
-	 ** REPR: true
-	 */
-	EXPR_TRUE,
-	/**
-	 ** The try expression with boolean type. This is a volatile expression.
-	 ** REPR: try { true } else { false }
-	 *@param _label the label of residual path.
-	 */
-	EXPR_TRY_TRUE,
-	/**
-	 ** The try expression with boolean type. This is a volatile expression.
-	 ** REPR: try { false } else { true }
-	 *@param _label the label of residual path.
-	 */
-	EXPR_TRY_FALSE,
-	/**
-	 ** The try expression with only residual part.
-	 ** REPR: try { ! } else { false }
-	 *@param _label the label of residual path.
-	 */
-	EXPR_RESIDUAL_FALSE,
-	/**
-	 ** The try expression with only residual part.
-	 ** REPR: try { ! } else { true }
-	 *@param _label the label of residual path.
-	 */
-	EXPR_RESIDUAL_TRUE,
-/*==========================Result Expressions==========================*/
-	/**
-	 ** The expression from a local variable.
-	 ** REPR: R[_reg]
-	 *@param _reg the register index.
-	 */
-	EXPR_VAR,
-	/**
-	 ** The expression bind to a temporary register.
-	 ** REPR: R[_reg]
-	 *@param _reg the register index.
-	 */
-	EXPR_TMP,
-	/**
-	 ** The expression bind to a capture value.
-	 ** REPR: C[_reg]
-	 *@param _reg the capture register index.
-	 */
-	EXPR_CAP,
+	EXPR_UNIT = 0x00,
 	/**
 	 ** The sequence of temporary registers.
 	 ** REPR: R[_impl:_impl+_len]
 	 *@param _pack the register pack.
 	 */
-	EXPR_PACK,
+	EXPR_PACK = 0x01,
+	/**
+	 ** Boolean constant expression.
+	 ** REPR: false/true
+	 */
+	EXPR_FALSE = 0x02, EXPR_TRUE,
+#define EXPR_BOOL(v) (EXPR_FALSE | (v))
+	/**
+	 ** The try expression with boolean type. This is a volatile expression.
+	 ** REPR: try { true/false } else { false/true }
+	 *@param _label the label of residual path.
+	 */
+	EXPR_TRY_TRUE = 0x04, EXPR_TRY_FALSE,
+	/**
+	 ** The try expression with only residual part.
+	 ** REPR: try { ! } else { false/true }
+	 *@param _label the label of residual path.
+	 */
+	EXPR_RESIDUAL_FALSE = 0x06, EXPR_RESIDUAL_TRUE,
+	/**
+	 ** The expression from a local variable.
+	 ** REPR: R[_reg]
+	 *@param _reg the register index.
+	 *@param _sym the symbol index.
+	 */
+	EXPR_VAR = 0x08,
+	/**
+	 ** The expression bind to a temporary register.
+	 ** REPR: R[_reg]
+	 *@param _reg the register index.
+	 */
+	EXPR_TMP = 0x09,
+	/**
+	 ** The expression bind to a capture value.
+	 ** REPR: C[_reg]
+	 *@param _reg the capture register index.
+	 */
+	EXPR_CAP = 0x0A,
+	/**
+	 ** Unreachable expression.
+	 ** REPR: !
+	 */
+	EXPR_NEVER = 0x0B,
 /*===========================Lazy Expressions===========================*/
 	/**
 	 ** The value indexed expression. REPR: R[_impl][R[_key]]
 	 *@param _base the base register index.
 	 *@param _key the key register index.
 	 */
-	EXPR_REFVV,
-	EXPR_REFTV,
-	EXPR_REFVT,
-	EXPR_REFTT,
-#define EXPR_REFR_ALL EXPR_REFVV ... EXPR_REFTT
+	EXPR_REF_ = 0x0C,
+#define EXPR_REF(k,v) (EXPR_REF_ | (k) << 1 | (v))
+#define EXPR_REFR_ALL EXPR_REF_ ... EXPR_REF_ + 3
 	/**
 	 ** The integer indexed expression.
 	 ** REPR: R[_impl][_key]
 	 *@param _base the base register index.
 	 *@param _key the integer key.
 	 */
-	EXPR_REFVI,
-	EXPR_REFTI,
-	EXPR_REFVI_,
-	EXPR_REFTI_,
-#define EXPR_REFI_ALL EXPR_REFVI ... EXPR_REFTI
+	EXPR_REFI_ = 0x10,
+#define EXPR_REFI(v) (EXPR_REFI_ | (v))
+#define EXPR_REFI_ALL EXPR_REFI_ ... EXPR_REFI_ + 1
 	/**
 	 ** The constant indexed expression. REPR: R[_impl][K[_key]]
 	 *@param _base the base register index.
 	 *@param _key the key constant index.
 	 */
-	EXPR_REFVK,
-	EXPR_REFTK,
-	EXPR_REFVK_,
-	EXPR_REFTK_,
-#define EXPR_REFK_ALL EXPR_REFVK ... EXPR_REFTK
-#define EXPR_REF_ALL EXPR_REFVV ... EXPR_REFTK_
-	EXPR_REFCK,
+	EXPR_REFK_ = 0x12,
+#define EXPR_REFK(v) (EXPR_REFK_ | (v))
+#define EXPR_REFK_ALL EXPR_REFK_ ... EXPR_REFK_ + 1
+#define EXPR_REF_ALL EXPR_REF_ ... EXPR_REFK_ + 1
+	EXPR_REFCK = 0x14,
 	/**
 	 ** The try expression. This is a volatile expression.
-	 ** REPR: try { R[_whent] } else { nil }
-	 *@param _whent the temporary register index.
-	 *@param _whenf the label of jump instruction.
+	 ** REPR: try { R[_try] } else { nil }
+	 *@param _try the temporary register index.
+	 *@param _residual the label of jump instruction.
 	 */
-	EXPR_TMP_OR_NIL,
+	EXPR_TMP_OR_NIL = 0x15,
 	/**
 	 ** The try expression. This is a volatile expression.
 	 ** REPR: try { R[_label(a)] } else { nil }
-	 *@param _whent the label of compute result instruction.
-	 *@param _whenf the label of jump instruction.
+	 *@param _try the label of compute result instruction.
+	 *@param _residual the label of jump instruction.
 	 */
-	EXPR_DST_OR_NIL,
+	EXPR_DYN_OR_NIL = 0x16,
 /*==============================Constants===============================*/
 	/**
 	 ** Nil constant expression.
 	 ** REPR: nil
 	 */
-	EXPR_NIL,
+	EXPR_NIL = 0x17,
 	/**
 	 ** Integer constant expression.
 	 ** REPR: _int
 	 *@param _int the integer constant.
 	 */
-	EXPR_INT,
+	EXPR_INT = 0x18,
 	/**
 	 ** Float constant expression.
 	 ** REPR: _float
 	 *@param _float the float constant.
 	 */
-	EXPR_FLOAT,
+	EXPR_FLOAT = 0x19,
 	/**
 	 ** String constant expression.
 	 ** REPR: _str
 	 *@param _str the string constant.
 	 */
-	EXPR_STR,
+	EXPR_STR = 0x1A,
 /*=========================Partial Expressions==========================*/
 	/**
 	 ** The partial evaluated expression.
@@ -221,20 +198,20 @@ enum ExprKind {
 	 ** REPR: R[_label(a)]
 	 *@param _label the label of instruction.
 	 */
-	EXPR_DST_A,
+	EXPR_DYN = 0x1B,
 	/**
 	 ** The partial evaluated expression, used for function applying.
 	 ** REPR: R[_label(a):_label(a)+_label(c)]
 	 *@param _label the label of instruction.
 	 */
-	EXPR_DST_AC,
+	EXPR_VA_DYN = 0x1C,
 	/**
 	 ** The partial evaluated expression, used for function applying.
-	 ** Different from EXPR_DST_AC, variable a is immutable.
+	 ** Different from EXPR_VA_DYN, variable a is immutable.
 	 ** REPR: R[_label(a):_label(a)+_label(c)]
 	 *@param _label the label of instruction.
 	 */
-	EXPR_DST_C,
+	EXPR_VARG = 0x1D,
 /*=========================Pattern Expressions==========================*/
 	PAT_DROP,
 	PAT_BIND,
@@ -264,13 +241,34 @@ struct Expr {
 		struct {
 			a_u32 _base;
 			a_u32 _key;
-		} _ref;
+		};
 		struct {
-			a_u32 _whent;
-			a_u32 _whenf;
-		} _cond;
+			a_u32 _try;
+			a_u32 _residual;
+		};
 	};
 };
+
+always_inline a_bool expr_has_tmp_val(InExpr e) {
+	a_u32 kind = e->_kind;
+	switch (kind) {
+		case EXPR_NEVER:
+		case EXPR_VAR:
+		case EXPR_TMP:
+		case EXPR_REF_ALL:
+			return kind & 0x1 ? true : false;
+		default: panic("expression has no value.");
+	}
+}
+
+always_inline a_bool expr_has_tmp_key(InExpr e) {
+	a_u32 kind = e->_kind;
+	switch (kind) {
+		case EXPR_REFR_ALL:
+			return kind & 0x2 ? true : false;
+		default: panic("expression has no value.");
+	}
+}
 
 struct ConExpr {
 	ExprPack _head;

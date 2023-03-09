@@ -28,10 +28,12 @@ static a_usize l_to_page_size(a_usize stack_size) {
 
 a_bool ai_stk_init(a_henv env, Stack* stack) {
 	Value* base;
+	a_usize size;
 
 #if ALO_STACK_INNER
 	base = ai_mem_vnnew(env, Value, INIT_STACK_SIZE_WITH_RESERVED);
 	if (unlikely(base == null)) return true;
+	size = INIT_STACK_SIZE_WITH_RESERVED;
 #else
 	quiet(env);
 	base = ai_mem_nreserve(null, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));
@@ -42,13 +44,14 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 		ai_mem_nrelease(base, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));
 		return true;
 	}
-	stack->_alloc_size = init_page_size;
+	size = init_page_size;
 #endif
 
 	*stack = new(Stack) {
 		._base = base,
 		._limit = base + INIT_STACK_SIZE,
-		._top = base
+		._top = base,
+		._alloc_size = size
 	};
 
 # if ALO_STRICT_STACK_CHECK
@@ -74,7 +77,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	a_isize diff;
 
 #if ALO_STACK_INNER
-	a_usize size_old = stack->_limit - stack->_base + RESERVED_STACK_SIZE;
+	a_usize size_old = stack->_alloc_size / sizeof(Value);
 	Value* stack_old = stack->_base;
 	Value* stack_new;
 #if ALO_STRICT_MEMORY_CHECK
@@ -86,6 +89,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 #endif
 	diff = ptr_diff(stack_new, stack_old);
 	stack->_base = stack_new;
+	stack->_alloc_size = size_new * sizeof(Value);
 
 	/* Relocate stack if base address is changed. */
 	if (diff != 0) {
@@ -154,7 +158,7 @@ a_isize ai_stk_check(a_henv env, Value* top) {
 
 void ai_stk_deinit(Global* g, Stack* stack) {
 #if ALO_STACK_INNER
-	ai_mem_vndel(g, stack->_base, stack->_limit - stack->_base + RESERVED_STACK_SIZE);
+	ai_mem_dealloc(g, stack->_base, stack->_alloc_size);
 #else
 	quiet(g);
 	ai_mem_ndecommit(stack->_base, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));

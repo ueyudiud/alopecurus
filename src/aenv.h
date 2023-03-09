@@ -37,34 +37,33 @@ intern a_none ai_env_raise(a_henv env, a_msg msg);
 # define ALOI_INIT_CFRAMESIZE usizec(8)
 #endif
 
-#define RFLAG_COUNT_VARARG 255
+#define RFLAG_COUNT_VARARG UINT8_MAX
 
 /* Flags of result. */
 typedef struct {
-	a_u16 _count: 8; /* Number of expected return count. */
+	a_u8 _count; /* Number of expected return count. */
 } RFlags;
 
 struct Frame {
+	a_henv _env;
 	Frame* _prev;
 	a_insn const* _pc;
 	StkPtr _stack_bot;
 	RcCap* _caps;
 	RFlags _rflags;
 	/* In strict stack checking mode, the API will use frame bound to check index range. */
-#if ALO_STRICT_STACK_CHECK
 	StkPtr _bound;
-#endif
 };
 
 struct alo_Env {
 	GOBJ_STRUCT_HEADER;
-	a_u8 _status;
-	a_u16 _flags;
 	Global* _g;
-	GRoute* _from;
 	Frame* _frame;
 	Stack _stack;
 	Value _error;
+	GRoute* _from;
+	a_u16 _flags;
+	a_u8 _status;
 	Frame _base_frame;
 };
 

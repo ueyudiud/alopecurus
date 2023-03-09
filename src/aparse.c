@@ -526,7 +526,6 @@ static void l_scan_relation_expr(Parser* par, OutExpr e) {
 		Expr e2;
 		l_scan_compare_expr(par, &e2);
 		ai_code_binary2(par, e, &e2, op, line);
-		ai_code_drop(par, &e2);
 	}
 }
 
@@ -1066,7 +1065,7 @@ static void l_scan_root_return_stat(Parser* par) {
 		Expr e2 = {};
 		l_scan_expr_pack(par, &e, &e2);
 		/* Unpack the return value if it is possible. */
-		if (e2._kind == EXPR_DST_AC || e2._kind == EXPR_DST_C) {
+		if (e2._kind == EXPR_VA_DYN || e2._kind == EXPR_VARG) {
 			ai_code_unpack(par, &e2, ln_cur(par));
 		}
 		ai_code_va_push(par, &e, &e2, 1);

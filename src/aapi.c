@@ -22,7 +22,7 @@
 /**
  ** Initialize library context, the function should be called before use library.
  ** This function returns initialization result message.
- ** Any other function of the library should called after library is initialized.
+ ** Name other function of the library should called after library is initialized.
  ** Initialize library context twice is undefined behavior.
  ** 
  ** Return message:
@@ -119,13 +119,13 @@ a_bool alo_ensure(a_henv env, a_usize n) {
 }
 
 void alo_settop(a_henv env, a_isize n) {
-	Value* v = n >= 0 ? ai_stk_bot(env) + n : env->_stack._top + n;
-	api_check(v >= ai_stk_bot(env) && v <= api_stack_limit(env));
-	Value* u = env->_stack._top;
-	while (u < v) { /* Fill nil value if stack grows. */
-		v_set_nil(u++);
-	}
-	env->_stack._top = v;
+	Value* old_top = env->_stack._top;
+	Value* new_top = n >= 0 ? ai_stk_bot(env) + n : old_top + n;
+
+	api_check(new_top >= ai_stk_bot(env) && new_top <= api_stack_limit(env));
+
+	v_set_nil_ranged(old_top, new_top);
+	env->_stack._top = new_top;
 }
 
 #define MIN_NEG_STACK_INDEX (-255)
@@ -368,7 +368,7 @@ void alo_xmove(a_henv src, a_henv dst, a_usize n) {
 	api_check(src != dst, "same environment.");
 	api_check_elem(src, n);
 	api_check_slot(dst, n);
-	v_cpy_multi(src, dst->_stack._top, src->_stack._top - n, n);
+	v_mov_all(src, dst->_stack._top, src->_stack._top - n, n);
 	src->_stack._top -= n;
 	dst->_stack._top += n;
 }
@@ -483,9 +483,14 @@ void alo_insert(a_henv env, a_isize id) {
 }
 
 static void l_call(a_henv env, a_u32 narg, a_i32 nres) {
-	ai_vm_call(env, env->_stack._top - narg - 1, new(RFlags) {
+	Value* base = env->_stack._top - narg - 1;
+
+	StkPtr sp = val2stk(env, base);
+	Value v = ai_vm_call(env, base, new(RFlags) {
 		._count = nres < 0 ? RFLAG_COUNT_VARARG : nres
 	});
+	/* Move argument */
+	v_set(env, stk2val(env, sp), v);
 }
 
 void alo_call(a_henv env, a_usize narg, a_isize nres) {

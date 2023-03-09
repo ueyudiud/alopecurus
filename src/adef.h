@@ -24,7 +24,7 @@
 #define ALO_COMP_OPT_EVAL 0x2000000
 
 /**
- ** Debug build mode. If enabled, all assumption will be checked and panic if failed.
+ ** Debug aasm mode. If enabled, all assumption will be checked and panic if failed.
  */
 #ifdef ALOI_DEBUG
 # define ALO_DEBUG M_true
@@ -200,7 +200,7 @@ typedef a_u32 a_insn;
 
 #define check(e) ({ typeof(e) _e = (e); if (unlikely(_e != ALO_SOK)) return _e; })
 
-#if ALO_DEBUG
+#if ALO_DEBUG && defined(ALO_LIB)
 intern a_none ai_dbg_panic(char const* fmt, ...);
 # define panic(m...) ai_dbg_panic(""m)
 #else

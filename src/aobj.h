@@ -126,18 +126,27 @@ always_inline void v_check_alive(a_henv env, Value v);
 #define V_PAYLOAD_MASK (~(~u64c(0) << 47))
 #define V_INT_MASK (~(~u64c(0) << 32))
 
-always_inline a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
+#define V_STRICT_NIL (~u64c(0))
+#define V_EMPTY (~u64c(1))
+#define V_FALSE (~cast(a_u64, T_FALSE) << 47)
+#define V_TRUE (~cast(a_u64, T_TRUE) << 47 | V_PAYLOAD_MASK)
+
+always_inline a_u64 v_masked_tag(a_enum tag) {
 	assume(tag <= T__MAX_FAST, "bad value tag.");
+	return ~cast(a_u64, tag) << 47;
+}
+
+always_inline a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
 	assume((payload & ~V_PAYLOAD_MASK) == 0, "bad value payload.");
-	return ~cast(a_u64, tag) << 47 | payload;
+	return v_masked_tag(tag) | payload;
 }
 
 always_inline a_u64 v_box_nan_raw_min(a_enum tag) {
-	return v_box_nan_raw(tag, 0);
+	return v_masked_tag(tag);
 }
 
 always_inline a_u64 v_box_nan_raw_max(a_enum tag) {
-	return v_box_nan_raw(tag, V_PAYLOAD_MASK);
+	return v_masked_tag(tag) | V_PAYLOAD_MASK;
 }
 
 always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
@@ -151,9 +160,6 @@ always_inline a_enum v_get_tag(Value v) {
 always_inline a_u64 v_get_payload(Value v) {
 	return v._ & V_PAYLOAD_MASK;
 }
-
-#define V_STRICT_NIL ~u64c(0)
-#define V_EMPTY ~u32c(1)
 
 always_inline a_bool v_is_nil(Value v) {
 	return v_get_tag(v) == T_NIL;
@@ -278,7 +284,7 @@ always_inline RcCap* v_as_cap(Value v) {
 
 #define v_of_nil() (new(Value) { V_STRICT_NIL })
 #define v_of_empty() (new(Value) { V_EMPTY })
-#define v_of_bool(v) ((v) ? v_box_nan(T_TRUE, V_PAYLOAD_MASK) : v_box_nan(T_FALSE, 0))
+#define v_of_bool(v) (new(Value) { (v) ? V_TRUE : V_FALSE })
 #define v_of_int(v) v_box_nan(T_INT, v)
 #define v_of_float(v) (new(Value) { ._ = bcast(a_u64, v) })
 #define v_of_ptr(v) v_box_nan(T_PTR, addr_of(v))
@@ -307,6 +313,12 @@ always_inline void v_set_nil(Value* d) {
 	v_setx(d, v_of_nil());
 }
 
+always_inline void v_set_nil_ranged(Value* l, Value* h) {
+	for (Value* p = l; p < h; ++p) {
+		v_set_nil(p);
+	}
+}
+
 always_inline void v_set_bool(Value* d, a_bool v) {
 	v_setx(d, v_of_bool(v));
 }
@@ -325,11 +337,11 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
 
-always_inline void v_cpy(a_henv env, Value* d, Value const* s) {
+always_inline void v_cpy(a_henv env, Value* restrict d, Value const* restrict s) {
 	v_set(env, d, *s);
 }
 
-always_inline void v_cpy_multi(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
+always_inline void v_mov_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
 	for (a_usize i = 0; i < n; ++i) {
 		v_cpy(env, &d[i], &s[i]);
 	}

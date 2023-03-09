@@ -68,13 +68,6 @@ static void dump_line(GProto* meta, LineItr* itr, a_u32 pc) {
 }
 
 static void dump_code(GProto* meta, a_bool fline) {
-	static char const* g_names[] = {
-#define BCNAME(id,name,a,b,c) name,
-		ALO_BC_LIST(BCNAME)
-#undef BCNAME
-		null
-	};
-
 	a_insn* begin = meta->_code;
 	a_insn* end = begin + meta->_ninsn;
 	LineItr line_itr = {};
@@ -86,15 +79,22 @@ static void dump_code(GProto* meta, a_bool fline) {
 		if (fline) {
 			dump_line(meta, &line_itr, n);
 		}
-		aloi_show("\t%5u %5s ", n, g_names[op]);
+		aloi_show("\t%5u %5s ", n, ai_bc_names[op]);
 		switch (op) {
-			case BC_NOP: {
+			case BC_NOP:
+			case BC_RET0: {
 				aloi_show("   _    _    _\n");
 				break;
 			}
 			case BC_KF:
 			case BC_KT:
-			case BC_CLOSE: {
+			case BC_BKF:
+			case BC_BKT:
+			case BC_CLOSE:
+			case BC_BNZ:
+			case BC_BZ:
+			case BC_RET1:
+			case BC_RETV: {
 				aloi_show("%4u    _    _\n", bc_load_a(i));
 				break;
 			}
@@ -109,7 +109,13 @@ static void dump_code(GProto* meta, a_bool fline) {
 				aloi_show("%4u    _ %4u\n", bc_load_a(i), bc_load_c(i));
 				break;
 			}
-			case BC_KI: {
+			case BC_KI:
+			case BC_BEQI:
+			case BC_BNEI:
+			case BC_BLTI:
+			case BC_BLEI:
+			case BC_BGTI:
+			case BC_BGEI: {
 				aloi_show("%4u %9d\n", bc_load_a(i), bc_load_sbx(i));
 				break;
 			}
@@ -118,24 +124,18 @@ static void dump_code(GProto* meta, a_bool fline) {
 				aloi_show("%4u %4u    _ ; %p\n", bc_load_a(i), b, meta->_subs[b]);
 				break;
 			}
-			case BC_BNZ:
-			case BC_BZ: {
-				aloi_show("   _ %4u    _\n", bc_load_b(i));
-				break;
-			}
 			case BC_MOV:
 			case BC_LDC:
 			case BC_STC:
-			case BC_TNZ:
-			case BC_TZ:
-			case BC_NEG: {
+			case BC_NEG:
+			case BC_BEQ:
+			case BC_BNE:
+			case BC_BLT:
+			case BC_BLE:
+			case BC_RET: {
 				aloi_show("%4u %4u    _\n", bc_load_a(i), bc_load_b(i));
 				break;
 			}
-			case BC_TEQ:
-			case BC_TNE:
-			case BC_TLT:
-			case BC_TLE:
 			case BC_TNEW:
 			case BC_GET:
 			case BC_SET:
@@ -172,12 +172,6 @@ static void dump_code(GProto* meta, a_bool fline) {
 				aloi_show("\n");
 				break;
 			}
-			case BC_TEQI:
-			case BC_TNEI:
-			case BC_TLTI:
-			case BC_TLEI:
-			case BC_TGTI:
-			case BC_TGEI:
 			case BC_GETI:
 			case BC_SETI:
 			case BC_ADDI:
@@ -191,23 +185,6 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_BORI:
 			case BC_BXORI: {
 				aloi_show("%4u %4u %4d\n", bc_load_a(i), bc_load_b(i), bc_load_sc(i));
-				break;
-			}
-			case BC_BEQ:
-			case BC_BNE:
-			case BC_BLT:
-			case BC_BLE:
-			case BC_RET: {
-				aloi_show("   _ %4u %4u\n", bc_load_b(i), bc_load_c(i));
-				break;
-			}
-			case BC_BEQI:
-			case BC_BNEI:
-			case BC_BLTI:
-			case BC_BLEI:
-			case BC_BGTI:
-			case BC_BGEI: {
-				aloi_show("   _ %4u %4d\n", bc_load_b(i), bc_load_sc(i));
 				break;
 			}
 			case BC_J: {
