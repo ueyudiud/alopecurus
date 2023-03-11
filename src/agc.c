@@ -77,12 +77,15 @@ static void really_mark_object(Global* g, a_hobj obj) {
 
 void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 	assume(g_has_white_color(g, obj)); /* Checked in inline function. */
-	assume(obj->_vtable->_mark != null, "permanent object should always be gray.");
-	if (obj->_vtable->_flags & VTABLE_FLAG_PLAIN_MARK) {
+	VTable const* vtable = obj->_vtable;
+	if (vtable->_flags & VTABLE_FLAG_PLAIN_MARK) {
 		obj->_tnext = trmark_null; /* Mark object to gray before propagation. */
-		really_mark_object(g, obj);
+		if (vtable->_mark != null) {
+			really_mark_object(g, obj);
+		}
 	}
 	else {
+		assume(vtable->_mark != null, "only a plain data object can has no mark method.");
 		join_trace(&g->_tr_gray, obj);
 	}
 }
