@@ -35,7 +35,7 @@ static a_usize proto_size(ProtoDesc* desc) {
 	}
 	if (desc->_flags._froot) {
 		assume(desc->_ncap <= 1, "bad capture count.");
-		size += fun_size(desc->_ncap);
+		size += fun_size(desc->_ncap) + sizeof(RcCap);
 	}
 	return size;
 }
@@ -86,11 +86,20 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 
 	if (desc->_flags._froot) {
 		GFun* fun = ptr_of(GFun, addr);
-		addr += sizeof(GFun) + sizeof(CapVal) * desc->_ncap;
+		addr += fun_size(desc->_ncap);
 
 		fun->_vtable = &afun_vtable;
 		fun->_proto = self;
 		fun->_len = desc->_ncap;
+		if (desc->_ncap > 0) {
+			RcCap* cap = ptr_of(RcCap, addr);
+			addr += sizeof(RcCap);
+
+			cap->_ptr = &cap->_slot;
+			cap->_rc_and_fclose = 3;
+
+			fun->_caps[0] = cap;
+		}
 
 		self->_cache = fun;
 	}
@@ -146,12 +155,9 @@ static RcCap* l_alloc_capture(a_henv env) {
 	return ai_mem_alloc(env, sizeof(RcCap));
 }
 
-static CapVal l_load_capture(a_henv env, CapInfo* info, CapVal* up, RcCap** now, Value* stack) {
+static RcCap* l_load_capture(a_henv env, CapInfo* info, RcCap** up, RcCap** now, Value* stack) {
 	if (info->_fup) {
 		return up[info->_reg];
-	}
-	else if (!info->_frc) {
-		return new(CapVal) { ._imm = stack[info->_reg] };
 	}
 	else {
 		Value* dst = stack + info->_reg;
@@ -174,7 +180,7 @@ static CapVal l_load_capture(a_henv env, CapInfo* info, CapVal* up, RcCap** now,
 		else {
 			cap->_rc_and_fclose += 2;
 		}
-		return new(CapVal) { ._rc = cap };
+		return cap;
 	}
 }
 
@@ -230,25 +236,14 @@ static void afun_mark(Global* g, GFun* self) {
     ai_gc_trace_mark(g, self->_proto);
     a_u32 len = self->_len;
     for (a_u32 i = 0; i < len; ++i) {
-		CapInfo* info = &self->_proto->_caps[i];
-		CapVal* val = &self->_caps[i];
-		if (info->_frc) {
-			cap_mark(g, val->_rc);
-		}
-		else {
-			ai_gc_trace_mark_val(g, val->_imm);
-		}
+		cap_mark(g, self->_caps[i]);
     }
 	ai_gc_trace_work(g, fun_size(self->_len));
 }
 
 static void afun_drop(Global* g, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
-		CapInfo* info = &self->_proto->_caps[i];
-		CapVal* val = &self->_caps[i];
-		if (info->_frc) {
-			cap_release(g, val->_rc);
-		}
+		cap_release(g, self->_caps[i]);
 	}
     ai_mem_dealloc(g, self, fun_size(self->_len));
 }

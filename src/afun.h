@@ -9,7 +9,6 @@
 
 typedef struct GProto GProto;
 
-typedef union CapVal CapVal;
 typedef struct LocalInfo LocalInfo;
 typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
@@ -59,11 +58,6 @@ struct GProto {
 	GProto* _subs[0];
 };
 
-union CapVal {
-	Value _imm; /* Immediate value. */
-	RcCap* _rc; /* Shared rc value. */
-};
-
 struct GFun {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
@@ -71,7 +65,7 @@ struct GFun {
 	a_u16 _sym; /* Function symbol. */
 	GProto* _proto;
 	union {
-		CapVal _caps[0];
+		RcCap* _caps[0];
 		Value _vals[0];
 	};
 };
@@ -101,7 +95,6 @@ struct CapInfo {
 		a_u8 _flags;
 		struct {
 			a_u8 _fup: 1; /* Capture from upper closure. */
-			a_u8 _frc: 1; /* Use RcCap to capture. */
 		};
 	};
 	a_u8 _reg;

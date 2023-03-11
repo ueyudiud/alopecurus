@@ -385,9 +385,6 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		a = bc_load_a(insn);
 		bc = bc_load_op(insn);
 		switch (bc) {
-			case BC_NOP: {
-				break;
-			}
 			case BC_MOV: {
 				loadB();
 
@@ -397,14 +394,14 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_LDC: {
 				loadB();
 
-				RcCap* cap = fun->_caps[b]._rc;
+				RcCap* cap = fun->_caps[b];
 				v_cpy(env, &R[a], cap->_ptr);
 				break;
 			}
 			case BC_STC: {
 				loadB();
 
-				RcCap* cap = fun->_caps[a]._rc;
+				RcCap* cap = fun->_caps[a];
 				v_cpy(env, cap->_ptr, &R[b]);
 
 				ai_gc_barrier_backward_val(env, fun, R[b]);
@@ -577,7 +574,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				Value vb = fun->_caps[b]._imm;
+				Value vb = *fun->_caps[b]->_ptr;
 				Value vc = K[c];
 
 				Value vt;
@@ -600,7 +597,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadEx();
 
-				Value vb = fun->_caps[b]._imm;
+				Value vb = *fun->_caps[b]->_ptr;
 				Value vc = K[ex];
 
 				Value vt;

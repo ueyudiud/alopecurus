@@ -189,7 +189,7 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 				table_emplace(env, self, node->_key, node->_hash, node->_value);
 			}
 
-			ai_mem_vdel(G(env), arr + 1, old_cap);
+			ai_mem_vdel(G(env), arr, old_cap);
 		}
 	}
 }

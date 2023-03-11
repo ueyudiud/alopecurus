@@ -80,7 +80,6 @@ static void dump_code(GProto* meta, a_bool fline) {
 		}
 		aloi_show("\t%5u %5s ", n, ai_bc_names[op]);
 		switch (op) {
-			case BC_NOP:
 			case BC_RET0: {
 				aloi_show("   _    _    _\n");
 				break;

@@ -640,7 +640,7 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	if (likely(msg == ALO_SOK)) {
 		v_set_obj(env, api_incr_stack(env), out);
 		if (out->_proto->_ncap > 0) {
-			v_cpy(env, &out->_vals[0], api_rdslot(env, id_env));
+			v_cpy(env, out->_caps[0]->_ptr, api_rdslot(env, id_env));
 		}
 	}
 	else {
