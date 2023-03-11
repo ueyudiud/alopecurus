@@ -1018,11 +1018,10 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					env->_stack._top = &R[a + b];
 				}
 
-				Value vr = ai_vm_call(env, &R[a], new(RFlags) {
+				ai_vm_call(env, &R[a], new(RFlags) {
 					._count = c != 0 ? c - 1 : RFLAG_COUNT_VARARG
 				});
-				reload_stack();
-				R[a] = vr;
+				check_gc();
 
 				if (c == 0) {
 					env->_stack._top = &R[fun->_proto->_nstack];

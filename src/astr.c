@@ -16,7 +16,6 @@
 
 #include "astr.h"
 
-static VTable const dstr_vtable;
 static VTable const istr_vtable;
 static VTable const hstr_vtable;
 
@@ -91,6 +90,7 @@ static GStr* hstr_alloc(a_henv env, a_usize len) {
 }
 
 static void istr_init(IStr* self, void const* src, a_usize len, a_hash hash) {
+	self->_body._vtable = &istr_vtable;
     self->_body._len = len;
     self->_body._hash = hash;
     memcpy(self->_body._data, src, len);
@@ -120,7 +120,6 @@ static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
 
 	/* String not found, create new string. */
 	IStr* self = ai_mem_alloc(env, istr_size(len));
-	self->_body._vtable = &istr_vtable;
 	istr_init(self, src, len, hash);
 	cache_emplace(istable, self);
     ai_gc_register_object(env, &self->_body);
@@ -141,7 +140,6 @@ GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 t
     a_hash hash = ai_str_hashof(g->_seed, src, len);
 
 	self->_body._gnext = null;
-	self->_body._vtable = &dstr_vtable;
 	istr_init(self, src, len, hash);
 	strx_id_set(&self->_body, tag);
 
@@ -230,10 +228,6 @@ void ai_str_clean(Global* g) {
     ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 }
 
-static void istr_mark(Global* g, GStr* self) {
-	ai_gc_trace_work(g, sizeof(IStr) + 1 + self->_len);
-}
-
 static void cache_remove(IStrCache* cache, IStr* str) {
 	/* Remove string from intern table. */
 	IStr** slot = cache_head(cache, str->_body._hash);
@@ -255,10 +249,6 @@ static void istr_drop(Global* g, a_hobj raw_self) {
 	ai_mem_dealloc(g, self, istr_size(self->_body._len));
 }
 
-static void hstr_mark(Global* g, GStr* self) {
-	ai_gc_trace_work(g, hstr_size(self->_len));
-}
-
 static void hstr_drop(Global* g, GStr* self) {
     ai_mem_dealloc(g, self, hstr_size(self->_len));
 }
@@ -267,24 +257,13 @@ static void str_tostr(a_henv env, GStr* self, GBuf* buf) {
 	ai_buf_putls(env, buf, self->_data, self->_len);
 }
 
-static VTable const dstr_vtable = {
-	._val_mask = V_MASKED_TAG(T_ISTR),
-	._api_tag = ALO_TSTR,
-	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_PLAIN_LEN | VTABLE_FLAG_PLAIN_MARK,
-	._name = "str",
-	._mark = null,
-	._drop = null,
-	._tostr = fpcast(a_fp_tostr, str_tostr)
-};
-
 static VTable const istr_vtable = {
 	._val_mask = V_MASKED_TAG(T_ISTR),
 	._api_tag = ALO_TSTR,
 	._repr_id = REPR_STR,
 	._flags = VTABLE_FLAG_PLAIN_LEN | VTABLE_FLAG_PLAIN_MARK,
 	._name = "str",
-	._mark = fpcast(a_fp_mark, istr_mark),
+	._mark = null,
 	._drop = istr_drop,
 	._tostr = fpcast(a_fp_tostr, str_tostr)
 };
@@ -295,7 +274,7 @@ static VTable const hstr_vtable = {
 	._repr_id = REPR_STR,
 	._flags = VTABLE_FLAG_PLAIN_MARK,
 	._name = "str",
-	._mark = fpcast(a_fp_mark, hstr_mark),
+	._mark = null,
 	._drop = fpcast(a_fp_drop, hstr_drop),
 	._tostr = fpcast(a_fp_tostr, str_tostr)
 };
