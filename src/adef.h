@@ -265,10 +265,11 @@ always_inline a_usize ceil_pow2m1_usize(a_usize a) {
     return likely(a != 0) ? ~usizec(0) >> clz_usize(a) : 0;
 }
 
+#define pad_to_raw(s,g) (((s) + (g) - 1) & ~((g) - 1))
+
 always_inline a_usize pad_to(a_usize size, a_usize granularity) {
-	a_usize mask = granularity - 1;
-	assume(granularity != 0 && (granularity & mask) == 0, "bad granularity.");
-	return (size + mask) & ~mask;
+	assume(granularity != 0 && (granularity & (granularity - 1)) == 0, "bad granularity.");
+	return pad_to_raw(size, granularity);
 }
 
 #endif /* adef_h_ */

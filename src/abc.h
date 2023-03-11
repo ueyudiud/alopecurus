@@ -44,7 +44,10 @@
 
 #define bc_make_iabc(op,a,b,c) (bc_wrap_op(op) | bc_wrap_a(a) | bc_wrap_b(b) | bc_wrap_c(c))
 #define bc_make_iabsc(op,a,b,c) (bc_wrap_op(op) | bc_wrap_a(a) | bc_wrap_b(b) | bc_wrap_sc(c))
-#define bc_make_iab(op,a,b) bc_make_iabc(op, a, b, 0)
+#define bc_make_iab(op,a,b) (bc_wrap_op(op) | bc_wrap_a(a) | bc_wrap_b(b))
+#define bc_make_iac(op,a,c) (bc_wrap_op(op) | bc_wrap_a(a) | bc_wrap_c(c))
+#define bc_make_ia(op,a) (bc_wrap_op(op) | bc_wrap_a(a))
+#define bc_make_i(op) bc_wrap_op(op)
 #define bc_make_iabx(op,a,b) (bc_wrap_op(op) | bc_wrap_a(a) | bc_wrap_bx(b))
 #define bc_make_iasbx(op,a,b) (bc_wrap_op(op) | bc_wrap_a(a) | bc_wrap_sbx(b))
 #define bc_make_iax(op,a) (bc_wrap_op(op) | bc_wrap_ax(a))
@@ -71,102 +74,144 @@ always_inline void bc_swap_c(a_insn* i, a_u32 c) { *i = (*i & ~BC_MASK_C) | bc_w
 always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc(c); }
 
 #define ALO_BC_LIST(_) \
-/*        id,    name,   a,   b,   c,    description                                         */ \
-    _(   NOP,   "nop", ___, ___, ___) /*                                                     */ \
-    _(   MOV,   "mov", reg, reg, ___) /* R[a] := R[b]                                        */ \
-/*======================================Duality Opcodes======================================*/ \
-    _(    KF,    "kf", reg, ___, ___) /* R[a] := false                                       */ \
-    _(    KT,    "kt", reg, ___, ___) /* R[a] := true                                        */ \
-    _(   BKF,   "bkf", reg, ___, ___) /* R[a] := false; pc += 1                              */ \
-    _(   BKT,   "bkt", reg, ___, ___) /* R[a] := true; pc += 1                               */ \
-    _(   BNZ,   "bnz", reg, ___, ___) /* if !R[a] { pc := pc + 1 }                           */ \
-    _(    BZ,    "bz", reg, ___, ___) /* if R[a] { pc := pc + 1 }                            */ \
-    _(   BEQ,   "beq", reg, reg, ___) /* if R[a] == R[b] { pc := pc + 1 }                    */ \
-    _(   BNE,   "bne", reg, reg, ___) /* if !(R[a] == R[b]) { pc := pc + 1 }                 */ \
-    _(   BLT,   "blt", reg, reg, ___) /* if R[a] < R[b] { pc := pc + 1 }                     */ \
-    _(  BNLT,  "bnlt", reg, reg, ___) /* if !(R[a] < R[b]) { pc := pc + 1 }                  */ \
-    _(   BLE,   "ble", reg, reg, ___) /* if R[a] <= R[b] { pc := pc + 1 }                    */ \
-    _(  BNLE,  "bnle", reg, reg, ___) /* if !(R[a] <= R[b]) { pc := pc + 1 }                 */ \
-    _(  BEQI,  "beqi", reg, val, val) /* if R[a] == int(b) { pc := pc + 1 }                  */ \
-    _(  BNEI,  "bnei", reg, val, val) /* if !(R[a] == int(b)) { pc := pc + 1 }               */ \
-    _(  BLTI,  "blti", reg, val, val) /* if R[a] < int(b) { pc := pc + 1 }                   */ \
-    _( BNLTI, "bnlti", reg, val, val) /* if !(R[a] < int(b)) { pc := pc + 1 }                */ \
-    _(  BLEI,  "blei", reg, val, val) /* if R[a] <= int(b) { pc := pc + 1 }                  */ \
-    _( BNLEI, "bnlei", reg, val, val) /* if !(R[a] <= int(b)) { pc := pc + 1 }               */ \
-    _(  BGTI,  "bgti", reg, val, val) /* if R[a] > int(b) { pc := pc + 1 }                   */ \
-    _( BNGTI, "bngti", reg, val, val) /* if !(R[a] > int(b)) { pc := pc + 1 }                */ \
-    _(  BGEI,  "bgei", reg, val, val) /* if R[a] >= int(b) { pc := pc + 1 }                  */ \
-    _( BNGEI, "bngei", reg, val, val) /* if !(R[a] >= int(b)) { pc := pc + 1 }               */ \
+/*        id,    name,   fmt,   a,   b,   c,    description                                  */ \
+    _(   NOP,   "nop",     i, ___, ___, ___) /*                                              */ \
+    _(   MOV,   "mov",   iAB, reg, reg, ___) /* R[a] := R[b]                                 */ \
+/*=====================================Duality Opcodes=======================================*/ \
+    _(    KF,    "kf",    iA, reg, ___, ___) /* R[a] := false                                */ \
+    _(    KT,    "kt",    iA, reg, ___, ___) /* R[a] := true                                 */ \
+    _(   BKF,   "bkf",    iA, reg, ___, ___) /* R[a] := false; pc += 1                       */ \
+    _(   BKT,   "bkt",    iA, reg, ___, ___) /* R[a] := true; pc += 1                        */ \
+    _(    BZ,    "bz",    iA, reg, ___, ___) /* if R[a] { pc := pc + 1 }                     */ \
+    _(   BNZ,   "bnz",    iA, reg, ___, ___) /* if !R[a] { pc := pc + 1 }                    */ \
+    _(   BEQ,   "beq",   iAB, reg, reg, ___) /* if R[a] == R[b] { pc := pc + 1 }             */ \
+    _(   BNE,   "bne",   iAB, reg, reg, ___) /* if !(R[a] == R[b]) { pc := pc + 1 }          */ \
+    _(   BLT,   "blt",   iAB, reg, reg, ___) /* if R[a] < R[b] { pc := pc + 1 }              */ \
+    _(  BNLT,  "bnlt",   iAB, reg, reg, ___) /* if !(R[a] < R[b]) { pc := pc + 1 }           */ \
+    _(   BLE,   "ble",   iAB, reg, reg, ___) /* if R[a] <= R[b] { pc := pc + 1 }             */ \
+    _(  BNLE,  "bnle",   iAB, reg, reg, ___) /* if !(R[a] <= R[b]) { pc := pc + 1 }          */ \
+    _(  BEQI,  "beqi", iAsBx, reg, val, val) /* if R[a] == int(b) { pc := pc + 1 }           */ \
+    _(  BNEI,  "bnei", iAsBx, reg, val, val) /* if !(R[a] == int(b)) { pc := pc + 1 }        */ \
+    _(  BLTI,  "blti", iAsBx, reg, val, val) /* if R[a] < int(b) { pc := pc + 1 }            */ \
+    _( BNLTI, "bnlti", iAsBx, reg, val, val) /* if !(R[a] < int(b)) { pc := pc + 1 }         */ \
+    _(  BLEI,  "blei", iAsBx, reg, val, val) /* if R[a] <= int(b) { pc := pc + 1 }           */ \
+    _( BNLEI, "bnlei", iAsBx, reg, val, val) /* if !(R[a] <= int(b)) { pc := pc + 1 }        */ \
+    _(  BGTI,  "bgti", iAsBx, reg, val, val) /* if R[a] > int(b) { pc := pc + 1 }            */ \
+    _( BNGTI, "bngti", iAsBx, reg, val, val) /* if !(R[a] > int(b)) { pc := pc + 1 }         */ \
+    _(  BGEI,  "bgei", iAsBx, reg, val, val) /* if R[a] >= int(b) { pc := pc + 1 }           */ \
+    _( BNGEI, "bngei", iAsBx, reg, val, val) /* if !(R[a] >= int(b)) { pc := pc + 1 }        */ \
 /*===========================================================================================*/ \
-    _(   LDC,   "ldc", reg, cap, ___) /* R[a] := *C[b]                                       */ \
-    _(   STC,   "stc", cap, reg, ___) /* *C[a] := R[b]                                       */ \
-    _(    KN,    "kn", reg, ___, num) /* R[a:a+c] := nil                                     */ \
-    _(    KI,    "ki", reg, val, val) /* R[a] := int(sbx)                                    */ \
-    _(     K,     "k", reg, kst, kst) /* R[a] := K[bx]                                       */ \
-    _(   LDF,   "ldf", reg, kst, kst) /* R[a] := func(F[bx])                                 */ \
-    _(  CMOV,  "cmov", reg, cap, ___) /* R[a] := C[b]                                        */ \
-    _(   GET,   "get", reg, reg, reg) /* R[a] := R[b][R[c]]                                  */ \
-    _(  GETI,  "geti", reg, reg, val) /* R[a] := R[b][int(c)]                                */ \
-    _(  GETS,  "gets", reg, reg, kst) /* R[a] := R[b][K[c]: str]                             */ \
-    _( GETSX, "getsx", reg, reg, ___) /* R[a] := R[b][K[ex]: str]                            */ \
-    _( CGETS, "cgets", reg, cap, kst) /* R[a] := C[b][K[c]: str]                             */ \
-    _(CGETSX,"cgetsx", reg, cap, ___) /* R[a] := C[b][K[ex]: str]                            */ \
-    _(   SET,   "set", reg, reg, reg) /* R[b][R[c]] := R[a]                                  */ \
-    _(  SETI,  "seti", reg, reg, val) /* R[b][int(sc)] := R[a]                               */ \
-    _(  SETK,  "setk", reg, reg, val) /* R[b][K[c]] := R[a]                                  */ \
-    _( SETKX, "setkx", reg, reg, ___) /* R[b][K[ex]] := R[a]                                 */ \
-    _(   NEG,   "neg", reg, reg, ___) /* R[a] := -R[b]                                       */ \
-    _(   LEN,   "len", reg, reg, ___) /* R[a] := #R[b]                                       */ \
-    _( UNBOX, "unbox", reg, reg, num) /* R[a:a+c-1] := *R[b]                                 */ \
-    _(  TNEW,  "tnew", reg, reg, num) /* R[a] := (R[b:b+c-1])                                */ \
-    _(  LNEW,  "lnew", reg, num, num) /* R[a] := [] (with size hint bx)                      */ \
-    _(   ADD,   "add", reg, reg, reg) /* R[a] := R[b] + R[c]                                 */ \
-    _(   SUB,   "sub", reg, reg, reg) /* R[a] := R[b] - R[c]                                 */ \
-    _(   MUL,   "mul", reg, reg, reg) /* R[a] := R[b] * R[c]                                 */ \
-    _(   DIV,   "div", reg, reg, reg) /* R[a] := R[b] / R[c]                                 */ \
-    _(   MOD,   "mod", reg, reg, reg) /* R[a] := R[b] % R[c]                                 */ \
-    _(   SHL,   "shl", reg, reg, reg) /* R[a] := R[b] << R[c]                                */ \
-    _(   SHR,   "shr", reg, reg, reg) /* R[a] := R[b] >> R[c]                                */ \
-    _(  BAND,  "band", reg, reg, reg) /* R[a] := R[b] & R[c]                                 */ \
-    _(   BOR,   "bor", reg, reg, reg) /* R[a] := R[b] | R[c]                                 */ \
-    _(  BXOR,  "bxor", reg, reg, reg) /* R[a] := R[b] ~ R[c]                                 */ \
-    _(  ADDI,  "addi", reg, reg, val) /* R[a] := R[b] + int(sc)                              */ \
-    _(  SUBI,  "subi", reg, reg, val) /* R[a] := R[b] - int(sc)                              */ \
-    _(  MULI,  "muli", reg, reg, val) /* R[a] := R[b] * int(sc)                              */ \
-    _(  DIVI,  "divi", reg, reg, val) /* R[a] := R[b] / int(sc)                              */ \
-    _(  MODI,  "modi", reg, reg, val) /* R[a] := R[b] % int(sc)                              */ \
-    _(  SHLI,  "shli", reg, reg, val) /* R[a] := R[b] << int(sc)                             */ \
-    _(  SHRI,  "shri", reg, reg, val) /* R[a] := R[b] >> int(sc)                             */ \
-    _( BANDI, "bandi", reg, reg, val) /* R[a] := R[b] & int(sc)                              */ \
-    _(  BORI,  "bori", reg, reg, val) /* R[a] := R[b] | int(sc)                              */ \
-    _( BXORI, "bxori", reg, reg, val) /* R[a] := R[b] ~ int(sc)                              */ \
-    _(  CALL,  "call", reg, num, num) /* R[a:a+c-1] := R[a](R[a+1:a+b])                      */ \
-    _(   CAT,   "cat", reg, reg, num) /* R[a] := concat(R[b:b+c-1])                          */ \
-    _(     J,     "j", off, off, off) /* pc := pc + sax                                      */ \
-    _( CLOSE, "close", reg, ___, ___) /* close(C[A:])                                        */ \
-    _(   RET,   "ret", reg, num, ___) /* return R[a:a+b+1]                                   */ \
-    _(  RETV,  "retv", reg, ___, ___) /* return R[a:]                                        */ \
-    _(  RET1,  "ret1", reg, ___, ___) /* return R[a]                                         */ \
-    _(  RET0,  "ret0", ___, ___, ___) /* return                                              */ \
-    _(    FC,    "fc", ___, ___, ___) /* call C function                                     */ \
-    _(    EX,    "ex", val, val, val) /*                                                     */
+    _(   LDC,   "ldc",   iAB, reg, cap, ___) /* R[a] := *C[b]                                */ \
+    _(   STC,   "stc",   iAB, cap, reg, ___) /* *C[a] := R[b]                                */ \
+    _(    KN,    "kn",   iAC, reg, ___, num) /* R[a:a+c] := nil                              */ \
+    _(    KI,    "ki", iAsBx, reg, val, val) /* R[a] := int(b)                               */ \
+    _(     K,     "k",  iABx, reg, kst, kst) /* R[a] := K[b]                                 */ \
+    _(   LDF,   "ldf",  iABx, reg, kst, kst) /* R[a] := func(F[b] )                          */ \
+    _(  CMOV,  "cmov",   iAB, reg, cap, ___) /* R[a] := C[b]                                 */ \
+    _(   GET,   "get",  iABC, reg, reg, reg) /* R[a] := R[b][R[c]]                           */ \
+    _(  GETI,  "geti", iABsC, reg, reg, val) /* R[a] := R[b][int(c)]                         */ \
+    _(  GETS,  "gets",  iABC, reg, reg, kst) /* R[a] := R[b][K[c]: str]                      */ \
+    _( GETSX, "getsx", iABEx, reg, reg, ___) /* R[a] := R[b][K[ex]: str]                     */ \
+    _( CGETS, "cgets",  iABC, reg, cap, kst) /* R[a] := C[b][K[c]: str]                      */ \
+    _(CGETSX,"cgetsx", iABEx, reg, cap, ___) /* R[a] := C[b][K[ex]: str]                     */ \
+    _(   SET,   "set",  iABC, reg, reg, reg) /* R[b][R[c]] := R[a]                           */ \
+    _(  SETI,  "seti", iABsC, reg, reg, val) /* R[b][int(sc)] := R[a]                        */ \
+    _(  SETS,  "sets",  iABC, reg, reg, val) /* R[b][K[c]] := R[a]                           */ \
+    _( SETSX, "setsx", iABEx, reg, reg, ___) /* R[b][K[ex]] := R[a]                          */ \
+    _(   NEG,   "neg",   iAB, reg, reg, ___) /* R[a] := -R[b]                                */ \
+    _(   LEN,   "len",   iAB, reg, reg, ___) /* R[a] := #R[b]                                */ \
+    _( UNBOX, "unbox",  iABC, reg, reg, num) /* R[a:a+c-1] := *R[b]                          */ \
+    _(  TNEW,  "tnew",  iABC, reg, reg, num) /* R[a] := (R[b:b+c-1])                         */ \
+    _(  LNEW,  "lnew",  iABx, reg, num, num) /* R[a] := [] (with size hint bx)               */ \
+    _(   ADD,   "add",  iABC, reg, reg, reg) /* R[a] := R[b] + R[c]                          */ \
+    _(   SUB,   "sub",  iABC, reg, reg, reg) /* R[a] := R[b] - R[c]                          */ \
+    _(   MUL,   "mul",  iABC, reg, reg, reg) /* R[a] := R[b] * R[c]                          */ \
+    _(   DIV,   "div",  iABC, reg, reg, reg) /* R[a] := R[b] / R[c]                          */ \
+    _(   MOD,   "mod",  iABC, reg, reg, reg) /* R[a] := R[b] % R[c]                          */ \
+    _(   SHL,   "shl",  iABC, reg, reg, reg) /* R[a] := R[b] << R[c]                         */ \
+    _(   SHR,   "shr",  iABC, reg, reg, reg) /* R[a] := R[b] >> R[c]                         */ \
+    _(  BAND,  "band",  iABC, reg, reg, reg) /* R[a] := R[b] & R[c]                          */ \
+    _(   BOR,   "bor",  iABC, reg, reg, reg) /* R[a] := R[b] | R[c]                          */ \
+    _(  BXOR,  "bxor",  iABC, reg, reg, reg) /* R[a] := R[b] ~ R[c]                          */ \
+    _(  ADDI,  "addi", iABsC, reg, reg, val) /* R[a] := R[b] + int(c)                        */ \
+    _(  SUBI,  "subi", iABsC, reg, reg, val) /* R[a] := R[b] - int(c)                        */ \
+    _(  MULI,  "muli", iABsC, reg, reg, val) /* R[a] := R[b] * int(c)                        */ \
+    _(  DIVI,  "divi", iABsC, reg, reg, val) /* R[a] := R[b] / int(c)                        */ \
+    _(  MODI,  "modi", iABsC, reg, reg, val) /* R[a] := R[b] % int(c)                        */ \
+    _(  SHLI,  "shli", iABsC, reg, reg, val) /* R[a] := R[b] << int(c)                       */ \
+    _(  SHRI,  "shri", iABsC, reg, reg, val) /* R[a] := R[b] >> int(c)                       */ \
+    _( BANDI, "bandi", iABsC, reg, reg, val) /* R[a] := R[b] & int(c)                        */ \
+    _(  BORI,  "bori", iABsC, reg, reg, val) /* R[a] := R[b] | int(c)                        */ \
+    _( BXORI, "bxori", iABsC, reg, reg, val) /* R[a] := R[b] ~ int(c)                        */ \
+    _(  CALL,  "call",  iABC, reg, num, num) /* R[a:a+c-1] := R[a](R[a+1:a+b])               */ \
+    _(   CAT,   "cat",  iABC, reg, reg, num) /* R[a] := concat(R[b:b+c-1])                   */ \
+    _(     J,     "j",  isAx, off, off, off) /* pc := pc + a                                 */ \
+    _( CLOSE, "close",    iA, reg, ___, ___) /* close(C[A:])                                 */ \
+    _(   RET,   "ret",   iAB, reg, num, ___) /* return R[a:a+b+1]                            */ \
+    _(  RETV,  "retv",    iA, reg, ___, ___) /* return R[a:]                                 */ \
+    _(  RET1,  "ret1",    iA, reg, ___, ___) /* return R[a]                                  */ \
+    _(  RET0,  "ret0",     i, ___, ___, ___) /* return                                       */ \
+    _(    FC,    "fc",     i, ___, ___, ___) /* call C function                              */ \
+    _(    EX,    "ex",   iAx, val, val, val) /*                                              */
 
-enum {
-#define BCNAME(id,name,a,b,c) BC_##id,
+enum OpCode {
+#define BCNAME(id,n,f,a,b,c) BC_##id,
     ALO_BC_LIST(BCNAME)
 #undef BCNAME
     BC__MAX
 };
 
-intern char const* const ai_bc_names[];
+enum InsnFormat {
+	INSN_i,
+	INSN_iA,
+	INSN_iAx,
+	INSN_isAx,
+	INSN_iAB,
+	INSN_iABx,
+	INSN_iAsBx,
+	INSN_iABC,
+	INSN_iABsC,
+	INSN_iAC,
+	INSN_iABEx
+};
 
-always_inline a_bool bc_has_dual_op(a_u32 op) {
+intern char const* const ai_bc_names[];
+intern a_u8 const ai_bc_formats[];
+
+always_inline a_bool bc_has_dual_op(a_enum op) {
 	return op >= BC_KF && op <= BC_BNGEI;
 }
 
-always_inline a_bool bc_is_branch_op(a_u32 op) {
-	return op >= BC_BNZ && op <= BC_BNGEI;
+always_inline a_bool bc_is_branch_op(a_enum op) {
+	return op >= BC_BZ && op <= BC_BNGEI;
 }
 
+always_inline void insn_check(a_insn i) {
+	a_enum op = bc_load_op(i);
+	assume(op < BC__MAX, "bad opcode.");
+	a_enum fmt = ai_bc_formats[op];
+	switch (fmt) {
+		case INSN_i: {
+			assume(bc_load_ax(i) == 0, "bad operand.");
+			break;
+		}
+		case INSN_iA: {
+			assume(bc_load_bx(i) == 0, "bad operand.");
+			break;
+		}
+		case INSN_iAB:
+		case INSN_iABEx: {
+			assume(bc_load_c(i) == 0, "bad operand.");
+			break;
+		}
+		case INSN_iAC: {
+			assume(bc_load_b(i) == 0, "bad operand.");
+			break;
+		}
+		default: {
+			break;
+		}
+	}
+}
 
 #endif /* abc_h_ */

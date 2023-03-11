@@ -74,7 +74,6 @@ static void dump_code(GProto* meta, a_bool fline) {
 	for (a_insn* p = begin; p < end; ++p) {
 		a_insn i = *p;
 		a_u32 op = bc_load_op(i);
-		assume(op < BC__MAX, "bad opcode.");
 		a_u32 n = cast(a_u32, p - meta->_code);
 		if (fline) {
 			dump_line(meta, &line_itr, n);
@@ -157,7 +156,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			}
 			case BC_GETS:
 			case BC_CGETS:
-			case BC_SETK: {
+			case BC_SETS: {
 				a_u32 c = bc_load_c(i);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), c);
 				dump_const(meta->_consts[c]);
@@ -165,7 +164,8 @@ static void dump_code(GProto* meta, a_bool fline) {
 				break;
 			}
 			case BC_GETSX:
-			case BC_CGETSX: {
+			case BC_CGETSX:
+			case BC_SETSX: {
 				a_u32 ex = bc_load_ax(*p++);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), ex);
 				dump_const(meta->_consts[ex]);

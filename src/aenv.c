@@ -66,19 +66,36 @@ static a_bool route_init(a_henv env, GRoute* self) {
 }
 
 static void route_destroy(Global* g, GRoute* self) {
+	a_henv env = &route_main(g)->_route._body;
 	ai_stk_deinit(g, &self->_stack);
-	ai_cap_close(g->_active, &self->_frame->_caps, null);
+	for (Frame* frame = self->_frame; frame != null; frame = frame->_prev) {
+		RcCap* caps = frame->_caps;
+		RcCap* cap;
+		while ((cap = caps) != null) {
+			ai_cap_hard_close(env, cap);
+		}
+	}
 }
 
 static void route_mark_stack(Global* g, GRoute* self) {
 	Stack* stack = &self->_stack;
 	Value* from = stack->_base;
-	Value* const to = stack->_top;
+	Value* const to =
+			/* Mark object conservative in increasing GC: assume all object in the last frame will be freed. */
+			g->_gcstep == GCSTEP_PROPAGATE_ATOMIC ?
+			stack->_top :
+			stk2val(self, self->_frame->_stack_bot);
 	for (Value const* v = from; v < to; ++v) {
 		ai_gc_trace_mark_val(g, *v);
 	}
+	if (g->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
+		v_set_nil_ranged(stack->_top, stack->_limit); /* Clear no-marked stack slice. */
+	}
+	else if (!(g->_flags & GLOBAL_FLAG_EMERGENCYGC)) {
+		ai_stk_shrink(self);
+	}
 #if ALO_STACK_INNER
-	ai_gc_trace_work(g, sizeof(Value) * (stack->_limit - from + RESERVED_STACK_SIZE));
+	ai_gc_trace_work(g, stack->_alloc_size);
 #endif
 }
 
@@ -89,9 +106,7 @@ static void route_mark(Global* g, GRoute* self) {
 	}
 	ai_gc_trace_work(g, sizeof(GRoute));
 
-	if (route_is_active(self)) {
-		join_trace(&g->_tr_regray, self);
-	}
+	join_trace(&g->_tr_regray, self);
 }
 
 static void route_drop(Global* g, GRoute* self) {
@@ -103,7 +118,7 @@ static void route_drop(Global* g, GRoute* self) {
 }
 
 static VTable const route_vtable = {
-	._tid = T_USER_TEQ,
+	._val_mask = V_MASKED_TAG(T_USER_TEQ),
 	._api_tag = ALO_TROUTE,
 	._flags = VTABLE_FLAG_NONE,
 	._name = "route",
@@ -157,7 +172,6 @@ static void global_init(a_henv env, unused void* ctx) {
 	ai_gc_register_object(env, gtable);
 }
 
-__attribute__((__pure__))
 static a_usize sizeof_MRoute() {
 	return sizeof(MRoute) + STRX_RESERVE_SPACE;
 }
@@ -216,6 +230,8 @@ void alo_destroy(a_henv env) {
 		/* Swap user stack to ensure stack is keeping. */
 		ai_ctx_yield(env2route(env), &mr->_route, ALO_SEXIT);
 	}
+
+	env->_status = ALO_SEXIT; /* Mark status to exit. */
 
 	/* Clean resources. */
 	ai_gc_clean(g);

@@ -21,7 +21,7 @@ typedef struct {
 } IStrCache;
 
 typedef void (*a_fp_gexecpt)(a_henv env, void* ctx, a_msg msg);
-typedef void (*a_fp_gsplash)(Global* g, void* ctx);
+typedef void (*a_fp_gmark)(Global* g, void* ctx);
 
 struct Global {
 	Alloc _af;
@@ -39,13 +39,14 @@ struct Global {
 	a_gclist _gc_closable;
 	a_gclist _gc_toclose;
 	a_gcnext* _gc_sweep;
-	GStr* _nomem_error;
+	RcCap* _cap_cache;
 	Value _global;
 	a_fp_gexecpt _gexecpt;
-	a_fp_gsplash _gsplash;
+	a_fp_gmark _gmark;
 	void* _gprotect_ctx;
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
+	GStr* _nomem_error;
 	ModCache _mod_cache;
 	IStrCache _istr_cache;
 	a_hash _seed;
@@ -60,17 +61,17 @@ struct Global {
 
 #define ALO_HMSWAP 0x80
 
-always_inline void ai_env_gprotect(a_henv env, a_fp_gsplash splash, a_fp_gexecpt except, void* ctx) {
-	assume(splash != null || except != null);
+always_inline void ai_env_gprotect(a_henv env, a_fp_gmark mark, a_fp_gexecpt except, void* ctx) {
+	assume(mark != null || except != null);
 	Global* g = G(env);
-	g->_gsplash = splash;
+	g->_gmark = mark;
 	g->_gexecpt = except;
 	g->_gprotect_ctx = ctx;
 }
 
 always_inline void ai_env_gprotect_clear(a_henv env) {
 	Global* g = G(env);
-	g->_gsplash = null;
+	g->_gmark = null;
 	g->_gexecpt = null;
 	g->_gprotect_ctx = null;
 }

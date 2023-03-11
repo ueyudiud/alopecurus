@@ -11,7 +11,8 @@ typedef struct Stack Stack;
 
 intern a_bool ai_stk_init(a_henv env, Stack* stack);
 intern a_isize ai_stk_grow(a_henv env, Value* top);
-intern a_isize ai_stk_check(a_henv env, Value* top);
+intern void ai_stk_shrink(a_henv env);
+intern a_none ai_stk_overflow(a_henv env, a_bool again);
 intern void ai_stk_deinit(Global* g, Stack* stack);
 
 /* Reserve stack size for VM use. */
@@ -20,32 +21,37 @@ intern void ai_stk_deinit(Global* g, Stack* stack);
 #define OVERFLOW_STACK_SIZE 128
 
 #ifndef ALOI_INIT_STACKSIZE
-# define ALOI_INIT_STACKSIZE usizec(256)
+# define ALOI_INIT_STACKSIZE usizec(500)
 #endif
 
-#ifndef ALOI_INIT_FRAME_STACKSIZE
-# define ALOI_INIT_FRAME_STACKSIZE usizec(16)
+#ifndef ALOI_INIT_CFRAME_STACKSIZE
+# define ALOI_INIT_CFRAME_STACKSIZE usizec(16)
 #endif
 
 #ifndef ALOI_MAX_STACKSIZE
 # define ALOI_MAX_STACKSIZE usizec(100000)
 #endif
 
-#define GROW_STACK_FLAG_OF1 1
-#define GROW_STACK_FLAG_OF2 2
-
-#define INIT_STACK_SIZE ALOI_INIT_STACKSIZE
-#define INIT_STACK_SIZE_WITH_RESERVED (INIT_STACK_SIZE + RESERVED_STACK_SIZE)
-#define MAX_STACK_SIZE ALOI_MAX_STACKSIZE
-#define MAX_OVERFLOWED_STACK_SIZE (MAX_STACK_SIZE + OVERFLOW_STACK_SIZE)
-#define MAX_STACK_SIZE_WITH_RESERVED (MAX_STACK_SIZE + RESERVED_STACK_SIZE)
-
 struct Stack {
 	Value* _base;
 	Value* _top;
 	Value* _limit;
-	a_usize _alloc_size;
+	a_usize _alloc_size; /* The actual allocate size.*/
 };
+
+#define GROW_STACK_FLAG_OF1 1
+#define GROW_STACK_FLAG_OF2 2
+
+always_inline a_isize ai_stk_check(a_henv env, Stack* stack, Value* top) {
+	if (top > stack->_limit) {
+		a_isize diff = ai_stk_grow(env, top);
+		if (diff & (GROW_STACK_FLAG_OF1 | GROW_STACK_FLAG_OF2)) {
+			ai_stk_overflow(env, (diff & GROW_STACK_FLAG_OF2) != 0);
+		}
+		return diff;
+	}
+	return 0;
+}
 
 #if ALO_STACK_RELOC
 typedef a_isize StkPtr;

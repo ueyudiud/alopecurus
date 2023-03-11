@@ -76,11 +76,15 @@ static void tuple_drop(Global* g, GTuple* self) {
     ai_mem_dealloc(g, self, tuple_size(self->_len));
 }
 
-static Value tuple_get(a_henv env, GTuple* self, Value key) {
+Value ai_tuple_get(a_henv env, GTuple* self, Value key) {
 	if (unlikely(!v_is_int(key))) {
-		ai_err_raisef(env, ALO_EINVAL, "bad index for tuple.");
+		ai_err_bad_index(env, "tuple", v_typename(key));
 	}
-	Value const* value = ai_tuple_refi(env, self, v_as_int(key));
+	return ai_tuple_geti(env, self, v_as_int(key));
+}
+
+Value ai_tuple_geti(a_henv env, GTuple* self, a_int key) {
+	Value const* value = ai_tuple_refi(env, self, key);
 	if (unlikely(value == null)) {
 		ai_err_raisef(env, ALO_EINVAL, "index out of bound.");
 	}
@@ -88,14 +92,13 @@ static Value tuple_get(a_henv env, GTuple* self, Value key) {
 }
 
 static VTable const tuple_vtable = {
-	._tid = T_TUPLE,
+	._val_mask = V_MASKED_TAG(T_TUPLE),
 	._api_tag = ALO_TTUPLE,
 	._repr_id = REPR_TUPLE,
-	._flags = VTABLE_FLAG_NONE,
+	._flags = VTABLE_FLAG_PLAIN_LEN | VTABLE_FLAG_READONLY,
 	._name = "tuple",
 	._mark = fpcast(a_fp_mark, tuple_mark),
 	._drop = fpcast(a_fp_drop, tuple_drop),
-	._get = fpcast(a_fp_get, tuple_get),
 	._hash = fpcast(a_fp_hash, ai_tuple_hash),
 	._equals = fpcast(a_fp_equals, tuple_equals)
 };

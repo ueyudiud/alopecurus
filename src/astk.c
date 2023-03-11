@@ -16,42 +16,42 @@
 
 #include "astk.h"
 
-#define GROW_STACK_SIZE (4096 / sizeof(Value))
-
 #if ALO_STACK_OUTER
-
-static a_usize l_to_page_size(a_usize stack_size) {
-	return pad_to(sizeof(Value) * stack_size, PAGE_SIZE);
-}
-
+# define STACK_SIZE_GRANULARITY PAGE_SIZE
+#else
+# define STACK_SIZE_GRANULARITY usizec(1024)
 #endif
+
+enum {
+	INIT_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_INIT_STACKSIZE + RESERVED_STACK_SIZE), STACK_SIZE_GRANULARITY),
+	MAX_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + RESERVED_STACK_SIZE), STACK_SIZE_GRANULARITY),
+	MAX_OVERFLOWED_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + OVERFLOW_STACK_SIZE + RESERVED_STACK_SIZE), STACK_SIZE_GRANULARITY)
+};
 
 a_bool ai_stk_init(a_henv env, Stack* stack) {
 	Value* base;
-	a_usize size;
+	a_usize alloc_size = INIT_STACK_SIZE;
 
 #if ALO_STACK_INNER
-	base = ai_mem_vnnew(env, Value, INIT_STACK_SIZE_WITH_RESERVED);
+	base = ai_mem_nalloc(env, alloc_size);
 	if (unlikely(base == null)) return true;
-	size = INIT_STACK_SIZE_WITH_RESERVED;
 #else
 	quiet(env);
-	base = ai_mem_nreserve(null, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));
+	a_usize limit_page_size = MAX_OVERFLOWED_STACK_SIZE;
+	base = ai_mem_nreserve(null, limit_page_size);
 	if (unlikely(base == null)) return true;
-	a_usize init_page_size = l_to_page_size(INIT_STACK_SIZE_WITH_RESERVED);
-	void* result = ai_mem_ncommit(base, init_page_size, CTX_VA_RW);
+	void* result = ai_mem_ncommit(base, alloc_size, CTX_VALLOC_RW);
 	if (unlikely(result == null)) {
-		ai_mem_nrelease(base, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));
+		ai_mem_nrelease(base, limit_page_size);
 		return true;
 	}
-	size = init_page_size;
 #endif
 
 	*stack = new(Stack) {
 		._base = base,
-		._limit = base + INIT_STACK_SIZE,
+		._limit = ptr_disp(Value, base, INIT_STACK_SIZE) - RESERVED_STACK_SIZE,
 		._top = base,
-		._alloc_size = size
+		._alloc_size = alloc_size
 	};
 
 # if ALO_STRICT_STACK_CHECK
@@ -64,11 +64,14 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 #if ALO_STACK_RELOC
 static void stack_reloc(a_henv env, a_isize diff) {
 	Stack* stack = &env->_stack;
-	stack->_bot = ptr_disp(Value, stack->_bot, diff);
 	stack->_top = ptr_disp(Value, stack->_top, diff);
 
-	for (RcCap* cap = env->_frame->_caps; cap != null; cap = cap->_cache_next) {
-		cap->_ptr = ptr_disp(Value, cap->_ptr, diff);
+	for (Frame* frame = env->_frame; frame != null; frame = frame->_prev) {
+		frame->_stack_bot = ptr_disp(Value, frame->_stack_bot, diff);
+
+		for (RcCap* cap = frame->_caps; cap != null; cap = cap->_next) {
+			cap->_ptr = ptr_disp(Value, cap->_ptr, diff);
+		}
 	}
 }
 #endif
@@ -77,19 +80,19 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	a_isize diff;
 
 #if ALO_STACK_INNER
-	a_usize size_old = stack->_alloc_size / sizeof(Value);
+	a_usize size_old = stack->_alloc_size;
 	Value* stack_old = stack->_base;
 	Value* stack_new;
 #if ALO_STRICT_MEMORY_CHECK
-	stack_new = ai_mem_vnew(env, Value, size_new);
-	memcpy(stack_new, stack_old, sizeof(Value) * (stack->_top - stack->_base));
-	ai_mem_vndel(env, stack_old, size_old);
+	stack_new = ai_mem_alloc(env, size_new);
+	memcpy(stack_new, stack_old, ptr_diff(stack->_top, stack->_base));
+	ai_mem_dealloc(G(env), stack_old, size_old);
 #else
-	stack_new = ai_mem_vgrow(env, stack->_base, size_old, size_new);
+	stack_new = ai_mem_realloc(env, stack_old, size_old, size_new);
 #endif
 	diff = ptr_diff(stack_new, stack_old);
 	stack->_base = stack_new;
-	stack->_alloc_size = size_new * sizeof(Value);
+	stack->_alloc_size = size_new;
 
 	/* Relocate stack if base address is changed. */
 	if (diff != 0) {
@@ -99,15 +102,12 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	return diff;
 #else
 	if (likely(stack->_alloc_size < sizeof(Value) * size_new)) {
-		a_usize page_size_old = stack->_alloc_size;
-		a_usize page_size_new = l_to_page_size(size_new);
-		assume(page_size_old % PAGE_SIZE == 0, "bad page size.");
-		assume(page_size_new > page_size_old, "grow nothing.");
-		void* addr = stack->_base;
-		void* result = ai_mem_ncommit(addr + page_size_old, page_size_new - page_size_old, CTX_VA_RW);
+		a_usize size_old = stack->_alloc_size;
+		assume(size_new > size_old, "grow nothing.");
+		void* result = ai_mem_ncommit(stack->_base + size_old, size_new - size_old, CTX_VALLOC_RW);
 		if (unlikely(result == null))
 			ai_mem_nomem(env);
-		stack->_alloc_size = page_size_new;
+		stack->_alloc_size = size_new;
 	}
 	diff = 0;
 #endif
@@ -117,7 +117,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	return diff;
 }
 
-static a_none stack_overflow(a_henv env, a_bool again) {
+a_none ai_stk_overflow(a_henv env, a_bool again) {
 	if (again) {
 		GStr* err = ai_str_newl(env, "stack overflow");
 		v_set_obj(env, &env->_error, err);
@@ -130,30 +130,32 @@ static a_none stack_overflow(a_henv env, a_bool again) {
 
 a_isize ai_stk_grow(a_henv env, Value* top) {
 	Stack* stack = &env->_stack;
-	a_usize current_size = stack->_limit - stack->_base;
-	a_usize expect_size = top - stack->_base;
+	a_usize current_size = ptr_diff(stack->_limit, stack->_base);
+	a_usize expect_size = ptr_diff(top, stack->_base);
 	assume(expect_size > current_size);
 	if (unlikely(expect_size > MAX_STACK_SIZE)) {
 		if (current_size == MAX_OVERFLOWED_STACK_SIZE)
 			return GROW_STACK_FLAG_OF2;
-		stack_grow(env, stack, MAX_OVERFLOWED_STACK_SIZE + RESERVED_STACK_SIZE);
+		stack_grow(env, stack, MAX_OVERFLOWED_STACK_SIZE);
 		return GROW_STACK_FLAG_OF1;
 	}
-	current_size = max(current_size + GROW_STACK_SIZE, expect_size);
-	current_size = min(current_size, MAX_STACK_SIZE);
+	a_usize size_new = pad_to(expect_size, STACK_SIZE_GRANULARITY);
+	size_new = max(size_new, current_size + STACK_SIZE_GRANULARITY);
+	size_new = min(size_new, MAX_STACK_SIZE);
 
-	return stack_grow(env, stack, current_size + RESERVED_STACK_SIZE);
+	return stack_grow(env, stack, size_new);
 }
 
-a_isize ai_stk_check(a_henv env, Value* top) {
-	if (top > env->_stack._limit) {
-		a_isize diff = ai_stk_grow(env, top);
-		if (diff & (GROW_STACK_FLAG_OF1 | GROW_STACK_FLAG_OF2)) {
-			stack_overflow(env, (diff & GROW_STACK_FLAG_OF2) != 0);
-		}
-		return diff;
+void ai_stk_shrink(a_henv env) {
+	Stack* stack = &env->_stack;
+	a_usize current_size = stack->_alloc_size;
+	a_usize used_size = stack->_top - stack->_base;
+	if (unlikely(used_size <= current_size / 4 && current_size > STACK_SIZE_GRANULARITY)) {
+		a_usize size_new = current_size / 2;
+		a_usize size_old = stack->_alloc_size;
+		assume(size_new < size_old, "shrink nothing.");
+		ai_mem_ndealloc(G(env), stack->_base + size_new, size_old - size_new);
 	}
-	return 0;
 }
 
 void ai_stk_deinit(Global* g, Stack* stack) {
@@ -161,6 +163,6 @@ void ai_stk_deinit(Global* g, Stack* stack) {
 	ai_mem_dealloc(g, stack->_base, stack->_alloc_size);
 #else
 	quiet(g);
-	ai_mem_ndecommit(stack->_base, l_to_page_size(MAX_STACK_SIZE_WITH_RESERVED));
+	ai_mem_ndecommit(stack->_base, sizeof(Value) * MAX_OVERFLOWED_STACK_SIZE);
 #endif
 }

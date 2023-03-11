@@ -58,7 +58,7 @@ static a_u32 l_const_index(Parser* par, Value val) {
 		 * Since all literals which have the same format provided by compiler should
 		 * have same binary data, use identity equality for comparison.
 		 */
-		if (v_trivial_equals(consts->_arr[i], val)) {
+		if (v_trivial_equals_unchecked(consts->_arr[i], val)) {
 			return i;
 		}
 	}
@@ -96,6 +96,7 @@ static void l_emit_line(Parser* par, a_line line) {
 }
 
 static a_u32 l_emit_direct(Parser* par, a_insn insn, a_u32 line) {
+	insn_check(insn);
 	l_emit_line(par, line);
 	return l_bput(par, par->_insns, insn, 4096);
 }
@@ -176,7 +177,7 @@ static void l_emit_fast(Parser* par, a_insn i, a_line line) {
 
 static void l_flush_close(Parser* par) {
 	if (par->_fnscope->_fclose) {
-		l_emit_direct(par, bc_make_iabc(BC_CLOSE, par->_scope->_top_ntr, DMB, DMB), par->_fnscope->_close_line);
+		l_emit_direct(par, bc_make_ia(BC_CLOSE, par->_scope->_top_ntr), par->_fnscope->_close_line);
 		l_clear_close(par);
 	}
 }
@@ -240,7 +241,7 @@ static a_u32 l_emit_mov(Parser* par, a_u32 dst, a_u32 src, a_line line) {
 
 static a_u32 l_emit_kz(Parser* par, a_u32 dst, a_bool val, a_line line) {
 	assume(val == false || val == true);
-	return l_emit(par, bc_make_iab(BC_KF | val, dst, DMB), line);
+	return l_emit(par, bc_make_ia(BC_KF | val, dst), line);
 }
 
 static a_u32 l_emit_k(Parser* par, a_u32 dst, Value val, a_line line) {
@@ -257,19 +258,19 @@ static void l_emit_ret(Parser* par, a_u32 base, a_u32 len, a_line line) {
 	a_insn i;
 	switch (len) {
 		case 0: {
-			i = bc_make_iabc(BC_RET0, DMB, DMB, DMB);
+			i = bc_make_i(BC_RET0);
 			break;
 		}
 		case 1: {
-			i = bc_make_iabc(BC_RET1, DMB, base, DMB);
+			i = bc_make_ia(BC_RET1, base);
 			break;
 		}
 		case VARARG: {
-			i = bc_make_iabc(BC_RETV, DMB, base, DMB);
+			i = bc_make_ia(BC_RETV, base);
 			break;
 		}
 		default: {
-			i = bc_make_iabc(BC_RET, DMB, base, len);
+			i = bc_make_iab(BC_RET, base, len);
 			break;
 		}
 	}
@@ -297,7 +298,7 @@ static a_u32 l_emit_kn(Parser* par, a_u32 dst, a_u32 len, a_line line) {
 			}
 		}
 	}
-	return l_emit(par, bc_make_iabc(BC_KN, dst, DMB, len), line);
+	return l_emit(par, bc_make_iac(BC_KN, dst, len), line);
 }
 
 static a_u32 l_emit_branch(Parser* par, a_insn i, a_u32 label, a_u32 line) {
@@ -306,8 +307,20 @@ static a_u32 l_emit_branch(Parser* par, a_insn i, a_u32 label, a_u32 line) {
 	return label2 != NO_LABEL ? l_emit_direct(par, bc_make_isax(BC_J, diff), line) : NO_LABEL;
 }
 
-static a_u32 l_emit_test(Parser* par, a_u32 op, a_u32 reg, a_u32 label, a_u32 line) {
-	return l_emit_branch(par, bc_make_iabc(op, DMB, reg, DMB), label, line);
+static a_u32 l_emit_test(Parser* par, a_u32 op, a_u32 a, a_u32 label, a_u32 line) {
+	return l_emit_branch(par, bc_make_ia(op, a), label, line);
+}
+
+static a_u32 l_emit_refx(Parser* par, a_enum op, a_u32 a, a_u32 b, a_u32 c, a_u32 line) {
+	assume(ai_bc_formats[op] == INSN_iABC && ai_bc_formats[op + 1] == INSN_iABEx, "bad opcode.");
+	if (likely(c <= BC_MAX_C)) {
+		return l_emit(par, bc_make_iabc(op, a, b, c), line);
+	}
+	else {
+		a_u32 label = l_emit(par, bc_make_iab(op, a, b), line);
+		l_emit_fast(par, bc_make_iax(BC_EX, c), line);
+		return label;
+	}
 }
 
 static void l_merge_branch(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) {
@@ -461,6 +474,28 @@ static void l_check_free_used_stack(Scope* scope) {
 	if (unlikely(scope->_num_fur > 0) && scope->_bot_fur + scope->_num_fur == scope->_top_reg) {
 		scope->_top_reg = scope->_bot_fur;
 		scope->_num_fur = 0;
+	}
+}
+
+/**
+ ** Reallocate the register which is already freed, used for phi operation.
+ *@param par the parser.
+ *@param reg the register to allocate.
+ */
+static void l_realloc_stack(Parser* par, a_u32 reg) {
+	Scope* scope = par->_scope;
+	assume(l_is_in_tmp(par, reg), "cannot reallocate a using register twice.");
+	assume(!par->_fnscope->_fvarg, "cannot allocate register when stack is not rebalanced.");
+	if (likely(scope->_top_reg == reg)) {
+		scope->_top_reg += 1;
+		assume(scope->_top_reg <= par->_fnscope->_max_reg);
+	}
+	else {
+		if (reg == scope->_bot_fur) {
+			scope->_bot_fur += 1;
+		}
+		scope->_num_fur -= 1;
+		l_check_free_used_stack(scope);
 	}
 }
 
@@ -753,12 +788,12 @@ static void l_instantiate_branch(Parser* par, InoutExpr e, a_u32 reg) {
 	}
 
 	/* Swap last instruction. */
-	par->_code[par->_head_label - 1] = bc_make_iab(e->_kind == EXPR_TRY_TRUE ? BC_BKF : BC_BKT, reg, DMB);
-	l_emit(par, bc_make_iab(e->_kind == EXPR_TRY_TRUE ? BC_KT : BC_KF, reg, DMB), e->_line);
+	par->_code[par->_head_label - 1] = bc_make_ia(e->_kind == EXPR_TRY_TRUE ? BC_BKF : BC_BKT, reg);
+	l_emit(par, bc_make_ia(e->_kind == EXPR_TRY_TRUE ? BC_KT : BC_KF, reg), e->_line);
 }
 
 /**
- ** Move expression to the pack, then drop the expression.
+ ** Move expression to the pack, then drop_object the expression.
  *@param par the parser.
  *@param e the expression to move
  *@return the result pack moved from expression.
@@ -1247,7 +1282,7 @@ static void l_merge_optR(Parser* par, a_u32 label, a_u32 reg, a_line line) {
 
 void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line line) {
 	if (e2->_kind == EXPR_NEVER) {
-		assume(label == NO_LABEL, "unreachable code provide value.");
+		l_mark_label(par, label, line);
 		return;
 	}
 	switch (e1->_kind) {
@@ -1265,6 +1300,7 @@ void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line lin
 			l_merge_optR(par, e1->_residual, reg, line);
 
 			l_mark_label(par, label, line);
+			l_realloc_stack(par, reg);
 			expr_tmp(e1, reg, line);
 			break;
 		}
@@ -1277,12 +1313,14 @@ void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line lin
 			l_merge_optR(par, e1->_residual, reg, line);
 
 			l_mark_label(par, label, line);
+			l_realloc_stack(par, reg);
 			expr_tmp(e1, reg, line);
 			break;
 		}
 		case EXPR_TMP: {
-			assume(l_is_in_tmp(par, e1->_reg));
-			l_fixR(par, e2, e1->_reg);
+			a_u32 reg = e1->_reg;
+			l_realloc_stack(par, reg);
+			l_fixR(par, e2, reg);
 			l_mark_label(par, label, line);
 			break;
 		}
@@ -1591,7 +1629,7 @@ void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 		expr_dyn(e, l_emit(par, bc_make_iabc(BC_CAT, DYN, ce->_head._base, ce->_head._len + 1), line));
 		l_drop_pack(par, &ce->_head);
 	}
-	/* Check and drop string buffer. */
+	/* Check and drop_object string buffer. */
 	if (par->_qbq == &ce->_buf) {
 		l_bdel(par, ce->_buf);
 		par->_qbq = ce->_buf._last;
@@ -1780,15 +1818,7 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 		}
 		case EXPR_REFK_ALL: {
 			l_anyR(par, e2);
-
-			a_u32 k = e1->_key;
-			if (likely(k <= BC_MAX_C)) {
-				l_emit(par, bc_make_iabc(BC_SETK, e2->_reg, e1->_base, k), line);
-			}
-			else {
-				l_emit(par, bc_make_iabc(BC_SETKX, e2->_reg, e1->_base, DMB), line);
-				l_emit_fast(par, bc_make_iax(BC_EX, k), line);
-			}
+			l_emit_refx(par, BC_SETS, e2->_reg, e1->_base, e1->_key, line);
 
 			l_drop(par, e2);
 			break;
@@ -1800,14 +1830,7 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 			l_emit(par, bc_make_iab(BC_LDC, reg, e1->_base), line);
 			expr_tmp(e1, reg, line);
 
-			a_u32 k = e1->_key;
-			if (likely(k <= BC_MAX_C)) {
-				l_emit(par, bc_make_iabc(BC_SETK, e2->_reg, reg, k), line);
-			}
-			else {
-				l_emit(par, bc_make_iabc(BC_SETKX, e2->_reg, reg, DMB), line);
-				l_emit_fast(par, bc_make_iax(BC_EX, k), line);
-			}
+			l_emit_refx(par, BC_SETS, e2->_reg, reg, e1->_key, line);
 			l_drop(par, e2);
 			break;
 		}
@@ -1890,7 +1913,7 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e) {
 			if (s->_ftest) {
 				a_u32 reg = l_alloc_stack(par, line);
 				l_emit(par, bc_make_iab(BC_LEN, reg, e->_reg), line);
-				s->_label_fail = l_emit_branch(par, bc_make_iabc(BC_BNEI, DMB, reg, num), s->_label_fail, line);
+				s->_label_fail = l_emit_branch(par, bc_make_iasbx(BC_BNEI, reg, num), s->_label_fail, line);
 				l_free_stack(par, reg);
 			}
 			l_drop(par, e);
@@ -2034,9 +2057,7 @@ void ai_code_prologue(Parser* par, FnScope* fnscope, a_line line) {
 GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 	FnScope* scope = par->_fnscope;
 
-	if (l_should_eval(par)) {
-		l_emit_ret(par, DMB, 0, line);
-	}
+	l_emit_ret(par, DMB, 0, line);
 
 	scope_pop(par, line);
 
@@ -2131,7 +2152,7 @@ static void parser_close(Parser* par) {
 	ai_env_gprotect_clear(par->_env);
 }
 
-static void parser_splash(Global* g, void* ctx) {
+static void parser_mark(Global* g, void* ctx) {
 	Parser* par = ctx;
 	run {
 		LexStrs* strs = &par->_lex._strs;
@@ -2161,7 +2182,7 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 }
 
 void ai_code_open(Parser* par) {
-	ai_env_gprotect(par->_env, parser_splash, parser_except, par);
+	ai_env_gprotect(par->_env, parser_mark, parser_except, par);
 
 	/* Add '_ENV' name. */
 	l_push_symbol(par, new(Sym) {
@@ -2280,13 +2301,7 @@ static void l_dynR(Parser* par, InoutExpr e) {
 		case EXPR_REFK(false): {
 			a_u32 k = e->_key;
 			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
-				if (likely(k <= BC_MAX_C)) {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETS, DYN, e->_base, k), e->_line));
-				}
-				else {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_GETSX, DYN, e->_base, DMB), e->_line));
-					l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
-				}
+				expr_dyn(e, l_emit_refx(par, BC_GETS, DYN, e->_base, k, e->_line));
 			}
 			else {
 				a_u32 reg = l_alloc_stack(par, e->_line);
@@ -2299,13 +2314,7 @@ static void l_dynR(Parser* par, InoutExpr e) {
 		case EXPR_REFCK: {
 			a_u32 k = e->_key;
 			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
-				if (likely(k <= BC_MAX_C)) {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETS, DYN, e->_base, k), e->_line));
-				}
-				else {
-					expr_dyn(e, l_emit(par, bc_make_iabc(BC_CGETSX, DYN, e->_base, DMB), e->_line));
-					l_emit_fast(par, bc_make_iax(BC_EX, k), e->_line);
-				}
+				expr_dyn(e, l_emit_refx(par, BC_CGETS, DYN, e->_base, k, e->_line));
 			}
 			else {
 				a_u32 reg = l_succ_alloc_stack(par, 2, e->_line);

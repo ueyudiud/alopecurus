@@ -65,7 +65,7 @@ always_inline a_bool g_has_other_color(Global* g, a_hobj v) {
     return (v->_tnext & other_color(g)) != 0;
 }
 
-always_inline a_bool g_is_white_with_assume_alive(Global* g, a_hobj v) {
+always_inline a_bool g_has_white_color_within_assume_alive(Global* g, a_hobj v) {
 	assume(g_has_white_color(g, v));
 	return (v->_tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
@@ -81,8 +81,8 @@ always_inline void g_set_gray(a_hobj v) {
 always_inline void v_check_alive(a_henv env, Value v) {
 	if (v_is_obj(v)) {
 		GObj* obj = v_as_obj(v);
-		a_u32 tag = v_get_tag(v);
-		assume((tag == obj->_vtable->_tid) && !g_has_other_color(G(env), obj));
+		a_usize raw_tag = v._ ^ obj->_vtable->_val_mask;
+		assume((raw_tag & ~V_PAYLOAD_MASK) == 0 && !g_has_other_color(G(env), obj));
 	}
 }
 
@@ -110,10 +110,19 @@ intern void ai_gc_clean(Global* g);
 
 #define ai_gc_register_object(env,obj) ai_gc_register_object_(env, gobj_cast(obj))
 #define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, gobj_cast(obj))
-#define ai_gc_trace_mark(g,obj) ai_gc_trace_mark_(g, gobj_cast(obj))
+
+always_inline void ai_gc_trace_mark(Global* g, a_hobj obj) {
+	if (g_has_white_color_within_assume_alive(g, obj) && obj->_vtable->_mark != null) {
+		ai_gc_trace_mark_(g, obj);
+	}
+}
+
+#define ai_gc_trace_mark(g,obj) ai_gc_trace_mark(g, gobj_cast(obj))
 
 always_inline void ai_gc_trace_mark_val(Global* g, Value v) {
-	if (v_is_obj(v)) ai_gc_trace_mark_(g, v_as_obj(v));
+	if (v_is_obj(v)) {
+		ai_gc_trace_mark_(g, v_as_obj(v));
+	}
 }
 
 #define ai_gc_should_run(g) unlikely((g)->_mem_debt >= 0)
@@ -139,7 +148,7 @@ always_inline a_bool ai_gc_is_sweeping(Global* g) {
 
 always_inline void ai_gc_barrier_forward(a_henv env, a_hobj obj1, a_hobj obj2) {
 	Global* g = G(env);
-	if (g_has_black_color(obj1) && g_is_white_with_assume_alive(g, obj2)) {
+	if (g_has_black_color(obj1) && g_has_white_color_within_assume_alive(g, obj2)) {
 		if (ai_gc_is_tracing(g)) {
 			join_trace(&g->_tr_gray, obj2);
 		}
@@ -162,7 +171,7 @@ always_inline void ai_gc_barrier_forward_val(a_henv env, GObj* obj, Value val) {
 
 always_inline void ai_gc_barrier_backward(a_henv env, a_hobj obj1, a_hobj obj2) {
 	Global* g = G(env);
-	if (g_has_black_color(obj1) && g_is_white_with_assume_alive(g, obj2)) {
+	if (g_has_black_color(obj1) && g_has_white_color_within_assume_alive(g, obj2)) {
 		join_trace(&g->_tr_regray, obj1);
 	}
 }

@@ -14,16 +14,16 @@
 
 #define GCUNIT 256
 
-#ifndef ALOI_MINMEMWORK
-# define ALOI_MINMEMWORK usizec(4096)
+#ifndef ALOI_MIN_MEM_WORK
+# define ALOI_MIN_MEM_WORK usizec(4096)
 #endif
 
-#ifndef ALOI_SWEEPCOST
-# define ALOI_SWEEPCOST usizec(64)
+#ifndef ALOI_SWEEP_COST
+# define ALOI_SWEEP_COST usizec(64)
 #endif
 
-#ifndef ALOI_CLOSECOST
-# define ALOI_CLOSECOST usizec(256)
+#ifndef ALOI_CLOSE_COST
+# define ALOI_CLOSE_COST usizec(256)
 #endif
 
 always_inline void join_gc(a_gclist* list, a_hobj elem) {
@@ -44,6 +44,7 @@ always_inline void flip_color(Global* g) {
 }
 
 void ai_gc_register_object_(a_henv env, a_hobj obj) {
+	assume(obj->_vtable->_drop != null, "cannot register permanent object.");
 	Global* g = G(env);
 	join_gc(&g->_gc_normal, obj);
 	obj->_tnext = cast(a_trmark, g->_white_color);
@@ -63,34 +64,33 @@ void ai_gc_register_objects(a_henv env, RefQueue* rq) {
 
 void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 	Global* g = G(env);
-	assume(g->_gc_normal == obj);
+	assume(g->_gc_normal == obj, "object not registered.");
 	strip_gc(&g->_gc_normal);
 	join_gc(&g->_gc_fixed, obj);
 }
 
-always_inline void really_mark_object(Global* g, a_hobj obj) {
+static void really_mark_object(Global* g, a_hobj obj) {
 	a_fp_mark mark_fp = obj->_vtable->_mark;
-	assume(mark_fp != null);
+	assume(mark_fp != null, "no mark");
 	(*mark_fp)(g, obj);
 }
 
 void ai_gc_trace_mark_(Global* g, a_hobj obj) {
-	if (g_has_white_color(g, obj) && obj->_vtable->_mark != null) {
-		if (obj->_vtable->_flags & VTABLE_FLAG_PLAIN_MARK) {
-			obj->_tnext = trmark_null; /* Mark object to gray before propagation. */
-			really_mark_object(g, obj);
-		}
-		else {
-			join_trace(&g->_tr_gray, obj);
-		}
+	assume(g_has_white_color(g, obj)); /* Checked in inline function. */
+	assume(obj->_vtable->_mark != null, "permanent object should always be gray.");
+	if (obj->_vtable->_flags & VTABLE_FLAG_PLAIN_MARK) {
+		obj->_tnext = trmark_null; /* Mark object to gray before propagation. */
+		really_mark_object(g, obj);
+	}
+	else {
+		join_trace(&g->_tr_gray, obj);
 	}
 }
 
-always_inline void delete_object(Global* g, a_hobj obj) {
+static void drop_object(Global* g, a_hobj obj) {
 	a_fp_drop drop_fp = obj->_vtable->_drop;
-	if (likely(drop_fp != null)) {
-		(*drop_fp)(g, obj);
-	}
+	assume(drop_fp != null);
+	(*drop_fp)(g, obj);
 }
 
 static void propagagte_once(Global* g, a_trmark* list) {
@@ -100,7 +100,7 @@ static void propagagte_once(Global* g, a_trmark* list) {
 static a_bool sweep_once(Global* g) {
 	GObj* obj = strip_gc(g->_gc_sweep);
 	if (g_has_other_color(g, obj)) {
-		delete_object(g, obj);
+		drop_object(g, obj);
 		return true;
 	}
 	else {
@@ -110,7 +110,7 @@ static a_bool sweep_once(Global* g) {
 }
 
 static void close_once(Global* g) {
-	GObj* obj = strip_gc(&g->_gc_closable);
+	GObj* obj = strip_gc(&g->_gc_toclose);
 	(*obj->_vtable->_close)(g->_active, obj);
 	join_gc(&g->_gc_normal, obj);
 }
@@ -131,7 +131,7 @@ static a_bool propagate_work(Global* g, a_trmark* list) {
 static a_bool sweep_work(Global* g) {
 	while (*g->_gc_sweep != null) {
 		if (sweep_once(g)) {
-			g->_mem_work -= ALOI_SWEEPCOST;
+			g->_mem_work -= ALOI_SWEEP_COST;
 			if (g->_mem_work < 0)
 				return false;
 		}
@@ -142,7 +142,7 @@ static a_bool sweep_work(Global* g) {
 static a_bool close_work(Global* g) {
 	while (g->_gc_toclose != null) {
 		close_once(g);
-		g->_mem_work -= ALOI_CLOSECOST;
+		g->_mem_work -= ALOI_CLOSE_COST;
 		if (g->_mem_work < 0) 
 			return false;
 	}
@@ -161,10 +161,10 @@ static void sweep_all(Global* g) {
 	}
 }
 
-static void delete_all(Global* g, GObj** list) {
+static void drop_all(Global* g, GObj** list) {
 	while (*list != null) {
 		GObj* obj = strip_gc(list);
-		delete_object(g, obj);
+		drop_object(g, obj);
 	}
 }
 
@@ -183,7 +183,7 @@ static void begin_propagate(Global* g) {
 	g->_tr_gray = trmark_null;
 	g->_tr_regray = trmark_null;
 	/* Mark nonvolatile root. */
-	join_trace(&g->_tr_gray, gobj_cast(ai_env_mainof(g)));
+	join_trace(&g->_tr_gray, ai_env_mainof(g));
 	if (v_is_obj(g->_global)) {
 		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
@@ -208,35 +208,43 @@ static a_bool begin_close(Global* g) {
 }
 
 static void propagate_atomic(Global* g) {
-	a_isize old_work = g->_mem_work;
 	g->_gcstep = GCSTEP_PROPAGATE_ATOMIC;
 	/* Mark volatile root. */
-	ai_gc_trace_mark_(g, gobj_cast(g->_active));
+	ai_gc_trace_mark(g, g->_active);
 	if (v_is_obj(g->_global)) {
 		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
 	ai_mod_cache_mark(g, &g->_mod_cache);
-	if (g->_gsplash != null) {
-		(*g->_gsplash)(g, g->_gprotect_ctx);
+	if (g->_gmark != null) {
+		(*g->_gmark)(g, g->_gprotect_ctx);
 	}
 	propagate_all(g, &g->_tr_gray);
 
-	g->_mem_estimate = ai_env_mem_total(g);
-	
+	a_isize old_work = g->_mem_work;
 	a_trmark list = g->_tr_regray;
 	g->_tr_regray = trmark_null;
 	propagate_all(g, &list);
 
-	g->_mem_work = 0;
 	propagate_all(g, &g->_tr_gray);
-	g->_mem_estimate += cast(a_usize, -g->_mem_work);
 
+	g->_mem_estimate = ai_env_mem_total(g);
 	flip_color(g);
 	g->_mem_work = old_work;
 }
 
+static void drop_cached_caps(Global* g) {
+	RcCap* cap = g->_cap_cache;
+	g->_cap_cache = null;
+	while (cap != null) {
+		RcCap* next = cap->_next;
+		ai_cap_drop(g, cap);
+		cap = next;
+	}
+}
+
 static void sweep_atomic(Global* g) {
 	g->_gcstep = GCSTEP_SWEEP_ATOMIC;
+	drop_cached_caps(g);
 }
 
 static a_bool run_incr_gc(Global* g) {
@@ -303,7 +311,7 @@ void ai_gc_set_debt(Global* g, a_isize debt) {
 static void compute_work(Global* g) {
 	a_usize2 work = mul_usize(cast(a_usize, g->_mem_work) + cast(a_usize, g->_mem_debt), g->_gcstepmul) / GCUNIT;
 	a_isize truncated_work = likely(work < ISIZE_MAX) ? cast(a_isize, work) : ISIZE_MAX;
-	g->_mem_work = max(truncated_work, cast(a_isize, ALOI_MINMEMWORK));
+	g->_mem_work = max(truncated_work, cast(a_isize, ALOI_MIN_MEM_WORK));
 }
 
 static void compute_step_debt(Global* g, a_isize work) {
@@ -343,15 +351,16 @@ void ai_gc_full_gc(a_henv env, a_bool emergency) {
 	Global* g = G(env);
 	a_u16 old_flags = g->_flags;
 	g->_flags |= GLOBAL_FLAG_FULLGC;
-	if (emergency) g->_flags |= GLOBAL_FLAG_PAUSE_CLOSE;
+	if (emergency) g->_flags |= GLOBAL_FLAG_EMERGENCYGC;
 	run_full_gc(g);
 	compute_pause_debt(g);
 	g->_flags = old_flags;
 }
 
 void ai_gc_clean(Global* g) {
-	delete_all(g, &g->_gc_closable);
-	delete_all(g, &g->_gc_toclose);
-	delete_all(g, &g->_gc_normal);
-	delete_all(g, &g->_gc_fixed);
+	drop_all(g, &g->_gc_closable);
+	drop_all(g, &g->_gc_toclose);
+	drop_all(g, &g->_gc_normal);
+	drop_all(g, &g->_gc_fixed);
+	drop_cached_caps(g);
 }

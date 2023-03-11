@@ -13,7 +13,7 @@
 
 #define GLOBAL_FLAG_INCRGC u16c(0x0001)
 #define GLOBAL_FLAG_FULLGC u16c(0x0002)
-#define GLOBAL_FLAG_PAUSE_CLOSE u16c(0x0004)
+#define GLOBAL_FLAG_EMERGENCYGC u16c(0x0004)
 #define GLOBAL_FLAG_DISABLE_GC u16c(0x0008)
 
 typedef void (*a_pfun)(a_henv, void*);
@@ -48,11 +48,11 @@ struct Frame {
 	a_henv _env;
 	Frame* _prev;
 	a_insn const* _pc;
-	StkPtr _stack_bot;
+	Value* _stack_bot;
 	RcCap* _caps;
 	RFlags _rflags;
-	/* In strict stack checking mode, the API will use frame bound to check index range. */
-	StkPtr _bound;
+	StkPtr _bound; /* In strict stack checking mode, the API will use frame bound to check index range. */
+	CapVal* _capval;
 };
 
 struct alo_Env {

@@ -48,6 +48,10 @@ struct IStr {
 
 #define ISTR_MAX_LEN 255
 
+always_inline a_bool g_is_istr(a_hobj v) {
+	return g_test(v, T_ISTR);
+}
+
 always_inline a_bool g_is_str(a_hobj v) {
 	return v->_vtable->_repr_id == REPR_STR;
 }

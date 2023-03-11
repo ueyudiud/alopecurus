@@ -268,10 +268,10 @@ static void str_tostr(a_henv env, GStr* self, GBuf* buf) {
 }
 
 static VTable const dstr_vtable = {
-	._tid = T_ISTR,
+	._val_mask = V_MASKED_TAG(T_ISTR),
 	._api_tag = ALO_TSTR,
 	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_FAST_LEN | VTABLE_FLAG_PLAIN_MARK | VTABLE_FLAG_OVERRIDE(TM_LEN),
+	._flags = VTABLE_FLAG_PLAIN_LEN | VTABLE_FLAG_PLAIN_MARK,
 	._name = "str",
 	._mark = null,
 	._drop = null,
@@ -279,10 +279,10 @@ static VTable const dstr_vtable = {
 };
 
 static VTable const istr_vtable = {
-	._tid = T_ISTR,
+	._val_mask = V_MASKED_TAG(T_ISTR),
 	._api_tag = ALO_TSTR,
 	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_FAST_LEN | VTABLE_FLAG_PLAIN_MARK | VTABLE_FLAG_OVERRIDE(TM_LEN),
+	._flags = VTABLE_FLAG_PLAIN_LEN | VTABLE_FLAG_PLAIN_MARK,
 	._name = "str",
 	._mark = fpcast(a_fp_mark, istr_mark),
 	._drop = istr_drop,
@@ -290,10 +290,10 @@ static VTable const istr_vtable = {
 };
 
 static VTable const hstr_vtable = {
-	._tid = T_HSTR,
+	._val_mask = V_MASKED_TAG(T_HSTR),
 	._api_tag = ALO_TSTR,
 	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_PLAIN_MARK | VTABLE_FLAG_OVERRIDE(TM_LEN),
+	._flags = VTABLE_FLAG_PLAIN_MARK,
 	._name = "str",
 	._mark = fpcast(a_fp_mark, hstr_mark),
 	._drop = fpcast(a_fp_drop, hstr_drop),

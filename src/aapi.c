@@ -203,21 +203,7 @@ static a_tag tag_of(Value v) {
 			return ALO_TINT;
 		case T_PTR:
 			return ALO_TPTR;
-		case T_ISTR:
-		case T_HSTR:
-			return ALO_TSTR;
-		case T_TUPLE:
-			return ALO_TTUPLE;
-		case T_LIST:
-			return ALO_TLIST;
-		case T_TABLE:
-			return ALO_TTABLE;
-		case T_FUNC:
-			return ALO_TFUNC;
-		case T_MOD:
-			return ALO_TMOD;
-		case T_USER_TEQ:
-		case T_USER_NEQ:
+		case T__MIN_OBJ ... T__MAX_OBJ:
 			return v_as_obj(v)->_vtable->_api_tag;
 		default:
 			return ALO_TFLOAT;
@@ -485,12 +471,9 @@ void alo_insert(a_henv env, a_isize id) {
 static void l_call(a_henv env, a_u32 narg, a_i32 nres) {
 	Value* base = env->_stack._top - narg - 1;
 
-	StkPtr sp = val2stk(env, base);
-	Value v = ai_vm_call(env, base, new(RFlags) {
+	ai_vm_call(env, base, new(RFlags) {
 		._count = nres < 0 ? RFLAG_COUNT_VARARG : nres
 	});
-	/* Move argument */
-	v_set(env, stk2val(env, sp), v);
 }
 
 void alo_call(a_henv env, a_usize narg, a_isize nres) {
@@ -607,28 +590,13 @@ a_htype alo_typeof(a_henv env, a_isize id) {
 	panic("not implemented.");
 }
 
-char const* const ai_obj_tag_name[] = {
-	[ALO_TNIL] = "nil",
-	[ALO_TBOOL] = "bool",
-	[ALO_TINT] = "int",
-	[ALO_TPTR] = "ptr",
-	[ALO_TFLOAT] = "float",
-	[ALO_TSTR] = "str",
-	[ALO_TTUPLE] = "tuple",
-	[ALO_TLIST] = "list",
-	[ALO_TTABLE] = "table",
-	[ALO_TFUNC] = "func",
-	[ALO_TMOD] = "mod",
-	[ALO_TUSER] = "user"
-};
-
 char const* alo_typename(unused a_henv env, a_htype type) {
 	a_usize type_addr = addr_of(type);
 	if (type_addr == 0) {
 		return "empty";
 	}
 	else if (type_addr - 1 < T__MAX_FAST) {
-		return ai_obj_tag_name[type_addr - 1];
+		return ai_api_tagname[type_addr - 1];
 	}
 	else {
 		//TODO
@@ -687,3 +655,18 @@ void alo_dump(a_henv env, a_isize id, a_flags options) {
 	GFun* fun = v_as_func(*v);
 	ai_dump_print(env, fun->_proto, options);
 }
+
+char const ai_api_tagname[][8] = {
+	[ALO_TNIL] = "nil",
+	[ALO_TBOOL] = "bool",
+	[ALO_TINT] = "int",
+	[ALO_TPTR] = "ptr",
+	[ALO_TFLOAT] = "float",
+	[ALO_TSTR] = "str",
+	[ALO_TTUPLE] = "tuple",
+	[ALO_TLIST] = "list",
+	[ALO_TTABLE] = "table",
+	[ALO_TFUNC] = "func",
+	[ALO_TMOD] = "mod",
+	[ALO_TUSER] = "user"
+};

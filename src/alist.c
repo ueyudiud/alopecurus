@@ -72,19 +72,27 @@ static void list_drop(Global* g, GList* self) {
     ai_mem_dealloc(g, self, sizeof(GList));
 }
 
-static Value list_get(a_henv env, GList* self, Value index) {
+Value ai_list_get(a_henv env, GList* self, Value index) {
 	if (unlikely(!v_is_int(index))) {
-		ai_err_raisef(env, ALO_EINVAL, "bad index for list.");
+		ai_err_bad_index(env, "list", v_typename(index));
 	}
-	Value* ref = ai_list_refi(env, self, v_as_int(index));
+	return ai_list_geti(env, self, v_as_int(index));
+}
+
+Value ai_list_geti(a_henv env, GList* self, a_int index) {
+	Value* ref = ai_list_refi(env, self, index);
 	return ref ? *ref : v_of_nil();
 }
 
-static void list_set(a_henv env, GList* self, Value index, Value value) {
+void ai_list_set(a_henv env, GList* self, Value index, Value value) {
 	if (unlikely(!v_is_int(index))) {
 		ai_err_raisef(env, ALO_EINVAL, "bad index for list.");
 	}
-	Value* ref = ai_list_refi(env, self, v_as_int(index));
+	ai_list_seti(env, self, v_as_int(index), value);
+}
+
+void ai_list_seti(a_henv env, GList* self, a_int index, Value value) {
+	Value* ref = ai_list_refi(env, self, index);
 	if (unlikely(ref == null)) {
 		ai_err_raisef(env, ALO_EINVAL, "list index out of bound.");
 	}
@@ -93,13 +101,11 @@ static void list_set(a_henv env, GList* self, Value index, Value value) {
 }
 
 static VTable const list_vtable = {
-	._tid = T_LIST,
+	._val_mask = V_MASKED_TAG(T_LIST),
 	._api_tag = ALO_TLIST,
 	._repr_id = REPR_LIST,
-	._flags = VTABLE_FLAG_FAST_LEN | VTABLE_FLAG_OVERRIDE(TM_LEN) | VTABLE_FLAG_OVERRIDE(TM_GET) | VTABLE_FLAG_OVERRIDE(TM_SET),
+	._flags = VTABLE_FLAG_PLAIN_LEN,
 	._name = "list",
 	._mark = fpcast(a_fp_mark, list_mark),
-	._drop = fpcast(a_fp_drop, list_drop),
-	._get = fpcast(a_fp_get, list_get),
-	._set = fpcast(a_fp_set, list_set)
+	._drop = fpcast(a_fp_drop, list_drop)
 };

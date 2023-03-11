@@ -191,8 +191,8 @@ endif
 ACTX_C= actx/x64.w64.win.c
 
 KER_O= aapi.o adump.o acode.o aparse.o alex.o adbg.o aerr.o aload.o \
-asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o aenv.o astk.o ameta.o \
-afun.o atable.o alist.o atuple.o astr.o abuf.o aio.o actx.o
+asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o aenv.o astk.o afun.o \
+atable.o alist.o atuple.o astr.o abuf.o aio.o aobj.o abc.o actx.o
 LIB_O= asyslib.o adbglib.o abaselib.o aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
 
@@ -216,7 +216,7 @@ default all: $(ALL_T)
 
 clean:
 	$(Q) "RM      $(ALL_RM)"
-	$(E) cd $(OUT) && $(call HOST_RM, $(ALL_RM))
+	$(E) $(call HOST_RM, $(ALL_RM))
 
 echo:
 	$(Q) "    LEVEL=$(LEVEL)"
@@ -226,10 +226,6 @@ echo:
 depend:
 	$(E) $(HOST_CC) $(HOST_CCFLAGS) -MM *.c > makefile.dep
 
-check:
-	$(Q) "MKDIR   $(OUT)"
-	$(E) $(call MD, $(OUT))
-
 .PHONY: default all clean depend check
 
 ##############################################################
@@ -238,17 +234,17 @@ check:
 
 %.o: %.c
 	$(Q) "CC      $@"
-	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/$(@:.o=_dyn.o)" -c $<
-	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
+	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o $(@:.o=_dyn.o) -c $<
+	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o $@ -c $<
 
 $(ALO_O): alo.c
 	$(Q) "CC      $@"
-	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
+	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o $@ -c $<
 
 actx.o: $(ACTX_C)
 	$(Q) "CC      $@"
-	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o "$(OUT)/$(@:.o=_dyn.o)" -c $<
-	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o "$(OUT)/$@" -c $<
+	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o $(@:.o=_dyn.o) -c $<
+	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o $@ -c $<
 
 actx.h: actx.o
 
@@ -260,15 +256,15 @@ include makefile.dep
 
 $(ALO_A): $(BASE_O)
 	$(Q) "AR      $@"
-	$(E) cd $(OUT) && $(TARGET_AR) $@ $(BASE_O)
+	$(E) $(TARGET_AR) $@ $(BASE_O)
 
 $(ALO_SO): $(BASE_O)
 	$(Q) "DYLINK  $@"
-	$(E) cd $(OUT) && $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(BASE_O) $(TARGET_LIBS)
-	$(E) cd $(OUT) && $(TARGET_STRIP) $@
+	$(E) $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(BASE_O) $(TARGET_LIBS)
+	$(E) $(TARGET_STRIP) $@
 
 $(ALO_T): $(TARGET_O) $(ALO_O)
 	$(Q) "LINK    $@"
-	$(E) cd $(OUT) && $(TARGET_LD) $(TARGET_LDFLAGS) -o $@ $(ALO_O) $(TARGET_O) $(TARGET_LIBS)
+	$(E) $(TARGET_LD) $(TARGET_LDFLAGS) -o $@ $(ALO_O) $(TARGET_O) $(TARGET_LIBS)
 
 ##############################################################

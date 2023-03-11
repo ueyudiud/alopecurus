@@ -99,38 +99,59 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	}
 }
 
-static Value vm_get(a_henv env, Value v1, Value v2) {
-	if (unlikely(!v_is_obj(v1))) {
+static Value vm_meta_get(a_henv env, Value v1, Value v2) {
+	if (!v_is_obj(v1)) {
 		goto bad_op;
 	}
-	a_hobj obj = v_as_obj(v1);
-	a_fp_get get_fp = obj->_vtable->_get;
-	if (unlikely(get_fp == null)) {
+
+	VTable const* vtable = v_as_obj(v1)->_vtable;
+	if (!(vtable->_flags & VTABLE_FLAG_FAST_TM(TM_GET))) {
 		goto bad_op;
 	}
-	return (*get_fp)(env, obj, v2);
+
+	Value* pvf = ai_obj_vlookup_(env, vtable, TM_GET);
+	assume(pvf != null);
+	Value vf = *pvf;
+
+	if (unlikely(v_is_nil(vf))) {
+		goto bad_op;
+	}
+
+	Value* base = vm_push_args(env, vf, v1, v2);
+	return ai_vm_call(env, base, RFLAGS_META_CALL);
 
 bad_op:
 	l_bad_tm_err(env, TM_GET);
 }
 
-static void vm_set(a_henv env, Value v1, Value v2, Value v3) {
-	if (unlikely(!v_is_obj(v1))) {
+static void vm_meta_set(a_henv env, Value v1, Value v2, Value v3) {
+	if (!v_is_obj(v1)) {
 		goto bad_op;
 	}
-	a_hobj obj = v_as_obj(v1);
-	a_fp_set set_fp = obj->_vtable->_set;
-	if (unlikely(set_fp == null)) {
+
+	VTable const* vtable = v_as_obj(v1)->_vtable;
+	if (!(vtable->_flags & VTABLE_FLAG_FAST_TM(TM_SET))) {
 		goto bad_op;
 	}
-	return (*set_fp)(env, obj, v2, v3);
+
+	Value* pvf = ai_obj_vlookup_(env, vtable, TM_SET);
+	assume(pvf != null);
+	Value vf = *pvf;
+
+	if (unlikely(v_is_nil(vf))) {
+		goto bad_op;
+	}
+
+	Value* base = vm_push_args(env, vf, v1, v2, v3);
+	ai_vm_call(env, base, RFLAGS_META_CALL);
+	return;
 
 bad_op:
-	l_bad_tm_err(env, TM_GET);
+	l_bad_tm_err(env, TM_SET);
 }
 
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlookup_val(env, v1, tm);
+	Value vf = ai_obj_vlookup(env, v1, tm);
 
 	if (v_is_nil(vf)) {
 		l_bad_tm_err(env, tm);
@@ -142,7 +163,7 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 }
 
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlookup_val(env, v1, tm);
+	Value vf = ai_obj_vlookup(env, v1, tm);
 
 	if (v_is_nil(vf)) {
 		l_bad_tm_err(env, tm);
@@ -263,6 +284,14 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 	}
 }
 
+static void vm_close_above(a_henv env, RcCap** restrict caps, Value* ptr) {
+	RcCap* cap;
+	while ((cap = *caps) != null && cap->_ptr >= ptr) {
+		*caps = cap->_next;
+		ai_cap_soft_close(env, cap);
+	}
+}
+
 static a_u32 vm_fetch_ex(a_insn const** ppc) {
 	a_insn const* pc = *ppc;
 	a_insn insn = *pc;
@@ -289,8 +318,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 # define load_stack() quiet(R = env->_stack._bot)
 # define reload_stack() load_stack()
 #else
-# define R stk2val(env, frame._stack_bot)
-# define init_check_stack(p) ({ a_isize _d = ai_stk_check(env, p); assume(_d == 0, "stack moved."); })
+# define R frame._stack_bot
+# define init_check_stack(p) ({ a_isize _d = ai_stk_check(env, &env->_stack, p); assume(_d == 0, "stack moved."); })
 # define load_stack() ((void) 0)
 # define reload_stack() ((void) 0)
 #endif
@@ -299,7 +328,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	run { /* Check for function. */
 		Value vf = *base;
 		while (unlikely(!v_is_func(vf))) {
-			vf = ai_obj_vlookup_val(env, vf, TM_CALL);
+			vf = ai_obj_vlookup(env, vf, TM_CALL);
 			if (v_is_nil(vf)) {
 				l_bad_tm_err(env, TM_CALL);
 			}
@@ -328,8 +357,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		}
 		frame = new(Frame) {
 			._prev = env->_frame,
-			._stack_bot = val2stk(env, base),
-			._caps = env->_frame->_caps,
+			._stack_bot = base,
+			._caps = null,
 			._pc = proto->_code,
 			._rflags = rflags
 		};
@@ -352,6 +381,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 #define loadEx() a_u32 ex = vm_fetch_ex(&pc)
 
 		insn = *(pc++);
+		insn_check(insn);
 		a = bc_load_a(insn);
 		bc = bc_load_op(insn);
 		switch (bc) {
@@ -450,7 +480,25 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				Value vt = vm_get(env, R[b], R[c]);
+				Value vb = R[b];
+				Value vc = R[c];
+
+				Value vt;
+				if (v_is_tuple(vb)) {
+					vt = ai_tuple_get(env, v_as_tuple(vb), vc);
+				}
+				else if (v_is_list(vb)) {
+					vt = ai_list_get(env, v_as_list(vb), vc);
+				}
+				else if (v_is_table(vb)) {
+					vt = ai_table_get(env, v_as_table(vb), vc);
+				}
+				else if (v_is_mod(vb)) {
+					vt = ai_table_get(env, &v_as_mod(vb)->_table, vc);
+				}
+				else {
+					vt = vm_meta_get(env, vb, vc);
+				}
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -458,7 +506,24 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadsC();
 
-				Value vt = vm_get(env, R[b], v_of_int(c));
+				Value vb = R[b];
+
+				Value vt;
+				if (v_is_tuple(vb)) {
+					vt = ai_tuple_geti(env, v_as_tuple(vb), c);
+				}
+				else if (v_is_list(vb)) {
+					vt = ai_list_geti(env, v_as_list(vb), c);
+				}
+				else if (v_is_table(vb)) {
+					vt = ai_table_get(env, v_as_table(vb), v_of_int(c));
+				}
+				else if (v_is_mod(vb)) {
+					vt = ai_table_get(env, &v_as_mod(vb)->_table, v_of_int(c));
+				}
+				else {
+					vt = vm_meta_get(env, vb, v_of_int(c));
+				}
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -466,7 +531,22 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				Value vt = vm_get(env, R[b], K[c]);
+				Value vb = R[b];
+				Value vc = K[c];
+
+				Value vt;
+				if (v_is_table(vb)) {
+					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
+				}
+				else if (v_is_mod(vb)) {
+					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				}
+				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vt = vm_meta_get(env, vb, vc);
+				}
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -474,7 +554,22 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadEx();
 
-				Value vt = vm_get(env, R[b], K[ex]);
+				Value vb = R[b];
+				Value vc = K[ex];
+
+				Value vt;
+				if (v_is_table(vb)) {
+					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
+				}
+				else if (v_is_mod(vb)) {
+					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				}
+				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vt = vm_meta_get(env, vb, vc);
+				}
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -482,7 +577,22 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				Value vt = vm_get(env, fun->_caps[b]._imm, K[c]);
+				Value vb = fun->_caps[b]._imm;
+				Value vc = K[c];
+
+				Value vt;
+				if (v_is_table(vb)) {
+					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
+				}
+				else if (v_is_mod(vb)) {
+					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				}
+				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vt = vm_meta_get(env, vb, vc);
+				}
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -490,7 +600,22 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadEx();
 
-				Value vt = vm_get(env, fun->_caps[b]._imm, K[ex]);
+				Value vb = fun->_caps[b]._imm;
+				Value vc = K[ex];
+
+				Value vt;
+				if (v_is_table(vb)) {
+					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
+				}
+				else if (v_is_mod(vb)) {
+					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				}
+				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vt = vm_meta_get(env, vb, vc);
+				}
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -498,28 +623,81 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				vm_set(env, R[b], R[c], R[a]);
+				Value va = R[a];
+				Value vb = R[b];
+				Value vc = R[c];
+
+				if (v_is_list(vb)) {
+					ai_list_set(env, v_as_list(vb), vc, va);
+				}
+				else if (v_is_table(vb)) {
+					ai_table_set(env, v_as_table(vb), vc, va);
+				}
+				else {
+					vm_meta_set(env, R[b], R[c], R[a]);
+				}
 				break;
 			}
 			case BC_SETI: {
 				loadB();
 				loadsC();
 
-				vm_set(env, R[b], v_of_int(c), R[a]);
+				Value va = R[a];
+				Value vb = R[b];
+
+				if (v_is_list(vb)) {
+					ai_list_seti(env, v_as_list(vb), c, va);
+				}
+				else if (v_is_table(vb)) {
+					ai_table_set(env, v_as_table(vb), v_of_int(c), va);
+				}
+				else {
+					vm_meta_set(env, R[b], v_of_int(c), R[a]);
+				}
 				break;
 			}
-			case BC_SETK: {
+			case BC_SETS: {
 				loadB();
 				loadC();
 
-				vm_set(env, R[b], K[c], R[a]);
+				Value va = R[a];
+				Value vb = R[b];
+				Value vc = K[c];
+
+				if (v_is_table(vb)) {
+					ai_table_set(env, v_as_table(vb), vc, va);
+				}
+				else if (v_is_mod(vb)) {
+					ai_table_set(env, &v_as_mod(vb)->_table, vc, va);
+				}
+				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vm_meta_set(env, vb, vc, va);
+				}
 				break;
 			}
-			case BC_SETKX: {
+			case BC_SETSX: {
 				loadB();
 				loadEx();
 
-				vm_set(env, R[b], K[ex], R[a]);
+				Value va = R[a];
+				Value vb = R[b];
+				Value vc = K[ex];
+
+				if (v_is_table(vb)) {
+					ai_table_set(env, v_as_table(vb), vc, va);
+				}
+				else if (v_is_mod(vb)) {
+					ai_table_set(env, &v_as_mod(vb)->_table, vc, va);
+				}
+				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vm_meta_set(env, vb, vc, va);
+				}
 				break;
 			}
 			case BC_ADD:
@@ -829,7 +1007,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				break;
 			}
 			case BC_CLOSE: {
-				ai_cap_close(env, &frame._caps, &R[a]);
+				vm_close_above(env, &frame._caps, &R[a]);
 				break;
 			}
 			case BC_CALL: {
@@ -841,12 +1019,12 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 
 				Value vr = ai_vm_call(env, &R[a], new(RFlags) {
-					._count = c
+					._count = c != 0 ? c - 1 : RFLAG_COUNT_VARARG
 				});
 				reload_stack();
 				R[a] = vr;
 
-				if (c != 0) {
+				if (c == 0) {
 					env->_stack._top = &R[fun->_proto->_nstack];
 				}
 				break;
@@ -869,18 +1047,15 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value* p;
 			case BC_RET: {
 				loadB();
-				loadC();
 
-				p = &R[b];
-				n = c;
+				p = &R[a];
+				n = b;
 
 				goto vm_return_with_args;
 			}
 			case BC_RETV: {
-				loadB();
-
-				p = &R[b];
-				n = env->_stack._top - &R[b];
+				p = &R[a];
+				n = env->_stack._top - &R[a];
 
 				goto vm_return_with_args;
 			}
@@ -901,7 +1076,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			vm_return_with_args: {
 				check_in_stack(env, p);
 
-				Value* src = p + 1;
+				Value* src = p;
 				Value* dst = R;
 
 				a_u32 m = min(n, frame._rflags._count);
@@ -919,9 +1094,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			}
 			}
 			case BC_RET1: {
-				loadB();
-
-				ret = R[b];
+				ret = R[a];
+				R[-1] = ret;
 				arg_top = R;
 
 				goto vm_return;
@@ -933,6 +1107,14 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				goto vm_return;
 			}
 			vm_return: {
+				run {
+					RcCap* caps = frame._caps;
+					RcCap* cap;
+					while ((cap = caps) != null) {
+						caps = cap->_next;
+						ai_cap_soft_close(env, cap);
+					}
+				}
 				if (frame._rflags._count != RFLAG_COUNT_VARARG) {
 					Value* top = R - 1 + frame._rflags._count;
 					v_set_nil_ranged(arg_top, top);
@@ -942,7 +1124,6 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					env->_stack._top = arg_top;
 				}
 				env->_frame = frame._prev;
-				ai_cap_close(env, &frame._caps, R);
 				return ret;
 			}
 			} /* End of return instructions. */

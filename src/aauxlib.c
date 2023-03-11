@@ -51,14 +51,7 @@ void aloL_argerror(a_henv env, a_usize id, char const* what) {
 
 static char const* l_typename(a_henv env, a_isize id) {
 	Value const* p = api_roslot(env, id);
-	if (p == null) return "empty";
-
-	Value v = *p;
-	if (!v_is_user(v)) {
-		return ai_obj_tag_name[v_get_tag(v)];
-	}
-
-	return v_as_obj(v)->_vtable->_name;
+	return likely(p != null) ? v_typename(*p) : "empty";
 }
 
 void aloL_typeerror(a_henv env, a_usize id, char const* name) {
@@ -69,7 +62,7 @@ void aloL_typeerror(a_henv env, a_usize id, char const* name) {
 void aloL_checktag(a_henv env, a_usize id, a_tag tag) {
 	api_check(tag >= ALO_TEMPTY && tag <= ALO_TUSER, "bad type tag.");
 	if (alo_tagof(env, cast(a_isize, id)) != tag) {
-		aloL_typeerror(env, id, ai_obj_tag_name[tag]);
+		aloL_typeerror(env, id, ai_api_tagname[tag]);
 	}
 }
 

@@ -116,11 +116,11 @@ static GFun* fun_new(a_henv env, VTable const* vtable, GProto* proto, a_u32 ncap
 
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 	static a_insn const l_codes[] = {
-		bc_make_iabc(BC_FC, 0, 0, 0)
+		bc_make_i(BC_FC)
 	};
 
 	static GThinProto const l_proto = {
-		._nstack = ALOI_INIT_FRAME_STACKSIZE,
+		._nstack = ALOI_INIT_CFRAME_STACKSIZE,
 		._nparam = 0,
 		._flags = FUN_FLAG_VARARG | FUN_FLAG_NATIVE,
 		._code = cast(a_insn*, l_codes)
@@ -134,6 +134,16 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 	ai_gc_register_object(env, self);
 
 	return self;
+}
+
+static RcCap* l_alloc_capture(a_henv env) {
+	Global* g = G(env);
+	RcCap* cap = g->_cap_cache;
+	if (cap != null) {
+		g->_cap_cache = cap->_next;
+		return cap;
+	}
+	return ai_mem_alloc(env, sizeof(RcCap));
 }
 
 static CapVal l_load_capture(a_henv env, CapInfo* info, CapVal* up, RcCap** now, Value* stack) {
@@ -150,15 +160,20 @@ static CapVal l_load_capture(a_henv env, CapInfo* info, CapVal* up, RcCap** now,
 			now = &cap->_next;
 		}
 		if (cap == null || cap->_ptr < dst) {
-			RcCap* cap2 = ai_mem_alloc(env, sizeof(RcCap));
+			RcCap* self = l_alloc_capture(env);
 
-			cap2->_ptr = dst;
-			cap2->_next = cap;
-			cap2->_touch = false;
+			*self = new(RcCap) {
+				._ptr = dst,
+				._rc_and_fclose = 2,
+				._next = cap,
+				._touch = false
+			};
 
-			*now = cap = cap2;
+			*now = cap = self;
 		}
-		cap->_rc += 1;
+		else {
+			cap->_rc_and_fclose += 2;
+		}
 		return new(CapVal) { ._rc = cap };
 	}
 }
@@ -182,13 +197,7 @@ GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame) {
 }
 
 static a_bool cap_is_closed(RcCap* self) {
-	return self->_ptr == &self->_slot;
-}
-
-static void cap_close(a_henv env, RcCap* self) {
-	assume(!cap_is_closed(self));
-	v_cpy(env, &self->_slot, self->_ptr);
-	self->_ptr = &self->_slot;
+	return (self->_rc_and_fclose & 1) != 0;
 }
 
 static void cap_mark(Global* g, RcCap* self) {
@@ -200,15 +209,20 @@ static void cap_mark(Global* g, RcCap* self) {
 	}
 }
 
-static void cap_drop(Global* g, RcCap* self) {
+void ai_cap_drop(Global* g, RcCap* self) {
 	ai_mem_dealloc(g, self, sizeof(RcCap));
 }
 
+static void cap_recycle(Global* g, RcCap* self) {
+	self->_next = g->_cap_cache;
+	g->_cap_cache = self;
+}
+
 static void cap_release(Global* g, RcCap* self) {
-	assume(self->_rc > 0);
-	self->_rc -= 1;
-	if (self->_rc == 0 && cap_is_closed(self)) {
-		cap_drop(g, self);
+	assume(self->_rc_and_fclose >= 2);
+	self->_rc_and_fclose -= 2;
+	if (self->_rc_and_fclose == 0) {
+		cap_recycle(g, self);
 	}
 }
 
@@ -274,22 +288,35 @@ void ai_proto_drop(Global* g, GProto* self) {
     ai_mem_dealloc(g, self, self->_len);
 }
 
-void ai_cap_close(a_henv env, RcCap** pcap, Value const* base) {
-	RcCap* cap;
-	while ((cap = *pcap) != null && cap->_ptr >= base) {
-		RcCap* next = cap->_next;
-		if (cap->_rc > 0) {
-			cap_close(env, cap);
-		}
-		else {
-			cap_drop(G(env), cap);
-		}
-		*pcap = next;
+static void cap_close(a_henv env, RcCap* restrict self) {
+	assume(!cap_is_closed(self));
+	v_cpy(env, &self->_slot, self->_ptr);
+	self->_ptr = &self->_slot;
+	if (self->_touch) {
+		ai_gc_trace_mark_val(G(env), self->_slot);
+	}
+}
+
+void ai_cap_soft_close(a_henv env, RcCap* cap) {
+	if (cap->_rc_and_fclose > 0) {
+		cap_close(env, cap);
+	}
+	else {
+		cap_recycle(G(env), cap);
+	}
+}
+
+void ai_cap_hard_close(a_henv env, RcCap* cap) {
+	if (cap->_rc_and_fclose > 0) {
+		cap_close(env, cap);
+	}
+	else {
+		ai_cap_drop(G(env), cap);
 	}
 }
 
 static VTable const afun_vtable = {
-	._tid = T_FUNC,
+	._val_mask = V_MASKED_TAG(T_FUNC),
 	._api_tag = ALO_TFUNC,
 	._repr_id = REPR_FUNC,
 	._flags = VTABLE_FLAG_NONE,
@@ -299,7 +326,7 @@ static VTable const afun_vtable = {
 };
 
 static VTable const cfun_vtable = {
-	._tid = T_FUNC,
+	._val_mask = V_MASKED_TAG(T_FUNC),
 	._api_tag = ALO_TFUNC,
 	._repr_id = REPR_FUNC,
 	._flags = VTABLE_FLAG_NONE,
@@ -309,7 +336,7 @@ static VTable const cfun_vtable = {
 };
 
 static VTable const proto_vtable = {
-	._tid = T_USER_TEQ,
+	._val_mask = V_MASKED_TAG(T_USER_TEQ),
 	._api_tag = ALO_TUSER,
 	._flags = VTABLE_FLAG_NONE,
 	._mark = fpcast(a_fp_mark, proto_mark),

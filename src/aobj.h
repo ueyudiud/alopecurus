@@ -60,8 +60,12 @@ typedef struct Buf Buf;
 
 #define T_FLOAT u32c(16)
 
-enum {
-	REPR_OPAQUE, /* The layout of structure is not observable for VM. */
+/**
+ ** The fast representation tag of value. Used to identify the layout of object
+ ** and dispatch the operation in less tag checking.
+ */
+enum FastRepr {
+	REPR_OPAQUE, /* The layout is not observable for VM, do not use any optimize strategy. */
 	REPR_STR,
 	REPR_TUPLE,
 	REPR_LIST,
@@ -79,9 +83,6 @@ typedef struct { a_u64 _; } Value;
 typedef void (*a_fp_mark)(Global* g, a_hobj self);
 typedef void (*a_fp_drop)(Global* g, a_hobj self);
 typedef void (*a_fp_close)(a_henv env, a_hobj self);
-typedef Value (*a_fp_vlook)(a_henv env, a_hobj self, a_enum op);
-typedef Value (*a_fp_get)(a_henv env, a_hobj self, Value index);
-typedef void (*a_fp_set)(a_henv env, a_hobj self, Value index, Value value);
 typedef a_hash (*a_fp_hash)(a_henv env, a_hobj self);
 typedef a_bool (*a_fp_equals)(a_henv env, a_hobj self, Value other);
 typedef void (*a_fp_tostr)(a_henv env, a_hobj self, GBuf* buf);
@@ -89,19 +90,15 @@ typedef void (*a_fp_tostr)(a_henv env, a_hobj self, GBuf* buf);
 typedef struct VTable VTable;
 
 struct VTable {
-	a_u8 _tid; /* The value type id. */
+	a_usize _val_mask; /* The value description. */
+	char const* _name;
 	a_u8 _api_tag; /* The tag for API. */
 	a_u8 _repr_id; /* The layout index for object. */
 	a_u16 _flags;
-	char const* _name;
-	VTable const* _impl;
-	/* Resource management functions. */
+	/* Virtual function table. */
 	a_fp_mark _mark;
 	a_fp_drop _drop;
 	a_fp_close _close;
-	/* Virtual functions. */
-	a_fp_get _get;
-	a_fp_set _set;
 	a_fp_hash _hash;
 	a_fp_equals _equals;
 	a_fp_tostr _tostr;
@@ -116,24 +113,28 @@ struct GObj {
 };
 
 #define VTABLE_FLAG_NONE u16c(0)
-#define VTABLE_FLAG_OVERRIDE(tm) (u32c(1) << (tm))
+#define VTABLE_FLAG_FAST_TM(tm) (u16c(1) << (tm))
 #define VTABLE_FLAG_PLAIN_MARK u16c(0x0100)
-#define VTABLE_FLAG_FAST_LEN u16c(0x0200)
+#define VTABLE_FLAG_PLAIN_LEN u16c(0x0200)
 #define VTABLE_FLAG_VLOOKUP u16c(0x0400)
+#define VTABLE_FLAG_READONLY u16c(0x8000)
 
 always_inline void v_check_alive(a_henv env, Value v);
 
 #define V_PAYLOAD_MASK (~(~u64c(0) << 47))
 #define V_INT_MASK (~(~u64c(0) << 32))
 
+#define V_MASKED_TAG(tag) (~cast(a_u64, tag) << 47)
+
 #define V_STRICT_NIL (~u64c(0))
 #define V_EMPTY (~u64c(1))
-#define V_FALSE (~cast(a_u64, T_FALSE) << 47)
-#define V_TRUE (~cast(a_u64, T_TRUE) << 47 | V_PAYLOAD_MASK)
+#define V_FALSE V_MASKED_TAG(T_FALSE)
+#define V_TRUE (V_MASKED_TAG(T_TRUE) | V_PAYLOAD_MASK)
+#define V_FLOAT_MAX u64c(0xfff8000000000000)
 
 always_inline a_u64 v_masked_tag(a_enum tag) {
 	assume(tag <= T__MAX_FAST, "bad value tag.");
-	return ~cast(a_u64, tag) << 47;
+	return V_MASKED_TAG(tag);
 }
 
 always_inline a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
@@ -161,8 +162,16 @@ always_inline a_u64 v_get_payload(Value v) {
 	return v._ & V_PAYLOAD_MASK;
 }
 
+always_inline a_bool v_test_range(Value v, a_enum tag_min, a_enum tag_max) {
+	return v._ - v_box_nan_raw_min(tag_max) <= v_box_nan_raw_max(tag_min) - v_box_nan_raw_min(tag_max);
+}
+
+always_inline a_bool v_test(Value v, a_enum tag) {
+	return v_get_tag(v) == tag;
+}
+
 always_inline a_bool v_is_nil(Value v) {
-	return v_get_tag(v) == T_NIL;
+	return v_test(v, T_NIL);
 }
 
 always_inline a_bool v_is_strict_nil(Value v) {
@@ -173,60 +182,52 @@ always_inline a_bool v_is_empty(Value v) {
 	return v._ == V_EMPTY;
 }
 
-always_inline a_bool v_is_false(Value v) {
-	return v_get_tag(v) == T_FALSE;
-}
-
-always_inline a_bool v_is_true(Value v) {
-	return v_get_tag(v) == T_TRUE;
-}
-
 always_inline a_bool v_is_int(Value v) {
-	return v_get_tag(v) == T_INT;
+	return v_test(v, T_INT);
 }
 
 always_inline a_bool v_is_ptr(Value v) {
-	return v_get_tag(v) == T_PTR;
+	return v_test(v, T_PTR);
 }
 
 always_inline a_bool v_is_istr(Value v) {
-	return v_get_tag(v) == T_ISTR;
+	return v_test(v, T_ISTR);
 }
 
 always_inline a_bool v_is_hstr(Value v) {
-	return v_get_tag(v) == T_HSTR;
+	return v_test(v, T_HSTR);
 }
 
 always_inline a_bool v_is_obj(Value v) {
-	return v._ - v_box_nan_raw_min(T__MAX_OBJ) <= v_box_nan_raw_max(T__MIN_OBJ) - v_box_nan_raw_min(T__MAX_OBJ);
+	return v_test_range(v, T__MIN_OBJ, T__MAX_OBJ);
 }
 
 always_inline a_bool v_is_str(Value v) {
-	return v._ - v_box_nan_raw_min(T_HSTR) <= v_box_nan_raw_max(T_ISTR) - v_box_nan_raw_min(T_HSTR);
+	return v_test_range(v, T_ISTR, T_HSTR);
 }
 
 always_inline a_bool v_is_tuple(Value v) {
-	return v_get_tag(v) == T_TUPLE;
+	return v_test(v, T_TUPLE);
 }
 
 always_inline a_bool v_is_list(Value v) {
-	return v_get_tag(v) == T_LIST;
+	return v_test(v, T_LIST);
 }
 
 always_inline a_bool v_is_table(Value v) {
-	return v_get_tag(v) == T_TABLE;
+	return v_test(v, T_TABLE);
 }
 
 always_inline a_bool v_is_func(Value v) {
-	return v_get_tag(v) == T_FUNC;
+	return v_test(v, T_FUNC);
 }
 
 always_inline a_bool v_is_mod(Value v) {
-	return v_get_tag(v) == T_MOD;
+	return v_test(v, T_MOD);
 }
 
 always_inline a_bool v_is_cap(Value v) {
-	return v_get_tag(v) == T_CAP;
+	return v_test(v, T_CAP);
 }
 
 always_inline a_bool v_is_float(Value v) {
@@ -238,7 +239,7 @@ always_inline a_bool v_is_num(Value v) {
 }
 
 always_inline a_bool v_is_user(Value v) {
-	return v_get_tag(v) == T_USER_NEQ || v_get_tag(v) == T_USER_TEQ;
+	return v_test(v, T_USER_NEQ) || v_test(v, T_USER_TEQ);
 }
 
 always_inline a_bool v_to_bool(Value v) {
@@ -263,42 +264,37 @@ always_inline a_float v_as_num(Value v) {
 	return v_is_int(v) ? v_as_int(v) : v_as_float(v);
 }
 
-always_inline void* v_as_ptr_raw(Value v) {
-	return ptr_of(void, v_get_payload(v));
-}
-
 always_inline void* v_as_ptr(Value v) {
 	assume(v_is_ptr(v), "not pointer.");
-	return v_as_ptr_raw(v);
+	return ptr_of(void, v_get_payload(v));
 }
 
 always_inline GObj* v_as_obj(Value v) {
 	assume(v_is_obj(v), "not object.");
-	return cast(GObj*, v_as_ptr_raw(v));
+	return ptr_of(GObj, v_get_payload(v));
 }
 
 always_inline RcCap* v_as_cap(Value v) {
 	assume(v_is_cap(v));
-	return cast(RcCap*, v_as_ptr_raw(v));
+	return ptr_of(RcCap, v_get_payload(v));
 }
-
-#define v_of_nil() (new(Value) { V_STRICT_NIL })
-#define v_of_empty() (new(Value) { V_EMPTY })
-#define v_of_bool(v) (new(Value) { (v) ? V_TRUE : V_FALSE })
-#define v_of_int(v) v_box_nan(T_INT, v)
-#define v_of_float(v) (new(Value) { ._ = bcast(a_u64, v) })
-#define v_of_ptr(v) v_box_nan(T_PTR, addr_of(v))
 
 always_inline Value v_of_obj(a_hobj v) {
-	a_u32 id = cast(a_u32, v->_vtable->_tid);
-	return v_box_nan(min(id, T__MAX_OBJ), addr_of(v));
+	return new(Value) { v->_vtable->_val_mask | addr_of(v) };
 }
-
-#define v_of_obj(v) v_of_obj(gobj_cast(v))
 
 always_inline Value v_of_cap(RcCap* v) {
 	return v_box_nan(T_CAP, addr_of(v));
 }
+
+#define v_of(v) (new(Value) {v})
+#define v_of_nil() v_of(V_STRICT_NIL)
+#define v_of_empty() v_of(V_EMPTY)
+#define v_of_bool(v) v_of((v) ? V_TRUE : V_FALSE)
+#define v_of_int(v) v_box_nan(T_INT, v)
+#define v_of_float(v) v_of(bcast(a_u64, v))
+#define v_of_ptr(v) v_box_nan(T_PTR, addr_of(v))
+#define v_of_obj(v) v_of_obj(gobj_cast(v))
 
 always_inline void v_setx(Value* d, Value v) {
 	*d = v;
@@ -348,24 +344,42 @@ always_inline void v_mov_all(a_henv env, Value* restrict d, Value const* restric
 }
 
 always_inline a_bool v_has_trivial_hash(Value v) {
-	return v._ - v_box_nan_raw_min(T__MAX_NHH) > v_box_nan_raw_max(T__MIN_NHH) - v_box_nan_raw_min(T__MAX_NHH);
+	return !v_test_range(v, T__MIN_NHH, T__MAX_NHH);
 }
 
 always_inline a_bool v_has_trivial_equals(Value v) {
-	return v._ - v_box_nan_raw_min(T__MAX_NEQ) > v_box_nan_raw_max(T__MIN_NEQ) - v_box_nan_raw_min(T__MAX_NEQ);
+	return !v_test_range(v, T__MIN_NEQ, T__MAX_NEQ);
 }
 
 always_inline a_hash v_trivial_hash(Value v) {
 	assume(v_has_trivial_hash(v), "bad hash.");
-	return v._ >> 32 ^ v._;
+	return v._ >> 16 ^ v._;
 }
+
+/* Identity equality. */
+#define v_trivial_equals_unchecked(v1,v2) ((v1)._ == (v2)._)
 
 /* Identity equality. */
 always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 	assume(v_has_trivial_equals(v1) && v_has_trivial_equals(v2));
-	return v1._ == v2._;
+	return v_trivial_equals_unchecked(v1, v2);
 }
 
-intern char const* const ai_obj_tag_name[];
+intern char const ai_obj_typenames[][8];
+
+always_inline char const* v_typename(Value v) {
+	if (v_is_float(v)) {
+		return ai_obj_typenames[T_FLOAT];
+	}
+	else if (!v_is_user(v)) {
+		return ai_obj_typenames[v_get_tag(v)];
+	}
+
+	return v_as_obj(v)->_vtable->_name;
+}
+
+always_inline a_bool g_test(a_hobj p, a_enum tag) {
+	return p->_vtable->_val_mask == v_masked_tag(tag);
+}
 
 #endif /* aobj_h_ */
