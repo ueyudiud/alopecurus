@@ -333,6 +333,7 @@ static VTable const cfun_vtable = {
 static VTable const proto_vtable = {
 	._val_mask = V_MASKED_TAG(T_USER_TEQ),
 	._api_tag = ALO_TUSER,
+	._repr_id = REPR_OPAQUE,
 	._flags = VTABLE_FLAG_NONE,
 	._mark = fpcast(a_fp_mark, proto_mark),
 	._drop = fpcast(a_fp_drop, ai_proto_drop)
