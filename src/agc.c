@@ -240,7 +240,7 @@ static void drop_cached_caps(Global* g) {
 	g->_cap_cache = null;
 	while (cap != null) {
 		RcCap* next = cap->_next;
-		ai_cap_drop(g, cap);
+		ai_cap_really_drop(g, cap);
 		cap = next;
 	}
 }

@@ -96,7 +96,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 			addr += sizeof(RcCap);
 
 			cap->_ptr = &cap->_slot;
-			cap->_rc_and_fclose = 3;
+			cap->_rc_and_fopen = 4;
 
 			fun->_caps[0] = cap;
 		}
@@ -170,15 +170,15 @@ static RcCap* l_load_capture(a_henv env, CapInfo* info, RcCap** up, RcCap** now,
 
 			*self = new(RcCap) {
 				._ptr = dst,
-				._rc_and_fclose = 2,
+				._rc_and_fopen = 3,
 				._next = cap,
-				._touch = false
+				._flags = false
 			};
 
 			*now = cap = self;
 		}
 		else {
-			cap->_rc_and_fclose += 2;
+			cap->_rc_and_fopen += 2;
 		}
 		return cap;
 	}
@@ -203,7 +203,7 @@ GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame) {
 }
 
 static a_bool cap_is_closed(RcCap* self) {
-	return (self->_rc_and_fclose & 1) != 0;
+	return (self->_rc_and_fopen & 1) == 0;
 }
 
 static void cap_mark(Global* g, RcCap* self) {
@@ -211,33 +211,79 @@ static void cap_mark(Global* g, RcCap* self) {
 		ai_gc_trace_mark_val(g, *self->_ptr);
 	}
 	else {
-		self->_touch = true;
+		self->_ftouch = true;
 	}
 }
 
-void ai_cap_drop(Global* g, RcCap* self) {
+void ai_cap_really_drop(Global* g, RcCap* self) {
 	ai_mem_dealloc(g, self, sizeof(RcCap));
 }
 
-static void cap_recycle(Global* g, RcCap* self) {
+static void cap_drop(Global* g, RcCap* self) {
 	self->_next = g->_cap_cache;
 	g->_cap_cache = self;
 }
 
+static void cap_close_value(a_henv env, RcCap* self) {
+	if (self->_fclosable) {
+		a_hobj obj = v_as_obj(*self->_ptr);
+		a_fp_close close_fp = obj->_vtable->_close;
+		assume(close_fp != null, "missing close function.");
+		(*close_fp)(env, obj);
+		self->_fclosable = false;
+	}
+}
+
 static void cap_release(Global* g, RcCap* self) {
-	assume(self->_rc_and_fclose >= 2);
-	self->_rc_and_fclose -= 2;
-	if (self->_rc_and_fclose == 0) {
-		cap_recycle(g, self);
+	assume(self->_rc_and_fopen >= 2);
+	self->_rc_and_fopen -= 2;
+	if (self->_rc_and_fopen == 0) {
+		cap_close_value(ai_env_mainof(g), self);
+		cap_drop(g, self);
+	}
+}
+
+static void cap_close_internal(a_henv env, RcCap* restrict self) {
+	v_cpy(env, &self->_slot, self->_ptr);
+	self->_ptr = &self->_slot;
+
+	if (self->_ftouch) {
+		ai_gc_trace_mark_val(G(env), self->_slot);
+	}
+}
+
+void ai_cap_soft_close(a_henv env, RcCap* self) {
+	assume(!cap_is_closed(self));
+	a_u32 count = self->_rc_and_fopen - 1;
+	if (count > 0) {
+		self->_rc_and_fopen = count;
+		cap_close_internal(env, self);
+	}
+	else {
+		cap_close_value(env, self);
+		cap_drop(G(env), self);
+	}
+}
+
+void ai_cap_hard_close(a_henv env, RcCap* self) {
+	assume(!cap_is_closed(self));
+	a_u32 count = self->_rc_and_fopen - 1;
+	if (count > 0) {
+		self->_rc_and_fopen = count;
+		cap_close_internal(env, self);
+	}
+	else {
+		cap_close_value(env, self);
+		ai_cap_really_drop(G(env), self);
 	}
 }
 
 static void afun_mark(Global* g, GFun* self) {
-    ai_gc_trace_mark(g, self->_proto);
-    a_u32 len = self->_len;
-    for (a_u32 i = 0; i < len; ++i) {
+	ai_gc_trace_mark(g, self->_proto);
+	a_u32 len = self->_len;
+	for (a_u32 i = 0; i < len; ++i) {
 		cap_mark(g, self->_caps[i]);
-    }
+	}
 	ai_gc_trace_work(g, fun_size(self->_len));
 }
 
@@ -245,7 +291,7 @@ static void afun_drop(Global* g, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
 		cap_release(g, self->_caps[i]);
 	}
-    ai_mem_dealloc(g, self, fun_size(self->_len));
+	ai_mem_dealloc(g, self, fun_size(self->_len));
 }
 
 static void cfun_mark(Global* g, GFun* self) {
@@ -261,9 +307,9 @@ static void cfun_drop(Global* g, GFun* self) {
 }
 
 static void proto_mark(Global* g, GProto* self) {
-    for (a_u32 i = 0; i < self->_nconst; ++i) {
+	for (a_u32 i = 0; i < self->_nconst; ++i) {
 		ai_gc_trace_mark_val(g, self->_consts[i]);
-    }
+	}
 	if (self->_dbg_file != null) {
 		ai_gc_trace_mark(g, self->_dbg_file);
 	}
@@ -280,34 +326,7 @@ static void proto_mark(Global* g, GProto* self) {
 }
 
 void ai_proto_drop(Global* g, GProto* self) {
-    ai_mem_dealloc(g, self, self->_len);
-}
-
-static void cap_close(a_henv env, RcCap* restrict self) {
-	assume(!cap_is_closed(self));
-	v_cpy(env, &self->_slot, self->_ptr);
-	self->_ptr = &self->_slot;
-	if (self->_touch) {
-		ai_gc_trace_mark_val(G(env), self->_slot);
-	}
-}
-
-void ai_cap_soft_close(a_henv env, RcCap* cap) {
-	if (cap->_rc_and_fclose > 0) {
-		cap_close(env, cap);
-	}
-	else {
-		cap_recycle(G(env), cap);
-	}
-}
-
-void ai_cap_hard_close(a_henv env, RcCap* cap) {
-	if (cap->_rc_and_fclose > 0) {
-		cap_close(env, cap);
-	}
-	else {
-		ai_cap_drop(G(env), cap);
-	}
+	ai_mem_dealloc(g, self, self->_len);
 }
 
 static VTable const afun_vtable = {
