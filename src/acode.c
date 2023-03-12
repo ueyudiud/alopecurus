@@ -2093,8 +2093,7 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 			RichCapInfo* cap_info = &scope->_caps._arr[i];
 			proto->_caps[i] = new(CapInfo) {
 				._reg = cap_info->_src_index,
-				._fup = cap_info->_scope != par->_scope_depth,
-				._frc = (cap_info->_mods & SYM_MOD_READONLY) == 0
+				._fup = cap_info->_scope != par->_scope_depth
 			};
 			if (desc._flags._fdebug) {
 				proto->_dbg_cap_names[i] = cap_info->_name;
@@ -2319,7 +2318,7 @@ static void l_dynR(Parser* par, InoutExpr e) {
 			else {
 				a_u32 reg = l_succ_alloc_stack(par, 2, e->_line);
 				l_emit(par, bc_make_iabx(BC_K, reg, k), e->_line);
-				l_emit_fast(par, bc_make_iab(BC_CMOV, reg + 1, e->_base), e->_line);
+				l_emit_fast(par, bc_make_iab(BC_LDC, reg + 1, e->_base), e->_line);
 				l_emit_fast(par, bc_make_iabc(BC_GET, DYN, reg + 1, reg), e->_line);
 				l_succ_free_stack(par, reg, 2);
 			}

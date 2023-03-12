@@ -75,8 +75,8 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
 
 #define ALO_BC_LIST(_) \
 /*        id,    name,   fmt,   a,   b,   c,    description                                  */ \
-    _(   NOP,   "nop",     i, ___, ___, ___) /*                                              */ \
     _(   MOV,   "mov",   iAB, reg, reg, ___) /* R[a] := R[b]                                 */ \
+    _(     K,     "k",  iABx, reg, kst, kst) /* R[a] := K[b]                                 */ \
 /*=====================================Duality Opcodes=======================================*/ \
     _(    KF,    "kf",    iA, reg, ___, ___) /* R[a] := false                                */ \
     _(    KT,    "kt",    iA, reg, ___, ___) /* R[a] := true                                 */ \
@@ -105,9 +105,7 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(   STC,   "stc",   iAB, cap, reg, ___) /* *C[a] := R[b]                                */ \
     _(    KN,    "kn",   iAC, reg, ___, num) /* R[a:a+c] := nil                              */ \
     _(    KI,    "ki", iAsBx, reg, val, val) /* R[a] := int(b)                               */ \
-    _(     K,     "k",  iABx, reg, kst, kst) /* R[a] := K[b]                                 */ \
     _(   LDF,   "ldf",  iABx, reg, kst, kst) /* R[a] := func(F[b] )                          */ \
-    _(  CMOV,  "cmov",   iAB, reg, cap, ___) /* R[a] := C[b]                                 */ \
     _(   GET,   "get",  iABC, reg, reg, reg) /* R[a] := R[b][R[c]]                           */ \
     _(  GETI,  "geti", iABsC, reg, reg, val) /* R[a] := R[b][int(c)]                         */ \
     _(  GETS,  "gets",  iABC, reg, reg, kst) /* R[a] := R[b][K[c]: str]                      */ \

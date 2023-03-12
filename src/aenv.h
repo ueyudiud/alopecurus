@@ -52,7 +52,6 @@ struct Frame {
 	RcCap* _caps;
 	RFlags _rflags;
 	StkPtr _bound; /* In strict stack checking mode, the API will use frame bound to check index range. */
-	CapVal* _capval;
 };
 
 struct alo_Env {

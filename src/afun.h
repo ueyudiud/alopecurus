@@ -9,7 +9,6 @@
 
 typedef struct GProto GProto;
 
-typedef union CapVal CapVal;
 typedef struct LocalInfo LocalInfo;
 typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
@@ -19,9 +18,9 @@ intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
 intern GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame);
 intern void ai_proto_drop(Global* g, GProto* self);
-intern void ai_cap_drop(Global* g, RcCap* cap);
-intern void ai_cap_soft_close(a_henv env, RcCap* cap);
-intern void ai_cap_hard_close(a_henv env, RcCap* cap);
+intern void ai_cap_really_drop(Global* g, RcCap* self);
+intern void ai_cap_soft_close(a_henv env, RcCap* self);
+intern void ai_cap_hard_close(a_henv env, RcCap* self);
 
 #define FUN_FLAG_VARARG u16c(0x0001)
 #define FUN_FLAG_NATIVE u16c(0x0002)
@@ -59,11 +58,6 @@ struct GProto {
 	GProto* _subs[0];
 };
 
-union CapVal {
-	Value _imm; /* Immediate value. */
-	RcCap* _rc; /* Shared rc value. */
-};
-
 struct GFun {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
@@ -71,7 +65,7 @@ struct GFun {
 	a_u16 _sym; /* Function symbol. */
 	GProto* _proto;
 	union {
-		CapVal _caps[0];
+		RcCap* _caps[0];
 		Value _vals[0];
 	};
 };
@@ -81,8 +75,14 @@ struct GFun {
  */
 struct RcCap {
 	Value* _ptr;
-	a_u32 _rc_and_fclose;
-	a_u8 _touch;
+	a_u32 _rc_and_fopen;
+	union {
+		a_u8 _flags;
+		struct {
+			a_u8 _ftouch: 1;
+			a_u8 _fclosable: 1;
+		};
+	};
 	union {
 		Value _slot;
 		RcCap* _next;
@@ -101,7 +101,6 @@ struct CapInfo {
 		a_u8 _flags;
 		struct {
 			a_u8 _fup: 1; /* Capture from upper closure. */
-			a_u8 _frc: 1; /* Use RcCap to capture. */
 		};
 	};
 	a_u8 _reg;
