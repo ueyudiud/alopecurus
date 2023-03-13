@@ -546,12 +546,39 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				check_gc();
 				break;
 			}
+			case BC_LBOXM: {
+				loadB();
+
+				a_u32 n = env->_stack._top - &R[b];
+
+				GList* val = ai_list_new(env);
+				v_set_obj(env, env->_stack._top, val);
+				env->_stack._top += 1;
+
+				ai_list_push_all(env, val, &R[b], n);
+				v_set_obj(env, &R[a], val);
+				check_gc();
+
+				adjust_top();
+				break;
+			}
 			case BC_LPUSH: {
 				loadB();
 				loadC();
 
 				GList* val = v_as_list(R[a]);
 				ai_list_push_all(env, val, &R[b], c);
+
+				check_gc();
+				break;
+			}
+			case BC_LPUSHM: {
+				loadB();
+
+				a_u32 n = env->_stack._top - &R[b];
+
+				GList* val = v_as_list(R[a]);
+				ai_list_push_all(env, val, &R[b], n);
 
 				check_gc();
 				break;
@@ -1226,18 +1253,43 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				if (b != 0) {
-					env->_stack._top = &R[a + b];
-				}
+				env->_stack._top = &R[a + b];
 
 				ai_vm_call(env, &R[a], new(RFlags) {
-					._count = c != 0 ? c - 1 : RFLAG_COUNT_VARARG
+					._count = c
 				});
 				check_gc();
 
-				if (c == 0) {
-					adjust_top();
-				}
+				adjust_top();
+				break;
+			}
+			case BC_CALLV: {
+				loadB();
+
+				env->_stack._top = &R[a + b];
+
+				ai_vm_call(env, &R[a], new(RFlags) {
+					._count = RFLAG_COUNT_VARARG
+				});
+				check_gc();
+				break;
+			}
+			case BC_CALLM: {
+				loadC();
+
+				ai_vm_call(env, &R[a], new(RFlags) {
+					._count = c
+				});
+				check_gc();
+
+				adjust_top();
+				break;
+			}
+			case BC_CALLMV: {
+				ai_vm_call(env, &R[a], new(RFlags) {
+					._count = RFLAG_COUNT_VARARG
+				});
+				check_gc();
 				break;
 			}
 			case BC_CAT: {
@@ -1262,7 +1314,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				goto vm_return;
 			}
-			case BC_RETV: {
+			case BC_RETM: {
 				Value* p = &R[a];
 				a_usize n = env->_stack._top - p;
 

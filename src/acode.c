@@ -270,7 +270,7 @@ static void l_emit_ret(Parser* par, a_u32 base, a_u32 len, a_line line) {
 			break;
 		}
 		case VARARG: {
-			i = bc_make_ia(BC_RETV, base);
+			i = bc_make_ia(BC_RETM, base);
 			break;
 		}
 		default: {
@@ -765,7 +765,7 @@ static void l_negate_branch(Parser* par, a_u32* plabel, a_u32 label, a_line line
 		a_insn* pi = &par->_code[label - 1];
 
 		a_u32 op = bc_load_op(*pi);
-		if (bc_is_branch_op(op)) {
+		if (bc_is_branch(op)) {
 			bc_swap_op(pi, op ^ 1);
 			l_mark_label(par, l_next_jump(par, label), line);
 			l_redirect(par, label, *plabel, line);
@@ -780,7 +780,7 @@ static void l_negate_branch(Parser* par, a_u32* plabel, a_u32 label, a_line line
 
 static void l_instantiate_branch(Parser* par, InoutExpr e, a_u32 reg) {
 	assume(par->_head_label == e->_label + 1);
-	assume(bc_is_branch_op(bc_load_op(par->_code[e->_label - 1])));
+	assume(bc_is_branch(bc_load_op(par->_code[e->_label - 1])));
 
 	a_u32 label = l_next_jump(par, e->_label);
 	if (label != NO_LABEL) {
@@ -844,7 +844,7 @@ void ai_code_new_list(Parser* par, InoutExpr e, a_line line) {
 	expr_dyn(e, l_emit(par, bc_make_iabx(BC_LNEW, DYN, 0), line));
 }
 
-void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
+void ai_code_unary(Parser* par, InoutExpr e, a_enum op, a_line line) {
 	switch (op) {
 		case OP_NEG: {
 			switch (e->_kind) {
@@ -948,7 +948,7 @@ void ai_code_unary(Parser* par, InoutExpr e, a_u32 op, a_line line) {
 	}
 }
 
-void ai_code_binary1(Parser* par, InoutExpr e, a_u32 op, a_line line) {
+void ai_code_binary1(Parser* par, InoutExpr e, a_enum op, a_line line) {
 	switch (op) {
 		case OP_ADD:
 		case OP_SUB:
@@ -1140,7 +1140,7 @@ static void l_compare(Parser* par, InoutExpr e1, InExpr e2, a_u32 bc, a_line lin
  *@param op the operation.
  *@param line the line number of the operation.
  */
-void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line) {
+void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line line) {
 	if (unlikely(e1->_kind == EXPR_NEVER || e2->_kind == EXPR_NEVER)) return;
 	switch (op) {
 		case OP_ADD:
@@ -1336,7 +1336,7 @@ void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line lin
 	}
 }
 
-void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line line) {
+void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_enum op, a_line line) {
 	switch (op) {
 		case OP_OR_NIL: {
 			a_u32 kind = l_condT(par, e, plabel, line);
@@ -1642,11 +1642,7 @@ static a_insn l_is_leave(Parser* par, a_u32 label) {
 		return 0;
 	a_insn i = par->_code[label];
 	a_u32 op = bc_load_op(i);
-	return (
-			op == BC_RET ||
-			op == BC_RETV ||
-			op == BC_RET0 ||
-			op == BC_RET1) ? i : 0;
+	return bc_is_leave(op) ? i : 0;
 }
 
 /**

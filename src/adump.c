@@ -91,8 +91,9 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_CLOSE:
 			case BC_BNZ:
 			case BC_BZ:
+			case BC_CALLMV:
 			case BC_RET1:
-			case BC_RETV: {
+			case BC_RETM: {
 				aloi_show("%4u    _    _\n", bc_load_a(i));
 				break;
 			}
@@ -103,7 +104,8 @@ static void dump_code(GProto* meta, a_bool fline) {
 				aloi_show("\n");
 				break;
 			}
-			case BC_KN: {
+			case BC_KN:
+			case BC_CALLM: {
 				aloi_show("%4u    _ %4u\n", bc_load_a(i), bc_load_c(i));
 				break;
 			}
@@ -126,10 +128,13 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_LDC:
 			case BC_STC:
 			case BC_NEG:
+			case BC_LPUSHM:
+			case BC_LBOXM:
 			case BC_BEQ:
 			case BC_BNE:
 			case BC_BLT:
 			case BC_BLE:
+			case BC_CALLV:
 			case BC_RET: {
 				aloi_show("%4u %4u    _\n", bc_load_a(i), bc_load_b(i));
 				break;
@@ -148,6 +153,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_BOR:
 			case BC_BXOR:
 			case BC_UNBOX:
+			case BC_LPUSH:
 			case BC_CALL:
 			case BC_CAT: {
 				aloi_show("%4u %4u %4u\n", bc_load_a(i), bc_load_b(i), bc_load_c(i));
@@ -155,7 +161,8 @@ static void dump_code(GProto* meta, a_bool fline) {
 			}
 			case BC_GETS:
 			case BC_CGETS:
-			case BC_SETS: {
+			case BC_SETS:
+			case BC_CSETS: {
 				a_u32 c = bc_load_c(i);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), c);
 				dump_const(meta->_consts[c]);
@@ -164,7 +171,8 @@ static void dump_code(GProto* meta, a_bool fline) {
 			}
 			case BC_GETSX:
 			case BC_CGETSX:
-			case BC_SETSX: {
+			case BC_SETSX:
+			case BC_CSETSX: {
 				a_u32 ex = bc_load_ax(*p++);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), ex);
 				dump_const(meta->_consts[ex]);

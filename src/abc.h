@@ -74,7 +74,7 @@ always_inline void bc_swap_c(a_insn* i, a_u32 c) { *i = (*i & ~BC_MASK_C) | bc_w
 always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_wrap_sc(c); }
 
 #define ALO_BC_LIST(_) \
-/*        id,    name,   fmt, stk,    description                                  */ \
+/*        id,    name,   fmt, ctl,    description                                  */ \
     _(   MOV,   "mov",   iAB, ___) /* R[a] := R[b]                                 */ \
 /*=================================================================================*/ \
     _(   LDC,   "ldc",   iAB, ___) /* R[a] := C[b]                                 */ \
@@ -124,11 +124,13 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(  BNOT,  "bnot",   iAB, ___) /* R[a] := ~R[b]                                */ \
     _(   LEN,   "len",   iAB, ___) /* R[a] := #R[b]                                */ \
     _( UNBOX, "unbox",  iABC, ___) /* R[a:a+c] := *R[b]                            */ \
-    _(UNBOXV,"unboxv",  iABC, ___) /* R[a:] := *R[b]                               */ \
+    _(UNBOXV,"unboxv",  iABC, _2v) /* R[a:] := *R[b]                               */ \
     _(  TNEW,  "tnew",  iABC, ___) /* R[a] := (R[b:b+c])                           */ \
     _( TNEWM, "tnewm",  iABC, v2_) /* R[a] := (R[b:])                              */ \
     _(  LNEW,  "lnew",  iABx, ___) /* R[a] := [] (with size hint bx)               */ \
+    _( LBOXM, "lboxm",   iAB, ___) /* R[a] := [R[b:]                               */ \
     _( LPUSH, "lpush",  iABC, ___) /* (R[a]: list) ++= R[b:b+c])                   */ \
+    _(LPUSHM,"lpushm",   iAB, v2_) /* (R[a]: list) ++= R[b:])                      */ \
     _(   ADD,   "add",  iABC, ___) /* R[a] := R[b] + R[c]                          */ \
     _(   SUB,   "sub",  iABC, ___) /* R[a] := R[b] - R[c]                          */ \
     _(   MUL,   "mul",  iABC, ___) /* R[a] := R[b] * R[c]                          */ \
@@ -150,17 +152,17 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(  BORI,  "bori", iABsC, ___) /* R[a] := R[b] | int(c)                        */ \
     _( BXORI, "bxori", iABsC, ___) /* R[a] := R[b] ~ int(c)                        */ \
     _(  CALL,  "call",  iABC, ___) /* R[a:a+c] := R[a](R[a+1:a+b])                 */ \
-    _( CALLV, "callv",  iABC, _2v) /* R[a:] := R[a](R[a+1:a+b])                    */ \
-    _( CALLM, "callm",  iABC, v2_) /* R[a:a+c] := R[a](R[a+1:])                    */ \
-    _(CALLMV,"callmv",  iABC, v2v) /* R[a:] := R[a](R[a+1:])                       */ \
+    _( CALLV, "callv",   iAB, _2v) /* R[a:] := R[a](R[a+1:a+b])                    */ \
+    _( CALLM, "callm",   iAC, v2_) /* R[a:a+c] := R[a](R[a+1:])                    */ \
+    _(CALLMV,"callmv",    iA, v2v) /* R[a:] := R[a](R[a+1:])                       */ \
     _(   CAT,   "cat",  iABC, ___) /* R[a] := concat(R[b:b+c])                     */ \
     _(  CATM,  "catm",  iABC, v2_) /* R[a] := concat(R[b:])                        */ \
-    _(     J,     "j",  isAx, ___) /* pc := pc + a                                 */ \
     _( CLOSE, "close",    iA, ___) /* close(C[A:])                                 */ \
-    _(   RET,   "ret",   iAB, ___) /* return R[a:a+b+1]                            */ \
-    _(  RETV,  "retv",    iA, ___) /* return R[a:]                                 */ \
-    _(  RET1,  "ret1",    iA, ___) /* return R[a]                                  */ \
-    _(  RET0,  "ret0",     i, ___) /* return                                       */ \
+    _(     J,     "j",  isAx, ___) /* pc := pc + a                                 */ \
+    _(  RET0,  "ret0",     i, _2n) /* return                                       */ \
+    _(  RET1,  "ret1",    iA, _2n) /* return R[a]                                  */ \
+    _(   RET,   "ret",   iAB, _2n) /* return R[a:a+b+1]                            */ \
+    _(  RETM,  "retm",    iA, v2n) /* return R[a:]                                 */ \
     _(    FC,    "fc",     i, ___) /* call C function                              */ \
     _(    EX,    "ex",   iAx, ___) /*                                              */
 
@@ -185,6 +187,9 @@ static_assert(BC_GETS + 1 == BC_GETSX);
 static_assert(BC_CGETS + 1 == BC_CGETSX);
 static_assert(BC_SETS + 1 == BC_SETSX);
 static_assert(BC_CSETS + 1 == BC_CSETSX);
+static_assert(BC_UNBOX + 1 == BC_UNBOXV);
+static_assert(BC_CALL + 1 == BC_CALLV);
+static_assert(BC_CALLM + 1 == BC_CALLMV);
 
 enum InsnFormat {
 	INSN_i,
@@ -203,12 +208,16 @@ enum InsnFormat {
 intern char const* const ai_bc_names[];
 intern a_u8 const ai_bc_formats[];
 
-always_inline a_bool bc_has_dual_op(a_enum op) {
+always_inline a_bool bc_has_dual(a_enum op) {
 	return op >= BC_KF && op <= BC_BNGEI;
 }
 
-always_inline a_bool bc_is_branch_op(a_enum op) {
+always_inline a_bool bc_is_branch(a_enum op) {
 	return op >= BC_BZ && op <= BC_BNGEI;
+}
+
+always_inline a_bool bc_is_leave(a_enum op) {
+	return op >= BC_RET0 && op <= BC_RETM;
 }
 
 always_inline void insn_check(a_insn i) {
