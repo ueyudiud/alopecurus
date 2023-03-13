@@ -121,7 +121,8 @@ static a_bool l_test_sep(Parser* par) {
 
 static void l_scan_atom_expr(Parser* par, OutExpr e);
 static void l_scan_expr(Parser* par, OutExpr e);
-static void l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2);
+static a_bool l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2);
+static a_bool l_scan_expr_pack_tail(Parser* par, InoutExpr e1, OutExpr e2);
 static void l_scan_stat(Parser* par);
 static void l_scan_stat_seq(Parser* par);
 
@@ -252,7 +253,7 @@ static void l_scan_atom_expr(Parser* par, OutExpr e) {
 				if (!l_test_skip(par, TK_RBK)) {
 					if (l_test_skip(par, TK_COMMA) && !l_test(par, TK_RBK)) {
 						Expr e2;
-						l_scan_expr_pack(par, e, &e2);
+						l_scan_expr_pack_tail(par, e, &e2);
 						ai_code_va_push(par, e, &e2, ln_cur(par));
 					}
 					l_check_pair_right(par, TK_LBK, TK_RBK, line);
@@ -315,9 +316,9 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 
 				if (!l_test_skip(par, TK_RBK)) {
 					Expr e2;
-					l_scan_expr_pack(par, e, &e2);
-					l_check_pair_right(par, TK_LBK, TK_RBK, line);
+					l_scan_expr_pack_tail(par, e, &e2);
 					ai_code_va_push(par, e, &e2, ln_cur(par));
+					l_check_pair_right(par, TK_LBK, TK_RBK, line);
 				}
 				ai_code_call(par, e, line);
 				break;
@@ -611,16 +612,35 @@ static void l_scan_expr(Parser* par, OutExpr e) {
 	l_scan_ternary_expr(par, e);
 }
 
-static void l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2) {
-	l_scan_expr(par, e2);
-	while (l_test_skip(par, TK_COMMA)) {
-		ai_code_va_push(par, e1, e2, ln_cur(par));
+static a_bool l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2) {
+	l_scan_expr(par, e1);
+	if (l_test_skip(par, TK_COMMA)) {
 		if (l_test_skip(par, TK_TDOT)) {
-			ai_code_unpack(par, e2, ln_cur(par));
+			ai_code_unpack(par, e1, ln_cur(par));
+		}
+		else {
+			return l_scan_expr_pack_tail(par, e1, e2);
+		}
+	}
+	return false;
+}
+
+static a_bool l_scan_expr_pack_tail(Parser* par, InoutExpr e1, OutExpr e2) {
+	ai_code_va_init(par, e1);
+	l_scan_expr(par, e2);
+
+	a_u32 line = ln_cur(par);
+	while (l_test_skip(par, TK_COMMA)) {
+		if (l_test_skip(par, TK_TDOT)) {
+			ai_code_unpack(par, e2, line);
 			break;
 		}
+		ai_code_va_push(par, e1, e2, line);
+		line = ln_cur(par);
 		l_scan_expr(par, e2);
 	}
+
+	return true;
 }
 
 typedef struct Lhs Lhs;
@@ -750,8 +770,9 @@ static void l_scan_return_stat(Parser* par) {
 
 	if (!l_test_sep(par)) {
 		Expr e2 = {};
-		l_scan_expr_pack(par, &e, &e2);
-		ai_code_va_push(par, &e, &e2, line);
+		if (l_scan_expr_pack(par, &e, &e2)) {
+			ai_code_va_push(par, &e, &e2, line);
+		}
 	}
 
 	l_test_skip(par, TK_SEMI);
@@ -1063,12 +1084,13 @@ static void l_scan_root_return_stat(Parser* par) {
 
 	if (!l_test_sep(par)) {
 		Expr e2 = {};
-		l_scan_expr_pack(par, &e, &e2);
-		/* Unpack the return value if it is possible. */
-		if (e2._kind == EXPR_VA_DYN || e2._kind == EXPR_VARG) {
-			ai_code_unpack(par, &e2, ln_cur(par));
+		if (l_scan_expr_pack(par, &e, &e2)) {
+			ai_code_va_push(par, &e, &e2, 1);
 		}
-		ai_code_va_push(par, &e, &e2, 1);
+		/* Unpack the return value if only return one value and it can be unpacked. */
+		else if (e._kind == EXPR_VA_DYN || e._kind == EXPR_VARG) {
+			ai_code_unpack(par, &e, ln_cur(par));
+		}
 	}
 
 	l_test_skip(par, TK_SEMI);

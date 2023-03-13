@@ -347,7 +347,7 @@ always_inline void v_cpy(a_henv env, Value* restrict d, Value const* restrict s)
 	v_set(env, d, *s);
 }
 
-always_inline void v_mov_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
+always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
 	for (a_usize i = 0; i < n; ++i) {
 		v_cpy(env, &d[i], &s[i]);
 	}

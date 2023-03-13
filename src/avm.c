@@ -289,7 +289,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 			ai_buf_putls(env, buf, cache->_data, cache->_len);
 		}
 
-		do {
+		loop {
 			if (likely(v_is_str(v))) {
 				GStr* val = v_as_str(v);
 				ai_buf_putls(env, buf, val->_data, val->_len);
@@ -332,8 +332,9 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 					break;
 				}
 			}
+			if (i == n) break;
+			v = base[i++];
 		}
-		while (i < n && (v = base[i++], true));
 
 		GStr* result = ai_buf_tostr(env, buf);
 		ai_buf_deinit(G(env), buf);
@@ -538,9 +539,19 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_LNEW: {
 				loadBx();
 
-				GList* v = ai_list_new(env);
-				v_set_obj(env, &R[a], v);
-				ai_list_hint(env, v, b);
+				GList* val = ai_list_new(env);
+				v_set_obj(env, &R[a], val);
+				ai_list_hint(env, val, b);
+
+				check_gc();
+				break;
+			}
+			case BC_LPUSH: {
+				loadB();
+				loadC();
+
+				GList* val = v_as_list(R[a]);
+				ai_list_push_all(env, val, &R[b], c);
 
 				check_gc();
 				break;
@@ -744,10 +755,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
-				else if (v_is_mod(vb)) {
-					ai_table_set(env, &v_as_mod(vb)->_table, vc, va);
-				}
-				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+				else if (unlikely(v_is_list(vb))) {
 					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
 				}
 				else {
@@ -767,10 +775,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
-				else if (v_is_mod(vb)) {
-					ai_table_set(env, &v_as_mod(vb)->_table, vc, va);
-				}
-				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+				else if (unlikely(v_is_list(vb))) {
 					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
 				}
 				else {
@@ -877,7 +882,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else if (v_is_list(vb)) {
 					GList* val = v_as_list(vb);
-					v_mov_all_with_nil(env, &R[a], c, val->_data, val->_len);
+					v_mov_all_with_nil(env, &R[a], c, val->_ptr, val->_len);
 				}
 				else {
 					vm_meta_unbox(env, vb, &R[b], c);
@@ -899,7 +904,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				else if (v_is_list(vb)) {
 					GList* val = v_as_list(vb);
 					check_stack(&R[a] + val->_len);
-					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_data, val->_len);
+					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_ptr, val->_len);
 				}
 				else {
 					vm_meta_unbox(env, vb, &R[b], RFLAG_COUNT_VARARG);

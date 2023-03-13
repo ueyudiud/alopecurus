@@ -17,7 +17,7 @@ static VTable const list_vtable;
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, sizeof(GList));
 	self->_vtable = &list_vtable;
-    self->_data = null;
+    self->_ptr = null;
     self->_len = 0;
     self->_cap = 0;
     ai_gc_register_object(env, self);
@@ -29,19 +29,32 @@ void ai_list_hint(a_henv env, GList* self, a_usize len) {
     a_usize old_cap = self->_cap;
     if (expect > old_cap) {
         a_usize new_cap = expect;
-        self->_data = ai_mem_vgrow(env, self->_data, old_cap, new_cap);
+        self->_ptr = ai_mem_vgrow(env, self->_ptr, old_cap, new_cap);
         self->_cap = new_cap;
     }
 }
 
-void ai_list_insert(a_henv env, GList* self, Value value) {
+void ai_list_push(a_henv env, GList* self, Value value) {
     if (self->_len == self->_cap) {
         a_usize old_cap = self->_cap;
         a_usize new_cap = old_cap * 2;
-        self->_data = ai_mem_vgrow(env, self->_data, old_cap, new_cap);
+        self->_ptr = ai_mem_vgrow(env, self->_ptr, old_cap, new_cap);
     }
-    v_set(env, &self->_data[self->_len++], value);
-	ai_gc_barrier_forward_val(env, self, value);
+
+    v_set(env, &self->_ptr[self->_len++], value);
+
+	ai_gc_barrier_backward_val(env, self, value);
+}
+
+void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
+	ai_list_hint(env, self, len);
+
+	v_cpy_all(env, self->_ptr + self->_len, src, len);
+	self->_len += 1;
+	/* We assume the elements in source has white value. */
+	if (g_has_black_color(self)) {
+		join_trace(&G(env)->_tr_regray, self);
+	}
 }
 
 Value* ai_list_refi(unused a_henv env, GList* self, a_isize pos) {
@@ -56,19 +69,19 @@ Value* ai_list_refi(unused a_henv env, GList* self, a_isize pos) {
             return null;
         }
     }
-    return &self->_data[pos];
+    return &self->_ptr[pos];
 }
 
 static void list_mark(Global* g, GList* self) {
     a_usize len = self->_len;
     for (a_usize i = 0; i < len; ++i) {
-		ai_gc_trace_mark_val(g, self->_data[i]);
+		ai_gc_trace_mark_val(g, self->_ptr[i]);
     }
 	ai_gc_trace_work(g, sizeof(GList) + sizeof(Value) * self->_cap);
 }
 
 static void list_drop(Global* g, GList* self) {
-    ai_mem_vdel(g, self->_data, self->_cap);
+    ai_mem_vdel(g, self->_ptr, self->_cap);
     ai_mem_dealloc(g, self, sizeof(GList));
 }
 

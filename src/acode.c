@@ -70,6 +70,10 @@ static a_u32 l_const_index(Parser* par, Value val) {
 	return l_bput(par, *consts, val, 256);
 }
 
+static a_bool l_const_is_istr(Parser* par, a_u32 index) {
+	return v_is_istr(par->_consts._ptr[par->_fnscope->_const_off + index]);
+}
+
 /**
  ** Get last instruction if it is in sequential control flow.
  *@return the last instruction.
@@ -463,10 +467,6 @@ static a_u32 l_alloc_stack(Parser* par, a_u32 line) {
 
 static a_bool l_is_in_tmp(Parser* par, a_u32 reg) {
 	return reg >= par->_scope->_top_ntr;
-}
-
-static a_bool l_is_topR(Parser* par, a_u32 reg) {
-	return reg == cast(a_u32, par->_scope->_top_reg) - 1;
 }
 
 static void l_check_free_used_stack(Scope* scope) {
@@ -1518,29 +1518,20 @@ a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line l
 	}
 }
 
+void ai_code_va_init(Parser* par, InoutExpr e) {
+	if (e->_kind != EXPR_NEVER) {
+		l_topR(par, e);
+	}
+	e->_kind = EXPR_PACK;
+	e->_pack = new(ExprPack) { e->_reg, 1 };
+}
+
 void ai_code_va_push(Parser* par, InoutExpr e1, InExpr e2, a_line line) {
 	if (unlikely(e2->_kind == EXPR_NEVER)) {
 		expr_never(e1, line);
 		return;
 	}
-	if (unlikely(e1->_kind != EXPR_PACK)) {
-		switch (e1->_kind) {
-			case EXPR_NEVER: {
-				return;
-			}
-			case EXPR_UNIT: {
-				expr_copy(e1, e2);
-				return;
-			}
-			default: {
-				assume(e1->_kind != EXPR_PACK);
-				l_topR(par, e1);
-				e1->_kind = EXPR_PACK;
-				e1->_pack = new(ExprPack) { e1->_reg, 1 };
-				break;
-			}
-		}
-	}
+	assume(e1->_kind == EXPR_PACK);
 	l_va_push(par, &e1->_pack, e2, line);
 }
 
@@ -1791,9 +1782,6 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 	switch (e1->_kind) {
 		case EXPR_VAR: {
 			l_check_writable(par, e1->_sym, line);
-			fallthrough;
-		}
-		case EXPR_TMP: {
 			l_fixR(par, e2, e1->_reg);
 			break;
 		}
@@ -1801,19 +1789,24 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 			l_anyR(par, e2);
 			l_check_writable(par, e1->_sym, line);
 			l_emit(par, bc_make_iab(BC_STC, e1->_reg, e2->_reg), line);
+
 			l_drop(par, e2);
 			break;
 		}
 		case EXPR_REFR_ALL: {
 			l_anyR(par, e2);
 			l_emit(par, bc_make_iabc(BC_SET, e1->_base, e1->_key, e2->_reg), line);
+
 			l_drop(par, e2);
+			ai_code_drop(par, e1);
 			break;
 		}
 		case EXPR_REFI_ALL: {
 			l_anyR(par, e2);
 			l_emit(par, bc_make_iabc(BC_SETI, e1->_base, e1->_key, e2->_reg), line);
+
 			l_drop(par, e2);
+			ai_code_drop(par, e1);
 			break;
 		}
 		case EXPR_REFK_ALL: {
@@ -1821,24 +1814,29 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 			l_emit_refx(par, BC_SETS, e2->_reg, e1->_base, e1->_key, line);
 
 			l_drop(par, e2);
+			ai_code_drop(par, e1);
 			break;
 		}
 		case EXPR_REFCK: {
 			l_anyR(par, e2);
 
-			a_u32 reg = l_alloc_stack(par, line);
-			l_emit(par, bc_make_iab(BC_LDC, reg, e1->_base), line);
-			expr_tmp(e1, reg, line);
-
-			l_emit_refx(par, BC_SETS, e2->_reg, reg, e1->_key, line);
-			l_drop(par, e2);
+			if (l_const_is_istr(par, e1->_key)) {
+				l_emit_refx(par, BC_CSETS, e1->_base, e1->_key, e2->_reg, line);
+			}
+			else {
+				a_u32 reg = l_succ_alloc_stack(par, 2, line);
+				l_emit(par, bc_make_iab(BC_LDC, reg, e1->_base), line);
+				l_emit(par, bc_make_iabx(BC_K, reg + 1, e1->_key), line);
+				l_emit_refx(par, BC_SETS, reg, reg + 1, e2->_reg, line);
+				l_succ_free_stack(par, 2, line);
+				l_drop(par, e2);
+			}
 			break;
 		}
 		default: {
-			ai_par_error(par, "cannot assign to the expression.", e1->_line);
+			panic("cannot bind to the expression.");
 		}
 	}
-	ai_code_drop(par, e1);
 }
 
 #define NAMES_GROW_UNIT 64
@@ -2312,7 +2310,7 @@ static void l_dynR(Parser* par, InoutExpr e) {
 		}
 		case EXPR_REFCK: {
 			a_u32 k = e->_key;
-			if (v_is_istr(par->_consts._ptr[par->_fnscope->_const_off + k])) {
+			if (l_const_is_istr(par, k)) {
 				expr_dyn(e, l_emit_refx(par, BC_CGETS, DYN, e->_base, k, e->_line));
 			}
 			else {
@@ -2460,7 +2458,7 @@ static void l_topR(Parser* par, InoutExpr e) {
 			bc_swap_c(pi, 2);
 
 			a_u32 reg = bc_load_a(*pi);
-			assume(l_is_topR(par, reg));
+			assume(par->_scope->_top_reg == reg, "vararg are not in the top.");
 			expr_tmp(e, reg, e->_line);
 			break;
 		}

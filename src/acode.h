@@ -38,6 +38,7 @@ intern void ai_code_call(Parser* par, InExpr e, a_line line);
 intern void ai_code_return(Parser* par, InExpr e, a_line line);
 intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_line line);
 intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line line);
+intern void ai_code_va_init(Parser* par, InoutExpr e);
 intern void ai_code_va_push(Parser* par, InoutExpr e1, InExpr e2, a_line line);
 intern void ai_code_va_pop(Parser* par, InoutExpr es, InoutExpr e, a_line line);
 intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line);

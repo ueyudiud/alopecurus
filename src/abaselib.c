@@ -82,10 +82,10 @@ static void l_show_impl(Value v, a_u32 depth) {
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("[");
-					l_show_impl(val->_data[0], depth + 1);
+					l_show_impl(val->_ptr[0], depth + 1);
 					for (a_u32 i = 1; i < n; ++i) {
 						aloi_show(", ");
-						l_show_impl(val->_data[i], depth + 1);
+						l_show_impl(val->_ptr[i], depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");

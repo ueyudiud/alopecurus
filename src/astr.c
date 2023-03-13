@@ -139,7 +139,8 @@ GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 t
     IStr* self = cast(IStr*, blk);
     a_hash hash = ai_str_hashof(g->_seed, src, len);
 
-	self->_body._gnext = null;
+	g_set_gray(&self->_body);
+
 	istr_init(self, src, len, hash);
 	strx_id_set(&self->_body, tag);
 

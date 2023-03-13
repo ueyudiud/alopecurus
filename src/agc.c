@@ -5,12 +5,11 @@
 #define agc_c_
 #define ALO_LIB
 
-#include "atable.h"
 #include "amem.h"
 
 #include "agc.h"
 
-#define trmark_null cast(a_trmark, null)
+#define trmark_null GRAY_NULL
 
 #define GCUNIT 256
 
@@ -47,7 +46,7 @@ void ai_gc_register_object_(a_henv env, a_hobj obj) {
 	assume(obj->_vtable->_drop != null, "cannot register permanent object.");
 	Global* g = G(env);
 	join_gc(&g->_gc_normal, obj);
-	obj->_tnext = cast(a_trmark, g->_white_color);
+	g_set_white(g, obj);
 }
 
 void ai_gc_register_objects(a_henv env, RefQueue* rq) {
@@ -70,8 +69,11 @@ void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 }
 
 static void really_mark_object(Global* g, a_hobj obj) {
+	/* Color object to black. */
+	g_set_black(obj);
+	/* Call mark virtual method. */
 	a_fp_mark mark_fp = obj->_vtable->_mark;
-	assume(mark_fp != null, "no mark");
+	assume(mark_fp != null, "missing mark method.");
 	(*mark_fp)(g, obj);
 }
 
@@ -79,7 +81,7 @@ void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 	assume(g_has_white_color(g, obj)); /* Checked in inline function. */
 	VTable const* vtable = obj->_vtable;
 	if (vtable->_flags & VTABLE_FLAG_PLAIN_MARK) {
-		obj->_tnext = trmark_null; /* Mark object to gray before propagation. */
+		g_set_gray(obj); /* Mark object to gray before propagation. */
 		if (vtable->_mark != null) {
 			really_mark_object(g, obj);
 		}

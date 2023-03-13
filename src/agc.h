@@ -53,30 +53,50 @@ always_inline a_bool g_has_black_color(a_hobj v) {
     return (v->_tnext & BLACK_COLOR) != 0;
 }
 
+#define g_has_black_color(v) g_has_black_color(gobj_cast(v))
+
 always_inline a_bool g_has_gray_color(a_hobj v) {
     return (v->_tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
+
+#define g_has_gray_color(v) g_has_gray_color(gobj_cast(v))
 
 always_inline a_bool g_has_white_color(Global* g, a_hobj v) {
     return (v->_tnext & white_color(g)) != 0;
 }
 
+#define g_has_white_color(g,v) g_has_white_color(g, gobj_cast(v))
+
 always_inline a_bool g_has_other_color(Global* g, a_hobj v) {
     return (v->_tnext & other_color(g)) != 0;
 }
+
+#define g_has_other_color(g,v) g_has_other_color(g, gobj_cast(v))
 
 always_inline a_bool g_has_white_color_within_assume_alive(Global* g, a_hobj v) {
 	assume(g_has_white_color(g, v));
 	return (v->_tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
 
+#define g_has_white_color_within_assume_alive(g,v) g_has_white_color_within_assume_alive(g, gobj_cast(v))
+
 always_inline void g_set_white(Global* g, a_hobj v) {
 	v->_tnext = white_color(g);
 }
 
+#define g_set_white(g,v) g_set_white(g, gobj_cast(v))
+
 always_inline void g_set_gray(a_hobj v) {
 	v->_tnext = GRAY_NULL;
 }
+
+#define g_set_gray(v) g_set_gray(gobj_cast(v))
+
+always_inline void g_set_black(a_hobj v) {
+	v->_tnext = BLACK_COLOR;
+}
+
+#define g_set_black(v) g_set_black(gobj_cast(v))
 
 always_inline void v_check_alive(a_henv env, Value v) {
 	if (v_is_obj(v)) {

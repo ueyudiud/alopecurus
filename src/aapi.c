@@ -352,7 +352,7 @@ void alo_xmove(a_henv src, a_henv dst, a_usize n) {
 	api_check(src != dst, "same environment.");
 	api_check_elem(src, n);
 	api_check_slot(dst, n);
-	v_mov_all(src, dst->_stack._top, src->_stack._top - n, n);
+	v_cpy_all(src, dst->_stack._top, src->_stack._top - n, n);
 	src->_stack._top -= n;
 	dst->_stack._top += n;
 }
@@ -461,7 +461,7 @@ void alo_insert(a_henv env, a_isize id) {
 	Value v1 = api_elem(env, id);
 	api_check(v_is_list(v1));
 	Value v2 = api_pre_decr_stack(env);
-	ai_list_insert(env, v_as_list(v1), v2);
+	ai_list_push(env, v_as_list(v1), v2);
 	api_post_decr_stack(env);
 	ai_gc_trigger(env);
 }

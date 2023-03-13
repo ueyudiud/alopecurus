@@ -19,7 +19,7 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
 	self->_vtable = &tuple_vtable;
     self->_len = len;
 	self->_hash = 0;
-	v_mov_all(env, self->_body, src, len);
+	v_cpy_all(env, self->_body, src, len);
     ai_gc_register_object(env, self);
     return self;
 }
