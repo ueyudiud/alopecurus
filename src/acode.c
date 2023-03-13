@@ -37,7 +37,7 @@ static void l_nomem_error(Parser* par) {
         l_check_alloc(ai_buf_ngrow((par)->_env, _buf, _buf->_cap + u)); \
     } \
 	a_usize _index = _buf->_len++; \
-    _buf->_arr[_index] = (v); \
+    _buf->BUF_PTR_REF[_index] = (v); \
 	_index; \
 })
 
@@ -58,7 +58,7 @@ static a_u32 l_const_index(Parser* par, Value val) {
 		 * Since all literals which have the same format provided by compiler should
 		 * have same binary data, use identity equality for comparison.
 		 */
-		if (v_trivial_equals_unchecked(consts->_arr[i], val)) {
+		if (v_trivial_equals_unchecked(consts->_ptr[i], val)) {
 			return i;
 		}
 	}
@@ -89,7 +89,7 @@ static void l_emit_line(Parser* par, a_line line) {
 		LineInfo info = new(LineInfo) {UINT32_MAX, line};
 		a_u32 index = l_bput(par, par->_lines, info, 512);
 		if (index > scope->_line_off) { /* Settle end label for last line info. */
-			par->_lines._arr[index - 1]._end = par->_head_label;
+			par->_lines._ptr[index - 1]._end = par->_head_label;
 		}
 		scope->_head_line = line;
 	}
@@ -589,13 +589,13 @@ static a_u32 l_condF(Parser* par, InExpr e, a_u32* plabel, a_u32 line);
 static a_u32 l_try(Parser* par, InoutExpr e, a_u32 line);
 
 static a_u32 l_local(Parser* par, Sym* sym) {
-	return par->_locals._arr[par->_fnscope->_local_off + sym->_index]._reg;
+	return par->_locals._ptr[par->_fnscope->_local_off + sym->_index]._reg;
 }
 
 static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
 	/* Find in captured values. */
 	for (a_u32 i = 0; i < scope->_caps._len; ++i) {
-		RichCapInfo* info = &scope->_caps._arr[i];
+		RichCapInfo* info = &scope->_caps._ptr[i];
 		if (info->_sym_index == sym->_index) {
 			/* Already captured. */
 			return i;
@@ -635,10 +635,10 @@ static a_u32 l_capture(Parser* par, Sym* sym) {
 }
 
 /* TODO Get environment name. */
-#define l_env_name(par) (&(par)->_syms._arr[0])
+#define l_env_name(par) (&(par)->_syms._ptr[0])
 
 static void l_load_name(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
-	Sym* sym = &par->_syms._arr[id];
+	Sym* sym = &par->_syms._ptr[id];
 	switch (sym->_kind) {
 		case SYM_LOCAL: {
 			if (par->_scope_depth == sym->_scope) {
@@ -674,7 +674,7 @@ void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line) {
 	SymBuf* syms = &par->_syms;
 	for (a_u32 i = syms->_len; i > 0; --i) {
 		a_u32 id = i - 1;
-		if (syms->_arr[id]._name == name) {
+		if (syms->_ptr[id]._name == name) {
 			l_load_name(par, e, id, line);
 			return;
 		}
@@ -1578,7 +1578,7 @@ static a_bool l_try_append(Parser* par, QBuf* buf, InExpr e) {
 }
 
 static GStr* buf_to_str(Parser* par, QBuf* buf) {
-	GStr* str = ai_lex_tostr(&par->_lex, buf->_arr, buf->_len);
+	GStr* str = ai_lex_to_str(&par->_lex, buf->_ptr, buf->_len);
 	ai_buf_reset(buf);
 	return str;
 }
@@ -1781,7 +1781,7 @@ void ai_code_drop(Parser* par, InExpr e) {
 }
 
 static void l_check_writable(Parser* par, a_u32 id, a_line line) {
-	Sym* sym = &par->_syms._arr[id];
+	Sym* sym = &par->_syms._ptr[id];
 	if (sym->_mods & SYM_MOD_READONLY) {
 		ai_par_error(par, "cannot assign to readonly variable %s.", line, str2ntstr(sym->_name));
 	}
@@ -1999,10 +1999,10 @@ static void scope_pop(Parser* par, a_line line) {
 		a_u32 top = par->_syms._len;
 		a_u32 label = par->_head_label;
 		for (a_u32 i = bot; i < top; ++i) {
-			Sym* sym = &par->_syms._arr[i];
+			Sym* sym = &par->_syms._ptr[i];
 			switch (sym->_kind) {
 				case SYM_LOCAL:
-					par->_locals._arr[par->_fnscope->_local_off + sym->_index]._end_label = label;
+					par->_locals._ptr[par->_fnscope->_local_off + sym->_index]._end_label = label;
 					break;
 				default:
 					unreachable();
@@ -2080,17 +2080,17 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 		l_nomem_error(par);
 	}
 
-	memcpy(proto->_consts, par->_consts._arr + scope->_const_off, sizeof(Value) * desc._nconst);
+	memcpy(proto->_consts, par->_consts._ptr + scope->_const_off, sizeof(Value) * desc._nconst);
 	memcpy(proto->_code, par->_code + scope->_begin_label, sizeof(a_insn) * desc._ninsn);
 	if (desc._flags._fdebug) {
 		proto->_dbg_lndef = scope->_begin_line;
 		proto->_dbg_lnldef = line;
-		memcpy(proto->_dbg_lines, par->_lines._arr + scope->_line_off, sizeof(LineInfo) * desc._nline);
-		memcpy(proto->_dbg_locals, par->_locals._arr + scope->_local_off, sizeof(LocalInfo) * desc._nlocal);
+		memcpy(proto->_dbg_lines, par->_lines._ptr + scope->_line_off, sizeof(LineInfo) * desc._nline);
+		memcpy(proto->_dbg_locals, par->_locals._ptr + scope->_local_off, sizeof(LocalInfo) * desc._nlocal);
 	}
 	run {
 		for (a_u32 i = 0; i < desc._ncap; ++i) {
-			RichCapInfo* cap_info = &scope->_caps._arr[i];
+			RichCapInfo* cap_info = &scope->_caps._ptr[i];
 			proto->_caps[i] = new(CapInfo) {
 				._reg = cap_info->_src_index,
 				._fup = cap_info->_scope != par->_scope_depth
@@ -2156,7 +2156,7 @@ static void parser_mark(Global* g, void* ctx) {
 	run {
 		LexStrs* strs = &par->_lex._strs;
 		for (a_u32 i = 0; i <= strs->_hmask; ++i) {
-			StrNode* node = &strs->_table[i];
+			StrNode* node = &strs->_ptr[i];
 			if (node->_str != null) {
 				ai_gc_trace_mark(g, node->_str);
 			}
@@ -2299,7 +2299,7 @@ static void l_dynR(Parser* par, InoutExpr e) {
 		}
 		case EXPR_REFK(false): {
 			a_u32 k = e->_key;
-			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
+			if (v_is_istr(par->_consts._ptr[par->_fnscope->_const_off + k])) {
 				expr_dyn(e, l_emit_refx(par, BC_GETS, DYN, e->_base, k, e->_line));
 			}
 			else {
@@ -2312,7 +2312,7 @@ static void l_dynR(Parser* par, InoutExpr e) {
 		}
 		case EXPR_REFCK: {
 			a_u32 k = e->_key;
-			if (v_is_istr(par->_consts._arr[par->_fnscope->_const_off + k])) {
+			if (v_is_istr(par->_consts._ptr[par->_fnscope->_const_off + k])) {
 				expr_dyn(e, l_emit_refx(par, BC_CGETS, DYN, e->_base, k, e->_line));
 			}
 			else {

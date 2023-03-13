@@ -26,11 +26,11 @@
 /**
  ** Debug aasm mode. If enabled, all assumption will be checked and panic if failed.
  */
-#ifdef ALOI_DEBUG
+//#ifdef ALOI_DEBUG
 # define ALO_DEBUG M_true
-#else
-# define ALO_DEBUG M_false
-#endif
+//#else
+//# define ALO_DEBUG M_false
+//#endif
 
 /**
  ** Check memory related function in strict mode.
@@ -74,8 +74,11 @@
 #define unused __attribute__((__unused__))
 
 /* Types. */
-
-#define a_none __attribute__((__noreturn__)) void
+#if __STDC_VERSION__ >= 201112L
+# define a_none _Noreturn void
+#else
+# define a_none __attribute__((__noreturn__)) void
+#endif
 
 #if ALO_M64
 typedef __int128_t a_isize2;
@@ -133,6 +136,19 @@ typedef a_u32 a_insn;
 #define true  (!false)
 #define zero(t) ((t) {0})
 
+#if __STDC_VERSION__ >= 201112L
+# ifndef static_assert
+#  define static_assert(e) _Static_assert(e, "assert failed.")
+# endif
+#else
+# ifdef __COUNTER__
+#  define ALO_ASSERT_NAME M_cat(ai_assert_,__COUNTER__)
+# else
+#  define ALO_ASSERT_NAME M_cat(ai_assert_,__LINE__)
+# endif
+# define static_assert(e) extern (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
+#endif
+
 /* Special generic functors. */
 
 #undef new
@@ -145,7 +161,7 @@ typedef a_u32 a_insn;
 
 #define new(t) (t)
 #define cast(t,e) ((t) (e))
-#define bcast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; *cast(typeof(t)*, _e); })
+#define bcast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
 #define fpcast(t,e) cast(t, cast(void*, e))
 #define quiet(e...) ((void) ((void) 0, ##e))
 #define addr_of(e) cast(a_usize, (quiet((typeof(*(e))*) null), e))

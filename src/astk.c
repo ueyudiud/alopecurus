@@ -117,8 +117,10 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	return diff;
 }
 
-a_none ai_stk_overflow(a_henv env, a_bool again) {
-	if (again) {
+#define STACK_GROW_OVERFLOW isizec(2)
+
+a_none ai_stk_overflow(a_henv env, a_isize diff) {
+	if (diff & STACK_GROW_OVERFLOW) {
 		GStr* err = ai_str_newl(env, "stack overflow");
 		v_set_obj(env, &env->_error, err);
 		ai_env_raise(env, ALO_ESTKOF);
@@ -130,19 +132,21 @@ a_none ai_stk_overflow(a_henv env, a_bool again) {
 
 a_isize ai_stk_grow(a_henv env, Value* top) {
 	Stack* stack = &env->_stack;
+	assume(top > stack->_limit);
 	a_usize current_size = ptr_diff(stack->_limit, stack->_base);
 	a_usize expect_size = ptr_diff(top, stack->_base);
 	assume(expect_size > current_size);
 	if (unlikely(expect_size > MAX_STACK_SIZE)) {
-		if (current_size == MAX_OVERFLOWED_STACK_SIZE)
-			return GROW_STACK_FLAG_OF2;
+		if (current_size == MAX_OVERFLOWED_STACK_SIZE) {
+			return STACK_GROW_FAILED | STACK_GROW_OVERFLOW;
+		}
 		stack_grow(env, stack, MAX_OVERFLOWED_STACK_SIZE);
-		return GROW_STACK_FLAG_OF1;
+		return STACK_GROW_FAILED;
 	}
+
 	a_usize size_new = pad_to(expect_size, STACK_SIZE_GRANULARITY);
 	size_new = max(size_new, current_size + STACK_SIZE_GRANULARITY);
 	size_new = min(size_new, MAX_STACK_SIZE);
-
 	return stack_grow(env, stack, size_new);
 }
 

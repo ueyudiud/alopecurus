@@ -9,7 +9,7 @@
 #include "aarch.h"
 #include "adef.h"
 #include "aobj.h"
-#include "alink.h"
+#include "amap.h"
 #include "akw.h"
 #include "aop.h"
 #include "abc.h"

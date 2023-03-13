@@ -99,7 +99,7 @@ static a_bool c_isibody(a_i32 ch) {
 }
 
 always_inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
-    ai_buf_xput(lex->_in._env, &lex->_buf, ch);
+    ai_buf_xput(lex->_env, &lex->_buf, ch);
 	return ALO_SOK;
 }
 
@@ -110,72 +110,81 @@ static void l_bput(Lexer* lex, a_i32 ch) {
 			ai_lex_error(lex, "token too long.");
 		}
 		else {
-			ai_mem_nomem(lex->_in._env);
+			ai_mem_nomem(lex->_env);
 		}
 	}
 }
 
-static a_u32 strs_next_free(LexStrs* strs) {
-    a_u32 head = strs->_hfree;
-    StrNode* node = &strs->_table[head];
-	while (node->_str != null) {
-		node = &strs->_table[++head];
-	}
-    strs->_hfree = head + 1;
-    return head;
+static StrNode* strs_next_free(LexStrs* strs) {
+	StrNode* node = list_pop_template(strs, _hfree, _hprev, _hnext);
+	assume(node != null && node->_str == null);
+    return node;
 }
 
 static void strs_add(LexStrs* strs, GStr* str) {
     assume(strs->_hfree <= strs->_hmask);
-	a_u32 index = str->_hash & strs->_hmask;
-    StrNode* node = &strs->_table[index];
+    StrNode* node = map_hash_first(strs, str->_hash);
     if (node->_str == null) {
-        *node = new(StrNode) {str, ai_link_new() };
+#define Ff(n) list_set(strs, _hfree, n)
+		link_remove_local_template(node, _hprev, _hnext, Ff, quiet);
+#undef Ff
+        *node = new(StrNode) { ._str = str };
     }
     else {
-        a_u32 index2 = strs_next_free(strs);
-        StrNode* node2 = &strs->_table[index2];
-        if (ai_link_prev(node) != null) {
-			ai_link_move(node, node2);
-            *node = new(StrNode) { str, ai_link_new() };
+        StrNode* node2 = strs_next_free(strs);
+        if (link_get(node, _hprev) != null) {
+			link_move_template(node, node2, _hprev, _hnext);
+            *node = new(StrNode) { ._str = str };
         }
         else {
 			node2->_str = str;
-			ai_link_insert_after(node, node2);
+			link_insert_local_template(node, node2, _hprev, _hnext, quiet);
         }
     }
 }
 
-static void strs_grow(a_henv env, LexStrs* strs) {
-    a_usize old_cap = strs->_hmask + 1;
-    a_usize new_cap = old_cap * 2;
-    StrNode* old_table = strs->_table;
-    StrNode* new_table = ai_mem_vnew(env, StrNode, new_cap);
+static void strs_alloc_array(a_henv env, LexStrs* self, a_usize cap) {
+	StrNode* ptr = ai_mem_vnew(env, StrNode, cap);
 
-    strs->_hmask = new_cap - 1;
-    strs->_hfree = 0;
-    strs->_table = new_table;
-	memclr(new_table, sizeof(StrNode) * new_cap);
+	self->_hmask = cap - 1;
+	self->_hfree = 0;
+	self->_ptr = ptr;
+
+	memclr(ptr, sizeof(StrNode) * cap);
+	map_init_links_template(self, _hprev, _hnext);
+}
+
+static void strs_grow(Lexer* lex, LexStrs* self) {
+    a_usize old_cap = self->_hmask + 1;
+	if (old_cap == u32c(1) << 31) {
+		Parser* par = from_member(Parser, _lex, lex);
+		ai_par_report(par, false, par_err_f_arg(par, "too many symbol and string in chunk."));
+	}
+
+	a_usize new_cap = old_cap * 2;
+    StrNode* old_table = self->_ptr;
+
+	strs_alloc_array(lex->_env, self, new_cap);
 
     for (a_usize i = 0; i < old_cap; ++i) {
         GStr* str = old_table[i]._str;
         if (str != null) {
-            strs_add(strs, str);
+            strs_add(self, str);
         }
     }
 
-	ai_mem_vdel(G(env), old_table, old_cap);
+	ai_mem_vdel(G(lex->_env), old_table, old_cap);
 }
 
 static void strs_close(a_henv env, LexStrs* strs) {
-	if (strs->_table != null) {
-		ai_mem_vdel(G(env), strs->_table, strs->_hmask + 1);
+	if (strs->_ptr != null) {
+		ai_mem_vdel(G(env), strs->_ptr, strs->_hmask + 1);
 	}
 }
 
-static GStr* l_tostr(Lexer* lex) {
+static GStr* l_to_str(Lexer* lex) {
     Buf* buf = &lex->_buf;
-    GStr* str = ai_lex_tostr(lex, buf->_arr, buf->_len);
+    GStr* str = ai_lex_to_str(lex, buf->_ptr, buf->_len);
 	ai_buf_reset(&lex->_buf);
     return str;
 }
@@ -192,19 +201,16 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 	lex->_scope0 = new(LexScope) {
 		._up = null
 	};
-    lex->_strs = new(LexStrs) {
-        ._table = ai_mem_vnew(lex->_in._env, StrNode, STRS_INIT_CAP),
-        ._hmask = STRS_INIT_CAP - 1,
-        ._hfree = 0,
-        ._nstr = 0
-    };
-	memclr(lex->_strs._table, STRS_INIT_CAP * sizeof(StrNode));
+
+	strs_alloc_array(env, &lex->_strs, STRS_INIT_CAP);
+	lex->_strs._len = 0;
+
     l_pollx(lex);
 }
 
 void ai_lex_close(Lexer* lex) {
-	strs_close(lex->_in._env, &lex->_strs);
-	ai_buf_deinit(G(lex->_in._env), &lex->_buf);
+	strs_close(lex->_env, &lex->_strs);
+	ai_buf_deinit(G(lex->_env), &lex->_buf);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {
@@ -257,29 +263,26 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 	}
 }
 
-GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len) {
-	a_henv env = lex->_in._env;
+GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
+	a_henv env = lex->_env;
 	LexStrs* strs = &lex->_strs;
 	a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
 
-	StrNode* node = &strs->_table[hash & strs->_hmask];
-	if (node->_str != null) {
-		do {
-			if (node->_str->_hash == hash && ai_str_requals(node->_str, src, len)) {
-				lex->_buf._len = 0;
-				return node->_str;
-			}
-		}
-		while ((node = ai_link_next(node)) != null);
-	}
+#define test(n) ((n)->_str->_hash == hash && ai_str_requals((n)->_str, src, len))
+#define empty(n) ((n)->_str == null)
+#define con(n) return (n)->_str
+	map_find_template(strs, hash, test, empty, con);
+#undef test
+#undef empty
+#undef con
 
-	if (strs->_nstr == strs->_hmask) {
-		strs_grow(env, strs);
+	if (strs->_len == strs->_hmask + 1) {
+		strs_grow(lex, strs);
 	}
 
 	GStr* str = ai_str_new(env, src, len);
 	strs_add(strs, str);
-	strs->_nstr += 1;
+	strs->_len += 1;
 	return str;
 }
 
@@ -308,7 +311,7 @@ static a_i32 l_scan_ident(Lexer* lex, Token* tk) {
     while (c_isibody(l_peekx(lex))) {
         l_bput(lex, l_pollx(lex));
     }
-    GStr* str = l_tostr(lex);
+    GStr* str = l_to_str(lex);
     tk->_str = str;
     return strx_iskw(str) ? strx_totk(str) : TK_IDENT;
 }
@@ -377,7 +380,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 } while (true)
 
     if (ch == '0') {
-        a_u32 i;
+        a_u32 i = 0;
         switch (ch = l_peekx(lex)) {
             case '.': {
                 ch = l_peekx(lex);
@@ -903,10 +906,10 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 			else {
 				while (!(l_scan_multi_echar(lex, '\'', line) & S_TEXT));
 			}
-			tk->_str = l_tostr(lex);
+			tk->_str = l_to_str(lex);
 		}
 		else {
-			tk->_str = ai_env_strx(G(lex->_in._env), STRX__EMPTY);
+			tk->_str = ai_env_strx(G(lex->_env), STRX__EMPTY);
 		}
 	}
 	else {
@@ -922,7 +925,7 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 				}
 			}
 		}
-		tk->_str = l_tostr(lex);
+		tk->_str = l_to_str(lex);
 	}
 	return TK_STRING;
 }
@@ -938,7 +941,7 @@ static a_i32 l_scan_template_string_body(Lexer* lex, Token* tk) {
 				ai_lex_error(lex, "unclosed string.");
 			case '$': {
 				if (lex->_buf._len != 0) {
-					tk->_str = l_tostr(lex);
+					tk->_str = l_to_str(lex);
 					return TK_TSTRING;
 				}
 				else {
@@ -953,7 +956,7 @@ static a_i32 l_scan_template_string_body(Lexer* lex, Token* tk) {
 			}
 		}
 	}
-	tk->_str = l_tostr(lex);
+	tk->_str = l_to_str(lex);
 	lex->_channel = CHANNEL_NORMAL;
 	return TK_STRING;
 }
@@ -971,7 +974,7 @@ static a_i32 l_scan_multiline_template_string_body(Lexer* lex, Token* tk) {
 	else {
 		while (!(l_scan_multi_echar(lex, '\"', lex->_scope->_begin_line) & S_TEXT));
 	}
-	tk->_str = l_tostr(lex);
+	tk->_str = l_to_str(lex);
 	lex->_channel = CHANNEL_NORMAL;
 	return TK_STRING;
 }
@@ -988,7 +991,7 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 			return l_scan_multiline_template_string_body(lex, tk);
 		}
 		else {
-			tk->_str = ai_env_strx(G(lex->_in._env), STRX__EMPTY);
+			tk->_str = ai_env_strx(G(lex->_env), STRX__EMPTY);
 			return TK_STRING;
 		}
 	}

@@ -98,6 +98,17 @@ always_inline Value* ai_stk_bot(a_henv env) {
 	return stk2val(env, env->_frame->_stack_bot);
 }
 
+always_inline a_isize ai_stk_check(a_henv env, Value* top) {
+	if (top > env->_stack._limit) {
+		a_isize diff = ai_stk_grow(env, top);
+		if (diff & STACK_GROW_FAILED) {
+			ai_stk_overflow(env, diff);
+		}
+		return diff;
+	}
+	return 0;
+}
+
 always_inline void ai_env_pop_error(a_henv env, Value* d) {
 	v_cpy(env, d, &env->_error);
 	env->_error = v_of_nil();

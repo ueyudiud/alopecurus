@@ -9,28 +9,28 @@
 #include "aerr.h"
 
 #define TM_LIST(_) \
-	_(GET, "__get__")     \
-	_(SET, "__set__")     \
-	_(LEN, "__len__")     \
-	_(CLOSE, "__close__") \
-	_(HASH, "__hash__")   \
-	_(EQ, "__eq__")       \
-	_(LT, "__lt__")       \
-	_(LE, "__le__")       \
-	_(IN, "__in__")       \
-	_(ADD, "__add__")     \
-	_(SUB, "__sub__")     \
-	_(MUL, "__mul__")     \
-	_(DIV, "__div__")     \
-	_(MOD, "__mod__")     \
-	_(SHL, "__shl__")     \
-	_(SHR, "__shr__")     \
-	_(BIT_AND, "__band__")\
-	_(BIT_OR, "__bor__")  \
-	_(BIT_XOR, "__bxor__")\
-	_(NEG, "__neg__")     \
-	_(BIT_INV, "__inv__") \
-	_(UNBOX, "__unbox__") \
+	_(GET, "__get__")      \
+	_(SET, "__set__")      \
+	_(LEN, "__len__")      \
+	_(CLOSE, "__close__")  \
+	_(HASH, "__hash__")    \
+	_(EQ, "__eq__")        \
+	_(LT, "__lt__")        \
+	_(LE, "__le__")        \
+	_(IN, "__in__")        \
+	_(ADD, "__add__")      \
+	_(SUB, "__sub__")      \
+	_(MUL, "__mul__")      \
+	_(DIV, "__div__")      \
+	_(MOD, "__mod__")      \
+	_(SHL, "__shl__")      \
+	_(SHR, "__shr__")      \
+	_(BIT_AND, "__band__") \
+	_(BIT_OR, "__bor__")   \
+	_(BIT_XOR, "__bxor__") \
+	_(NEG, "__neg__")      \
+	_(BIT_NOT, "__bnot__") \
+	_(UNBOX, "__unbox__")  \
 	_(CALL, "__call__")
 
 enum {

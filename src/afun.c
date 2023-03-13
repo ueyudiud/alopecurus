@@ -35,7 +35,7 @@ static a_usize proto_size(ProtoDesc* desc) {
 	}
 	if (desc->_flags._froot) {
 		assume(desc->_ncap <= 1, "bad capture count.");
-		size += fun_size(desc->_ncap) + sizeof(RcCap);
+		size += fun_size(desc->_ncap) + desc->_ncap * sizeof(RcCap);
 	}
 	return size;
 }

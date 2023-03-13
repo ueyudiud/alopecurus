@@ -99,23 +99,20 @@ a_usize alo_stacksize(a_henv env) {
 }
 
 a_bool alo_ensure(a_henv env, a_usize n) {
-	Value* const top = env->_stack._top;
+	Value* const expect = env->_stack._top + n;
 	Value* const limit = env->_stack._limit;
-	assume(top <= limit);
-	Value* require = ai_stk_bot(env) + n;
-	if (require > top) {
-		if (require > limit) {
-			a_isize diff = ai_stk_grow(env, require);
-			if (diff & (GROW_STACK_FLAG_OF1 | GROW_STACK_FLAG_OF2)) return false;
-#if ALO_STRICT_STACK_CHECK
-			require = ptr_disp(Value, require, diff);
-#endif
+	if (expect > limit) {
+		a_isize diff = ai_stk_grow(env, expect);
+
+		if (diff & STACK_GROW_FAILED) {
+			return false;
 		}
+
 #if ALO_STRICT_STACK_CHECK
-		env->_frame->_bound = require;
+		env->_frame->_bound = ptr_disp(Value, expect, diff);
 #endif
 	}
-	return true;
+	return false;
 }
 
 void alo_settop(a_henv env, a_isize n) {

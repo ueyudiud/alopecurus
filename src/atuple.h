@@ -21,6 +21,8 @@ struct GTuple {
 	Value _body[0];
 };
 
+static_assert(offsetof(GObj, _len) == offsetof(GTuple, _len));
+
 always_inline a_bool g_is_tuple(a_hobj v) {
 	return v->_vtable->_repr_id == REPR_TUPLE;
 }

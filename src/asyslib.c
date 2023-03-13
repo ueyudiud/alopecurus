@@ -13,36 +13,27 @@
 
 #include "alolib.h"
 
-static a_bool l_try_to_code(Value const* v, a_i32* pcode) {
-	if (v != null) {
-		switch (v_get_tag(*v)) {
-			case T_FALSE: {
-				*pcode = 0;
-				return true;
-			}
-			case T_TRUE: {
-				*pcode = 1;
-				return true;
-			}
-			case T_INT: {
-				*pcode = v_as_int(*v);
-				return true;
-			}
-			default: {
-				return false;
-			}
-		}
-	}
-	else {
-		*pcode = 0;
-		return true;
-	}
-}
-
 static a_u32 sys_exit(a_henv env) {
+	Value v_code = api_elem(env, 0);
 	a_i32 code;
-	if (!l_try_to_code(api_roslot(env, 0), &code)) {
-		aloL_errorf(env, "bad exit code.");
+	switch (v_get_tag(v_code)) {
+		case T_NIL:
+		case T_FALSE: {
+			code = EXIT_SUCCESS;
+			break;
+		}
+		case T_TRUE: {
+			code = EXIT_FAILURE;
+			break;
+		}
+		case T_INT: {
+			code = v_as_int(v_code);
+			break;
+		}
+		default: {
+			aloL_errorf(env, "bad exit code.");
+			unreachable();
+		}
 	}
 	ai_vm_hook(env, ALO_SEXIT, ALO_HMRAISE);
 	alo_destroy(env);

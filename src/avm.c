@@ -150,6 +150,65 @@ bad_op:
 	l_bad_tm_err(env, TM_SET);
 }
 
+static Value vm_meta_len(a_henv env, Value v1) {
+	if (!v_is_obj(v1)) {
+		goto bad_op;
+	}
+
+	a_hobj obj = v_as_obj(v1);
+	VTable const* vtable = obj->_vtable;
+	if (!(vtable->_flags & VTABLE_FLAG_FAST_TM(TM_LEN))) {
+		if (vtable->_flags & VTABLE_FLAG_PLAIN_LEN) {
+			return v_of_int(cast(a_int, obj->_len));
+		}
+		goto bad_op;
+	}
+
+	Value* pvf = ai_obj_vlookup_(env, vtable, TM_LEN);
+	assume(pvf != null);
+	Value vf = *pvf;
+
+	if (unlikely(v_is_nil(vf))) {
+		goto bad_op;
+	}
+
+	Value* base = vm_push_args(env, vf, v1);
+	return ai_vm_call(env, base, RFLAGS_META_CALL);
+
+bad_op:
+	l_bad_tm_err(env, TM_LEN);
+}
+
+static Value vm_meta_unbox(a_henv env, Value v1, Value* vb, a_usize n) {
+	if (!v_is_obj(v1)) {
+		goto bad_op;
+	}
+
+	Value vf = ai_obj_vlookup(env, v1, TM_UNBOX);
+
+	if (unlikely(v_is_nil(vf))) {
+		goto bad_op;
+	}
+
+	env->_stack._top = vb;
+	Value* base = vm_push_args(env, vf, v1);
+	return ai_vm_call(env, base, new(RFlags) { ._count = n });
+
+bad_op:
+	l_bad_tm_err(env, TM_UNBOX);
+}
+
+static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
+	Value vf = ai_obj_vlookup(env, v1, tm);
+
+	if (v_is_nil(vf)) {
+		l_bad_tm_err(env, tm);
+	}
+
+	Value* base = vm_push_args(env, vf, v1);
+	return ai_vm_call(env, base, RFLAGS_META_CALL);
+}
+
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 	Value vf = ai_obj_vlookup(env, v1, tm);
 
@@ -159,7 +218,6 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 
 	Value* base = vm_push_args(env, vf, v1, v2);
 	return ai_vm_call(env, base, RFLAGS_META_CALL);
-
 }
 
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
@@ -292,6 +350,21 @@ static void vm_close_above(a_henv env, RcCap** restrict caps, Value* ptr) {
 	}
 }
 
+static void v_mov_all_with_nil(a_henv env, Value* dst, a_usize dst_len, Value const* src, a_usize src_len) {
+	a_usize i = 0;
+
+	a_usize arg_len = min(dst_len, src_len);
+	while (i < arg_len) {
+		v_cpy(env, &dst[i], &src[i]);
+		i += 1;
+	}
+
+	while (i < dst_len) {
+		v_cpy(env, &dst[i], &src[i]);
+		i += 1;
+	}
+}
+
 static a_u32 vm_fetch_ex(a_insn const** ppc) {
 	a_insn const* pc = *ppc;
 	a_insn insn = *pc;
@@ -314,16 +387,15 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 #if ALO_STACK_RELOC
 	Value* R;
 # define R R
-# define init_check_stack(p) quiet(base = ptr_disp(Value, ai_stk_check(env, p), diff))
-# define load_stack() quiet(R = env->_stack._bot)
-# define reload_stack() load_stack()
+# define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); base = ptr_disp(Value, R, _d); reload_stack(); })
+# define reload_stack() quiet(R = env->_stack._bot)
 #else
 # define R frame._stack_bot
-# define init_check_stack(p) ({ a_isize _d = ai_stk_check(env, &env->_stack, p); assume(_d == 0, "stack moved."); })
-# define load_stack() ((void) 0)
+# define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); assume(_d == 0, "stack moved."); reload_stack(); })
 # define reload_stack() ((void) 0)
 #endif
 #define check_gc() ai_gc_trigger_ext(env, (void) 0, reload_stack())
+#define adjust_top() quiet(env->_stack._top = &R[fun->_proto->_nstack])
 
 	run { /* Check for function. */
 		Value vf = *base;
@@ -339,7 +411,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			v_set(env, &base[0], vf);
 			env->_stack._top += 1;
 
-			init_check_stack(env->_stack._top);
+			check_stack(env->_stack._top);
 		}
 	}
 
@@ -351,9 +423,9 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 	run {
 		GProto* proto = fun->_proto;
-		init_check_stack(base + proto->_nstack);
+		check_stack(R + proto->_nstack);
 		if (!(proto->_flags & FUN_FLAG_VARARG)) {
-			env->_stack._top = base + proto->_nstack;
+			adjust_top();
 		}
 		frame = new(Frame) {
 			._prev = env->_frame,
@@ -365,7 +437,6 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		env->_frame = &frame;
 
 		K = proto->_consts;
-		load_stack();
 	}
 
 	loop {
@@ -495,6 +566,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
+					reload_stack();
 				}
 				v_set(env, &R[a], vt);
 				break;
@@ -520,6 +592,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vt = vm_meta_get(env, vb, v_of_int(c));
+					reload_stack();
 				}
 				v_set(env, &R[a], vt);
 				break;
@@ -543,6 +616,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
+					reload_stack();
 				}
 				v_set(env, &R[a], vt);
 				break;
@@ -566,6 +640,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
+					reload_stack();
 				}
 				v_set(env, &R[a], vt);
 				break;
@@ -589,6 +664,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
+					reload_stack();
 				}
 				v_set(env, &R[a], vt);
 				break;
@@ -612,6 +688,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
+					reload_stack();
 				}
 				v_set(env, &R[a], vt);
 				break;
@@ -632,6 +709,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vm_meta_set(env, R[b], R[c], R[a]);
+					reload_stack();
 				}
 				break;
 			}
@@ -650,6 +728,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vm_meta_set(env, R[b], v_of_int(c), R[a]);
+					reload_stack();
 				}
 				break;
 			}
@@ -672,6 +751,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
+					reload_stack();
 				}
 				break;
 			}
@@ -694,6 +774,95 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
+					reload_stack();
+				}
+				break;
+			}
+			case BC_NEG: {
+				loadB();
+
+				Value vb = R[b];
+
+				if (v_is_int(vb)) {
+					a_int val = ai_op_neg_int(v_as_int(vb));
+					v_set_int(&R[a], val);
+				}
+				else if (v_is_float(vb)) {
+					a_float val = ai_op_neg_float(v_as_float(vb));
+					v_set_float(&R[a], val);
+				}
+				else {
+					Value vt = vm_meta_unr(env, vb, TM_NEG);
+					reload_stack();
+					v_set(env, &R[a], vt);
+				}
+				break;
+			}
+			case BC_BNOT: {
+				loadB();
+
+				Value vb = R[b];
+
+				if (v_is_int(vb)) {
+					a_int val = ai_op_bnot_int(v_as_int(vb));
+					v_set_int(&R[a], val);
+				}
+				else {
+					Value vt = vm_meta_unr(env, vb, TM_BIT_NOT);
+					reload_stack();
+					v_set(env, &R[a], vt);
+				}
+				break;
+			}
+			case BC_LEN: {
+				loadB();
+
+				Value vb = R[b];
+
+				Value vt = vm_meta_len(env, vb);
+				reload_stack();
+				v_set(env, &R[a], vt);
+				break;
+			}
+			case BC_UNBOX: {
+				loadB();
+				loadC();
+
+				Value vb = R[b];
+
+				if (v_is_tuple(vb)) {
+					GTuple* val = v_as_tuple(vb);
+					v_mov_all_with_nil(env, &R[a], c, val->_body, val->_len);
+				}
+				else if (v_is_list(vb)) {
+					GList* val = v_as_list(vb);
+					v_mov_all_with_nil(env, &R[a], c, val->_data, val->_len);
+				}
+				else {
+					vm_meta_unbox(env, vb, &R[b], c);
+					reload_stack();
+					adjust_top();
+				}
+				break;
+			}
+			case BC_UNBOXV: {
+				loadB();
+
+				Value vb = R[b];
+
+				if (v_is_tuple(vb)) {
+					GTuple* val = v_as_tuple(vb);
+					check_stack(&R[a] + val->_len);
+					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_body, val->_len);
+				}
+				else if (v_is_list(vb)) {
+					GList* val = v_as_list(vb);
+					check_stack(&R[a] + val->_len);
+					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_data, val->_len);
+				}
+				else {
+					vm_meta_unbox(env, vb, &R[b], RFLAG_COUNT_VARARG);
+					reload_stack();
 				}
 				break;
 			}
@@ -1021,7 +1190,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				check_gc();
 
 				if (c == 0) {
-					env->_stack._top = &R[fun->_proto->_nstack];
+					adjust_top();
 				}
 				break;
 			}
@@ -1037,68 +1206,49 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			}
 			{ /* Begin of return instructions. */
 				Value ret;
-				Value* arg_top;
-			{
-				a_u32 n;
-				Value* p;
+				Value* top;
 			case BC_RET: {
 				loadB();
 
-				p = &R[a];
-				n = b;
+				ret = R[a];
+				v_mov_all_with_nil(env, R - 1, frame._rflags._count, &R[a], b);
+				top = R - 1 + b;
 
-				goto vm_return_with_args;
+				goto vm_return;
 			}
 			case BC_RETV: {
-				p = &R[a];
-				n = env->_stack._top - &R[a];
+				Value* p = &R[a];
+				a_usize n = env->_stack._top - p;
 
-				goto vm_return_with_args;
+				ret = p != env->_stack._top ? *p : v_of_nil();
+				v_mov_all_with_nil(env, R - 1, frame._rflags._count, p, n);
+				top = R - 1 + n;
+
+				goto vm_return;
 			}
 			case BC_FC: {
 				a_cfun cf = bcast(a_cfun, fun->_caps[fun->_len - 1]);
 
-				n = (*cf)(env);
-				api_check_elem(env, n);
-				p = env->_stack._top - n;
+				a_u32 n = (*cf)(env);
 
 				reload_stack();
 
-				goto vm_return_with_args;
-			}
-			/*
-			 * Move minor result values then jump to return.
-			 */
-			vm_return_with_args: {
-				check_in_stack(env, p);
-
-				Value* src = p;
-				Value* dst = R;
-
-				a_u32 m = min(n, frame._rflags._count);
-
-				ret = *p;
-				arg_top = R + m - 1;
-
-				while (dst < arg_top) {
-					v_cpy(env, dst, src);
-					dst += 1;
-					src += 1;
-				}
+				api_check_elem(env, n);
+				v_mov_all_with_nil(env, R - 1, frame._rflags._count, env->_stack._top - n, n);
+				top = R - 1 + n;
 
 				goto vm_return;
 			}
-			}
 			case BC_RET1: {
 				ret = R[a];
-				R[-1] = ret;
-				arg_top = R;
+				v_cpy(env, &R[-1], &R[a]);
+				top = R;
 
 				goto vm_return;
 			}
 			case BC_RET0: {
 				ret = v_of_nil();
-				arg_top = R - 1;
+				top = R - 1;
 
 				goto vm_return;
 			}
@@ -1111,13 +1261,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 						ai_cap_soft_close(env, cap);
 					}
 				}
-				if (frame._rflags._count != RFLAG_COUNT_VARARG) {
-					Value* top = R - 1 + frame._rflags._count;
-					v_set_nil_ranged(arg_top, top);
+				if (frame._rflags._count == RFLAG_COUNT_VARARG) {
 					env->_stack._top = top;
-				}
-				else {
-					env->_stack._top = arg_top;
 				}
 				env->_frame = frame._prev;
 				return ret;

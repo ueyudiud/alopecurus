@@ -5,7 +5,7 @@
 #ifndef atable_h_
 #define atable_h_
 
-#include "alink.h"
+#include "amap.h"
 #include "aobj.h"
 
 typedef struct GModLoader GModLoader;
@@ -34,7 +34,10 @@ intern void ai_mod_clean(Global* g);
 
 always_inline Value ai_obj_vlookup(a_henv env, Value val, a_enum tm) {
 	if (!v_is_obj(val)) return v_of_nil();
-	Value* v = ai_obj_vlookup_(env, v_as_obj(val)->_vtable, tm);
+	a_hobj obj = v_as_obj(val);
+	VTable const* vtable = obj->_vtable;
+	if (!(vtable->_flags & VTABLE_FLAG_VLOOKUP)) return v_of_nil();
+	Value* v = ai_obj_vlookup_(env, vtable, tm);
 	return v != null ? *v : v_of_nil();
 }
 
@@ -42,10 +45,10 @@ typedef struct TNode TNode;
 
 #define GTABLE_STRUCT_HEADER \
 	GOBJ_STRUCT_HEADER;         \
-	a_u32 _len;                 \
-	a_u32 _hmask; /* Hash mask. */ \
+	a_u32 BUF_LEN_NAME;         \
+	MAP_HMASK_DEF; /* Hash mask. */ \
 	BUF_PTR_DEF(TNode); /* Data pointer. */ \
-	LHEAD_DEF /* Head of linked list. */
+	LIST_LINK_DEF /* Head of linked list. */
 
 /**
  ** Linked hash table.
@@ -55,6 +58,8 @@ struct GTable {
 	a_u32 _hfree; /* Last hash free slot. */
 };
 
+static_assert(offsetof(GObj, _len) == offsetof(GTable, _len));
+
 /**
  ** Table node.
  */
@@ -62,8 +67,8 @@ struct TNode {
 	Value _value;
 	Value _key;
 	a_hash _hash;
-	a_x32 _hnext;
-	LINK_DEF;
+	HLINK_NEXT_DEF;
+	NODE_LINK_DEF;
 };
 
 struct ModCache {

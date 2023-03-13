@@ -24,33 +24,20 @@
 static VTable const table_vtable;
 static VTable const mod_vtable;
 
-static a_u32 wrap_abs(GTable* self, TNode* node) {
-	return node != null ? cast(a_u32, node - self->BUF_PTR_REF) : 0;
-}
-
-static TNode* unwrap_abs(GTable* self, a_u32 id) {
-	return &self->BUF_PTR_REF[id];
-}
-
 static void table_init_array(GTable* self, TNode* array, a_usize cap) {
 	assume(array != null);
 
-	self->_arr = array;
+	self->_ptr = array;
 	self->_hmask = cap - 1;
 	self->_hfree = 0;
 
-	self->_lhead = new(LHead) { ._first = 0, ._last = 0 };
+	self->_lfirst = self->_llast = 0;
 
 	for (a_u32 i = 0; i < cap; ++i) {
-		array[i] = new(TNode) {
-			._key = v_of_empty(),
-			._hnext = nil,
-			._link = new(Link) {
-				._prev = i > 0 ? x32c(-1) : nil,
-				._next = i < cap - 1 ? x32c(1) : nil
-			}
-		};
+		array[i]._key = v_of_empty();
 	}
+
+	map_init_links_template(self, _lprev, _lnext);
 }
 
 static void table_alloc_array(a_henv env, GTable* self, a_usize new_cap) {
@@ -96,7 +83,7 @@ static void tnode_emplace(a_henv env, TNode* node, Value key, a_hash hash, Value
  */
 static void tnode_move(a_henv env, TNode* noded, TNode* nodes) {
 	tnode_emplace(env, noded, nodes->_key, nodes->_hash, nodes->_value);
-	ai_link_move(nodes, noded);
+	link_move_template(nodes, noded, _lprev, _lnext);
 }
 
 /**
@@ -105,13 +92,8 @@ static void tnode_move(a_henv env, TNode* noded, TNode* nodes) {
  *@return the free node.
  */
 static TNode* table_pop_free(GTable* self) {
-	TNode* node = unwrap_abs(self, self->_hfree);
-	assume(tnode_is_empty(node));
-	TNode* noden = ai_link_next(node);
-	if (noden != null) {
-		noden->_link._prev = nil;
-		self->_hfree = wrap_abs(self, noden);
-	}
+	TNode* node = list_pop_template(self, _hfree, _lprev, _lnext);
+	assume(node != null && tnode_is_empty(node));
 	return node;
 }
 
@@ -121,24 +103,24 @@ static TNode* table_pop_free(GTable* self) {
  *@param node the node to be linked.
  */
 static void table_link_tail(GTable* self, TNode* node) {
-	ai_link_push_last(self, node, self->_len > 0);
+	link_push_template(self, node, _lfirst, _llast, _lprev, _lnext);
 }
 
 static TNode* table_get_hprev(GTable* self, TNode* node) {
-	TNode* nodep = unwrap_abs(self, node->_hash & self->_hmask);
+	TNode* nodep = map_hash_first(self, node->_hash);
 	TNode* noden;
-	while ((noden = ai_link_unwrap(nodep, nodep->_hnext)) != node) {
+	while ((noden = link_get(nodep, _hnext)) != node) {
 		nodep = noden;
 	}
 	return nodep;
 }
 
 static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
-    TNode* nodeh = unwrap_abs(self, hash & self->_hmask);
+    TNode* nodeh = map_hash_first(self, hash);
     if (tnode_is_hhead(self, nodeh, hash)) {
         /* Insert into hash list. */
         TNode* nodet = table_pop_free(self);
-		TNode* noden = ai_link_unwrap(nodeh, nodeh->_hnext);
+		TNode* noden = link_get(nodeh, _hnext);
 
 		/* Emplace node at another free node. */
         /*                       v
@@ -146,13 +128,18 @@ static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Valu
          */
 		tnode_emplace(env, nodet, key, hash, value);
 
-		nodet->_hnext = ai_link_wrap(nodet, noden);
-		nodeh->_hnext = ai_link_wrap(nodeh, nodet);
+		link_set(nodeh, _hnext, nodet);
+		link_set(nodet, _hnext, noden);
 
 		table_link_tail(self, nodet);
     }
     else {
-		if (!tnode_is_empty(nodeh)) {
+		if (tnode_is_empty(nodeh)) {
+#define Ff(n) list_set(self, _hfree, n)
+			link_remove_local_template(nodeh, _lprev, _lnext, Ff, quiet);
+#undef Ff
+		}
+		else {
 			/* Move placed entry to other node. */
 			/*                         v
 			 * ... -> p -> h -> ... => h; ... -> p -> f -> ...
@@ -160,7 +147,7 @@ static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Valu
 			TNode* nodef = table_pop_free(self);
 			TNode* nodep = table_get_hprev(self, nodeh);
 			tnode_move(env, nodef, nodeh);
-			nodep->_hnext = ai_link_wrap(nodep, nodef);
+			link_set(nodep, _hnext, nodef);
 		}
 		/* Emplace node locally. */
 		/*    v
@@ -179,13 +166,13 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 		a_usize new_cap = ceil_pow2m1_usize(cast(a_usize, ceil(expect / ALOI_TABLE_LOAD_FACTOR))) + 1;
 		assume(expect <= new_cap && new_cap > 0);
 
-		TNode* arr = self->_arr;
-		TNode* node = ai_link_first(self);
+		TNode* arr = self->_ptr;
+		TNode* node = list_first(self);
 
 		table_alloc_array(env, self, new_cap);
 
 		if (arr != null) {
-			for (; node != null; node = ai_link_next(node)) {
+			for (; node != null; node = link_next(node)) {
 				table_emplace(env, self, node->_key, node->_hash, node->_value);
 			}
 
@@ -194,41 +181,20 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 	}
 }
 
-typedef a_bool (*Pred)(a_henv env, a_usize ctx, Value v);
-
-static Value* table_find(a_henv env, GTable* self, a_hash hash, Pred pred, a_usize ctx) {
-	if (likely(self->_len > 0)) {
-		TNode* node = unwrap_abs(self, hash & self->_hmask);
-		if (!tnode_is_empty(node) && tnode_is_hhead(self, node, hash)) {
-			do {
-				if (node->_hash == hash && (*pred)(env, ctx, node->_key))
-					return &node->_value;
-			}
-			while ((node = ai_link_unwrap(node, node->_hnext)) != null);
-		}
-	}
-    return null;
+static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value key) {
+#define test(n) v_trivial_equals(key, (n)->_key)
+#define con(n) return &(n)->_value
+	return map_find_template(self, hash, test, tnode_is_empty, con);
+#undef test
+#undef con
 }
 
-static a_bool pred_id(unused a_henv env, a_usize ctx, Value vk) {
-	return v_trivial_equals(bcast(Value, ctx), vk);
-}
-
-static Value* table_find_id(a_henv env, GTable* self, a_hash hash, Value key) {
-	return table_find(env, self, hash, pred_id, bcast(a_usize, key));
-}
-
-static a_bool pred_str(unused a_henv env, a_usize ctx, Value vk) {
-	a_lstr const* key = ptr_of(a_lstr, ctx);
-	if (v_is_str(vk)) {
-		GStr* str = v_as_str(vk);
-		return key->_len == str->_len && memcmp(key->_ptr, str->_data, key->_len) == 0;
-	}
-	return false;
-}
-
-static Value* table_find_str(a_henv env, GTable* self, a_hash hash, a_lstr const* key) {
-	return table_find(env, self, hash, pred_str, addr_of(key));
+static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* key) {
+#define test(n) (v_is_str((n)->_key) && ai_str_requals(v_as_str((n)->_key), key->_ptr, key->_len))
+#define con(n) return &(n)->_value
+	return map_find_template(self, hash, test, tnode_is_empty, con);
+#undef test
+#undef con
 }
 
 Value const* ai_table_refi(a_henv env, GTable* self, a_int key) {
@@ -262,12 +228,17 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 	}
 	else {
 		GObj* obj = v_as_obj(key);
+
 		a_fp_equals equals_fp = obj->_vtable->_equals;
 		a_fp_hash hash_fp = obj->_vtable->_hash;
+
 		a_u32 hash = hash_fp != null ? (*hash_fp)(env, obj) : v_trivial_hash(key);
-		Pred pred = fpcast(Pred, equals_fp);
-		a_usize ctx = addr_of(v_as_obj(key));
-		return table_find(env, self, hash, pred, ctx);
+
+#define test(n) (*equals_fp)(env, obj, (n)->_key)
+#define con(n) return &(n)->_value
+		return map_find_template(self, hash, test, tnode_is_empty, con);
+#undef test
+#undef con
 	}
 }
 
@@ -305,9 +276,9 @@ void ai_table_set(a_henv env, GTable* self, Value key, Value value) {
 }
 
 static void table_mark(Global* g, GTable* self) {
-    a_usize len = self->_arr != null ? self->_hmask + 1 : 0;
+    a_usize len = self->_ptr != null ? self->_hmask + 1 : 0;
     for (a_usize i = 0; i < len; ++i) {
-        TNode* node = &self->_arr[i];
+        TNode* node = &self->_ptr[i];
         if (!tnode_is_empty(node)) {
 			ai_gc_trace_mark_val(g, node->_key);
 			ai_gc_trace_mark_val(g, node->_value);
@@ -317,8 +288,8 @@ static void table_mark(Global* g, GTable* self) {
 }
 
 static void table_drop(Global* g, GTable* self) {
-	if (self->_arr != null) {
-		ai_mem_vdel(g, self->_arr, self->_hmask + 1);
+	if (self->_ptr != null) {
+		ai_mem_vdel(g, self->_ptr, self->_hmask + 1);
 	}
     ai_mem_dealloc(g, self, sizeof(GTable));
 }
@@ -340,7 +311,6 @@ GMod* ai_mod_alloc(a_henv env, a_usize len) {
 
 	self->_vtable = &mod_vtable;
 	table_init_array(&self->_table, self->_data, cap);
-	self->_len = len;
 
 	self->_next = null;
 	self->_name = null;
@@ -373,25 +343,34 @@ static a_bool generic_equals(a_henv env, a_hobj self, Value other) {
 
 void ai_mod_ready(a_henv env, GMod* self, VTable const* impl) {
 	quiet(env);
-	a_u32 op_flags = self->_impl._flags;
-	self->_impl = new(VTable) {
-		._val_mask = op_flags & VTABLE_FLAG_FAST_TM(TM_EQ) ? T_USER_NEQ : T_USER_TEQ,
-		._api_tag = ALO_TUSER,
-		._repr_id = impl->_repr_id,
-		._flags = op_flags | (impl->_flags & VTABLE_FLAG_PLAIN_LEN) | VTABLE_FLAG_VLOOKUP,
-		._name = str2ntstr(self->_name),
-		._mark = impl->_mark,
-		._drop = impl->_drop,
-		._close = op_flags & VTABLE_FLAG_FAST_TM(TM_CLOSE) ? generic_close : impl->_close,
-		._hash = op_flags & VTABLE_FLAG_FAST_TM(TM_HASH) ? generic_hash : impl->_hash,
-		._equals = (op_flags & VTABLE_FLAG_FAST_TM(TM_EQ)) ? generic_equals : impl->_equals
-	};
+	if (impl != null) {
+		a_u32 op_flags = self->_impl._flags;
+		self->_impl = new(VTable) {
+			._val_mask = v_masked_tag(op_flags & VTABLE_FLAG_FAST_TM(TM_EQ) ? T_USER_NEQ : T_USER_TEQ),
+			._api_tag = ALO_TUSER,
+			._repr_id = impl->_repr_id,
+			._flags = op_flags | (impl->_flags & VTABLE_FLAG_PLAIN_LEN) | VTABLE_FLAG_VLOOKUP,
+			._name = str2ntstr(self->_name),
+			._mark = impl->_mark,
+			._drop = impl->_drop,
+			._close = op_flags & VTABLE_FLAG_FAST_TM(TM_CLOSE) ? generic_close : impl->_close,
+			._hash = op_flags & VTABLE_FLAG_FAST_TM(TM_HASH) ? generic_hash : impl->_hash,
+			._equals = (op_flags & VTABLE_FLAG_FAST_TM(TM_EQ)) ? generic_equals : impl->_equals
+		};
+	}
+	else {
+		self->_impl = new(VTable) {
+			._repr_id = REPR_TRAIT,
+			._name = self->_name != null ? str2ntstr(self->_name) : null,
+		};
+	}
 	self->_mc = 0;
 	self->_rc = 0;
 }
 
 void ai_mod_emplace(a_henv env, GMod* self, GStr* key, Value value) {
 	table_emplace(env, &self->_table, v_of_obj(key), key->_hash, value);
+	self->_len += 1;
 	if (strx_istm(key)) {
 		a_enum tm = strx_totm(key);
 		if (tm <= TM__FAST_MAX) {
@@ -415,7 +394,7 @@ static void mod_mark(Global* g, a_hobj raw_self) {
 		ai_gc_trace_mark(g, self->_name);
 	}
 	for (a_usize i = 0; i <= self->_hmask; ++i) {
-		TNode* node = &self->_arr[i];
+		TNode* node = &self->_ptr[i];
 		if (!tnode_is_empty(node)) {
 			ai_gc_trace_mark_val(g, node->_key);
 			ai_gc_trace_mark_val(g, node->_value);

@@ -36,6 +36,8 @@ struct GStr {
 	GSTR_STRUCT_HEADER;
 };
 
+static_assert(offsetof(GObj, _len) == offsetof(GStr, _len));
+
 struct IStr {
 	IStr* _cache_next; /* Next node of overflow chain in intern table. */
 	union {

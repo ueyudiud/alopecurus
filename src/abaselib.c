@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 
-#include "alink.h"
+#include "amap.h"
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
@@ -107,13 +107,13 @@ static void l_show_impl(Value v, a_u32 depth) {
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("{");
-					TNode* itr = ai_link_first(val);
+					TNode* itr = list_first(val);
 					l_show_impl(itr->_key, depth + 1);
 					aloi_show(" -> ");
 					l_show_impl(itr->_value, depth + 1);
 					while (--n > 0) {
 						assume(itr != null);
-						itr = ai_link_next(itr);
+						itr = link_get(itr, _lnext);
 						aloi_show(", ");
 						l_show_impl(itr->_key, depth + 1);
 						aloi_show(" -> ");

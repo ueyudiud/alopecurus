@@ -7,7 +7,7 @@
 
 #include "akw.h"
 #include "abuf.h"
-#include "alink.h"
+#include "amap.h"
 #include "aobj.h"
 #include "aio.h"
 
@@ -25,7 +25,7 @@ intern void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx);
 intern void ai_lex_close(Lexer* lex);
 intern char const* ai_lex_tagname(a_i32 tag);
 intern char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf);
-intern GStr* ai_lex_tostr(Lexer* lex, void const* src, a_usize len);
+intern GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len);
 intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
 
@@ -70,14 +70,15 @@ typedef struct StrNode StrNode;
 
 struct StrNode { 
     GStr* _str;
-	LINK_DEF;
+	a_x32 _hprev;
+	HLINK_NEXT_DEF;
 };
 
 typedef struct {
-    StrNode* _table;
-    a_u32 _hfree;
-    a_u32 _hmask;
-    a_u32 _nstr;
+	BUF_PTR_DEF(StrNode);
+    a_u32 BUF_LEN_NAME;
+	MAP_HMASK_DEF;
+	a_u32 _hfree;
 } LexStrs;
 
 struct LexScope {
@@ -90,7 +91,10 @@ struct LexScope {
 };
 
 struct Lexer {
-    ZIn _in;
+	union {
+		ZIn _in;
+		a_henv _env;
+	};
     Buf _buf;
     GStr* _file; /* Source file name. */
     a_line _line;

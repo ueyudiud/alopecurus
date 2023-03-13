@@ -9,7 +9,7 @@
 
 #include "amem.h"
 
-#define BUF_PTR_NAME _arr
+#define BUF_PTR_NAME _ptr
 #define BUF_PTR_DEF(t) typeof(t)* BUF_PTR_NAME
 #define BUF_PTR_REF BUF_PTR_NAME
 
@@ -33,7 +33,7 @@ BUF_STRUCT_DECLARE(Buf, a_byte);
 BUF_STRUCT_DECLARE(QBuf, a_byte, QBuf* _last);
 BUF_STRUCT_DECLARE(GBuf, a_byte, GOBJ_STRUCT_HEADER);
 
-#define buf_fdst(b) cast(char*, (b)->_arr + (b)->_len)
+#define buf_fdst(b) cast(char*, (b)->BUF_PTR_REF + (b)->BUF_LEN_REF)
 
 always_inline a_msg ai_buf_ngrow(a_henv env, void* raw_buf, a_usize new_cap, a_usize size) {
 	Buf* buf = raw_buf;
@@ -53,7 +53,7 @@ always_inline a_msg ai_buf_nputls(a_henv env, void* raw_buf, void const* src, a_
 	Buf* buf = raw_buf;
 	check(ai_buf_ncheck(env, buf, len));
 	memcpy(buf_fdst(buf), src, len);
-	buf->_len += len;
+	buf->BUF_LEN_REF += len;
 	return ALO_SOK;
 }
 

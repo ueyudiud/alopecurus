@@ -172,7 +172,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 			ai_buf_xputfs(env, buf, " (%s)", str2ntstr(proto->_name));
 		}
 	}
-	GStr* str = ai_str_new(env, buf->_arr, buf->_len);
+	GStr* str = ai_str_new(env, buf->_ptr, buf->_len);
 	v_set_obj(env, err, str);
 	return ALO_SOK;
 }
@@ -197,7 +197,7 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 
 	mod->_name = ai_str_new(env, name, strlen(name));
 
-	for (a_u32 i = 0; i < nb; ++i) {
+	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Binding const* b = &bs[i];
 		assume(b->name != null);
 
@@ -208,6 +208,8 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 			ai_mod_emplace(env, mod, key, v_of_obj(fun));
 		}
 	}
+
+	ai_mod_ready(env, mod, null);
 
 	ai_gc_trigger(env);
 }

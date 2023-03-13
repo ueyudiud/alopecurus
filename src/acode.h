@@ -220,6 +220,10 @@ enum ExprKind {
 	PAT_DICT
 };
 
+static_assert((EXPR_FALSE ^ 1) == EXPR_TRUE);
+static_assert((EXPR_TRY_FALSE ^ 1) == EXPR_TRY_TRUE);
+static_assert((EXPR_RESIDUAL_FALSE ^ 1) == EXPR_RESIDUAL_TRUE);
+
 struct ExprPack {
 	a_u32 _base;
 	a_u32 _len;

@@ -23,6 +23,8 @@ struct GList {
 	Value* _data;
 };
 
+static_assert(offsetof(GObj, _len) == offsetof(GList, _len));
+
 always_inline a_bool g_is_list(a_hobj v) {
 	return v->_vtable->_repr_id == REPR_LIST;
 }

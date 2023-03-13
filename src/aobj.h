@@ -72,7 +72,7 @@ enum FastRepr {
 	REPR_TABLE,
 	REPR_FUNC,
 
-	REPR_EMPTY = UINT8_MAX /* The layout of struct is empty, use for trait to mixin. */
+	REPR_TRAIT = UINT8_MAX /* The layout of struct is empty, use for trait to mixin. */
 };
 
 #define g_cast(t,e) from_member(t, _obj_head_mark, &(e)->_obj_head_mark)
@@ -110,6 +110,7 @@ typedef struct { a_usize _; } ObjHeadMark[0];
 
 struct GObj {
 	GOBJ_STRUCT_HEADER;
+	a_u32 _len;
 };
 
 #define VTABLE_FLAG_NONE u16c(0)
@@ -125,12 +126,21 @@ always_inline void v_check_alive(a_henv env, Value v);
 #define V_INT_MASK (~(~u64c(0) << 32))
 
 #define V_MASKED_TAG(tag) (~cast(a_u64, tag) << 47)
+#define V_GET_TAG(repr) (~(repr) >> 47)
+#define V_GET_PAYLOAD(repr) ((repr) & V_PAYLOAD_MASK)
 
 #define V_STRICT_NIL (~u64c(0))
 #define V_EMPTY (~u64c(1))
 #define V_FALSE V_MASKED_TAG(T_FALSE)
 #define V_TRUE (V_MASKED_TAG(T_TRUE) | V_PAYLOAD_MASK)
 #define V_FLOAT_MAX u64c(0xfff8000000000000)
+
+static_assert(V_GET_TAG(V_STRICT_NIL) == T_NIL);
+static_assert(V_GET_TAG(V_EMPTY) == T_NIL);
+static_assert(V_GET_TAG(V_FALSE) == T_FALSE);
+static_assert(V_GET_TAG(V_TRUE) == T_TRUE);
+static_assert(V_TRUE + 1 == V_FALSE);
+static_assert(V_GET_TAG(V_FLOAT_MAX) == T_NAN);
 
 always_inline a_u64 v_masked_tag(a_enum tag) {
 	assume(tag <= T__MAX_FAST, "bad value tag.");
@@ -155,11 +165,11 @@ always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
 }
 
 always_inline a_enum v_get_tag(Value v) {
-	return ~v._ >> 47;
+	return V_GET_TAG(v._);
 }
 
 always_inline a_u64 v_get_payload(Value v) {
-	return v._ & V_PAYLOAD_MASK;
+	return V_GET_PAYLOAD(v._);
 }
 
 always_inline a_bool v_test_range(Value v, a_enum tag_min, a_enum tag_max) {
