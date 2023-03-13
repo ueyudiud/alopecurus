@@ -118,6 +118,8 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(  SETI,  "seti", iABsC, ___) /* R[b][int(sc)] := R[a]                        */ \
     _(  SETS,  "sets",  iABC, ___) /* R[b][K[c]] := R[a]                           */ \
     _( SETSX, "setsx", iABEx, ___) /* R[b][K[ex]] := R[a]                          */ \
+    _( CSETS, "csets",  iABC, ___) /* C[b][K[ex]] := R[a]                          */ \
+    _(CSETSX,"csetsx", iABEx, ___) /* C[b][K[ex]] := R[a]                          */ \
     _(   NEG,   "neg",   iAB, ___) /* R[a] := -R[b]                                */ \
     _(  BNOT,  "bnot",   iAB, ___) /* R[a] := ~R[b]                                */ \
     _(   LEN,   "len",   iAB, ___) /* R[a] := #R[b]                                */ \
@@ -126,6 +128,7 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(  TNEW,  "tnew",  iABC, ___) /* R[a] := (R[b:b+c])                           */ \
     _( TNEWM, "tnewm",  iABC, v2_) /* R[a] := (R[b:])                              */ \
     _(  LNEW,  "lnew",  iABx, ___) /* R[a] := [] (with size hint bx)               */ \
+    _( LPUSH, "lpush",  iABC, ___) /* (R[a]: list) ++= R[b:b+c])                   */ \
     _(   ADD,   "add",  iABC, ___) /* R[a] := R[b] + R[c]                          */ \
     _(   SUB,   "sub",  iABC, ___) /* R[a] := R[b] - R[c]                          */ \
     _(   MUL,   "mul",  iABC, ___) /* R[a] := R[b] * R[c]                          */ \
@@ -178,6 +181,10 @@ static_assert((BC_BLTI ^ 1) == BC_BNLTI);
 static_assert((BC_BLEI ^ 1) == BC_BNLEI);
 static_assert((BC_BGTI ^ 1) == BC_BNGTI);
 static_assert((BC_BGEI ^ 1) == BC_BNGEI);
+static_assert(BC_GETS + 1 == BC_GETSX);
+static_assert(BC_CGETS + 1 == BC_CGETSX);
+static_assert(BC_SETS + 1 == BC_SETSX);
+static_assert(BC_CSETS + 1 == BC_CSETSX);
 
 enum InsnFormat {
 	INSN_i,

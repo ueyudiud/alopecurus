@@ -12,6 +12,7 @@
 #include "astr.h"
 #include "atable.h"
 #include "afun.h"
+#include "amod.h"
 #include "aenv.h"
 #include "agc.h"
 #include "adbg.h"

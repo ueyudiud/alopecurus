@@ -11,6 +11,7 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
+#include "amod.h"
 #include "afmt.h"
 #include "agc.h"
 #include "aapi.h"
@@ -109,7 +110,7 @@ static Value vm_meta_get(a_henv env, Value v1, Value v2) {
 		goto bad_op;
 	}
 
-	Value* pvf = ai_obj_vlookup_(env, vtable, TM_GET);
+	Value const* pvf = ai_obj_vlookup_(env, vtable, TM_GET);
 	assume(pvf != null);
 	Value vf = *pvf;
 
@@ -134,7 +135,7 @@ static void vm_meta_set(a_henv env, Value v1, Value v2, Value v3) {
 		goto bad_op;
 	}
 
-	Value* pvf = ai_obj_vlookup_(env, vtable, TM_SET);
+	Value const* pvf = ai_obj_vlookup_(env, vtable, TM_SET);
 	assume(pvf != null);
 	Value vf = *pvf;
 
@@ -164,7 +165,7 @@ static Value vm_meta_len(a_henv env, Value v1) {
 		goto bad_op;
 	}
 
-	Value* pvf = ai_obj_vlookup_(env, vtable, TM_LEN);
+	Value const* pvf = ai_obj_vlookup_(env, vtable, TM_LEN);
 	assume(pvf != null);
 	Value vf = *pvf;
 
@@ -770,6 +771,46 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					ai_table_set(env, &v_as_mod(vb)->_table, vc, va);
 				}
 				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vm_meta_set(env, vb, vc, va);
+					reload_stack();
+				}
+				break;
+			}
+			case BC_CSETS: {
+				loadB();
+				loadC();
+
+				Value va = R[a];
+				Value vb = *fun->_caps[b]->_ptr;
+				Value vc = K[c];
+
+				if (v_is_table(vb)) {
+					ai_table_set(env, v_as_table(vb), vc, va);
+				}
+				else if (unlikely(v_is_list(vb))) {
+					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+				}
+				else {
+					vm_meta_set(env, vb, vc, va);
+					reload_stack();
+				}
+				break;
+			}
+			case BC_CSETSX: {
+				loadB();
+				loadEx();
+
+				Value va = R[a];
+				Value vb = *fun->_caps[b]->_ptr;
+				Value vc = K[ex];
+
+				if (v_is_table(vb)) {
+					ai_table_set(env, v_as_table(vb), vc, va);
+				}
+				else if (unlikely(v_is_list(vb))) {
 					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
 				}
 				else {

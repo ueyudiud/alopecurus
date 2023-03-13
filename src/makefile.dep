@@ -1,81 +1,85 @@
 aapi.o: aapi.c astr.h aio.h aobj.h adef.h aarch.h alo.h aauxlib.h \
- atuple.h alist.h atable.h amap.h abuf.h amem.h afun.h actx.h agbl.h \
- astrx.h akw.h aop.h aerr.h aenv.h astk.h actx/x64.win.h agc.h avm.h \
- aparse.h alex.h adump.h aapi.h
+ atuple.h alist.h atable.h amap.h abuf.h amem.h afun.h amod.h actx.h \
+ agbl.h astrx.h akw.h aop.h aerr.h aenv.h astk.h actx/x64.win.h agc.h \
+ avm.h aparse.h alex.h adump.h aapi.h
 aauxlib.o: aauxlib.c abuf.h amem.h aobj.h adef.h aarch.h alo.h aauxlib.h \
- astr.h aio.h atable.h amap.h afun.h aenv.h astk.h agc.h agbl.h astrx.h \
- akw.h aop.h aerr.h adbg.h aapi.h alolib.h
+ astr.h aio.h atable.h amap.h afun.h amod.h aenv.h astk.h agc.h agbl.h \
+ astrx.h akw.h aop.h aerr.h adbg.h aapi.h alolib.h
 abaselib.o: abaselib.c amap.h abuf.h amem.h aobj.h adef.h aarch.h alo.h \
  aauxlib.h atuple.h alist.h atable.h agc.h agbl.h astr.h aio.h astrx.h \
- akw.h aop.h aerr.h afun.h aenv.h astk.h aapi.h alolib.h abaselib.h
+ akw.h aop.h aerr.h amod.h afun.h aenv.h astk.h aapi.h alolib.h \
+ abaselib.h
 abc.o: abc.c abc.h adef.h aarch.h alo.h aauxlib.h
 abuf.o: abuf.c agbl.h astr.h aio.h aobj.h adef.h aarch.h alo.h aauxlib.h \
- astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h amem.h afun.h aenv.h \
- astk.h agc.h
+ astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h amem.h amod.h afun.h \
+ aenv.h astk.h agc.h
 acode.o: acode.c abc.h adef.h aarch.h alo.h aauxlib.h afun.h aobj.h agc.h \
  agbl.h astr.h aio.h astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h \
- amem.h aenv.h astk.h afmt.h acode.h aparse.h alex.h
+ amem.h amod.h aenv.h astk.h afmt.h acode.h aparse.h alex.h
 adbg.o: adbg.c afun.h aobj.h adef.h aarch.h alo.h aauxlib.h agc.h agbl.h \
  astr.h aio.h astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h amem.h \
- aenv.h astk.h aapi.h adbg.h
+ amod.h aenv.h astk.h aapi.h adbg.h
 adbglib.o: adbglib.c adef.h aarch.h alo.h aauxlib.h alolib.h
 adump.o: adump.c abc.h adef.h aarch.h alo.h aauxlib.h afun.h aobj.h agc.h \
  agbl.h astr.h aio.h astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h \
- amem.h aenv.h astk.h adump.h abaselib.h
+ amem.h amod.h aenv.h astk.h adump.h abaselib.h
 aenv.o: aenv.c abc.h adef.h aarch.h alo.h aauxlib.h astr.h aio.h aobj.h \
  atuple.h alist.h atable.h amap.h abuf.h amem.h actx.h agbl.h astrx.h \
- akw.h aop.h aerr.h afun.h aenv.h astk.h actx/x64.win.h agc.h
+ akw.h aop.h aerr.h amod.h afun.h aenv.h astk.h actx/x64.win.h agc.h
 aerr.o: aerr.c astr.h aio.h aobj.h adef.h aarch.h alo.h aauxlib.h aenv.h \
  astk.h afun.h agc.h agbl.h astrx.h akw.h aop.h aerr.h atable.h amap.h \
- abuf.h amem.h avm.h
+ abuf.h amem.h amod.h avm.h
 afmt.o: afmt.c afmt.h abuf.h amem.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astr.h aio.h
 afun.o: afun.c abc.h adef.h aarch.h alo.h aauxlib.h amem.h aobj.h agc.h \
  agbl.h astr.h aio.h astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h \
- afun.h aenv.h astk.h
+ amod.h afun.h aenv.h astk.h
 agc.o: agc.c atable.h amap.h abuf.h amem.h aobj.h adef.h aarch.h alo.h \
- aauxlib.h agc.h agbl.h astr.h aio.h astrx.h akw.h aop.h aerr.h afun.h \
- aenv.h astk.h
+ aauxlib.h agc.h agbl.h astr.h aio.h astrx.h akw.h aop.h aerr.h amod.h \
+ afun.h aenv.h astk.h
 aio.o: aio.c amem.h aobj.h adef.h aarch.h alo.h aauxlib.h agc.h agbl.h \
- astr.h aio.h astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h afun.h \
- aenv.h astk.h
+ astr.h aio.h astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h amod.h \
+ afun.h aenv.h astk.h
 alex.o: alex.c aenv.h astr.h aio.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astk.h afun.h aerr.h acode.h aop.h aparse.h agc.h agbl.h astrx.h akw.h \
- atable.h amap.h abuf.h amem.h alex.h afmt.h
+ atable.h amap.h abuf.h amem.h amod.h alex.h afmt.h
 alist.o: alist.c aop.h adef.h aarch.h alo.h aauxlib.h aerr.h aobj.h \
  amem.h agc.h agbl.h astr.h aio.h astrx.h akw.h atable.h amap.h abuf.h \
- afun.h aenv.h astk.h alist.h
+ amod.h afun.h aenv.h astk.h alist.h
 alo.o: alo.c adef.h aarch.h alo.h aauxlib.h alolib.h abaselib.h
 aload.o: aload.c aio.h aobj.h adef.h aarch.h alo.h aauxlib.h astr.h \
  aenv.h astk.h afun.h amem.h agc.h agbl.h astrx.h akw.h aop.h aerr.h \
- atable.h amap.h abuf.h aload.h
+ atable.h amap.h abuf.h amod.h aload.h
 amem.o: amem.c aenv.h astr.h aio.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astk.h afun.h agc.h agbl.h astrx.h akw.h aop.h aerr.h atable.h amap.h \
- abuf.h amem.h
+ abuf.h amem.h amod.h
+amod.o: amod.c atable.h amap.h abuf.h amem.h aobj.h adef.h aarch.h alo.h \
+ aauxlib.h agbl.h astr.h aio.h astrx.h akw.h aop.h aerr.h amod.h afun.h \
+ aenv.h astk.h agc.h avm.h
 aobj.o: aobj.c aobj.h adef.h aarch.h alo.h aauxlib.h
 aop.o: aop.c aop.h adef.h aarch.h alo.h aauxlib.h aerr.h aobj.h
 aparse.o: aparse.c afun.h aobj.h adef.h aarch.h alo.h aauxlib.h aenv.h \
  astr.h aio.h astk.h aerr.h acode.h aop.h aparse.h agc.h agbl.h astrx.h \
- akw.h atable.h amap.h abuf.h amem.h alex.h
+ akw.h atable.h amap.h abuf.h amem.h amod.h alex.h
 asave.o: asave.c aio.h aobj.h adef.h aarch.h alo.h aauxlib.h aenv.h \
  astr.h astk.h afun.h agc.h agbl.h astrx.h akw.h aop.h aerr.h atable.h \
- amap.h abuf.h amem.h aload.h
+ amap.h abuf.h amem.h amod.h aload.h
 astk.o: astk.c aenv.h astr.h aio.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astk.h afun.h amem.h agc.h agbl.h astrx.h akw.h aop.h aerr.h atable.h \
- amap.h abuf.h actx.h actx/x64.win.h
+ amap.h abuf.h amod.h actx.h actx/x64.win.h
 astr.o: astr.c aop.h adef.h aarch.h alo.h aauxlib.h aerr.h aobj.h aenv.h \
  astr.h aio.h astk.h afun.h amem.h agc.h agbl.h astrx.h akw.h atable.h \
- amap.h abuf.h
+ amap.h abuf.h amod.h
 astrx.o: astrx.c astr.h aio.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astrx.h akw.h aop.h aerr.h
 asyslib.o: asyslib.c avm.h aenv.h astr.h aio.h aobj.h adef.h aarch.h \
  alo.h aauxlib.h astk.h afun.h aapi.h alolib.h
 atable.o: atable.c aop.h adef.h aarch.h alo.h aauxlib.h aerr.h aobj.h \
  astr.h aio.h amem.h agc.h agbl.h astrx.h akw.h atable.h amap.h abuf.h \
- afun.h aenv.h astk.h avm.h
+ amod.h afun.h aenv.h astk.h avm.h
 atuple.o: atuple.c amem.h aobj.h adef.h aarch.h alo.h aauxlib.h agc.h \
  agbl.h astr.h aio.h astrx.h akw.h aop.h aerr.h atable.h amap.h abuf.h \
- afun.h aenv.h astk.h avm.h atuple.h
+ amod.h afun.h aenv.h astk.h avm.h atuple.h
 avm.o: avm.c abc.h adef.h aarch.h alo.h aauxlib.h aop.h aerr.h aobj.h \
- atuple.h alist.h atable.h amap.h abuf.h amem.h afun.h afmt.h astr.h \
- aio.h agc.h agbl.h astrx.h akw.h aenv.h astk.h aapi.h avm.h
+ atuple.h alist.h atable.h amap.h abuf.h amem.h afun.h amod.h afmt.h \
+ astr.h aio.h agc.h agbl.h astrx.h akw.h aenv.h astk.h aapi.h avm.h

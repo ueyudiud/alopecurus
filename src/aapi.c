@@ -10,6 +10,7 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
+#include "amod.h"
 #include "actx.h"
 #include "agc.h"
 #include "aerr.h"

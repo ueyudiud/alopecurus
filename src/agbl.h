@@ -11,6 +11,7 @@
 #include "astr.h"
 #include "astrx.h"
 #include "atable.h"
+#include "amod.h"
 #include "afun.h"
 #include "aenv.h"
 
