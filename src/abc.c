@@ -13,8 +13,14 @@ char const* const ai_bc_names[BC__MAX] = {
 #undef BCNAME
 };
 
-a_u8 const ai_bc_formats[BC__MAX] = {
+a_u8 const ai_bc_fmts[BC__MAX] = {
 #define BCFMT(id,n,f,...) M_cat(INSN_,f),
 	ALO_BC_LIST(BCFMT)
 #undef BCFMT
+};
+
+a_u8 const ai_bc_ctrls[BC__MAX] = {
+#define BCCTRL(id,n,f,c,...) M_cat(INSN_c,c),
+	ALO_BC_LIST(BCCTRL)
+#undef BCCTRL
 };

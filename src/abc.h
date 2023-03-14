@@ -123,12 +123,12 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(   NEG,   "neg",   iAB, ___) /* R[a] := -R[b]                                */ \
     _(  BNOT,  "bnot",   iAB, ___) /* R[a] := ~R[b]                                */ \
     _(   LEN,   "len",   iAB, ___) /* R[a] := #R[b]                                */ \
-    _( UNBOX, "unbox",  iABC, ___) /* R[a:a+c] := *R[b]                            */ \
+    _( UNBOX, "unbox",  iABC, _2n) /* R[a:a+c] := *R[b]                            */ \
     _(UNBOXV,"unboxv",  iABC, _2v) /* R[a:] := *R[b]                               */ \
     _(  TNEW,  "tnew",  iABC, ___) /* R[a] := (R[b:b+c])                           */ \
     _( TNEWM, "tnewm",  iABC, v2_) /* R[a] := (R[b:])                              */ \
     _(  LNEW,  "lnew",  iABx, ___) /* R[a] := [] (with size hint bx)               */ \
-    _( LBOXM, "lboxm",   iAB, ___) /* R[a] := [R[b:]                               */ \
+    _( LBOXM, "lboxm",   iAB, ___) /* R[a] := [R[b:]]                              */ \
     _( LPUSH, "lpush",  iABC, ___) /* (R[a]: list) ++= R[b:b+c])                   */ \
     _(LPUSHM,"lpushm",   iAB, v2_) /* (R[a]: list) ++= R[b:])                      */ \
     _(   ADD,   "add",  iABC, ___) /* R[a] := R[b] + R[c]                          */ \
@@ -151,18 +151,18 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _( BANDI, "bandi", iABsC, ___) /* R[a] := R[b] & int(c)                        */ \
     _(  BORI,  "bori", iABsC, ___) /* R[a] := R[b] | int(c)                        */ \
     _( BXORI, "bxori", iABsC, ___) /* R[a] := R[b] ~ int(c)                        */ \
-    _(  CALL,  "call",  iABC, ___) /* R[a:a+c] := R[a](R[a+1:a+b])                 */ \
-    _( CALLV, "callv",   iAB, _2v) /* R[a:] := R[a](R[a+1:a+b])                    */ \
-    _( CALLM, "callm",   iAC, v2_) /* R[a:a+c] := R[a](R[a+1:])                    */ \
+    _(  CALL,  "call",  iABC, n2n) /* R[a:a+c] := R[a](R[a+1:a+b])                 */ \
+    _( CALLV, "callv",   iAB, n2v) /* R[a:] := R[a](R[a+1:a+b])                    */ \
+    _( CALLM, "callm",   iAC, v2n) /* R[a:a+c] := R[a](R[a+1:])                    */ \
     _(CALLMV,"callmv",    iA, v2v) /* R[a:] := R[a](R[a+1:])                       */ \
-    _(   CAT,   "cat",  iABC, ___) /* R[a] := concat(R[b:b+c])                     */ \
+    _(   CAT,   "cat",  iABC, n2_) /* R[a] := concat(R[b:b+c])                     */ \
     _(  CATM,  "catm",  iABC, v2_) /* R[a] := concat(R[b:])                        */ \
     _( CLOSE, "close",    iA, ___) /* close(C[A:])                                 */ \
     _(     J,     "j",  isAx, ___) /* pc := pc + a                                 */ \
-    _(  RET0,  "ret0",     i, _2n) /* return                                       */ \
-    _(  RET1,  "ret1",    iA, _2n) /* return R[a]                                  */ \
-    _(   RET,   "ret",   iAB, _2n) /* return R[a:a+b+1]                            */ \
-    _(  RETM,  "retm",    iA, v2n) /* return R[a:]                                 */ \
+    _(  RET0,  "ret0",     i, _2x) /* return                                       */ \
+    _(  RET1,  "ret1",    iA, _2x) /* return R[a]                                  */ \
+    _(   RET,   "ret",   iAB, n2x) /* return R[a:a+b+1]                            */ \
+    _(  RETM,  "retm",    iA, v2x) /* return R[a:]                                 */ \
     _(    FC,    "fc",     i, ___) /* call C function                              */ \
     _(    EX,    "ex",   iAx, ___) /*                                              */
 
@@ -205,8 +205,30 @@ enum InsnFormat {
 	INSN_iABEx
 };
 
+#define INSN_CTRL_TO_MARG 0x1
+#define INSN_CTRL_TO_VARG 0x2
+#define INSN_CTRL_FROM_MARG 0x4
+#define INSN_CTRL_FROM_VARG 0x8
+#define INSN_CTRL_LEAVE 0x10
+
+enum InsnCtrl {
+	INSN_c___ = 0,
+	INSN_c_2n = INSN_CTRL_TO_MARG,
+	INSN_c_2v = INSN_CTRL_TO_VARG,
+	INSN_c_2x = INSN_CTRL_LEAVE,
+	INSN_cn2_ = INSN_CTRL_FROM_MARG,
+	INSN_cn2n = INSN_CTRL_FROM_MARG|INSN_CTRL_TO_MARG,
+	INSN_cn2v = INSN_CTRL_FROM_MARG|INSN_CTRL_TO_VARG,
+	INSN_cn2x = INSN_CTRL_FROM_MARG|INSN_CTRL_LEAVE,
+	INSN_cv2_ = INSN_CTRL_FROM_VARG,
+	INSN_cv2n = INSN_CTRL_FROM_VARG|INSN_CTRL_TO_MARG,
+	INSN_cv2v = INSN_CTRL_FROM_VARG|INSN_CTRL_TO_VARG,
+	INSN_cv2x = INSN_CTRL_FROM_VARG|INSN_CTRL_LEAVE,
+};
+
 intern char const* const ai_bc_names[];
-intern a_u8 const ai_bc_formats[];
+intern a_u8 const ai_bc_fmts[];
+intern a_u8 const ai_bc_ctrls[];
 
 always_inline a_bool bc_has_dual(a_enum op) {
 	return op >= BC_KF && op <= BC_BNGEI;
@@ -220,10 +242,17 @@ always_inline a_bool bc_is_leave(a_enum op) {
 	return op >= BC_RET0 && op <= BC_RETM;
 }
 
+always_inline a_bool bc_can_unpack(a_enum op) {
+	a_u8 ctrl1 = ai_bc_ctrls[op];
+	if (!(ctrl1 & INSN_CTRL_TO_MARG)) return false;
+	assume(op + 1 <= BC__MAX && (ai_bc_ctrls[op + 1] & INSN_CTRL_TO_VARG), "bad control op.");
+	return true;
+}
+
 always_inline void insn_check(a_insn i) {
 	a_enum op = bc_load_op(i);
 	assume(op < BC__MAX, "bad opcode.");
-	a_enum fmt = ai_bc_formats[op];
+	a_enum fmt = ai_bc_fmts[op];
 	switch (fmt) {
 		case INSN_i: {
 			assume(bc_load_ax(i) == 0, "bad operand.");

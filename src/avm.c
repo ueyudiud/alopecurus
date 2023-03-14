@@ -425,7 +425,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 	run {
 		GProto* proto = fun->_proto;
-		check_stack(R + proto->_nstack);
+		check_stack(base + proto->_nstack);
 		if (!(proto->_flags & FUN_FLAG_VARARG)) {
 			adjust_top();
 		}

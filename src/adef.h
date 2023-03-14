@@ -26,11 +26,11 @@
 /**
  ** Debug aasm mode. If enabled, all assumption will be checked and panic if failed.
  */
-//#ifdef ALOI_DEBUG
+#ifdef ALOI_DEBUG
 # define ALO_DEBUG M_true
-//#else
-//# define ALO_DEBUG M_false
-//#endif
+#else
+# define ALO_DEBUG M_false
+#endif
 
 /**
  ** Check memory related function in strict mode.

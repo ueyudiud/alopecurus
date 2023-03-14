@@ -121,8 +121,8 @@ static a_bool l_test_sep(Parser* par) {
 
 static void l_scan_atom_expr(Parser* par, OutExpr e);
 static void l_scan_expr(Parser* par, OutExpr e);
-static a_bool l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2);
-static a_bool l_scan_expr_pack_tail(Parser* par, InoutExpr e1, OutExpr e2);
+static a_bool l_scan_exprs(Parser* par, Varg* varg, InoutExpr e, a_u32 n);
+static void l_scan_varg(Parser* par, Varg* varg, InExpr e1);
 static void l_scan_stat(Parser* par);
 static void l_scan_stat_seq(Parser* par);
 
@@ -245,19 +245,19 @@ static void l_scan_atom_expr(Parser* par, OutExpr e) {
 			a_u32 line = ln_cur(par);
 			l_skip(par);
 
+			Varg varg = {};
 			if (l_test_skip(par, TK_RBK)) {
 				ai_code_constK(par, e, EXPR_UNIT, line);
+				ai_code_new_tuple(par, &varg, e, line);
 			}
 			else {
 				l_scan_expr(par, e);
 				if (!l_test_skip(par, TK_RBK)) {
 					if (l_test_skip(par, TK_COMMA) && !l_test(par, TK_RBK)) {
-						Expr e2;
-						l_scan_expr_pack_tail(par, e, &e2);
-						ai_code_va_push(par, e, &e2, ln_cur(par));
+						l_scan_varg(par, &varg, e);
 					}
 					l_check_pair_right(par, TK_LBK, TK_RBK, line);
-					ai_code_new_tuple(par, e, line);
+					ai_code_new_tuple(par, &varg, e, line);
 				}
 			}
 			break;
@@ -314,13 +314,15 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 				a_line line = ln_cur(par);
 				l_skip(par);
 
+				Varg varg;
 				if (!l_test_skip(par, TK_RBK)) {
-					Expr e2;
-					l_scan_expr_pack_tail(par, e, &e2);
-					ai_code_va_push(par, e, &e2, ln_cur(par));
+					l_scan_varg(par, &varg, e);
 					l_check_pair_right(par, TK_LBK, TK_RBK, line);
 				}
-				ai_code_call(par, e, line);
+				else {
+					ai_code_va_init(par, &varg, e);
+				}
+				ai_code_call(par, &varg, e, line);
 				break;
 			}
 			default: {
@@ -387,6 +389,13 @@ static void l_scan_prefixed_expr(Parser* par, OutExpr e) {
 	}
 }
 
+static void l_scan_unpack_expr(Parser* par, OutExpr e) {
+	l_scan_prefixed_expr(par, e);
+	if (l_test_skip(par, TK_TDOT)) {
+		ai_code_unpack(par, e, ln_cur(par));
+	}
+}
+
 static a_u32 l_scan_arith_op(Parser* par) {
 	switch (l_peek(par)) {
 		case TK_PLUS:
@@ -429,7 +438,7 @@ static void l_scan_arith_expr(Parser* par, OutExpr e, a_u32 lv) {
 	};
 
 	a_u32 op;
-	l_scan_prefixed_expr(par, e);
+	l_scan_unpack_expr(par, e);
 	while ((op = l_scan_arith_op(par)) != OP__NOT_BIN && prios[op] >= lv) {
 		Expr e2;
 		a_line line = ln_cur(par);
@@ -612,35 +621,47 @@ static void l_scan_expr(Parser* par, OutExpr e) {
 	l_scan_ternary_expr(par, e);
 }
 
-static a_bool l_scan_expr_pack(Parser* par, InoutExpr e1, OutExpr e2) {
-	l_scan_expr(par, e1);
-	if (l_test_skip(par, TK_COMMA)) {
-		if (l_test_skip(par, TK_TDOT)) {
-			ai_code_unpack(par, e1, ln_cur(par));
-		}
-		else {
-			return l_scan_expr_pack_tail(par, e1, e2);
-		}
-	}
-	return false;
-}
+static a_bool l_scan_expr_list(Parser* par, Varg* varg, InoutExpr e, a_u32 n) {
+	l_scan_expr(par, e);
 
-static a_bool l_scan_expr_pack_tail(Parser* par, InoutExpr e1, OutExpr e2) {
-	ai_code_va_init(par, e1);
-	l_scan_expr(par, e2);
-
-	a_u32 line = ln_cur(par);
 	while (l_test_skip(par, TK_COMMA)) {
-		if (l_test_skip(par, TK_TDOT)) {
-			ai_code_unpack(par, e2, line);
-			break;
-		}
-		ai_code_va_push(par, e1, e2, line);
-		line = ln_cur(par);
-		l_scan_expr(par, e2);
+		a_line line = ln_cur(par);
+		ai_code_va_push(par, varg, e, line);
+		ai_code_va_pack(par, varg, n, line);
+		l_scan_expr(par, e);
 	}
 
 	return true;
+}
+
+static a_bool l_scan_exprs(Parser* par, Varg* varg, InoutExpr e, a_u32 n) {
+	if (e->_kind == EXPR_UNIT) {
+		l_scan_expr(par, e);
+
+		if (!l_test_skip(par, TK_COMMA))
+			return false;
+	}
+
+	ai_code_va_init(par, varg, e);
+	ai_code_va_pack(par, varg, n, ln_cur(par));
+	return l_scan_expr_list(par, varg, e, n);
+}
+
+static void l_scan_varg(Parser* par, Varg* varg, InExpr e1) {
+	Expr e = {};
+	if (e1 != null) {
+		ai_code_va_init(par, varg, e1);
+		l_scan_expr_list(par, varg, &e, 0);
+		ai_code_va_push(par, varg, &e, ln_cur(par));
+	}
+	else {
+		if (l_scan_exprs(par, varg, &e, 0)) {
+			ai_code_va_push(par, varg, &e, ln_cur(par));
+		}
+		else {
+			ai_code_va_init(par, varg, &e);
+		}
+	}
 }
 
 typedef struct Lhs Lhs;
@@ -675,10 +696,10 @@ static void l_scan_normal_assign_frag(Parser* par, Lhs* lhs) {
 	l_check_skip(par, TK_ASSIGN);
 	a_u32 line = ln_cur(par);
 
-	Expr rhs = {};
+	Varg rhs = {};
 	Expr rhs_last;
 
-	l_scan_expr_pack(par, &rhs, &rhs_last);
+	l_scan_exprs(par, &rhs, &rhs_last, lhs->_count);
 	if (!ai_code_balance(par, &rhs, &rhs_last, lhs->_count, line)) {
 		ai_par_error(par, "unbalanced assignment.", line);
 	}
@@ -766,41 +787,41 @@ static void l_scan_return_stat(Parser* par) {
 
 	l_skip(par);
 
-	Expr e = {};
+	Varg varg;
 
 	if (!l_test_sep(par)) {
-		Expr e2 = {};
-		if (l_scan_expr_pack(par, &e, &e2)) {
-			ai_code_va_push(par, &e, &e2, line);
-		}
+		l_scan_varg(par, &varg, null);
 	}
 
 	l_test_skip(par, TK_SEMI);
-	ai_code_return(par, &e, line);
+	ai_code_return(par, &varg, line);
 }
 
 static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
-	Expr e0 = {}, e;
+	Varg varg = {};
+	Expr e;
 
 	ai_code_label(par, stat->_label_test, line);
 
 	l_scan_expr(par, &e);
-	while (ai_code_let_bind(par, stat, &e)) {
+	loop {
 		if (!l_test_skip(par, TK_COMMA)) {
+			ai_code_let_bind(par, stat, &e);
 			ai_code_let_nils(par, stat, line);
-			goto discard;
+			goto compact;
 		}
-		l_scan_expr(par, &e);
-		if (l_test_skip(par, TK_TDOT)) {
+		else if (l_test_skip(par, TK_TDOT)) {
 			ai_code_unpack(par, &e, ln_cur(par));
-			if (!ai_code_balance(par, &e, &e0, stat->_nnode, line)) {
+			ai_code_let_bind(par, stat, &e);
+			if (!ai_code_balance(par, &varg, &e, stat->_nnode, line)) {
 				ai_par_error(par, "unbalanced binding.", line);
 			}
 			while (ai_code_let_bind(par, stat, &e)) {
-				ai_code_va_pop(par, &e0, &e, line);
+				ai_code_va_pop(par, &varg, &e, line);
 			}
-			goto discard;
+			goto compact;
 		}
+		l_scan_expr(par, &e);
 	}
 
 	while (l_test_skip(par, TK_COMMA)) {
@@ -809,8 +830,9 @@ static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
 		if (l_test_skip(par, TK_TDOT))
 			break;
 	}
-discard:
-	ai_code_discard(par);
+
+compact:
+	ai_code_compact(par);
 }
 
 #define TAG_BITS_PACK 0x03
@@ -1080,21 +1102,22 @@ static void l_scan_stat_seq(Parser* par) {
 }
 
 static void l_scan_root_return_stat(Parser* par) {
-	Expr e = {};
+	Varg varg = {};
 
 	if (!l_test_sep(par)) {
-		Expr e2 = {};
-		if (l_scan_expr_pack(par, &e, &e2)) {
-			ai_code_va_push(par, &e, &e2, 1);
+		Expr e = {};
+		if (l_scan_exprs(par, &varg, &e, 0)) {
+			ai_code_va_push(par, &varg, &e, 1);
 		}
 		/* Unpack the return value if only return one value and it can be unpacked. */
-		else if (e._kind == EXPR_VA_DYN || e._kind == EXPR_VARG) {
+		else if (!par->_fnscope->_fvarg && (e._kind == EXPR_DYN_AC || e._kind == EXPR_DYN_C)) {
 			ai_code_unpack(par, &e, ln_cur(par));
+			ai_code_va_push(par, &varg, &e, 1);
 		}
 	}
 
 	l_test_skip(par, TK_SEMI);
-	ai_code_return(par, &e, 1);
+	ai_code_return(par, &varg, 1);
 }
 
 static void l_scan_root(unused a_henv env, void* ctx) {

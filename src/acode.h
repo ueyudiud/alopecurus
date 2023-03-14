@@ -9,7 +9,7 @@
 #include "aparse.h"
 
 typedef struct Expr Expr;
-typedef struct ExprPack ExprPack;
+typedef struct Varg Varg;
 typedef struct ConExpr ConExpr;
 typedef struct LetStat LetStat;
 
@@ -27,20 +27,21 @@ intern void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line);
 
 intern void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line);
 intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line);
-intern void ai_code_new_tuple(Parser* par, InoutExpr e, a_line line);
+intern void ai_code_new_tuple(Parser* par, Varg* varg, OutExpr e, a_line line);
 intern void ai_code_new_list(Parser* par, InoutExpr e, a_line line);
 intern void ai_code_unary(Parser* par, InoutExpr e, a_enum op, a_line line);
 intern void ai_code_binary1(Parser* par, InoutExpr e, a_enum op, a_line line);
 intern void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line line);
 intern void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line line);
 intern void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line line);
-intern void ai_code_call(Parser* par, InExpr e, a_line line);
-intern void ai_code_return(Parser* par, InExpr e, a_line line);
+intern void ai_code_call(Parser* par, Varg* varg, OutExpr e, a_line line);
+intern void ai_code_return(Parser* par, Varg* varg, a_line line);
 intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_line line);
-intern a_bool ai_code_balance(Parser* par, InoutExpr es, InoutExpr e, a_u32 n, a_line line);
-intern void ai_code_va_init(Parser* par, InoutExpr e);
-intern void ai_code_va_push(Parser* par, InoutExpr e1, InExpr e2, a_line line);
-intern void ai_code_va_pop(Parser* par, InoutExpr es, InoutExpr e, a_line line);
+intern a_bool ai_code_balance(Parser* par, Varg* varg, InoutExpr e, a_u32 n, a_line line);
+intern void ai_code_va_init(Parser* par, Varg* varg, InoutExpr e);
+intern void ai_code_va_push(Parser* par, Varg* varg, InExpr e, a_line line);
+intern void ai_code_va_pack(Parser* par, Varg* varg, a_u32 n, a_line line);
+intern void ai_code_va_pop(Parser* par, Varg* varg, InoutExpr e, a_line line);
 intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line);
 intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line);
 
@@ -57,7 +58,7 @@ intern void ai_code_let_nils(Parser* par, LetStat* s, a_line line);
 intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
 intern void ai_code_local(Parser* par, OutExpr e, GStr* name, a_line line);
 intern void ai_code_bind_param(Parser* par, GStr* name, a_line line);
-intern void ai_code_discard(Parser* par);
+intern void ai_code_compact(Parser* par);
 
 intern void ai_code_enter(Parser* par, Scope* scope, a_line line);
 intern void ai_code_leave(Parser* par, a_line line);
@@ -73,17 +74,17 @@ intern GFun* ai_code_build_and_close(Parser* par);
  ** retain the values across any operations.
  */
 enum ExprKind {
+/*==============================Constants===============================*/
 	/**
 	 ** Unit expression.
 	 ** REPR: unit
 	 */
 	EXPR_UNIT = 0x00,
 	/**
-	 ** The sequence of temporary registers.
-	 ** REPR: R[_impl:_impl+_len]
-	 *@param _pack the register pack.
+	 ** Nil constant expression.
+	 ** REPR: nil
 	 */
-	EXPR_PACK = 0x01,
+	EXPR_NIL = 0x01,
 	/**
 	 ** Boolean constant expression.
 	 ** REPR: false/true
@@ -91,17 +92,30 @@ enum ExprKind {
 	EXPR_FALSE = 0x02, EXPR_TRUE,
 #define EXPR_BOOL(v) (EXPR_FALSE | (v))
 	/**
-	 ** The try expression with boolean type. This is a volatile expression.
-	 ** REPR: try { true/false } else { false/true }
-	 *@param _label the label of residual path.
+	 ** Integer constant expression.
+	 ** REPR: _int
+	 *@param _int the integer constant.
 	 */
-	EXPR_TRY_TRUE = 0x04, EXPR_TRY_FALSE,
+	EXPR_INT = 0x04,
 	/**
-	 ** The try expression with only residual part.
-	 ** REPR: try { ! } else { false/true }
-	 *@param _label the label of residual path.
+	 ** Float constant expression.
+	 ** REPR: _float
+	 *@param _float the float constant.
 	 */
-	EXPR_RESIDUAL_FALSE = 0x06, EXPR_RESIDUAL_TRUE,
+	EXPR_FLOAT = 0x05,
+	/**
+	 ** String constant expression.
+	 ** REPR: _str
+	 *@param _str the string constant.
+	 */
+	EXPR_STR = 0x06,
+/*==========================Bind Expressions============================*/
+	/**
+	 ** The expression bind to a capture value.
+	 ** REPR: C[_reg]
+	 *@param _reg the capture register index.
+	 */
+	EXPR_CAP = 0x07,
 	/**
 	 ** The expression from a local variable.
 	 ** REPR: R[_reg]
@@ -115,12 +129,6 @@ enum ExprKind {
 	 *@param _reg the register index.
 	 */
 	EXPR_TMP = 0x09,
-	/**
-	 ** The expression bind to a capture value.
-	 ** REPR: C[_reg]
-	 *@param _reg the capture register index.
-	 */
-	EXPR_CAP = 0x0A,
 	/**
 	 ** Unreachable expression.
 	 ** REPR: !
@@ -154,44 +162,6 @@ enum ExprKind {
 #define EXPR_REFK_ALL EXPR_REFK_ ... EXPR_REFK_ + 1
 #define EXPR_REF_ALL EXPR_REF_ ... EXPR_REFK_ + 1
 	EXPR_REFCK = 0x14,
-	/**
-	 ** The try expression. This is a volatile expression.
-	 ** REPR: try { R[_try] } else { nil }
-	 *@param _try the temporary register index.
-	 *@param _residual the label of jump instruction.
-	 */
-	EXPR_TMP_OR_NIL = 0x15,
-	/**
-	 ** The try expression. This is a volatile expression.
-	 ** REPR: try { R[_label(a)] } else { nil }
-	 *@param _try the label of compute result instruction.
-	 *@param _residual the label of jump instruction.
-	 */
-	EXPR_DYN_OR_NIL = 0x16,
-/*==============================Constants===============================*/
-	/**
-	 ** Nil constant expression.
-	 ** REPR: nil
-	 */
-	EXPR_NIL = 0x17,
-	/**
-	 ** Integer constant expression.
-	 ** REPR: _int
-	 *@param _int the integer constant.
-	 */
-	EXPR_INT = 0x18,
-	/**
-	 ** Float constant expression.
-	 ** REPR: _float
-	 *@param _float the float constant.
-	 */
-	EXPR_FLOAT = 0x19,
-	/**
-	 ** String constant expression.
-	 ** REPR: _str
-	 *@param _str the string constant.
-	 */
-	EXPR_STR = 0x1A,
 /*=========================Partial Expressions==========================*/
 	/**
 	 ** The partial evaluated expression.
@@ -199,20 +169,46 @@ enum ExprKind {
 	 ** REPR: R[_label(a)]
 	 *@param _label the label of instruction.
 	 */
-	EXPR_DYN = 0x1B,
+	EXPR_DYN_A = 0x15,
 	/**
-	 ** The partial evaluated expression, used for function applying.
+	 ** The expression of variable length arguments stored in sequence of
+	 ** registers.
+	 ** REPR: R[_label(a):]
+	 *@param _label the label of instruction that generate vararg.
+	 */
+	EXPR_DYN_AC = 0x16,
+	/**
+	 ** The calling expression.
 	 ** REPR: R[_label(a):_label(a)+_label(c)]
 	 *@param _label the label of instruction.
 	 */
-	EXPR_VA_DYN = 0x1C,
+	EXPR_DYN_C = 0x17,
 	/**
-	 ** The partial evaluated expression, used for function applying.
-	 ** Different from EXPR_VA_DYN, variable a is immutable.
-	 ** REPR: R[_label(a):_label(a)+_label(c)]
-	 *@param _label the label of instruction.
+	 ** The try expression. This is a volatile expression.
+	 ** REPR: try { R[_try] } else { nil }
+	 *@param _try the temporary register index.
+	 *@param _residual the label of jump instruction.
 	 */
-	EXPR_VARG = 0x1D,
+	EXPR_TMP_OR_NIL = 0x18,
+	/**
+	 ** The try expression. This is a volatile expression.
+	 ** REPR: try { R[_label(a)] } else { nil }
+	 *@param _try the label of compute result instruction.
+	 *@param _residual the label of jump instruction.
+	 */
+	EXPR_DYN_OR_NIL = 0x19,
+	/**
+	 ** The try expression with boolean type. This is a volatile expression.
+	 ** REPR: try { true/false } else { false/true }
+	 *@param _label the label of residual path.
+	 */
+	EXPR_TRY_TRUE = 0x1A, EXPR_TRY_FALSE,
+	/**
+	 ** The try expression with only residual part.
+	 ** REPR: try { ! } else { false/true }
+	 *@param _label the label of residual path.
+	 */
+	EXPR_RESIDUAL_FALSE = 0x1C, EXPR_RESIDUAL_TRUE,
 /*=========================Pattern Expressions==========================*/
 	PAT_DROP,
 	PAT_BIND,
@@ -225,13 +221,22 @@ static_assert((EXPR_FALSE ^ 1) == EXPR_TRUE);
 static_assert((EXPR_TRY_FALSE ^ 1) == EXPR_TRY_TRUE);
 static_assert((EXPR_RESIDUAL_FALSE ^ 1) == EXPR_RESIDUAL_TRUE);
 
-struct ExprPack {
-	a_u32 _base;
-	a_u32 _len;
+struct Varg {
+	a_u8 _base;
+	a_u8 _top;
+	a_u8 _coll; /* The collector index. */
+	union {
+		a_u8 _flags;
+		struct {
+			a_u8 _fcoll: 1;
+			a_u8 _fvarg: 1;
+			a_u8 _fborrow: 1;
+		};
+	};
 };
 
 struct Expr {
-	a_u16 _kind;
+	a_u8 _kind;
 	a_line _line;
 	union {
 		a_int _int;
@@ -242,7 +247,6 @@ struct Expr {
 			a_u32 _sym;
 		};
 		a_u32 _label;
-		ExprPack _pack;
 		struct {
 			a_u32 _base;
 			a_u32 _key;
@@ -276,7 +280,7 @@ always_inline a_bool expr_has_tmp_key(InExpr e) {
 }
 
 struct ConExpr {
-	ExprPack _head;
+	Varg _varg;
 	QBuf _buf;
 };
 
@@ -301,8 +305,8 @@ struct LetStat {
 	a_u32 _label_test;
 	a_u32 _label_fail;
 	a_u32 _nnode;
-	a_u32 _fvarg : 1;
-	a_u32 _ftest : 1;
+	a_u32 _fvarg: 1;
+	a_u32 _ftest: 1;
 };
 
 enum SymKind {
@@ -374,7 +378,6 @@ struct FnScope {
 	a_line _head_jump_line;
 	a_line _head_line;
 	a_line _close_line;
-	a_u16 _max_reg;
 	a_u16 _nsub;
 	union {
 		a_u8 _flow_flags;
@@ -387,6 +390,7 @@ struct FnScope {
 		};
 	};
 	a_u8 _nparam;
+	a_u8 _max_reg;
 };
 
 #endif /* acode_h_ */

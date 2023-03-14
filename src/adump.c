@@ -78,7 +78,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 		if (fline) {
 			dump_line(meta, &line_itr, n);
 		}
-		aloi_show("\t%5u %5s ", n, ai_bc_names[op]);
+		aloi_show("\t%5u %6s ", n, ai_bc_names[op]);
 		switch (op) {
 			case BC_RET0: {
 				aloi_show("   _    _    _\n");
@@ -130,6 +130,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_NEG:
 			case BC_LPUSHM:
 			case BC_LBOXM:
+			case BC_UNBOXV:
 			case BC_BEQ:
 			case BC_BNE:
 			case BC_BLT:
