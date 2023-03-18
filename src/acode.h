@@ -9,7 +9,6 @@
 #include "aparse.h"
 
 typedef struct Expr Expr;
-typedef struct Varg Varg;
 typedef struct ConExpr ConExpr;
 typedef struct LetStat LetStat;
 
@@ -27,21 +26,16 @@ intern void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line);
 
 intern void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line);
 intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line);
-intern void ai_code_new_tuple(Parser* par, Varg* varg, OutExpr e, a_line line);
 intern void ai_code_new_list(Parser* par, InoutExpr e, a_line line);
 intern void ai_code_unary(Parser* par, InoutExpr e, a_enum op, a_line line);
 intern void ai_code_binary1(Parser* par, InoutExpr e, a_enum op, a_line line);
 intern void ai_code_binary2(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line line);
 intern void ai_code_merge(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line line);
 intern void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_u32 op, a_line line);
-intern void ai_code_call(Parser* par, Varg* varg, OutExpr e, a_line line);
-intern void ai_code_return(Parser* par, Varg* varg, a_line line);
 intern a_u32 ai_code_testT(Parser* par, InoutExpr e, a_line line);
-intern a_bool ai_code_balance(Parser* par, Varg* varg, InoutExpr e, a_u32 n, a_line line);
-intern void ai_code_va_init(Parser* par, Varg* varg, InoutExpr e);
-intern void ai_code_va_push(Parser* par, Varg* varg, InExpr e, a_line line);
-intern void ai_code_va_pack(Parser* par, Varg* varg, a_u32 n, a_line line);
-intern void ai_code_va_pop(Parser* par, Varg* varg, InoutExpr e, a_line line);
+intern void ai_code_vararg1(Parser* par, InoutExpr es, a_enum op, a_line line);
+intern void ai_code_vararg2(Parser* par, InoutExpr es, InoutExpr e, a_enum op, a_line line);
+intern a_u32 ai_code_args_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_line line);
 intern void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line);
 intern void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line);
 
@@ -209,6 +203,8 @@ enum ExprKind {
 	 *@param _label the label of residual path.
 	 */
 	EXPR_RESIDUAL_FALSE = 0x1C, EXPR_RESIDUAL_TRUE,
+
+	EXPR_NTMP = 0x1E, EXPR_NTMPC,
 /*=========================Pattern Expressions==========================*/
 	PAT_DROP,
 	PAT_BIND,
@@ -221,19 +217,11 @@ static_assert((EXPR_FALSE ^ 1) == EXPR_TRUE);
 static_assert((EXPR_TRY_FALSE ^ 1) == EXPR_TRY_TRUE);
 static_assert((EXPR_RESIDUAL_FALSE ^ 1) == EXPR_RESIDUAL_TRUE);
 
-struct Varg {
+typedef struct {
 	a_u8 _base;
 	a_u8 _top;
 	a_u8 _coll; /* The collector index. */
-	union {
-		a_u8 _flags;
-		struct {
-			a_u8 _fcoll: 1;
-			a_u8 _fvarg: 1;
-			a_u8 _fborrow: 1;
-		};
-	};
-};
+} Args;
 
 struct Expr {
 	a_u8 _kind;
@@ -255,6 +243,7 @@ struct Expr {
 			a_u32 _try;
 			a_u32 _residual;
 		};
+		Args _args;
 	};
 };
 
@@ -280,7 +269,7 @@ always_inline a_bool expr_has_tmp_key(InExpr e) {
 }
 
 struct ConExpr {
-	Varg _varg;
+	Expr _expr;
 	QBuf _buf;
 };
 
@@ -337,11 +326,11 @@ struct Sym {
 
 #define SCOPE_STRUCT_HEAD \
     Scope* _up;           \
-	a_u16 _bot_reg;          \
-	a_u16 _top_ntr; /* Top of non-temporary section. */ \
-	a_u16 _bot_fur; /* Bottom of fragmented section. */ \
-	a_u16 _num_fur; /* Number of temporary register in fragmented section. */ \
-	a_u16 _top_reg;          \
+	a_u8 _bot_reg;          \
+	a_u8 _top_ntr; /* Top of non-temporary section. */ \
+	a_u8 _bot_fur; /* Bottom of fragmented section. */ \
+	a_u8 _num_fur; /* Number of temporary register in fragmented section. */ \
+	a_u8 _top_reg;          \
 	a_line _begin_line;      \
 	a_u32 _begin_label;      \
 	a_u32 _end_label;        \

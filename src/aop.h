@@ -67,13 +67,18 @@ enum UnaryOp {
 	/* Collection operator */
 	OP_LEN, OP_UNBOX,
 	/* Logical operators */
-	OP_NOT
+	OP_NOT,
 };
 
 enum MonadOp {
-	OP_OR_NIL,
-	OP_OR_ELSE,
+	OP_OR_NIL, OP_OR_ELSE,
 	OP_MERGE
+};
+
+enum VarargOp {
+	OP_CALL, OP_RETURN,
+	OP_VA_PUSH, OP_VA_POP,
+	OP_TNEW
 };
 
 #ifdef aloi_op_neg_int
