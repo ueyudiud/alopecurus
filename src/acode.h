@@ -8,13 +8,13 @@
 #include "aop.h"
 #include "aparse.h"
 
-typedef struct Expr Expr;
+typedef struct ExprBody ExprBody;
 typedef struct ConExpr ConExpr;
 typedef struct LetStat LetStat;
 
-typedef Expr* restrict InExpr;
-typedef Expr* restrict OutExpr;
-typedef Expr* restrict InoutExpr;
+typedef ExprBody* restrict InExpr;
+typedef ExprBody* restrict OutExpr;
+typedef ExprBody* restrict InoutExpr;
 
 intern void ai_code_never(Parser* par, OutExpr e, a_line line);
 intern void ai_code_constK(Parser* par, OutExpr e, a_u32 val, a_line line);
@@ -208,9 +208,10 @@ enum ExprKind {
 /*=========================Pattern Expressions==========================*/
 	PAT_DROP,
 	PAT_BIND,
+	PAT_ROOT,
 	PAT_TUPLE,
 	PAT_LIST,
-	PAT_DICT
+	PAT_TABLE
 };
 
 static_assert((EXPR_FALSE ^ 1) == EXPR_TRUE);
@@ -223,7 +224,7 @@ typedef struct {
 	a_u8 _coll; /* The collector index. */
 } Args;
 
-struct Expr {
+struct ExprBody {
 	a_u8 _kind;
 	a_line _line;
 	union {
@@ -246,6 +247,34 @@ struct Expr {
 		Args _args;
 	};
 };
+
+typedef ExprBody Expr[1];
+
+#define expr_init(e,k,v...) quiet(*(e) = new(ExprBody) { ._kind = (k), v })
+
+always_inline void expr_copy(OutExpr dst, InExpr src) {
+	*dst = *src;
+}
+
+always_inline void expr_never(OutExpr e, a_line line) {
+	expr_init(e, EXPR_NEVER, ._line = line);
+}
+
+always_inline void expr_unit(OutExpr e) {
+	expr_init(e, EXPR_UNIT);
+}
+
+always_inline void expr_var(OutExpr e, a_u32 reg, a_u32 sym, a_line line) {
+	expr_init(e, EXPR_VAR, ._reg = reg, ._sym = sym, ._line = line);
+}
+
+always_inline void expr_tmp(OutExpr e, a_u32 reg, a_line line) {
+	expr_init(e, EXPR_TMP, ._reg = reg, ._line = line);
+}
+
+always_inline void expr_dyn(OutExpr e, a_u32 label) {
+	expr_init(e, EXPR_DYN_A, ._label = label);
+}
 
 always_inline a_bool expr_has_tmp_val(InExpr e) {
 	a_u32 kind = e->_kind;
@@ -282,20 +311,29 @@ struct LetNode {
 	union {
 		Expr _expr;
 		struct {
-			a_u16 _kind;
+			a_u8 _kind;
+			union {
+				a_u8 _flags;
+				struct {
+					a_u8 _faggr: 1;
+				};
+			};
 			a_line _line;
-			a_u32 _succ_tag; /* Successive tag. */
+			a_u32 _count;
 		};
 	};
+	/* Used for register allocation. */
+	a_u8 _nI;
+	a_u8 _nR;
+	a_u8 _nV;
+	a_u8 _index; /* Index in enclosed pattern. */
 };
 
 struct LetStat {
-	LetNode* _head;
+	LetNode _root;
 	a_u32 _label_test;
 	a_u32 _label_fail;
-	a_u32 _nnode;
-	a_u32 _fvarg: 1;
-	a_u32 _ftest: 1;
+	a_u8 _ftest: 1;
 };
 
 enum SymKind {

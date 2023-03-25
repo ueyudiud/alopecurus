@@ -349,41 +349,6 @@ static void l_merge_branch(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line)
 #define l_lazy_jump ai_code_gotoU
 #define l_mark_label ai_code_label
 
-always_inline void expr_copy(OutExpr dst, InExpr src) {
-	*dst = *src;
-}
-
-always_inline void expr_never(OutExpr e, a_line line) {
-	e->_kind = EXPR_NEVER;
-	e->_line = line;
-}
-
-always_inline void expr_unit(OutExpr e) {
-	e->_kind = EXPR_UNIT;
-}
-
-always_inline void expr_var(OutExpr e, a_u32 reg, a_u32 sym, a_line line) {
-	*e = new(Expr) {
-		._kind = EXPR_VAR,
-		._line = line,
-		._reg = reg,
-		._sym = sym
-	};
-}
-
-always_inline void expr_tmp(OutExpr e, a_u32 reg, a_line line) {
-	*e = new(Expr) {
-		._kind = EXPR_TMP,
-		._line = line,
-		._reg = reg
-	};
-}
-
-always_inline void expr_dyn(OutExpr e, a_u32 label) {
-	e->_kind = EXPR_DYN_A;
-	e->_label = label;
-}
-
 void ai_code_never(unused Parser* par, OutExpr e, a_line line) {
 	expr_never(e, line);
 }
@@ -1376,7 +1341,11 @@ static void l_va_push(Parser* par, InoutExpr es, InExpr e, a_line line) {
 				bc_swap_c(pi, DMB);
 			}
 			else {
+				a_u32 reg = l_alloc_stack(par, line);
+				assume(es->_args._top == reg);
+
 				bc_swap_c(pi, 1);
+				es->_args._top += 1;
 			}
 			break;
 		}
@@ -1386,17 +1355,22 @@ static void l_va_push(Parser* par, InoutExpr es, InExpr e, a_line line) {
 
 			if (par->_fnscope->_fvarg) {
 				bc_swap_op(pi, bc_load_op(i) + 1);
-				bc_swap_a(pi, es->_reg);
+				bc_swap_a(pi, es->_args._top);
 				bc_swap_c(pi, DMB);
 			}
 			else {
-				bc_swap_a(pi, es->_reg);
+				a_u32 reg = l_alloc_stack(par, line);
+				assume(es->_args._top == reg);
+
+				bc_swap_a(pi, es->_args._top);
 				bc_swap_c(pi, 1);
+				es->_args._top += 1;
 			}
 			break;
 		}
 		default: {
 			l_topR(par, e);
+			es->_args._top += 1;
 			break;
 		}
 	}
@@ -1496,45 +1470,6 @@ void ai_code_vararg2(Parser* par, InoutExpr es, InExpr e, a_enum op, a_line line
 }
 
 /**
- ** Drop expression virtually.
- *@param par the parser.
- *@param e the expression to be dropped.
- *@return the stack top after drop operation.
- */
-static a_u32 l_vdrop(Parser* par, InExpr e) {
-	a_u32 top = par->_scope->_top_reg;
-	switch (e->_kind) {
-		case EXPR_TMP: {
-			assume(e->_reg + 1 == top);
-			return top - 1;
-		}
-		case EXPR_REF(true, true): {
-			assume((e->_base + 2 == top && e->_key + 1 == top) || (e->_base + 1 == top && e->_key + 2 == top));
-			return top - 2;
-		}
-		case EXPR_REF(false, true):
-		case EXPR_REFK(true): {
-			assume(e->_base + 1 == top);
-			return top - 1;
-		}
-		case EXPR_REF(true, false): {
-			assume(e->_key + 1 == top);
-			return top - 1;
-		}
-		default: {
-			return top;
-		}
-		case EXPR_NTMP:
-		case EXPR_NTMPC: {
-			return e->_reg;
-		}
-		case EXPR_TMP_OR_NIL: {
-			panic("register not merged.");
-		}
-	}
-}
-
-/**
  ** Take expected argument.
  *@param par the parser.
  *@param ei the initial expressions, and become expression pack in result.
@@ -1544,6 +1479,7 @@ static a_u32 l_vdrop(Parser* par, InExpr e) {
  *@return true if success and false for otherwise.
  */
 a_u32 ai_code_args_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_line line) {
+	assume(n > 0, "truncate nothing.");
 	switch (ei->_kind) {
 		case EXPR_NEVER: {
 			return 0;
@@ -1590,12 +1526,21 @@ a_u32 ai_code_args_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_lin
 				return 0;
 			}
 			else {
-				a_u32 m = l_vdrop(par, el) - ei->_reg;
+				a_u32 m = ei->_args._top - ei->_args._base;
+				if (m >= n) {
+					ai_code_drop(par, el);
 
-				expr_copy(el, ei);
-				expr_unit(ei);
+					a_u32 top = ei->_args._base + n;
+					l_succ_free_stack(par, top);
 
-				return n - m;
+					expr_tmp(el, top - 1, line);
+					ei->_args._top = top - 1;
+
+					return 0;
+				}
+				else {
+					return n - m - 1;
+				}
 			}
 		}
 		case EXPR_NTMPC: {
@@ -1649,20 +1594,20 @@ void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line) {
 
 		GStr* str = buf_to_str(par, &ce->_buf);
 		l_emit_k(par, reg, v_of_obj(str), line);
-		if (ce->_expr._kind != EXPR_NTMP) {
-			l_topV(par, &ce->_expr);
-			ce->_expr._base = reg;
+		if (ce->_expr->_kind != EXPR_NTMP) {
+			l_topV(par, ce->_expr);
+			ce->_expr->_base = reg;
 		}
 
 		ai_buf_reset(&ce->_buf);
 	}
 	else {
-		l_va_push(par, &ce->_expr, e, line);
+		l_va_push(par, ce->_expr, e, line);
 	}
 }
 
 void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
-	if (ce->_expr._kind == EXPR_UNIT) {
+	if (ce->_expr->_kind == EXPR_UNIT) {
 		e->_kind = EXPR_STR;
 		e->_str = buf_to_str(par, &ce->_buf);
 		e->_line = line;
@@ -1673,8 +1618,8 @@ void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 			a_u32 reg = l_alloc_stack(par, line);
 			l_emit_k(par, reg, v_of_obj(str), line);
 		}
-		expr_dyn(e, l_emit(par, bc_make_iabc(BC_CAT, DYN, ce->_expr._base, par->_scope->_top_reg - ce->_expr._base), line));
-		l_drop_ntmp(par, &ce->_expr);
+		expr_dyn(e, l_emit(par, bc_make_iabc(BC_CAT, DYN, ce->_expr->_base, par->_scope->_top_reg - ce->_expr->_base), line));
+		l_drop_ntmp(par, ce->_expr);
 	}
 	/* Check and drop_object string buffer. */
 	if (par->_qbq == &ce->_buf) {
@@ -1876,16 +1821,17 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 			l_anyR(par, e2);
 
 			if (l_const_is_istr(par, e1->_key)) {
-				l_emit_refx(par, BC_CSETS, e1->_base, e1->_key, e2->_reg, line);
+				l_emit_refx(par, BC_CSETS, e2->_reg, e1->_base, e1->_key, line);
 			}
 			else {
 				a_u32 reg = l_succ_alloc_stack(par, 2, line);
 				l_emit(par, bc_make_iab(BC_LDC, reg, e1->_base), line);
 				l_emit(par, bc_make_iabx(BC_K, reg + 1, e1->_key), line);
-				l_emit_refx(par, BC_SETS, reg, reg + 1, e2->_reg, line);
+				l_emit_refx(par, BC_SETS, e2->_reg, reg, reg + 1, line);
 				l_succ_free_stack(par, reg);
-				l_drop_tmp(par, e2);
 			}
+
+			l_drop_tmp(par, e2);
 			break;
 		}
 		default: {
@@ -1924,75 +1870,146 @@ static a_u32 l_bind_local(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label,
 	});
 }
 
-static a_u32 l_let_node_count(LetNode* node) {
-	a_u32 n = 0;
-	for (; node != null; node = node->_sibling) {
-		n += 1;
-	}
-	return n;
-}
-
 void ai_code_let_nils(Parser* par, LetStat* s, a_line line) {
 	Scope* scope = par->_scope;
-	if (l_let_node_count(s->_head) != s->_nnode)
-		ai_par_error(par, "missing assignment for pattern.", line);
+
+	/* If all node is bind. */
+	if (s->_root._sibling == null)
+		return;
+
+	if (s->_root._faggr) {
+		ai_par_error(par, "nil binding is only available for plain pattern.", line);
+	}
 
 	assume(scope->_top_ntr == scope->_top_reg);
-	a_u32 num = s->_nnode;
+	a_u32 num = s->_root._count - s->_root._sibling->_index;
 	a_u32 reg = l_succ_alloc_stack(par, num, line);
 	a_u32 label = l_emit_kn(par, reg, num, line);
-	for (LetNode* node = s->_head; node != null; node = node->_sibling) {
-		l_bind_local(par, node->_expr._str, reg++, label, SYM_MOD_NONE);
+	for (LetNode* node = s->_root._sibling; node != null; node = node->_sibling) {
+		l_bind_local(par, node->_expr->_str, reg++, label, SYM_MOD_NONE);
 	}
 
 	scope->_top_ntr = scope->_top_reg;
 }
 
-static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e) {
+static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base) {
 	switch (n->_kind) {
 		case PAT_DROP: {
 			ai_code_drop(par, e);
 			break;
 		}
 		case PAT_BIND: {
-			l_tmpR(par, e);
-			l_bind_local(par, n->_expr._str, e->_reg, par->_head_label, SYM_MOD_NONE);
+			a_u32 reg = base + n->_nI;
+			l_fixR(par, e, reg);
+			l_bind_local(par, n->_expr->_str, reg, par->_head_label, SYM_MOD_NONE);
 			break;
 		}
 		case PAT_TUPLE: {
-			a_u32 line = n->_expr._line;
-			a_u32 num = l_let_node_count(n->_child);
-			l_topR(par, e);
+			a_u32 line = n->_expr->_line;
+			a_u32 num = n->_count;
+			a_u32 reg = base + n->_nI;
 			if (s->_ftest) {
-				a_u32 reg = l_alloc_stack(par, line);
-				l_emit(par, bc_make_iab(BC_LEN, reg, e->_reg), line);
-				s->_label_fail = l_emit_branch(par, bc_make_iasbx(BC_BNEI, reg, num), s->_label_fail, line);
-				l_free_stack(par, reg);
+				a_u32 reg2 = l_alloc_stack(par, line);
+				l_emit(par, bc_make_iab(BC_LEN, reg2, e->_reg), line);
+				s->_label_fail = l_emit_branch(par, bc_make_iasbx(BC_BNEI, reg2, num), s->_label_fail, line);
+				l_free_stack(par, reg2);
 			}
-			l_drop_tmp(par, e);
-			a_u32 reg = l_succ_alloc_stack(par, num, line);
 			l_emit(par, bc_make_iabc(BC_UNBOX, reg, e->_reg, num), line);
 			for (LetNode* nchild = n->_child; nchild != null; nchild = nchild->_sibling) {
 				Expr e2;
-				expr_tmp(&e2, reg++, line);
-				l_let_bind(par, s, nchild, &e2);
+				expr_tmp(e2, reg++, line);
+				l_let_bind(par, s, nchild, e2, base);
 			}
 			break;
 		}
-		default:
+		default: {
 			unreachable();
+		}
+	}
+}
+
+static void l_let_compute(Parser* par, LetNode* nrt) {
+	LetNode* n = nrt;
+	a_u32 id = 0;
+	a_u32 nV = 0;
+	/* Step1: compute used register count. */
+	loop {
+		switch (n->_kind) {
+			case PAT_BIND: {
+				n->_nR = 1;
+				n->_nI = nV;
+				n->_nV = nV;
+				nV += 1;
+				break;
+			}
+			case PAT_TUPLE: {
+				n->_nV = nV; /* Save nV for future used. */
+				n->_nR = 0;
+				n->_nI = 0;
+				if (n->_child != null) {
+					n = n->_child;
+					continue;
+				}
+				break;
+			}
+			default: {
+				unreachable();
+			}
+		}
+
+		if (n == nrt)
+			return;
+
+		if (n->_sibling == null) {
+			loop {
+				LetNode* nup = n->_parent;
+
+				if (nup == nrt) {
+					return;
+				}
+				else if (nup->_sibling != null) {
+					n = nup;
+					break;
+				}
+
+				a_u32 nV1 = nup->_nV;
+
+				nup->_nR = max(nup->_nI, (nV - nV1) + n->_nR + nup->_count - id - 1);
+				nup->_nI += nV1;
+				nup->_nV = nV;
+
+				n = nup;
+			}
+
+			id = n->_index; /* Load node index. */
+		}
+
+		LetNode* nup = n->_parent;
+		nup->_nI = max(nup->_nI, (nV - nup->_nV) + n->_nR - id - 1);
+		n = n->_sibling;
+		id += 1;
 	}
 }
 
 a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e) {
-	LetNode* node = s->_head;
+	LetNode* node = s->_root._child;
 
 	assume(node != null);
 
-	l_let_bind(par, s, node, e);
+	l_let_compute(par, node);
+
+	if (e->_kind == EXPR_TMP) {
+		l_free_stack(par, e->_reg);
+	}
+	a_u32 reg = l_succ_alloc_stack(par, node->_nR, e->_line);
+	if (e->_kind != EXPR_TMP) {
+		l_fixR(par, e, reg + node->_nR - 1);
+	}
+	e->_kind = EXPR_VAR; /* Keep register valid before finished. */
+	l_let_bind(par, s, node, e, reg);
 
 	node = node->_sibling;
-	s->_head = node;
+	s->_root._child = node;
 	return node != null;
 }
 
@@ -2618,6 +2635,9 @@ static void l_stbV(Parser* par, InoutExpr e) {
 			}
 		}
 	}
+	else if (e->_kind != EXPR_UNIT) {
+		l_topV(par, e);
+	}
 }
 
 static void l_topV(Parser* par, InoutExpr e) {
@@ -2698,6 +2718,7 @@ static void l_topV(Parser* par, InoutExpr e) {
 			default: {
 				l_topR(par, e);
 				e->_kind = EXPR_NTMP;
+				e->_args = new(Args) { ._base = e->_reg, ._top = e->_reg + 1 };
 				break;
 			}
 		}
