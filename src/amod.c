@@ -79,7 +79,7 @@ void ai_mod_ready(a_henv env, GMod* self, VTable const* impl) {
 			._drop = impl->_drop,
 			._close = op_flags & VTABLE_FLAG_FAST_TM(TM_CLOSE) ? generic_close : impl->_close,
 			._hash = op_flags & VTABLE_FLAG_FAST_TM(TM_HASH) ? generic_hash : impl->_hash,
-			._equals = (op_flags & VTABLE_FLAG_FAST_TM(TM_EQ)) ? generic_equals : impl->_equals
+			._equals = op_flags & VTABLE_FLAG_FAST_TM(TM_EQ) ? generic_equals : impl->_equals
 		};
 	}
 	else {

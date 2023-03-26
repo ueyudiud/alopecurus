@@ -14,6 +14,7 @@
 #include "agc.h"
 #include "avm.h"
 #include "aerr.h"
+#include "aapi.h"
 
 #include "atable.h"
 
@@ -59,8 +60,8 @@ GTable* ai_table_new(a_henv env) {
     return self;
 }
 
-static a_bool tnode_is_hhead(GTable* table, TNode* node, a_hash hash) {
-    return !tnode_is_empty(node) && ((node->_hash ^ hash) & table->_hmask) == 0;
+static a_bool tnode_is_hhead(GTable* table, TNode* node) {
+    return !tnode_is_empty(node) && node == map_hash_first(table, node->_hash);
 }
 
 static void tnode_emplace(a_henv env, TNode* node, Value key, a_hash hash, Value value) {
@@ -112,7 +113,7 @@ static TNode* table_get_hprev(GTable* self, TNode* node) {
 
 static void table_emplace(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
     TNode* nodeh = map_hash_first(self, hash);
-    if (tnode_is_hhead(self, nodeh, hash)) {
+    if (tnode_is_hhead(self, nodeh)) {
         /* Insert into hash list. */
         TNode* nodet = table_pop_free(self);
 		TNode* noden = link_get(nodeh, _hnext);
@@ -173,6 +174,28 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 
 			ai_mem_vdel(G(env), arr, old_cap);
 		}
+	}
+}
+
+static void tnode_remove(a_henv env, GTable* table, TNode* node) {
+	assume(!tnode_is_empty(node), "cannot remove empty node.");
+
+#define first(n) list_set(table, _lfirst, n)
+#define last(n) list_set(table, _llast, n)
+	link_remove_local_template(node, _lprev, _lnext, first, last);
+#undef first
+#undef last
+
+	TNode* noden = link_next(node);
+	if (tnode_is_hhead(table, node)) {
+		if (noden != null) {
+			TNode* noden2 = link_next(noden);
+			link_set(noden, _hnext, noden2);
+		}
+	}
+	else {
+		TNode* nodep = table_get_hprev(table, node);
+		link_set(nodep, _hnext, noden);
 	}
 }
 
@@ -244,6 +267,59 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 Value const* ai_table_ref(a_henv env, GTable* self, Value key) {
 	a_u32 hash;
 	return table_get_opt(env, self, key, &hash);
+}
+
+a_usize alo_hnext(a_henv env, a_isize id, a_ritr itr) {
+	api_check_slot(env, 2);
+
+	Value v = api_elem(env, id);
+	api_check(v_is_obj(v) && v_as_obj(v)->_vtable->_repr_id == REPR_TABLE, "not table layout.");
+
+	GTable* self = g_as_table(v_as_obj(v));
+	a_u32 cursor = itr[0];
+	a_u32 pos;
+
+	/* Get next position. */
+	if (cursor == 0) {
+		if (self->_len == 0)
+			return 0;
+		pos = self->_lfirst;
+	}
+	else {
+		pos = ~cursor;
+
+		TNode* prev = &self->_ptr[pos];
+		api_check(!tnode_is_empty(prev), "invalid iterator.");
+		if (is_nil(prev->_lnext))
+			return 0;
+		pos += unwrap(prev->_lnext);
+		api_check(pos >= 0 && pos <= self->_hmask, "invalid iterator.");
+	}
+
+	itr[0] = ~pos; /* Store cursor. */
+
+	TNode* node = &self->_ptr[pos];
+	v_set(env, api_incr_stack(env), node->_key);
+	v_set(env, api_incr_stack(env), node->_value);
+
+	return 2;
+}
+
+a_bool alo_hremove(a_henv env, a_isize id, a_ritr itr) {
+	Value v = api_elem(env, id);
+	api_check(v_is_obj(v) && v_as_obj(v)->_vtable->_repr_id == REPR_TABLE, "not table layout.");
+
+	GTable* self = g_as_table(v_as_obj(v));
+	a_u32 cursor = itr[0];
+
+	api_check(cursor != 0, "no element need to remove.");
+
+	TNode* node = &self->_ptr[~cursor];
+	itr[0] = is_nil(node->_lprev) ? 0 : cursor - unwrap(node->_lprev);
+	tnode_remove(env, self, node);
+	self->_len -= 1;
+
+	return true;
 }
 
 Value ai_table_getis(a_henv env, GTable* self, GStr* key) {

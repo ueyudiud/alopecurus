@@ -8,6 +8,8 @@
 #include "amap.h"
 #include "aobj.h"
 
+typedef struct TNode TNode;
+
 intern GTable* ai_table_new(a_henv env);
 intern void ai_table_hint(a_henv env, GTable* self, a_usize len);
 intern Value const* ai_table_refi(a_henv env, GTable* self, a_int key);
@@ -18,8 +20,6 @@ intern Value ai_table_getis(a_henv env, GTable* self, GStr* key);
 intern Value ai_table_get(a_henv env, GTable* self, Value key);
 intern void ai_table_set(a_henv env, GTable* self, Value key, Value value);
 intern void ai_table_emplaces(a_henv env, GTable* self, GStr* key, Value value);
-
-typedef struct TNode TNode;
 
 #define GTABLE_STRUCT_HEADER \
 	GOBJ_STRUCT_HEADER;         \
