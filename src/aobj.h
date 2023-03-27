@@ -333,6 +333,10 @@ always_inline void v_set_int(Value* d, a_int v) {
 	v_setx(d, v_of_int(v));
 }
 
+always_inline void v_set_ptr(Value* d, void* v) {
+	v_setx(d, v_of_ptr(v));
+}
+
 always_inline void v_set_float(Value* d, a_float v) {
 	v_setx(d, v_of_float(v));
 }

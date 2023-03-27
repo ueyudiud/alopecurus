@@ -315,7 +315,7 @@ void alo_pushfloat(a_henv env, a_float val) {
 }
 
 void alo_pushptr(a_henv env, void* val) {
-	v_setx(api_incr_stack(env), v_of_ptr(val));
+	v_set_ptr(api_incr_stack(env), val);
 }
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {

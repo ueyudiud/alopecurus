@@ -177,7 +177,7 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 	}
 }
 
-static void tnode_remove(a_henv env, GTable* table, TNode* node) {
+static void tnode_remove(GTable* table, TNode* node) {
 	assume(!tnode_is_empty(node), "cannot remove empty node.");
 
 #define first(n) list_set(table, _lfirst, n)
@@ -293,7 +293,7 @@ a_usize alo_hnext(a_henv env, a_isize id, a_ritr itr) {
 		if (is_nil(prev->_lnext))
 			return 0;
 		pos += unwrap(prev->_lnext);
-		api_check(pos >= 0 && pos <= self->_hmask, "invalid iterator.");
+		api_check(pos <= self->_hmask, "invalid iterator.");
 	}
 
 	itr[0] = ~pos; /* Store cursor. */
@@ -316,7 +316,7 @@ a_bool alo_hremove(a_henv env, a_isize id, a_ritr itr) {
 
 	TNode* node = &self->_ptr[~cursor];
 	itr[0] = is_nil(node->_lprev) ? 0 : cursor - unwrap(node->_lprev);
-	tnode_remove(env, self, node);
+	tnode_remove(self, node);
 	self->_len -= 1;
 
 	return true;
