@@ -1899,7 +1899,7 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 			break;
 		}
 		case PAT_BIND: {
-			a_u32 reg = base + n->_nI;
+			a_u32 reg = base + n->_rel_id;
 			l_fixR(par, e, reg);
 			l_bind_local(par, n->_expr->_str, reg, par->_head_label, SYM_MOD_NONE);
 			break;
@@ -1907,7 +1907,7 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 		case PAT_TUPLE: {
 			a_u32 line = n->_expr->_line;
 			a_u32 num = n->_count;
-			a_u32 reg = base + n->_nI;
+			a_u32 reg = base + n->_rel_id;
 			if (s->_ftest) {
 				a_u32 reg2 = l_alloc_stack(par, line);
 				l_emit(par, bc_make_iab(BC_LEN, reg2, e->_reg), line);
@@ -1930,22 +1930,20 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 
 static void l_let_compute(Parser* par, LetNode* nrt) {
 	LetNode* n = nrt;
-	a_u32 id = 0;
-	a_u32 nV = 0;
-	/* Step1: compute used register count. */
+	a_u32 nvar = 0;
 	loop {
 		switch (n->_kind) {
 			case PAT_BIND: {
-				n->_nR = 1;
-				n->_nI = nV;
-				n->_nV = nV;
-				nV += 1;
+				n->_ntmp = 1;
+				n->_rel_id = nvar;
+				n->_nvar = nvar;
+				nvar += 1;
 				break;
 			}
 			case PAT_TUPLE: {
-				n->_nV = nV; /* Save nV for future used. */
-				n->_nR = 0;
-				n->_nI = 0;
+				n->_nvar = nvar; /* Save variable count for future used. */
+				n->_ntmp = 0;
+				n->_rel_id = 0;
 				if (n->_child != null) {
 					n = n->_child;
 					continue;
@@ -1972,22 +1970,19 @@ static void l_let_compute(Parser* par, LetNode* nrt) {
 					break;
 				}
 
-				a_u32 nV1 = nup->_nV;
+				a_u32 old_nvar = nup->_nvar;
 
-				nup->_nR = max(nup->_nI, (nV - nV1) + n->_nR + nup->_count - id - 1);
-				nup->_nI += nV1;
-				nup->_nV = nV;
+				nup->_rel_id = nup->_ntmp + old_nvar;
+				nup->_ntmp = max(nup->_ntmp, (nvar - old_nvar) + n->_ntmp + nup->_count - n->_index - 1);
+				nup->_nvar = nvar;
 
 				n = nup;
 			}
-
-			id = n->_index; /* Load node index. */
 		}
 
 		LetNode* nup = n->_parent;
-		nup->_nI = max(nup->_nI, (nV - nup->_nV) + n->_nR - id - 1);
+		nup->_ntmp = max(nup->_ntmp, (nvar - nup->_nvar) + n->_ntmp - n->_index - 1);
 		n = n->_sibling;
-		id += 1;
 	}
 }
 
@@ -2001,9 +1996,9 @@ a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e) {
 	if (e->_kind == EXPR_TMP) {
 		l_free_stack(par, e->_reg);
 	}
-	a_u32 reg = l_succ_alloc_stack(par, node->_nR, e->_line);
+	a_u32 reg = l_succ_alloc_stack(par, node->_ntmp, e->_line);
 	if (e->_kind != EXPR_TMP) {
-		l_fixR(par, e, reg + node->_nR - 1);
+		l_fixR(par, e, reg + node->_ntmp - 1);
 	}
 	e->_kind = EXPR_VAR; /* Keep register valid before finished. */
 	l_let_bind(par, s, node, e, reg);

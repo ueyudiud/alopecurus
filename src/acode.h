@@ -323,9 +323,9 @@ struct LetNode {
 		};
 	};
 	/* Used for register allocation. */
-	a_u8 _nI;
-	a_u8 _nR;
-	a_u8 _nV;
+	a_u8 _rel_id;
+	a_u8 _ntmp;
+	a_u8 _nvar;
 	a_u8 _index; /* Index in enclosed pattern. */
 };
 
