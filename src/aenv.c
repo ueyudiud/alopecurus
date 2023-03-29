@@ -169,7 +169,6 @@ static void global_init(a_henv env, unused void* ctx) {
 
 	GTable* gtable = ai_table_new(env);
 	v_set_obj(env, &G(env)->_global, gtable);
-	ai_gc_register_object(env, gtable);
 }
 
 static a_usize sizeof_MRoute() {

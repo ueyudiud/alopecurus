@@ -592,6 +592,16 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				check_gc();
 				break;
 			}
+			case BC_HNEW: {
+				loadBx();
+
+				GTable* val = ai_table_new(env);
+				v_set_obj(env, &R[a], val);
+				ai_table_hint(env, val, b);
+
+				check_gc();
+				break;
+			}
 			case BC_GET: {
 				loadB();
 				loadC();

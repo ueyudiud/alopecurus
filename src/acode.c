@@ -757,6 +757,10 @@ void ai_code_new_list(Parser* par, InoutExpr e, a_line line) {
 	expr_dyn(e, l_emit(par, bc_make_iabx(BC_LNEW, DYN, 0), line));
 }
 
+void ai_code_new_table(Parser* par, InoutExpr e, a_line line) {
+	expr_dyn(e, l_emit(par, bc_make_iabx(BC_HNEW, DYN, 0), line));
+}
+
 void ai_code_unary(Parser* par, InoutExpr e, a_enum op, a_line line) {
 	switch (op) {
 		case OP_NEG: {
@@ -1800,7 +1804,7 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 		}
 		case EXPR_REFR_ALL: {
 			l_anyR(par, e2);
-			l_emit(par, bc_make_iabc(BC_SET, e1->_base, e1->_key, e2->_reg), line);
+			l_emit(par, bc_make_iabc(BC_SET, e2->_reg, e1->_base, e1->_key), line);
 
 			l_drop_tmp(par, e2);
 			ai_code_drop(par, e1);
@@ -1808,7 +1812,7 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 		}
 		case EXPR_REFI_ALL: {
 			l_anyR(par, e2);
-			l_emit(par, bc_make_iabc(BC_SETI, e1->_base, e1->_key, e2->_reg), line);
+			l_emit(par, bc_make_iabc(BC_SETI, e2->_reg, e1->_base, e1->_key), line);
 
 			l_drop_tmp(par, e2);
 			ai_code_drop(par, e1);

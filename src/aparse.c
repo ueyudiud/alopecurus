@@ -263,8 +263,16 @@ static void l_scan_atom_expr(Parser* par, OutExpr e) {
 		case TK_LSQ: {
 			a_u32 line = ln_cur(par);
 			l_skip(par);
-			l_check_pair_right(par, TK_LSQ, TK_RSQ, line);
+			l_check_pair_right(par, TK_LSQ, TK_RSQ, line); //TODO
 			ai_code_new_list(par, e, line);
+			break;
+		}
+		case TK_LBR: {
+			a_u32 line = ln_cur(par);
+			l_skip(par);
+
+			l_check_pair_right(par, TK_LBR, TK_RBR, line); //TODO
+			ai_code_new_table(par, e, line);
 			break;
 		}
 		default: {

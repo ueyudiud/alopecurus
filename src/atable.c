@@ -54,9 +54,12 @@ static void table_alloc_array(a_henv env, GTable* self, a_usize new_cap) {
 
 GTable* ai_table_new(a_henv env) {
     GTable* self = ai_mem_alloc(env, sizeof(GTable));
+
 	self->_vtable = &table_vtable;
     self->_len = 0;
 	table_alloc_array(env, self, 0);
+
+	ai_gc_register_object(env, self);
     return self;
 }
 
@@ -201,7 +204,7 @@ static void tnode_remove(GTable* table, TNode* node) {
 
 static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value key) {
 #define test(n) v_trivial_equals(key, (n)->_key)
-#define con(n) return &(n)->_value
+#define con(n) ({ return &(n)->_value; })
 	return map_find_template(self, hash, test, tnode_is_empty, con);
 #undef test
 #undef con
@@ -209,7 +212,7 @@ static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value 
 
 static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* key) {
 #define test(n) (v_is_str((n)->_key) && ai_str_requals(v_as_str((n)->_key), key->_ptr, key->_len))
-#define con(n) return &(n)->_value
+#define con(n) ({ return &(n)->_value; })
 	return map_find_template(self, hash, test, tnode_is_empty, con);
 #undef test
 #undef con
@@ -227,7 +230,7 @@ Value const* ai_table_refis(a_henv env, GTable* self, GStr* key) {
 	return table_find_id(env, self, key->_hash, v_of_obj(key));
 }
 
-static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
+static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* restrict phash) {
 	if (likely(v_is_istr(key))) {
 		GStr* str = v_as_str(key);
 		*phash = str->_hash;
@@ -243,10 +246,12 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 		if (unlikely(v_is_nan(key))) {
 			return null;
 		}
-		return table_find_id(env, self, v_trivial_hash(key), key);
+		*phash = v_trivial_hash(key);
+		return table_find_id(env, self, *phash, key);
 	}
 	else if (likely(v_has_trivial_equals(key))) {
-		return table_find_id(env, self, v_trivial_hash(key), key);
+		*phash = v_trivial_hash(key);
+		return table_find_id(env, self, *phash, key);
 	}
 	else {
 		GObj* obj = v_as_obj(key);
@@ -254,11 +259,11 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* phash) {
 		a_fp_equals equals_fp = obj->_vtable->_equals;
 		a_fp_hash hash_fp = obj->_vtable->_hash;
 
-		a_u32 hash = hash_fp != null ? (*hash_fp)(env, obj) : v_trivial_hash(key);
+		*phash = hash_fp != null ? (*hash_fp)(env, obj) : v_trivial_hash(key);
 
 #define test(n) (*equals_fp)(env, obj, (n)->_key)
-#define con(n) return &(n)->_value
-		return map_find_template(self, hash, test, tnode_is_empty, con);
+#define con(n) ({ return &(n)->_value; })
+		return map_find_template(self, *phash, test, tnode_is_empty, con);
 #undef test
 #undef con
 	}

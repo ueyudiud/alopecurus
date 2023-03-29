@@ -119,6 +119,11 @@ static void dump_code(GProto* meta, a_bool fline) {
 				aloi_show("%4u %9d\n", bc_load_a(i), bc_load_sbx(i));
 				break;
 			}
+			case BC_LNEW:
+			case BC_HNEW: {
+				aloi_show("%4u %9u\n", bc_load_a(i), bc_load_bx(i));
+				break;
+			}
 			case BC_LDF: {
 				a_u32 b = bc_load_bx(i);
 				aloi_show("%4u %4u    _ ; %p\n", bc_load_a(i), b, meta->_subs[b]);
