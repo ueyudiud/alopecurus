@@ -252,7 +252,7 @@ static void l_scan_atom_expr(Parser* par, OutExpr e) {
 				l_scan_expr(par, e);
 				if (!l_test_skip(par, TK_RBK)) {
 					if (l_test_skip(par, TK_COMMA) && !l_test(par, TK_RBK)) {
-						l_scan_exprs(par, e, false);
+						l_scan_exprs(par, e, true);
 					}
 					l_check_pair_right(par, TK_LBK, TK_RBK, line);
 					ai_code_vararg1(par, e, OP_TNEW, line);

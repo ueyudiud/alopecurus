@@ -124,6 +124,12 @@ enum ExprKind {
 	 */
 	EXPR_TMP = 0x09,
 	/**
+	 ** The expression is expired but still exists in a register.
+	 ** REPR: R[_reg]
+	 *@param _reg the register index.
+	 */
+	EXPR_VAL = 0x0A,
+	/**
 	 ** Unreachable expression.
 	 ** REPR: !
 	 */
@@ -272,6 +278,10 @@ always_inline void expr_tmp(OutExpr e, a_u32 reg, a_line line) {
 	expr_init(e, EXPR_TMP, ._reg = reg, ._line = line);
 }
 
+always_inline void expr_val(OutExpr e, a_u32 reg, a_line line) {
+	expr_init(e, EXPR_VAL, ._reg = reg, ._line = line);
+}
+
 always_inline void expr_dyn(OutExpr e, a_u32 label) {
 	expr_init(e, EXPR_DYN_A, ._label = label);
 }
@@ -323,9 +333,9 @@ struct LetNode {
 		};
 	};
 	/* Used for register allocation. */
-	a_u8 _rel_id;
-	a_u8 _ntmp;
-	a_u8 _nvar;
+	a_u8 _tmp_pos;
+	a_u8 _tmp_top;
+	a_u8 _abs_bot;
 	a_u8 _index; /* Index in enclosed pattern. */
 };
 

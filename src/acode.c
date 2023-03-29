@@ -516,7 +516,10 @@ static void l_drop_tmp(Parser* par, InExpr e) {
 		l_free_stack(par, e->_reg);
 	}
 	else {
-		assume(e->_kind == EXPR_NEVER || e->_kind == EXPR_VAR, "register expression expected.");
+		assume(
+				e->_kind == EXPR_NEVER ||
+				e->_kind == EXPR_VAR ||
+				e->_kind == EXPR_VAL, "register expression expected.");
 	}
 }
 
@@ -1396,11 +1399,12 @@ void ai_code_vararg1(Parser* par, InoutExpr es, a_enum op, a_line line) {
 			l_drop_ntmp(par, es);
 
 			a_insn i;
+			Args* args = &es->_args;
 			if (par->_fnscope->_fvarg) {
-				i = bc_make_iab(BC_TNEWM, DYN, es->_reg);
+				i = bc_make_iab(BC_TNEWM, DYN, args->_base);
 			}
 			else {
-				i = bc_make_iabc(BC_TNEW, DYN, es->_reg, par->_scope->_top_reg - es->_reg);
+				i = bc_make_iabc(BC_TNEW, DYN, args->_base, args->_top - args->_base);
 			}
 
 			expr_dyn(es, l_emit(par, i, line));
@@ -1410,12 +1414,13 @@ void ai_code_vararg1(Parser* par, InoutExpr es, a_enum op, a_line line) {
 			l_topV(par, es);
 
 			a_insn i;
+			Args* args = &es->_args;
 			if (par->_fnscope->_fvarg) {
-				i = bc_make_iac(BC_CALLM, es->_reg, DYN);
+				i = bc_make_iac(BC_CALLM, args->_base, DYN);
 				par->_fnscope->_fvarg = false;
 			}
 			else {
-				i = bc_make_iabc(BC_CALL, es->_reg, par->_scope->_top_reg - es->_reg, DYN);
+				i = bc_make_iabc(BC_CALL, args->_base, args->_top - args->_base, DYN);
 			}
 
 			l_drop_ntmp(par, es);
@@ -1893,13 +1898,13 @@ void ai_code_let_nils(Parser* par, LetStat* s, a_line line) {
 }
 
 static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base) {
+	a_u32 reg = base + n->_abs_bot + n->_tmp_pos;
 	switch (n->_kind) {
 		case PAT_DROP: {
 			ai_code_drop(par, e);
 			break;
 		}
 		case PAT_BIND: {
-			a_u32 reg = base + n->_rel_id;
 			l_fixR(par, e, reg);
 			l_bind_local(par, n->_expr->_str, reg, par->_head_label, SYM_MOD_NONE);
 			break;
@@ -1907,7 +1912,6 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 		case PAT_TUPLE: {
 			a_u32 line = n->_expr->_line;
 			a_u32 num = n->_count;
-			a_u32 reg = base + n->_rel_id;
 			if (s->_ftest) {
 				a_u32 reg2 = l_alloc_stack(par, line);
 				l_emit(par, bc_make_iab(BC_LEN, reg2, e->_reg), line);
@@ -1917,7 +1921,7 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 			l_emit(par, bc_make_iabc(BC_UNBOX, reg, e->_reg, num), line);
 			for (LetNode* nchild = n->_child; nchild != null; nchild = nchild->_sibling) {
 				Expr e2;
-				expr_tmp(e2, reg++, line);
+				expr_val(e2, reg++, line);
 				l_let_bind(par, s, nchild, e2, base);
 			}
 			break;
@@ -1928,22 +1932,24 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 	}
 }
 
-static void l_let_compute(Parser* par, LetNode* nrt) {
+static void l_let_compute(Parser* par, LetNode* const nrt) {
 	LetNode* n = nrt;
-	a_u32 nvar = 0;
+	a_u32 abs_top = 0;
 	loop {
+		n->_abs_bot = abs_top;
+		n->_tmp_pos = 0;
 		switch (n->_kind) {
 			case PAT_BIND: {
-				n->_ntmp = 1;
-				n->_rel_id = nvar;
-				n->_nvar = nvar;
-				nvar += 1;
+				n->_tmp_top = 1;
+				abs_top += 1;
+				break;
+			}
+			case PAT_DROP: {
+				n->_tmp_top = 1;
 				break;
 			}
 			case PAT_TUPLE: {
-				n->_nvar = nvar; /* Save variable count for future used. */
-				n->_ntmp = 0;
-				n->_rel_id = 0;
+				n->_tmp_top = 0;
 				if (n->_child != null) {
 					n = n->_child;
 					continue;
@@ -1958,30 +1964,22 @@ static void l_let_compute(Parser* par, LetNode* nrt) {
 		if (n == nrt)
 			return;
 
-		if (n->_sibling == null) {
-			loop {
-				LetNode* nup = n->_parent;
+		while (n->_sibling == null) {
+			LetNode* nup = n->_parent;
 
-				if (nup == nrt) {
-					return;
-				}
-				else if (nup->_sibling != null) {
-					n = nup;
-					break;
-				}
+			a_u32 used = (n->_abs_bot - nup->_abs_bot) + n->_tmp_pos;
+			nup->_tmp_pos = used > n->_index ? max(nup->_tmp_pos, used - n->_index) : nup->_tmp_pos;
+			nup->_tmp_top = max(nup->_tmp_pos + nup->_count, (n->_abs_bot - nup->_abs_bot) + n->_tmp_top);
 
-				a_u32 old_nvar = nup->_nvar;
+			n = nup;
 
-				nup->_rel_id = nup->_ntmp + old_nvar;
-				nup->_ntmp = max(nup->_ntmp, (nvar - old_nvar) + n->_ntmp + nup->_count - n->_index - 1);
-				nup->_nvar = nvar;
-
-				n = nup;
+			if (n == nrt) {
+				return;
 			}
 		}
 
 		LetNode* nup = n->_parent;
-		nup->_ntmp = max(nup->_ntmp, (nvar - nup->_nvar) + n->_ntmp - n->_index - 1);
+		nup->_tmp_pos = max(nup->_tmp_pos, (n->_abs_bot - nup->_abs_bot) + n->_tmp_top - n->_index - 1);
 		n = n->_sibling;
 	}
 }
@@ -1994,13 +1992,15 @@ a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e) {
 	l_let_compute(par, node);
 
 	if (e->_kind == EXPR_TMP) {
-		l_free_stack(par, e->_reg);
+		a_u32 reg = e->_reg;
+		l_free_stack(par, reg);
+		expr_val(e, reg, e->_line);
 	}
-	a_u32 reg = l_succ_alloc_stack(par, node->_ntmp, e->_line);
-	if (e->_kind != EXPR_TMP) {
-		l_fixR(par, e, reg + node->_ntmp - 1);
+	a_u32 reg = l_succ_alloc_stack(par, node->_tmp_top, e->_line);
+	if (e->_kind != EXPR_VAL) {
+		l_fixR(par, e, reg);
+		expr_val(e, reg, e->_line);
 	}
-	e->_kind = EXPR_VAR; /* Keep register valid before finished. */
 	l_let_bind(par, s, node, e, reg);
 
 	node = node->_sibling;
@@ -2447,7 +2447,8 @@ static void l_fixR(Parser* par, InExpr e, a_u32 reg) {
 			break;
 		}
 		case EXPR_VAR:
-		case EXPR_TMP: {
+		case EXPR_TMP:
+		case EXPR_VAL: {
 			if (e->_reg != reg) {
 				l_drop_tmp(par, e);
 				l_emit_mov(par, reg, e->_try, e->_line);
@@ -2484,11 +2485,12 @@ static void l_topR(Parser* par, InoutExpr e) {
 			break;
 		}
 		case EXPR_TMP: {
+			l_free_stack(par, e->_reg);
+			fallthrough;
+		}
+		case EXPR_VAL: {
 			a_u32 reg1 = e->_reg;
-			a_u32 reg2;
-
-			l_free_stack(par, reg1);
-			reg2 = l_alloc_stack(par, e->_line);
+			a_u32 reg2 = l_alloc_stack(par, e->_line);
 			if (reg1 != reg2) {
 				l_emit_mov(par, reg2, reg1, e->_line);
 				e->_reg = reg2;

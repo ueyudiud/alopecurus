@@ -529,7 +529,16 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				a_u32 n = c != 0 ? c - 1 : cast(a_usize, env->_stack._top - &R[b]);
+				GTuple* v = ai_tuple_new(env, &R[b], c);
+				v_set_obj(env, &R[a], v);
+
+				check_gc();
+				break;
+			}
+			case BC_TNEWM: {
+				loadB();
+
+				a_u32 n = env->_stack._top - &R[b];
 				GTuple* v = ai_tuple_new(env, &R[b], n);
 				v_set_obj(env, &R[a], v);
 
