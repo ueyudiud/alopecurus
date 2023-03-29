@@ -132,7 +132,7 @@ static a_bool l_try_comp_console(a_henv env, a_bool expr, a_bool* psuccess) {
 		}
 		default: {
 		error:
-			aloL_base_show(env, -1);
+			aloB_show(env, -1);
 			aloi_show_newline();
 			*psuccess = false;
 			alo_settop(env, 1);
@@ -178,7 +178,7 @@ static void l_print_result(a_henv env) {
 	a_u32 n = alo_stacksize(env);
 	for (a_u32 i = 0; i < n; ++i) {
 		if (i != 0) aloi_show("\t");
-		aloL_base_show(env, i);
+		aloB_show(env, i);
 	}
 	aloi_show_newline();
 }
@@ -201,6 +201,7 @@ static void l_print_error(a_henv env) {
 }
 
 static a_none l_run_console(a_henv env) {
+	aloi_show(ALO_COPYRIGHT"\n");
 	loop {
 		if (l_comp_console(env)) {
 			a_msg msg = alo_pcall(env, 0, -1, 0);
@@ -220,7 +221,7 @@ static void l_main(a_henv env) {
 	l_run_console(env);
 }
 
-int main(int argc, char const** argv) {
+int main(int argc, char const* argv[]) {
 	(void) argc;
 	(void) argv;
 	alo_init();

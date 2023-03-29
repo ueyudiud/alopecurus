@@ -1,8 +1,5 @@
-/*
- * abaselib.h
- *
- *  Created on: 2023/1/31
- *      Author: ueyudiud
+/**
+ *@file abaselib.h
  */
 
 #ifndef abaselib_h_
@@ -17,6 +14,6 @@
 # define aloi_show_newline() quiet(fputc('\n', stdout), fflush(stdout))
 #endif
 
-ALO_EXPORT void aloL_base_show(a_henv env, a_isize id);
+ALO_EXPORT void aloB_show(a_henv env, a_isize id);
 
 #endif /* abaselib_h_ */

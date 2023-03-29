@@ -155,7 +155,7 @@ static void l_show_impl(Value v, a_u32 depth) {
  *@param env the runtime environment.
  *@param id the slot id.
  */
-void aloL_base_show(a_henv env, a_isize id) {
+void aloB_show(a_henv env, a_isize id) {
 	Value const* v = api_roslot(env, id);
 	api_check(v != null, "bad slot id.");
 	l_show_impl(*v, 0);
@@ -165,7 +165,7 @@ static a_u32 base_print(a_henv env) {
 	a_usize len = alo_stacksize(env);
 	for (a_usize id = 0; id < len; ++id) {
 		if (id != 0) aloi_show("\t");
-		aloL_base_show(env, cast(a_isize, id));
+		aloB_show(env, cast(a_isize, id));
 	}
 	aloi_show_newline();
 	return 0;
