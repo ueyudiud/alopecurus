@@ -2021,12 +2021,12 @@ void ai_code_local(Parser* par, OutExpr e, GStr* name, a_line line) {
 	scope->_top_ntr = scope->_top_reg;
 }
 
-void ai_code_bind_param(Parser* par, GStr* name, a_line line) {
+void ai_code_bind_param(Parser* par, GStr* name) {
 	FnScope* scope = par->_fnscope;
 	assume(&scope->_scope == par->_scope);
 	assume(scope->_top_ntr == scope->_top_reg);
 
-	a_u32 reg = l_alloc_stack(par, line);
+	a_u32 reg = l_alloc_stack(par, scope->_begin_line);
 	l_bind_local(par, name, reg, scope->_begin_label, SYM_MOD_NONE);
 	scope->_top_ntr = scope->_top_reg;
 

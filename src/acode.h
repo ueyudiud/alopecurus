@@ -52,7 +52,7 @@ intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line);
 intern void ai_code_let_nils(Parser* par, LetStat* s, a_line line);
 intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
 intern void ai_code_local(Parser* par, OutExpr e, GStr* name, a_line line);
-intern void ai_code_bind_param(Parser* par, GStr* name, a_line line);
+intern void ai_code_bind_param(Parser* par, GStr* name);
 intern void ai_code_compact(Parser* par);
 
 intern void ai_code_enter(Parser* par, Scope* scope, a_line line);
