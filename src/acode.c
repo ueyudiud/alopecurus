@@ -1259,6 +1259,28 @@ void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_enum op, a_line li
 			}
 			break;
 		}
+		case OP_OR_RET: {
+			//TODO
+			break;
+		}
+		case OP_OR_ELSE: {
+			switch (e->_kind) {
+				case EXPR_TMP: {
+					l_free_stack(par, e->_reg);
+					break;
+				}
+				case EXPR_TMP_OR_NIL: {
+					l_free_stack(par, e->_try);
+					break;
+				}
+				default: {
+					l_dynR(par, e);
+					break;
+				}
+			}
+			*plabel = l_lazy_jump(par, NO_LABEL, line);
+			break;
+		}
 		case OP_MERGE: {
 			a_u32 label = *plabel;
 			if (label == NO_LABEL)
@@ -1278,7 +1300,7 @@ void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_enum op, a_line li
 				}
 				default: {
 					l_dynR(par, e);
-					fallthrough;
+							fallthrough;
 				}
 				case EXPR_DYN_A: {
 					e->_kind = EXPR_DYN_OR_NIL;
@@ -1293,24 +1315,6 @@ void ai_code_monad(Parser* par, InoutExpr e, a_u32* plabel, a_enum op, a_line li
 				}
 			}
 			e->_line = line;
-			break;
-		}
-		case OP_OR_ELSE: {
-			switch (e->_kind) {
-				case EXPR_TMP: {
-					l_free_stack(par, e->_reg);
-					break;
-				}
-				case EXPR_TMP_OR_NIL: {
-					l_free_stack(par, e->_try);
-					break;
-				}
-				default: {
-					l_dynR(par, e);
-					break;
-				}
-			}
-			*plabel = l_lazy_jump(par, NO_LABEL, line);
 			break;
 		}
 		default: unreachable();
@@ -1757,7 +1761,7 @@ void ai_code_drop(Parser* par, InExpr e) {
 			l_free_stack(par, e->_reg);
 			break;
 		}
-		case EXPR_REFR_ALL: {
+		case EXPR_REF_ALL: {
 			if (expr_has_tmp_key(e)) {
 				l_free_stack(par, e->_key);
 			}
@@ -1802,7 +1806,7 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 			l_drop_tmp(par, e2);
 			break;
 		}
-		case EXPR_REFR_ALL: {
+		case EXPR_REF_ALL: {
 			l_anyR(par, e2);
 			l_emit(par, bc_make_iabc(BC_SET, e2->_reg, e1->_base, e1->_key), line);
 
@@ -1916,12 +1920,6 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 		case PAT_TUPLE: {
 			a_u32 line = n->_expr->_line;
 			a_u32 num = n->_count;
-			if (s->_ftest) {
-				a_u32 reg2 = l_alloc_stack(par, line);
-				l_emit(par, bc_make_iab(BC_LEN, reg2, e->_reg), line);
-				s->_label_fail = l_emit_branch(par, bc_make_iasbx(BC_BNEI, reg2, num), s->_label_fail, line);
-				l_free_stack(par, reg2);
-			}
 			l_emit(par, bc_make_iabc(BC_UNBOX, reg, e->_reg, num), line);
 			for (LetNode* nchild = n->_child; nchild != null; nchild = nchild->_sibling) {
 				Expr e2;
@@ -2335,7 +2333,7 @@ static void l_dynR(Parser* par, InoutExpr e) {
 			e->_try = l_emit_mov(par, DYN, e->_try, e->_line);
 			break;
 		}
-		case EXPR_REFR_ALL: {
+		case EXPR_REF_ALL: {
 			if (expr_has_tmp_key(e)) {
 				l_free_stack(par, e->_key);
 			}

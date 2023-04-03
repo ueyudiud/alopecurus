@@ -155,33 +155,41 @@ static RcCap* l_alloc_capture(a_henv env) {
 	return ai_mem_alloc(env, sizeof(RcCap));
 }
 
+static RcCap* l_load_capture_at(a_henv env, RcCap** now, Value* dst) {
+	RcCap* cap;
+	while ((cap = *now) != null && cap->_ptr > dst) {
+		now = &cap->_next;
+	}
+	if (cap == null || cap->_ptr < dst) {
+		RcCap* self = l_alloc_capture(env);
+
+		*self = new(RcCap) {
+			._ptr = dst,
+			._rc_and_fopen = 3,
+			._next = cap,
+			._flags = 0
+		};
+
+		*now = cap = self;
+	}
+	else {
+		cap->_rc_and_fopen += 2;
+	}
+	return cap;
+}
+
 static RcCap* l_load_capture(a_henv env, CapInfo* info, RcCap** up, RcCap** now, Value* stack) {
 	if (info->_fup) {
 		return up[info->_reg];
 	}
 	else {
-		Value* dst = stack + info->_reg;
-		RcCap* cap;
-		while ((cap = *now) != null && cap->_ptr > dst) {
-			now = &cap->_next;
-		}
-		if (cap == null || cap->_ptr < dst) {
-			RcCap* self = l_alloc_capture(env);
-
-			*self = new(RcCap) {
-				._ptr = dst,
-				._rc_and_fopen = 3,
-				._next = cap,
-				._flags = false
-			};
-
-			*now = cap = self;
-		}
-		else {
-			cap->_rc_and_fopen += 2;
-		}
-		return cap;
+		return l_load_capture_at(env, now, stack + info->_reg);
 	}
+}
+
+void ai_cap_mark_tbc(a_henv env, Frame* frame, Value* ptr) {
+	RcCap* cap = l_load_capture_at(env, &frame->_caps, ptr);
+	cap->_ftbc = true;
 }
 
 GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame) {
@@ -225,12 +233,12 @@ static void cap_drop(Global* g, RcCap* self) {
 }
 
 static void cap_close_value(a_henv env, RcCap* self) {
-	if (self->_fclosable) {
+	if (self->_ftbc) {
 		a_hobj obj = v_as_obj(*self->_ptr);
 		a_fp_close close_fp = obj->_vtable->_close;
 		assume(close_fp != null, "missing close function.");
 		(*close_fp)(env, obj);
-		self->_fclosable = false;
+		self->_ftbc = false;
 	}
 }
 

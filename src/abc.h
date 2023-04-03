@@ -158,6 +158,7 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(CALLMV,"callmv",    iA, v2v) /* R[a:] := R[a](R[a+1:])                       */ \
     _(   CAT,   "cat",  iABC, n2_) /* R[a] := concat(R[b:b+c])                     */ \
     _(  CATM,  "catm",  iABC, v2_) /* R[a] := concat(R[b:])                        */ \
+    _(   TBC,   "tbc",    iA, ___) /* mark R[A] to be closed                       */ \
     _( CLOSE, "close",    iA, ___) /* close(C[A:])                                 */ \
     _(     J,     "j",  isAx, ___) /* pc := pc + a                                 */ \
     _(  RET0,  "ret0",     i, _2x) /* return                                       */ \

@@ -18,6 +18,7 @@ intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
 intern GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame);
 intern void ai_proto_drop(Global* g, GProto* self);
+intern void ai_cap_mark_tbc(a_henv env, Frame* frame, Value* ptr);
 intern void ai_cap_really_drop(Global* g, RcCap* self);
 intern void ai_cap_soft_close(a_henv env, RcCap* self);
 intern void ai_cap_hard_close(a_henv env, RcCap* self);
@@ -80,7 +81,7 @@ struct RcCap {
 		a_u8 _flags;
 		struct {
 			a_u8 _ftouch: 1;
-			a_u8 _fclosable: 1;
+			a_u8 _ftbc: 1;
 		};
 	};
 	union {

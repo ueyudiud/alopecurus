@@ -1108,7 +1108,7 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
 				if (l_testskip(lex, '=')) {
 					return TK_NE;
 				}
-                return TK_NOT;
+                return TK_BANG;
             }
             case '<': {
                 if (l_testskip(lex, '<')) {

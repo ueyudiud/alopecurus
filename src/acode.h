@@ -143,7 +143,7 @@ enum ExprKind {
 	 */
 	EXPR_REF_ = 0x0C,
 #define EXPR_REF(k,v) (EXPR_REF_ | (k) << 1 | (v))
-#define EXPR_REFR_ALL EXPR_REF_ ... EXPR_REF_ + 3
+#define EXPR_REF_ALL EXPR_REF_ ... EXPR_REF_ + 3
 	/**
 	 ** The integer indexed expression.
 	 ** REPR: R[_impl][_key]
@@ -161,7 +161,6 @@ enum ExprKind {
 	EXPR_REFK_ = 0x12,
 #define EXPR_REFK(v) (EXPR_REFK_ | (v))
 #define EXPR_REFK_ALL EXPR_REFK_ ... EXPR_REFK_ + 1
-#define EXPR_REF_ALL EXPR_REF_ ... EXPR_REFK_ + 1
 	EXPR_REFCK = 0x14,
 /*=========================Partial Expressions==========================*/
 	/**
@@ -211,6 +210,10 @@ enum ExprKind {
 	 */
 	EXPR_RESIDUAL_FALSE = 0x1C, EXPR_RESIDUAL_TRUE,
 
+	/**
+	 ** The expressions bind to number of temporary registers.
+	 *@param _args the argument pack.
+	 */
 	EXPR_NTMP = 0x1E, EXPR_NTMPC,
 /*=========================Pattern Expressions==========================*/
 	PAT_DROP,
@@ -221,6 +224,9 @@ enum ExprKind {
 	PAT_TABLE
 };
 
+static_assert(EXPR_REF_ % 4 == 0);
+static_assert(EXPR_REFI_ % 2 == 0);
+static_assert(EXPR_REFK_ % 2 == 0);
 static_assert((EXPR_FALSE ^ 1) == EXPR_TRUE);
 static_assert((EXPR_TRY_FALSE ^ 1) == EXPR_TRY_TRUE);
 static_assert((EXPR_RESIDUAL_FALSE ^ 1) == EXPR_RESIDUAL_TRUE);
@@ -294,6 +300,8 @@ always_inline a_bool expr_has_tmp_val(InExpr e) {
 		case EXPR_VAR:
 		case EXPR_TMP:
 		case EXPR_REF_ALL:
+		case EXPR_REFI_ALL:
+		case EXPR_REFK_ALL:
 			return kind & 0x1 ? true : false;
 		default: panic("expression has no value.");
 	}
@@ -302,7 +310,7 @@ always_inline a_bool expr_has_tmp_val(InExpr e) {
 always_inline a_bool expr_has_tmp_key(InExpr e) {
 	a_u32 kind = e->_kind;
 	switch (kind) {
-		case EXPR_REFR_ALL:
+		case EXPR_REF_ALL:
 			return kind & 0x2 ? true : false;
 		default: panic("expression has no value.");
 	}
@@ -342,9 +350,6 @@ struct LetNode {
 
 struct LetStat {
 	LetNode _root;
-	a_u32 _label_test;
-	a_u32 _label_fail;
-	a_u8 _ftest: 1;
 };
 
 enum SymKind {
@@ -358,6 +363,10 @@ enum SymKind {
 	 *@param _index the capture index in top scope.
 	 */
 	SYM_CAPTURE,
+	/**
+	 ** The variable length arguments pass to function.
+	 */
+	SYM_VARARG,
 };
 
 enum {

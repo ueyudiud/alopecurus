@@ -173,14 +173,13 @@ static void l_scan_fun_args(Parser* par, a_i32 ltk, a_i32 rtk) {
 	a_u32 line2 = ln_cur(par);
 	if (!l_test_skip(par, rtk)) {
 		do {
+			GStr* name = l_check_ident(par);
 			if (l_test_skip(par, TK_TDOT)) {
 				//TODO
 				panic("unimplemented");
+				break;
 			}
-			else {
-				GStr* name = l_check_ident(par);
-				ai_code_bind_param(par, name);
-			}
+			ai_code_bind_param(par, name);
 		}
 		while (l_test_skip(par, TK_COMMA));
 		l_check_pair_right(par, ltk, rtk, line2);
@@ -332,6 +331,12 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 				ai_code_lookupS(par, e, name, line);
 				break;
 			}
+			case TK_BANG: {
+				a_line line = ln_cur(par);
+				l_skip(par);
+				ai_code_monad(par, e, &label, OP_OR_RET, line);
+				break;
+			}
 			case TK_DOT: {
 				a_line line = ln_cur(par);
 				l_skip(par);
@@ -393,7 +398,7 @@ static void l_scan_prefixed_expr(Parser* par, OutExpr e) {
 			ai_code_unary(par, e, OP_BIT_INV, line);
 			break;
 		}
-		case TK_NOT: {
+		case TK_BANG: {
 			a_line line = ln_cur(par);
 			l_skip(par);
 			l_scan_prefixed_expr(par, e);
@@ -549,7 +554,7 @@ static a_u32 l_scan_relation_op(Parser* par) {
 			return OP_IS;
 		case TK_IN:
 			return OP_IN;
-		case TK_NOT:
+		case TK_BANG:
 			switch (l_forward(par)) {
 				case TK_IS:
 					l_skip(par);
@@ -839,8 +844,6 @@ static void l_scan_return_stat(Parser* par) {
 static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
 	Expr e;
 
-	ai_code_label(par, stat->_label_test, line);
-
 	do {
 		l_scan_expr(par, e);
 		ai_code_let_bind(par, stat, e);
@@ -1021,8 +1024,6 @@ error:
 
 static void l_scan_let_clause(Parser* par, a_u32 line) {
 	LetStat stat = { };
-
-	stat._label_test = ai_code_gotoU(par, NO_LABEL, line);
 	l_scan_pattern(par, &stat, &stat._root, &stat._root._child, 0);
 }
 

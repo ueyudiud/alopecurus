@@ -71,7 +71,7 @@ enum UnaryOp {
 };
 
 enum MonadOp {
-	OP_OR_NIL, OP_OR_ELSE,
+	OP_OR_NIL, OP_OR_RET, OP_OR_ELSE,
 	OP_MERGE
 };
 

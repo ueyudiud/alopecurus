@@ -1264,8 +1264,21 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				pc += j;
 				break;
 			}
+			case BC_TBC: {
+				Value* ra = &R[a];
+
+				ai_cap_mark_tbc(env, &frame, ra);
+				break;
+			}
 			case BC_CLOSE: {
-				vm_close_above(env, &frame._caps, &R[a]);
+				Value* ra = &R[a];
+
+				RcCap** caps = &frame._caps;
+				RcCap* cap;
+				while ((cap = *caps) != null && cap->_ptr >= ra) {
+					*caps = cap->_next;
+					ai_cap_soft_close(env, cap);
+				}
 				break;
 			}
 			case BC_CALL: {

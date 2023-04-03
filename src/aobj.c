@@ -18,6 +18,7 @@ char const ai_obj_typenames[][8] = {
 	[T_TUPLE] = "tuple",
 	[T_LIST] = "list",
 	[T_TABLE] = "table",
+	[T_FUNC] = "func",
 	[T_MOD] = "mod",
 	[T_USER_TEQ] = "user",
 	[T_USER_NEQ] = "user",
