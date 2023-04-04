@@ -747,20 +747,17 @@ static void l_scan_assign_rhs(Parser* par, LhsNode* tail, a_u32 count) {
 	}
 }
 
-static void l_scan_assign_stat(Parser* par, Lhs* lhs) {
+static void l_scan_assign_lhs_tail(Parser* par, Lhs* lhs) {
 	LhsNode n = {};
 
-	if (lhs->_tail->_expr->_kind == EXPR_FREE) {
-		ai_par_error(par, "add 'pub' modifier to export variable '%s'", ln_cur(par), str2ntstr(lhs->_tail->_expr->_str));
-	}
-	else if (l_test_skip(par, TK_COMMA)) {
+	if (l_test_skip(par, TK_COMMA)) {
 		n._last = lhs->_tail;
 
 		lhs->_count += 1;
 		lhs->_tail = &n;
 
 		l_scan_prefixed_expr(par, n._expr);
-		return l_scan_assign_stat(par, lhs);
+		return l_scan_assign_lhs_tail(par, lhs);
 	}
 
 	l_scan_assign_rhs(par, lhs->_tail, lhs->_count + 1);
@@ -772,7 +769,7 @@ static void l_scan_assign_or_call(Parser* par) {
 	l_scan_expr(par, lhs._head._expr);
 	if (l_test(par, TK_COMMA) || l_test_skip(par, TK_TDOT) || l_test(par, TK_ASSIGN)) {
 		lhs._tail = &lhs._head;
-		l_scan_assign_stat(par, &lhs);
+		l_scan_assign_lhs_tail(par, &lhs);
 	}
 
 	l_test_skip(par, TK_SEMI);
@@ -1073,6 +1070,34 @@ static void l_scan_fun_def_stat(Parser* par) {
 	ai_code_bind(par, en, ef, line);
 }
 
+static void l_scan_pub_stat(Parser* par) {
+	a_line line = ln_cur(par);
+	l_skip(par);
+
+	switch (l_peek(par)) {
+		case TK_FN: {
+			Expr e1, e2;
+			l_skip(par);
+			GStr* name = l_check_ident(par);
+			ai_code_export(par, e1, name, line);
+			l_scan_function(par, e2, name, line);
+			ai_code_bind(par, e1, e2, line);
+			break;
+		}
+		default: {
+			Expr e;
+			GStr* name = l_check_ident(par);
+			ai_code_export(par, e, name, line);
+			if (l_test_skip(par, TK_ASSIGN)) {
+				Expr e2;
+				l_scan_expr(par, e2);
+				ai_code_bind(par, e, e2, line);
+			}
+			break;
+		}
+	}
+}
+
 static void l_scan_stat_pack(Parser* par) {
 	Scope scope;
 
@@ -1110,6 +1135,10 @@ static void l_scan_stat(Parser* par) {
 			l_scan_stat_pack(par);
 			break;
 		}
+		case TK_PUB: {
+			l_scan_pub_stat(par);
+			break;
+		}
 		default: {
 			l_scan_assign_or_call(par);
 			break;
@@ -1145,6 +1174,10 @@ static void l_scan_stats(Parser* par) {
 			}
 			case TK_FN: {
 				l_scan_fun_def_stat(par);
+				break;
+			}
+			case TK_PUB: {
+				l_scan_pub_stat(par);
 				break;
 			}
 			default: {

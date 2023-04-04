@@ -52,6 +52,7 @@ intern void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line);
 intern void ai_code_let_nils(Parser* par, LetStat* s, a_line line);
 intern a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e);
 intern void ai_code_local(Parser* par, OutExpr e, GStr* name, a_line line);
+intern void ai_code_export(Parser* par, OutExpr e, GStr* name, a_line line);
 intern void ai_code_bind_param(Parser* par, GStr* name);
 intern void ai_code_compact(Parser* par);
 
@@ -168,6 +169,12 @@ enum ExprKind {
 	 *@param _str the name of symbol.
 	 */
 	EXPR_FREE = 0x15,
+	/**
+	 ** The reference of export symbol.
+	 ** repr: _str
+	 *@param _str the name of symbol.
+	 */
+	EXPR_EXPORT = 0x16,
 /*=========================Partial Expressions==========================*/
 	/**
 	 ** The partial evaluated expression.
@@ -291,6 +298,14 @@ always_inline void expr_tmp(OutExpr e, a_u32 reg, a_line line) {
 	expr_init(e, EXPR_TMP, ._reg = reg, ._line = line);
 }
 
+always_inline void expr_export(OutExpr e, GStr* name, a_line line) {
+	expr_init(e, EXPR_EXPORT, ._str = name, ._line = line);
+}
+
+always_inline void expr_free(OutExpr e, GStr* name, a_line line) {
+	expr_init(e, EXPR_FREE, ._str = name, ._line = line);
+}
+
 always_inline void expr_val(OutExpr e, a_u32 reg, a_line line) {
 	expr_init(e, EXPR_VAL, ._reg = reg, ._line = line);
 }
@@ -369,6 +384,10 @@ enum SymKind {
 	 *@param _index the capture index in top scope.
 	 */
 	SYM_CAPTURE,
+	/**
+	 ** The exported variable.
+	 */
+	SYM_EXPORT,
 	/**
 	 ** The variable length arguments pass to function.
 	 */

@@ -344,14 +344,6 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 	}
 }
 
-static void vm_close_above(a_henv env, RcCap** restrict caps, Value* ptr) {
-	RcCap* cap;
-	while ((cap = *caps) != null && cap->_ptr >= ptr) {
-		*caps = cap->_next;
-		ai_cap_soft_close(env, cap);
-	}
-}
-
 static void v_mov_all_with_nil(a_henv env, Value* dst, a_usize dst_len, Value const* src, a_usize src_len) {
 	a_usize i = 0;
 

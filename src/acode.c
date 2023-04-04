@@ -595,10 +595,7 @@ static a_u32 l_capture(Parser* par, Sym* sym) {
 	return l_lookup_capture(par, par->_fnscope, sym, par->_scope_depth);
 }
 
-/* TODO Get environment name. */
-#define sym_env(par) (&(par)->_syms._ptr[0])
-
-static void l_load_name(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
+static void l_load_symbol(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
 	Sym* sym = &par->_syms._ptr[id];
 	switch (sym->_kind) {
 		case SYM_LOCAL: {
@@ -620,8 +617,32 @@ static void l_load_name(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
 			e->_sym = id;
 			break;
 		}
+		case SYM_EXPORT: {
+			expr_export(e, sym->_name, line);
+			break;
+		}
 		default: unreachable();
 	}
+}
+
+static void l_resolve_symbol(Parser* par, InoutExpr e) {
+	SymBuf* syms = &par->_syms;
+
+	GStr* env_name = ai_env_strx(G(par->_env), STRX_KW__ENV);
+	GStr* free_name = e->_str;
+
+	assume(e->_kind == EXPR_EXPORT || e->_kind == EXPR_FREE, "not unresolved symbol.");
+
+	for (a_u32 i = syms->_len; ; --i) {
+		assume(i > 0, "_ENV should not be free symbol.");
+		a_u32 id = i - 1;
+		if (syms->_ptr[id]._name == env_name) {
+			l_load_symbol(par, e, id, e->_line);
+			break;
+		}
+	}
+
+	ai_code_lookupS(par, e, free_name, e->_line);
 }
 
 /**
@@ -636,14 +657,12 @@ void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line) {
 	for (a_u32 i = syms->_len; i > 0; --i) {
 		a_u32 id = i - 1;
 		if (syms->_ptr[id]._name == name) {
-			l_load_name(par, e, id, line);
+			l_load_symbol(par, e, id, line);
 			return;
 		}
 	}
 
-	e->_kind = EXPR_FREE;
-	e->_str = name;
-	e->_line = line;
+	expr_free(e, name, line);
 }
 
 void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line) {
@@ -1846,6 +1865,15 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 			l_drop_tmp(par, e2);
 			break;
 		}
+		case EXPR_EXPORT: {
+			l_resolve_symbol(par, e1);
+			ai_code_bind(par, e1, e2, line);
+			break;
+		}
+		case EXPR_FREE: {
+			ai_par_error(par, "add 'pub' modifier to export variable '%s'", e1->_line, str2ntstr(e1->_str));
+			break;
+		}
 		default: {
 			panic("cannot bind to the expression.");
 		}
@@ -1933,7 +1961,7 @@ static void l_let_bind(Parser* par, LetStat* s, LetNode* n, InExpr e, a_u32 base
 	}
 }
 
-static void l_let_compute(Parser* par, LetNode* const nrt) {
+static void l_let_compute(unused Parser* par, LetNode* const nrt) {
 	LetNode* n = nrt;
 	a_u32 abs_top = 0;
 	loop {
@@ -2011,11 +2039,23 @@ a_bool ai_code_let_bind(Parser* par, LetStat* s, InExpr e) {
 
 void ai_code_local(Parser* par, OutExpr e, GStr* name, a_line line) {
 	Scope* scope = par->_scope;
-	assume(scope->_top_ntr == scope->_top_reg);
+	assume(scope->_top_ntr == scope->_top_reg, "stack not balanced.");
 	a_u32 reg = l_alloc_stack(par, line);
 	a_u32 sym = l_bind_local(par, name, reg, par->_head_label, SYM_MOD_NONE);
 	expr_var(e, reg, sym, line);
 	scope->_top_ntr = scope->_top_reg;
+}
+
+void ai_code_export(Parser* par, OutExpr e, GStr* name, a_line line) {
+	Scope* scope = par->_scope;
+	assume(scope->_top_ntr == scope->_top_reg, "stack not balanced.");
+	l_push_symbol(par, new(Sym) {
+		._kind = SYM_EXPORT,
+		._name = name,
+		._scope = par->_scope_depth,
+		._mods = SYM_MOD_NONE
+	});
+	expr_export(e, name, line);
 }
 
 void ai_code_bind_param(Parser* par, GStr* name) {
@@ -2249,7 +2289,7 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 void ai_code_open(Parser* par) {
 	ai_env_gprotect(par->_env, parser_mark, parser_except, par);
 
-	/* Add '_ENV' name. */
+	/* Add predefined '_ENV' name. */
 	l_push_symbol(par, new(Sym) {
 		._kind = SYM_CAPTURE,
 		._scope = SCOPE_DEPTH_ENV,
@@ -2321,8 +2361,8 @@ static void l_dynR(Parser* par, InoutExpr e) {
 			break;
 		}
 		case EXPR_FREE: {
-			a_u32 reg = l_capture(par, sym_env(par));
-			expr_dyn(e, l_emit_refx(par, BC_CGETS, DYN, reg, l_const_index(par, v_of_obj(e->_str)), e->_line));
+			l_resolve_symbol(par, e);
+			l_dynR(par, e);
 			break;
 		}
 		case EXPR_TRY_FALSE:
