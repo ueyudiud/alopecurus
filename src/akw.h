@@ -26,6 +26,7 @@
     _(LOOP, "loop")     \
     _(MATCH, "match")   \
     _(NIL, "nil")       \
+    _(PUB, "pub")       \
     _(RETURN, "return") \
     _(TRUE, "true")     \
 	_(WHILE, "while")   \
@@ -52,10 +53,12 @@
     _(MINUS, "-") \
     _(STAR, "*") \
     _(LSLASH, "/") \
+    _(RSLASH, "\\") \
     _(PERCENT, "%") \
     _(ASSIGN, "=") \
     _(EQ, "==") \
     _(BANG, "!") \
+    _(BBANG, "!!") \
     _(NE, "!=") \
     _(GT, ">") \
     _(GE, ">=") \
@@ -69,6 +72,7 @@
     _(BAR, "|") \
     _(BBAR, "||") \
     _(QUESTION, "?") \
+    _(BQUESTION, "??") \
     _(QDOT, "?.") \
     _(ELVIS, "?:")
 

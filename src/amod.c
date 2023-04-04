@@ -69,17 +69,21 @@ void ai_mod_ready(a_henv env, GMod* self, VTable const* impl) {
 	quiet(env);
 	if (impl != null) {
 		a_u32 op_flags = self->_impl._flags;
+		a_bool has_close = (op_flags & VTABLE_FLAG_FAST_TM(TM_CLOSE)) != 0;
+		a_bool has_hash = (op_flags & VTABLE_FLAG_FAST_TM(TM_HASH)) != 0;
+		a_bool has_equals = (op_flags & VTABLE_FLAG_FAST_TM(TM_EQ)) != 0;
+		a_bool has_len = (op_flags & VTABLE_FLAG_FAST_TM(TM_LEN)) != 0;
 		self->_impl = new(VTable) {
-			._val_mask = v_masked_tag(op_flags & VTABLE_FLAG_FAST_TM(TM_EQ) ? T_USER_NEQ : T_USER_TEQ),
+			._val_mask = v_masked_tag(has_equals ? T_USER_NEQ : T_USER_TEQ),
 			._api_tag = ALO_TUSER,
 			._repr_id = impl->_repr_id,
-			._flags = op_flags | (impl->_flags & VTABLE_FLAG_PLAIN_LEN) | VTABLE_FLAG_VLOOKUP,
+			._flags = op_flags | (has_len ? 0 : impl->_flags & VTABLE_FLAG_PLAIN_LEN) | VTABLE_FLAG_VLOOKUP,
 			._name = str2ntstr(self->_name),
 			._mark = impl->_mark,
 			._drop = impl->_drop,
-			._close = op_flags & VTABLE_FLAG_FAST_TM(TM_CLOSE) ? generic_close : impl->_close,
-			._hash = op_flags & VTABLE_FLAG_FAST_TM(TM_HASH) ? generic_hash : impl->_hash,
-			._equals = op_flags & VTABLE_FLAG_FAST_TM(TM_EQ) ? generic_equals : impl->_equals
+			._close = has_close ? generic_close : impl->_close,
+			._hash = has_hash ? generic_hash : impl->_hash,
+			._equals = has_equals ? generic_equals : impl->_equals
 		};
 	}
 	else {

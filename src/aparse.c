@@ -344,6 +344,13 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 				ai_code_lookupS(par, e, name, line);
 				break;
 			}
+			case TK_COLON: {
+				a_line line = ln_cur(par);
+				l_skip(par);
+				GStr* name = l_check_ident(par);
+				ai_code_lookupS(par, e, name, line);
+				break;
+			}
 			case TK_LSQ: {
 				Expr e2;
 				a_line line = ln_cur(par);
@@ -634,7 +641,7 @@ static void l_scan_ternary_expr(Parser* par, OutExpr e) {
 			a_u32 label2;
 			ai_code_monad(par, e, &label2, OP_OR_ELSE, line);
 
-			l_check_skip(par, TK_COLON);
+			l_check_skip(par, TK_RSLASH);
 
 			Expr e2;
 			ai_code_label(par, label1, line);
@@ -743,7 +750,10 @@ static void l_scan_assign_rhs(Parser* par, LhsNode* tail, a_u32 count) {
 static void l_scan_assign_stat(Parser* par, Lhs* lhs) {
 	LhsNode n = {};
 
-	if (l_test_skip(par, TK_COMMA)) {
+	if (lhs->_tail->_expr->_kind == EXPR_FREE) {
+		ai_par_error(par, "add 'pub' modifier to export variable '%s'", ln_cur(par), str2ntstr(lhs->_tail->_expr->_str));
+	}
+	else if (l_test_skip(par, TK_COMMA)) {
 		n._last = lhs->_tail;
 
 		lhs->_count += 1;
@@ -756,7 +766,7 @@ static void l_scan_assign_stat(Parser* par, Lhs* lhs) {
 	l_scan_assign_rhs(par, lhs->_tail, lhs->_count + 1);
 }
 
-static void l_scan_normal_stat(Parser* par) {
+static void l_scan_assign_or_call(Parser* par) {
 	Lhs lhs = {};
 
 	l_scan_expr(par, lhs._head._expr);
@@ -1022,11 +1032,6 @@ error:
 	l_error_got(par, "malformed pattern");
 }
 
-static void l_scan_let_clause(Parser* par, a_u32 line) {
-	LetStat stat = { };
-	l_scan_pattern(par, &stat, &stat._root, &stat._root._child, 0);
-}
-
 static void l_scan_let_stat(Parser* par) {
 	a_line line = ln_cur(par);
 	l_skip(par);
@@ -1042,7 +1047,8 @@ static void l_scan_let_stat(Parser* par) {
 			break;
 		}
 		default: {
-			l_scan_let_clause(par, line);
+			LetStat stat = { };
+			l_scan_pattern(par, &stat, &stat._root, &stat._root._child, 0);
 			break;
 		}
 	}
@@ -1105,7 +1111,7 @@ static void l_scan_stat(Parser* par) {
 			break;
 		}
 		default: {
-			l_scan_normal_stat(par);
+			l_scan_assign_or_call(par);
 			break;
 		}
 	}
@@ -1142,7 +1148,7 @@ static void l_scan_stats(Parser* par) {
 				break;
 			}
 			default: {
-				l_scan_normal_stat(par);
+				l_scan_assign_or_call(par);
 				break;
 			}
 		}

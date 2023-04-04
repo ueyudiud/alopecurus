@@ -162,6 +162,12 @@ enum ExprKind {
 #define EXPR_REFK(v) (EXPR_REFK_ | (v))
 #define EXPR_REFK_ALL EXPR_REFK_ ... EXPR_REFK_ + 1
 	EXPR_REFCK = 0x14,
+	/**
+	 ** The reference of free symbol.
+	 ** repr: _str
+	 *@param _str the name of symbol.
+	 */
+	EXPR_FREE = 0x15,
 /*=========================Partial Expressions==========================*/
 	/**
 	 ** The partial evaluated expression.
@@ -169,52 +175,52 @@ enum ExprKind {
 	 ** REPR: R[_label(a)]
 	 *@param _label the label of instruction.
 	 */
-	EXPR_DYN_A = 0x15,
+	EXPR_DYN_A = 0x16,
 	/**
 	 ** The expression of variable length arguments stored in sequence of
 	 ** registers.
 	 ** REPR: R[_label(a):]
 	 *@param _label the label of instruction that generate vararg.
 	 */
-	EXPR_DYN_AC = 0x16,
+	EXPR_DYN_AC = 0x17,
 	/**
 	 ** The calling expression.
 	 ** REPR: R[_label(a):_label(a)+_label(c)]
 	 *@param _label the label of instruction.
 	 */
-	EXPR_DYN_C = 0x17,
+	EXPR_DYN_C = 0x18,
 	/**
 	 ** The try expression. This is a volatile expression.
 	 ** REPR: try { R[_try] } else { nil }
 	 *@param _try the temporary register index.
 	 *@param _residual the label of jump instruction.
 	 */
-	EXPR_TMP_OR_NIL = 0x18,
+	EXPR_TMP_OR_NIL = 0x19,
 	/**
 	 ** The try expression. This is a volatile expression.
 	 ** REPR: try { R[_label(a)] } else { nil }
 	 *@param _try the label of compute result instruction.
 	 *@param _residual the label of jump instruction.
 	 */
-	EXPR_DYN_OR_NIL = 0x19,
+	EXPR_DYN_OR_NIL = 0x1A,
 	/**
 	 ** The try expression with boolean type. This is a volatile expression.
 	 ** REPR: try { true/false } else { false/true }
 	 *@param _label the label of residual path.
 	 */
-	EXPR_TRY_TRUE = 0x1A, EXPR_TRY_FALSE,
+	EXPR_TRY_TRUE = 0x1C, EXPR_TRY_FALSE,
 	/**
 	 ** The try expression with only residual part.
 	 ** REPR: try { ! } else { false/true }
 	 *@param _label the label of residual path.
 	 */
-	EXPR_RESIDUAL_FALSE = 0x1C, EXPR_RESIDUAL_TRUE,
+	EXPR_RESIDUAL_FALSE = 0x1E, EXPR_RESIDUAL_TRUE,
 
 	/**
 	 ** The expressions bind to number of temporary registers.
 	 *@param _args the argument pack.
 	 */
-	EXPR_NTMP = 0x1E, EXPR_NTMPC,
+	EXPR_NTMP = 0x20, EXPR_NTMPC,
 /*=========================Pattern Expressions==========================*/
 	PAT_DROP,
 	PAT_BIND,

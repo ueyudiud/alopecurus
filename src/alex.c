@@ -1092,6 +1092,9 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
             case '/': {
                 return TK_LSLASH;
             }
+			case '\\': {
+				return TK_RSLASH;
+			}
             case '%': {
                 return TK_PERCENT;
             }
@@ -1143,6 +1146,9 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
             case '?': {
 				if (l_testskip(lex, ':')) {
 					return TK_ELVIS;
+				}
+				else if (l_testskip(lex, '\\')) {
+					return TK_RSLASH;
 				}
 				else if (l_testskip(lex, '.')) {
 					return TK_QDOT;

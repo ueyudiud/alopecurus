@@ -596,7 +596,7 @@ static a_u32 l_capture(Parser* par, Sym* sym) {
 }
 
 /* TODO Get environment name. */
-#define l_env_name(par) (&(par)->_syms._ptr[0])
+#define sym_env(par) (&(par)->_syms._ptr[0])
 
 static void l_load_name(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
 	Sym* sym = &par->_syms._ptr[id];
@@ -641,9 +641,8 @@ void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line) {
 		}
 	}
 
-	e->_kind = EXPR_REFCK;
-	e->_base = l_capture(par, l_env_name(par));
-	e->_key = l_const_index(par, v_of_obj(name));
+	e->_kind = EXPR_FREE;
+	e->_str = name;
 	e->_line = line;
 }
 
@@ -2319,6 +2318,11 @@ static void l_dynR(Parser* par, InoutExpr e) {
 		}
 		case EXPR_CAP: {
 			expr_dyn(e, l_emit(par, bc_make_iab(BC_LDC, DYN, e->_reg), e->_line));
+			break;
+		}
+		case EXPR_FREE: {
+			a_u32 reg = l_capture(par, sym_env(par));
+			expr_dyn(e, l_emit_refx(par, BC_CGETS, DYN, reg, l_const_index(par, v_of_obj(e->_str)), e->_line));
 			break;
 		}
 		case EXPR_TRY_FALSE:
