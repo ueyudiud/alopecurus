@@ -12,7 +12,7 @@
 #include "astr.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
+#include "atype.h"
 #include "aenv.h"
 #include "agc.h"
 #include "adbg.h"
@@ -52,7 +52,7 @@ void aloL_argerror(a_henv env, a_usize id, char const* what) {
 
 static char const* l_typename(a_henv env, a_isize id) {
 	Value const* p = api_roslot(env, id);
-	return likely(p != null) ? v_typename(*p) : "empty";
+	return likely(p != null) ? v_nameof(env, *p) : "empty";
 }
 
 void aloL_typeerror(a_henv env, a_usize id, char const* name) {
@@ -193,7 +193,7 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize nb) {
 	api_check_slot(env, 1);
 
-	GMod* mod = ai_mod_alloc(env, nb);
+	GType* mod = ai_ctype_alloc(env, nb);
 	v_set_obj(env, api_incr_stack(env), mod);
 
 	mod->_name = ai_str_new(env, name, strlen(name));
@@ -206,11 +206,11 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 
 		if (b->fptr != null) {
 			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
-			ai_mod_emplace(env, mod, key, v_of_obj(fun));
+			ai_type_setis(env, mod, key, v_of_obj(fun));
 		}
 	}
 
-	ai_mod_ready(env, mod, null);
+	ai_type_ready(env, mod);
 
 	ai_gc_trigger(env);
 }
@@ -222,9 +222,9 @@ typedef struct {
 
 static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
-	a_hmod mod = alo_openmod(env, -1);
-	ai_mod_cache(env, null, mod);
-	ai_table_set(env, v_as_table(G(env)->_global), v_of_obj(mod->_name), v_of_obj(mod));
+	a_htype type = v_as_type(api_elem(env, -1));
+	ai_type_cache(env, null, type);
+	ai_table_set(env, v_as_table(G(env)->_global), v_of_obj(type->_name), v_of_obj(type));
 	api_decr_stack(env);
 }
 

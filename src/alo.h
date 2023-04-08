@@ -76,7 +76,8 @@ typedef a_i32 a_tag;
 #define ALO_TTABLE 8
 #define ALO_TFUNC 9
 #define ALO_TROUTE 10
-#define ALO_TMOD 11
+#define ALO_TTYPE 11
+
 #define ALO_TUSER 12
 
 #define ALO_EIO ((a_msg) -9) /* Foreign IO Error */
@@ -112,8 +113,6 @@ typedef a_u32 a_ritr[1];
 typedef struct alo_Alloc a_alloc;
 /* Environment handle. */
 typedef struct alo_Env* a_henv;
-/* Module handle. */
-typedef struct alo_Mod* a_hmod;
 /* Type handle. */
 typedef struct alo_Type* a_htype;
 
@@ -157,7 +156,7 @@ ALO_EXPORT void (alo_pushptr)(a_henv env, void* val);
 ALO_EXPORT char const* (alo_pushstr)(a_henv env, void const* src, a_usize len);
 ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);
 ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg);
-ALO_EXPORT void (alo_pushmod)(a_henv env, a_hmod mod);
+ALO_EXPORT void (alo_pushtype)(a_henv env, a_htype hnd);
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_usize n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_isize id);
@@ -189,16 +188,14 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 /* Type operations. */
 ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
 ALO_EXPORT char const* (alo_typename)(a_henv env, a_htype type);
+ALO_EXPORT a_msg (alo_looktype)(a_henv env, char const* src, a_usize len);
+ALO_EXPORT a_htype (alo_opentype)(a_henv env, a_isize id);
+ALO_EXPORT void (alo_closetype)(a_henv env, a_htype hnd);
 
 /* Table operations. */
 ALO_EXPORT a_usize (alo_hnext)(a_henv env, a_isize id, a_ritr itr);
 ALO_EXPORT a_bool (alo_hinsert)(a_henv env, a_isize id, a_ritr itr);
 ALO_EXPORT a_bool (alo_hremove)(a_henv env, a_isize id, a_ritr itr);
-
-/* Module operations */
-ALO_EXPORT a_msg (alo_lookmod)(a_henv env, char const* src, a_usize len);
-ALO_EXPORT a_hmod (alo_openmod)(a_henv env, a_isize id);
-ALO_EXPORT void (alo_closemod)(a_henv env, a_hmod mod);
 
 ALO_EXPORT void (alo_fullgc)(a_henv env);
 

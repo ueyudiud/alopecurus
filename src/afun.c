@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include "abc.h"
+#include "aenv.h"
 #include "amem.h"
 #include "agc.h"
 
@@ -47,8 +48,8 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
     if (self == null) return null;
     memclr(self, total_size);
 
-	self->_vtable = &proto_vtable;
-    self->_len = total_size;
+	self->_vptr = &proto_vtable;
+    self->_size = total_size;
     self->_nconst = desc->_nconst;
     self->_ninsn = desc->_ninsn;
     self->_nsub = desc->_nsub;
@@ -88,7 +89,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 		GFun* fun = ptr_of(GFun, addr);
 		addr += fun_size(desc->_ncap);
 
-		fun->_vtable = &afun_vtable;
+		fun->_vptr = &afun_vtable;
 		fun->_proto = self;
 		fun->_len = desc->_ncap;
 		if (desc->_ncap > 0) {
@@ -115,9 +116,9 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	return self;
 }
 
-static GFun* fun_new(a_henv env, VTable const* vtable, GProto* proto, a_u32 ncap) {
+static GFun* fun_new(a_henv env, VTable const* vptr, GProto* proto, a_u32 ncap) {
 	GFun* self = ai_mem_alloc(env, fun_size(ncap));
-	self->_vtable = vtable;
+	self->_vptr = vptr;
 	self->_proto = proto;
 	self->_len = ncap;
 	return self;
@@ -138,7 +139,7 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 	GFun* self = fun_new(env, &cfun_vtable, g_cast(GProto, &l_proto), ncap + 1);
 
 	v_cpy_all(env, self->_vals, pcap, ncap);
-	v_setx(self->_vals + ncap, bcast(Value, hnd));
+	v_set_raw(self->_vals + ncap, bit_cast(Value, hnd));
 
 	ai_gc_register_object(env, self);
 
@@ -235,9 +236,7 @@ static void cap_drop(Global* g, RcCap* self) {
 static void cap_close_value(a_henv env, RcCap* self) {
 	if (self->_ftbc) {
 		a_hobj obj = v_as_obj(*self->_ptr);
-		a_fp_close close_fp = obj->_vtable->_close;
-		assume(close_fp != null, "missing close function.");
-		(*close_fp)(env, obj);
+		g_vcall(env, obj, close);
 		self->_ftbc = false;
 	}
 }
@@ -330,38 +329,42 @@ static void proto_mark(Global* g, GProto* self) {
 			ai_gc_trace_mark(g, self->_dbg_cap_names[i]);
 		}
 	}
-	ai_gc_trace_work(g, self->_len);
+	ai_gc_trace_work(g, self->_size);
 }
 
 void ai_proto_drop(Global* g, GProto* self) {
-	ai_mem_dealloc(g, self, self->_len);
+	ai_mem_dealloc(g, self, self->_size);
 }
 
 static VTable const afun_vtable = {
-	._val_mask = V_MASKED_TAG(T_FUNC),
-	._api_tag = ALO_TFUNC,
-	._repr_id = REPR_FUNC,
-	._flags = VTABLE_FLAG_NONE,
-	._name = "func",
-	._mark = fpcast(a_fp_mark, afun_mark),
-	._drop = fpcast(a_fp_drop, afun_drop)
+	._mask = V_MASKED_TAG(T_FUNC),
+	._iname = env_type_iname(_func),
+	._body = {
+		vfp_def(drop, afun_drop),
+		vfp_def(mark, afun_mark)
+	}
 };
 
 static VTable const cfun_vtable = {
-	._val_mask = V_MASKED_TAG(T_FUNC),
-	._api_tag = ALO_TFUNC,
-	._repr_id = REPR_FUNC,
+	._mask = V_MASKED_TAG(T_FUNC),
+	._iname = env_type_iname(_func),
+	._base_size = sizeof(GFun),
+	._elem_size = sizeof(Value),
 	._flags = VTABLE_FLAG_NONE,
-	._name = "func",
-	._mark = fpcast(a_fp_mark, cfun_mark),
-	._drop = fpcast(a_fp_drop, cfun_drop)
+	._body = {
+		vfp_def(drop, cfun_drop),
+		vfp_def(mark, cfun_mark)
+	}
 };
 
 static VTable const proto_vtable = {
-	._val_mask = V_MASKED_TAG(T_USER_TEQ),
-	._api_tag = ALO_TUSER,
-	._repr_id = REPR_OPAQUE,
+	._mask = V_MASKED_TAG(T_USER_TEQ),
+	._iname = env_type_iname(_proto),
+	._base_size = 0,
+	._elem_size = 1,
 	._flags = VTABLE_FLAG_NONE,
-	._mark = fpcast(a_fp_mark, proto_mark),
-	._drop = fpcast(a_fp_drop, ai_proto_drop)
+	._body = {
+		vfp_def(drop, ai_proto_drop),
+		vfp_def(mark, proto_mark)
+	}
 };

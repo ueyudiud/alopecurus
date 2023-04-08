@@ -11,7 +11,7 @@
 #include "afun.h"
 #include "agc.h"
 #include "afmt.h"
-#include "astrx.h"
+#include "aname.h"
 
 #include "acode.h"
 
@@ -628,7 +628,7 @@ static void l_load_symbol(Parser* par, OutExpr e, a_u32 id, a_u32 line) {
 static void l_resolve_symbol(Parser* par, InoutExpr e) {
 	SymBuf* syms = &par->_syms;
 
-	GStr* env_name = ai_env_strx(G(par->_env), STRX_KW__ENV);
+	GStr* _env_name = env_name(par->_env, NAME_KW__ENV);
 	GStr* free_name = e->_str;
 
 	assume(e->_kind == EXPR_EXPORT || e->_kind == EXPR_FREE, "not unresolved symbol.");
@@ -636,7 +636,7 @@ static void l_resolve_symbol(Parser* par, InoutExpr e) {
 	for (a_u32 i = syms->_len; ; --i) {
 		assume(i > 0, "_ENV should not be free symbol.");
 		a_u32 id = i - 1;
-		if (syms->_ptr[id]._name == env_name) {
+		if (syms->_ptr[id]._name == _env_name) {
 			l_load_symbol(par, e, id, e->_line);
 			break;
 		}
@@ -2254,7 +2254,7 @@ static void parser_close(Parser* par) {
 	l_bdel(par, par->_syms);
 	ai_lex_close(&par->_lex);
 
-	ai_env_gprotect_clear(par->_env);
+	gbl_unprotect(par->_env);
 }
 
 static void parser_mark(Global* g, void* ctx) {
@@ -2287,7 +2287,7 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 }
 
 void ai_code_open(Parser* par) {
-	ai_env_gprotect(par->_env, parser_mark, parser_except, par);
+	gbl_protect(par->_env, parser_mark, parser_except, par);
 
 	/* Add predefined '_ENV' name. */
 	l_push_symbol(par, new(Sym) {
@@ -2295,7 +2295,7 @@ void ai_code_open(Parser* par) {
 		._scope = SCOPE_DEPTH_ENV,
 		._mods = SYM_MOD_READONLY /* Predefined environment is always readonly variable. */,
 		._index = 0,
-		._name = ai_env_strx(G(par->_env), STRX_KW__ENV)
+		._name = env_name(par->_env, NAME_KW__ENV)
 	});
 }
 

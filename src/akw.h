@@ -5,7 +5,7 @@
 #ifndef akw_h_
 #define akw_h_
 
-#define KEYWORD_LIST(_) \
+#define KW_LIST(_) \
     _(_ENV, "_ENV")     \
     _(AS, "as")         \
     _(BREAK, "break")   \
@@ -32,7 +32,7 @@
 	_(WHILE, "while")   \
 	_(UNDERSCORE, "_")
 
-#define OPERATOR_LIST(_) \
+#define OP_LIST(_) \
     _(LBK, "(") \
     _(RBK, ")") \
     _(LSQ, "[") \

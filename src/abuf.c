@@ -5,10 +5,8 @@
 #define abuf_c_
 #define ALO_LIB
 
-#include <string.h>
 #include <stdio.h>
 
-#include "agbl.h"
 #include "agc.h"
 
 #include "abuf.h"
@@ -55,7 +53,7 @@ a_msg ai_buf_nputvfs(a_henv env, void* raw_buf, char const* fmt, va_list varg) {
 GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
-	self->_vtable = &buf_vtable;
+	self->_vptr = &buf_vtable;
 	ai_buf_init(self);
 
 	ai_gc_register_object(env, self);
@@ -75,10 +73,10 @@ static void buf_drop(Global* g, a_hobj raw_self) {
 }
 
 static VTable const buf_vtable = {
-	._val_mask = V_MASKED_TAG(T_USER_TEQ),
-	._api_tag = ALO_TUSER,
-	._flags = VTABLE_FLAG_NONE,
-	._name = "str_buf",
-	._mark = buf_mark,
-	._drop = buf_drop
+	._mask = V_MASKED_TAG(T_USER_TEQ),
+	._iname = env_type_iname(_buf),
+	._body = {
+		vfp_def(drop, buf_drop),
+		vfp_def(mark, buf_mark)
+	}
 };

@@ -16,7 +16,7 @@ static VTable const list_vtable;
 
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, sizeof(GList));
-	self->_vtable = &list_vtable;
+	self->_vptr = &list_vtable;
     self->_ptr = null;
     self->_len = 0;
     self->_cap = 0;
@@ -77,7 +77,7 @@ static void list_mark(Global* g, GList* self) {
     for (a_usize i = 0; i < len; ++i) {
 		ai_gc_trace_mark_val(g, self->_ptr[i]);
     }
-	ai_gc_trace_work(g, sizeof(GList) + sizeof(Value) * self->_cap);
+	ai_gc_trace_work(g, sizeof(Value) * self->_cap);
 }
 
 static void list_drop(Global* g, GList* self) {
@@ -87,7 +87,7 @@ static void list_drop(Global* g, GList* self) {
 
 Value ai_list_get(a_henv env, GList* self, Value index) {
 	if (unlikely(!v_is_int(index))) {
-		ai_err_bad_index(env, "list", v_typename(index));
+		ai_err_bad_get(env, "list", v_nameof(env, index));
 	}
 	return ai_list_geti(env, self, v_as_int(index));
 }
@@ -114,11 +114,13 @@ void ai_list_seti(a_henv env, GList* self, a_int index, Value value) {
 }
 
 static VTable const list_vtable = {
-	._val_mask = V_MASKED_TAG(T_LIST),
-	._api_tag = ALO_TLIST,
-	._repr_id = REPR_LIST,
-	._flags = VTABLE_FLAG_PLAIN_LEN,
-	._name = "list",
-	._mark = fpcast(a_fp_mark, list_mark),
-	._drop = fpcast(a_fp_drop, list_drop)
+	._mask = V_MASKED_TAG(T_LIST),
+	._iname = env_type_iname(_list),
+	._base_size = sizeof(GList),
+	._elem_size = 0,
+	._flags = VTABLE_FLAG_NONE,
+	._body = {
+		vfp_def(mark, list_mark),
+		vfp_def(drop, list_drop)
+	}
 };

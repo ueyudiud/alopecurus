@@ -9,13 +9,6 @@
 
 #include "amem.h"
 
-#define BUF_PTR_NAME _ptr
-#define BUF_PTR_DEF(t) typeof(t)* BUF_PTR_NAME
-#define BUF_PTR_REF BUF_PTR_NAME
-
-#define BUF_LEN_NAME _len
-#define BUF_LEN_REF BUF_LEN_NAME
-
 intern a_msg ai_buf_nputi(a_henv env, void* raw_buf, a_int val);
 intern a_msg ai_buf_nputf(a_henv env, void* raw_buf, a_float val);
 intern a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add);
@@ -24,14 +17,6 @@ intern a_msg ai_buf_nputvfs(a_henv env, void* raw_buf, char const* fmt, va_list 
 intern GBuf* ai_buf_new(a_henv env);
 intern void ai_buf_cats(a_henv env, GBuf* self, GStr* str);
 intern GStr* ai_buf_tostr(a_henv env, GBuf* self);
-
-#define BUF_STRUCT_DECLARE(n,t,e...) \
-    typedef struct n n; \
-    struct n { BUF_PTR_DEF(t); a_usize BUF_LEN_NAME; a_usize _cap; e; }
-
-BUF_STRUCT_DECLARE(Buf, a_byte);
-BUF_STRUCT_DECLARE(QBuf, a_byte, QBuf* _last);
-BUF_STRUCT_DECLARE(GBuf, a_byte, GOBJ_STRUCT_HEADER);
 
 #define buf_fdst(b) cast(char*, (b)->BUF_PTR_REF + (b)->BUF_LEN_REF)
 

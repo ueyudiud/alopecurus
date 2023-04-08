@@ -6,7 +6,6 @@
 #define aop_h_
 
 #include "adef.h"
-#include "aerr.h"
 
 #define TM_LIST(_) \
 	_(GET, "__get__")      \

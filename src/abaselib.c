@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 
-#include "amap.h"
+#include "atmp.h"
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
@@ -107,7 +107,7 @@ static void l_show_impl(Value v, a_u32 depth) {
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("{");
-					TNode* itr = list_first(val);
+					HNode* itr = list_first(val);
 					l_show_impl(itr->_key, depth + 1);
 					aloi_show(" -> ");
 					l_show_impl(itr->_value, depth + 1);
@@ -134,8 +134,8 @@ static void l_show_impl(Value v, a_u32 depth) {
 			aloi_show("<func:%p>", v_as_obj(v));
 			break;
 		}
-		case T_MOD: {
-			aloi_show("<mod:%s>", str2ntstr(v_as_mod(v)->_name));
+		case T_TYPE: {
+			aloi_show("<mod:%s>", str2ntstr(v_as_type(v)->_name));
 			break;
 		}
 		case T_USER_TEQ:

@@ -94,6 +94,7 @@ typedef struct {
 } a_lstr;
 
 typedef struct { a_i32 _; } a_x32;
+
 typedef a_u32 a_hash;
 typedef a_u32 a_insn;
 
@@ -153,22 +154,28 @@ typedef a_u32 a_insn;
 
 #undef new
 #undef cast
+#undef bit_cast
 #undef quiet
+#undef null_of
 #undef addr_of
 #undef ptr_of
+#undef off_of
+#undef ptr_diff
+#undef ptr_disp
 #undef from_member
 #undef fallthrough
 
 #define new(t) (t)
 #define cast(t,e) ((t) (e))
-#define bcast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
-#define fpcast(t,e) cast(t, cast(void*, e))
+#define bit_cast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
-#define addr_of(e) cast(a_usize, (quiet((typeof(*(e))*) null), e))
+#define null_of(t) ((t*) 0)
+#define addr_of(e) cast(a_usize, e)
 #define ptr_of(t,e) ({ typeof(e) _e = (e); quiet(&_e == zero(a_usize*)); cast(typeof(t)*, _e); })
+#define off_of(t,f) addr_of(&null_of(t)->f)
 #define ptr_diff(p,q) ({ typeof(&*(p)) _p = (p), _q = (q); (_p - _q) * cast(a_isize, sizeof(*_p)); })
-#define ptr_disp(t,p,d) ptr_of(t, cast(a_usize, p) + (d))
-#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &cast(typeof(t)*, null)->f); cast(typeof(t)*, cast(void*, _v) - offsetof(t, f)); })
+#define ptr_disp(t,p,d) ptr_of(t, addr_of(p) + (d))
+#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &null_of(t)->f); ptr_of(t, addr_of(_v) - off_of(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
 
 /**

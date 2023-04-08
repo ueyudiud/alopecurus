@@ -148,7 +148,7 @@ static void l_splash(Global* g, void* ctx) {
     InCtx* ic = ctx;
 	rq_for(obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
-		for (a_u32 i = 0; i < meta->_len; ++i) {
+		for (a_u32 i = 0; i < meta->_nconst; ++i) {
 			ai_gc_trace_mark_val(g, meta->_consts[i]);
 		}
 	}
@@ -158,7 +158,7 @@ static void l_release(InCtx* ic) {
     Global* g = G(ic->_env);
 	rq_for(obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
-		ai_mem_ndealloc(g, meta, meta->_len);
+		ai_mem_ndealloc(g, meta, meta->_size);
 	}
 }
 
@@ -167,9 +167,9 @@ a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags)
 	rq_init(&ic._rq);
     ai_io_iinit(env, fun, ctx, &ic._in);
 
-	ai_env_gprotect(env, l_splash, null, &ic);
+	gbl_protect(env, l_splash, null, &ic);
     a_msg msg = l_load(&ic);
-	ai_env_gprotect_clear(env);
+	gbl_unprotect(env);
     
     if (likely(msg == ALO_SOK)) {
         *pval = g_cast(GProto, ic._rq._head)->_cache;

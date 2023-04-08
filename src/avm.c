@@ -11,9 +11,11 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
+#include "atype.h"
 #include "afmt.h"
+#include "aenv.h"
 #include "agc.h"
+#include "aerr.h"
 #include "aapi.h"
 
 #include "avm.h"
@@ -47,7 +49,7 @@ void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
 }
 
 static a_none l_bad_tm_err(a_henv env, a_u32 tm) {
-	GStr* tm_name = ai_env_strx(G(env), STRX_TM__FIRST + tm);
+	GStr* tm_name = env_name(env, NAME_TM__FIRST + tm);
 	ai_err_raisef(env, ALO_EINVAL, "'%s' method not found.", str2ntstr(tm_name));
 }
 
@@ -66,9 +68,8 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 		return ai_tuple_hash(env, v_as_tuple(v));
 	}
 	else {
-		GObj* obj = v_as_obj(v);
-		a_fp_hash hash_fp = obj->_vtable->_hash;
-		return hash_fp != null ? (*hash_fp)(env, obj) : v_trivial_hash(v);
+		a_hobj p = v_as_obj(v);
+		return g_vcall(env, p, hash);
 	}
 }
 
@@ -87,9 +88,8 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 			return ai_tuple_equals(env, v_as_tuple(v1), v_as_tuple(v2));
 		}
 		else {
-			GObj* obj = v_as_obj(v1);
-			a_fp_equals equals_fp = obj->_vtable->_equals;
-			return equals_fp != null ? (*equals_fp)(env, obj, v2) : v_trivial_equals(v1, v2);
+			a_hobj p = v_as_obj(v1);
+			return g_vcall(env, p, equals, v2);
 		}
 	}
 	else if (v_is_num(v1) && v_is_num(v2)) {
@@ -101,106 +101,55 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 }
 
 static Value vm_meta_get(a_henv env, Value v1, Value v2) {
-	if (!v_is_obj(v1)) {
-		goto bad_op;
-	}
-
-	VTable const* vtable = v_as_obj(v1)->_vtable;
-	if (!(vtable->_flags & VTABLE_FLAG_FAST_TM(TM_GET))) {
-		goto bad_op;
-	}
-
-	Value const* pvf = ai_obj_vlookup_(env, vtable, TM_GET);
-	assume(pvf != null);
-	Value vf = *pvf;
+	Value vf = ai_obj_vlookftm(env, v1, TM_GET);
 
 	if (unlikely(v_is_nil(vf))) {
-		goto bad_op;
+		l_bad_tm_err(env, TM_GET);
 	}
 
 	Value* base = vm_push_args(env, vf, v1, v2);
 	return ai_vm_call(env, base, RFLAGS_META_CALL);
-
-bad_op:
-	l_bad_tm_err(env, TM_GET);
 }
 
 static void vm_meta_set(a_henv env, Value v1, Value v2, Value v3) {
-	if (!v_is_obj(v1)) {
-		goto bad_op;
-	}
-
-	VTable const* vtable = v_as_obj(v1)->_vtable;
-	if (!(vtable->_flags & VTABLE_FLAG_FAST_TM(TM_SET))) {
-		goto bad_op;
-	}
-
-	Value const* pvf = ai_obj_vlookup_(env, vtable, TM_SET);
-	assume(pvf != null);
-	Value vf = *pvf;
+	Value vf = ai_obj_vlookftm(env, v1, TM_SET);
 
 	if (unlikely(v_is_nil(vf))) {
-		goto bad_op;
+		l_bad_tm_err(env, TM_SET);
 	}
 
 	Value* base = vm_push_args(env, vf, v1, v2, v3);
 	ai_vm_call(env, base, RFLAGS_META_CALL);
-	return;
-
-bad_op:
-	l_bad_tm_err(env, TM_SET);
 }
 
 static Value vm_meta_len(a_henv env, Value v1) {
-	if (!v_is_obj(v1)) {
-		goto bad_op;
-	}
-
-	a_hobj obj = v_as_obj(v1);
-	VTable const* vtable = obj->_vtable;
-	if (!(vtable->_flags & VTABLE_FLAG_FAST_TM(TM_LEN))) {
-		if (vtable->_flags & VTABLE_FLAG_PLAIN_LEN) {
-			return v_of_int(cast(a_int, obj->_len));
+	GType* type = v_typeof(env, v1);
+	if (!type_has_method(type, TM_LEN)) {
+		if (type_has_flag(type, TYPE_FLAG_FAST_LEN)) {
+			return v_of_int(cast(a_int, v_as_obj(v1)->_len));
 		}
-		goto bad_op;
+		l_bad_tm_err(env, TM_LEN);
 	}
 
-	Value const* pvf = ai_obj_vlookup_(env, vtable, TM_LEN);
-	assume(pvf != null);
-	Value vf = *pvf;
-
-	if (unlikely(v_is_nil(vf))) {
-		goto bad_op;
-	}
-
+	Value vf = ai_obj_vlookftm(env, v1, TM_LEN);
 	Value* base = vm_push_args(env, vf, v1);
 	return ai_vm_call(env, base, RFLAGS_META_CALL);
-
-bad_op:
-	l_bad_tm_err(env, TM_LEN);
 }
 
 static Value vm_meta_unbox(a_henv env, Value v1, Value* vb, a_usize n) {
-	if (!v_is_obj(v1)) {
-		goto bad_op;
-	}
-
-	Value vf = ai_obj_vlookup(env, v1, TM_UNBOX);
+	Value vf = ai_obj_vlooktm(env, v1, TM_UNBOX);
 
 	if (unlikely(v_is_nil(vf))) {
-		goto bad_op;
+		l_bad_tm_err(env, TM_UNBOX);
 	}
 
 	env->_stack._top = vb;
 	Value* base = vm_push_args(env, vf, v1);
 	return ai_vm_call(env, base, new(RFlags) { ._count = n });
-
-bad_op:
-	l_bad_tm_err(env, TM_UNBOX);
 }
 
 static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
-	Value vf = ai_obj_vlookup(env, v1, tm);
+	Value vf = ai_obj_vlooktm(env, v1, tm);
 
 	if (v_is_nil(vf)) {
 		l_bad_tm_err(env, tm);
@@ -211,7 +160,7 @@ static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
 }
 
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlookup(env, v1, tm);
+	Value vf = ai_obj_vlooktm(env, v1, tm);
 
 	if (v_is_nil(vf)) {
 		l_bad_tm_err(env, tm);
@@ -222,7 +171,7 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 }
 
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlookup(env, v1, tm);
+	Value vf = ai_obj_vlooktm(env, v1, tm);
 
 	if (v_is_nil(vf)) {
 		l_bad_tm_err(env, tm);
@@ -250,17 +199,17 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 			else {
 				switch (v_get_tag(v)) {
 					case T_NIL: {
-						cache = ai_env_strx(G(env), STRX_KW_NIL);
+						cache = env_name(env, NAME_KW_NIL);
 						i += 1;
 						goto cached;
 					}
 					case T_FALSE: {
-						cache = ai_env_strx(G(env), STRX_KW_FALSE);
+						cache = env_name(env, NAME_KW_FALSE);
 						i += 1;
 						goto cached;
 					}
 					case T_TRUE: {
-						cache = ai_env_strx(G(env), STRX_KW_TRUE);
+						cache = env_name(env, NAME_KW_TRUE);
 						i += 1;
 						goto cached;
 					}
@@ -268,11 +217,11 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				}
 			}
 		}
-		return ai_env_strx(G(env), STRX__EMPTY); /* Empty string. */
+		return env_name(env, NAME__EMPTY); /* Empty string. */
 	}
 
 	run cached: {
-		Value const str_empty = v_of_obj(ai_env_strx(G(env), STRX__EMPTY));
+		Value const str_empty = v_of_obj(env_name(env, NAME__EMPTY));
 		while (i < n) {
 			v = base[i++];
 			if (!v_trivial_equals(v, str_empty))
@@ -317,17 +266,18 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 						ai_mem_nomem(env);
 					break;
 				}
-				case T__MIN_OBJ ... T__MAX_OBJ: {
-					GObj* obj = v_as_obj(v);
-					a_fp_tostr tostr_fp = obj->_vtable->_tostr;
-					if (tostr_fp == null) {
-						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", obj->_vtable->_name);
-					}
-					(*tostr_fp)(env, obj, buf);
+				case T_HSTR:
+				case T_ISTR: {
+					GStr* str = v_as_str(v);
+					ai_buf_putls(env, buf, str->_data, str->_len);
 					break;
 				}
 				default: {
-					if (unlikely(ai_fmt_nputf(env, buf, v_as_float(v))))
+					if (v_is_obj(v)) {
+						//TODO for userdata.
+						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+					}
+					else if (unlikely(ai_fmt_nputf(env, buf, v_as_float(v))))
 						ai_mem_nomem(env);
 					break;
 				}
@@ -394,7 +344,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	run { /* Check for function. */
 		Value vf = *base;
 		while (unlikely(!v_is_func(vf))) {
-			vf = ai_obj_vlookup(env, vf, TM_CALL);
+			vf = ai_obj_vlooktm(env, vf, TM_CALL);
 			if (v_is_nil(vf)) {
 				l_bad_tm_err(env, TM_CALL);
 			}
@@ -611,8 +561,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				else if (v_is_table(vb)) {
 					vt = ai_table_get(env, v_as_table(vb), vc);
 				}
-				else if (v_is_mod(vb)) {
-					vt = ai_table_get(env, &v_as_mod(vb)->_table, vc);
+				else if (v_is_type(vb)) {
+					if (!v_is_str(vc)) {
+						ai_err_bad_get(env, "type", v_nameof(env, vc));
+					}
+					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
@@ -637,8 +590,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				else if (v_is_table(vb)) {
 					vt = ai_table_get(env, v_as_table(vb), v_of_int(c));
 				}
-				else if (v_is_mod(vb)) {
-					vt = ai_table_get(env, &v_as_mod(vb)->_table, v_of_int(c));
+				else if (v_is_type(vb)) {
+					ai_err_bad_get(env, "type", "int");
 				}
 				else {
 					vt = vm_meta_get(env, vb, v_of_int(c));
@@ -658,11 +611,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
 				}
-				else if (v_is_mod(vb)) {
-					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				else if (v_is_type(vb)) {
+					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
 				}
 				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), "str");
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
@@ -682,11 +635,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
 				}
-				else if (v_is_mod(vb)) {
-					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				else if (v_is_type(vb)) {
+					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
 				}
 				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
@@ -706,11 +659,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
 				}
-				else if (v_is_mod(vb)) {
-					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				else if (v_is_type(vb)) {
+					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
 				}
 				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
@@ -730,11 +683,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
 				}
-				else if (v_is_mod(vb)) {
-					vt = ai_table_getis(env, &v_as_mod(vb)->_table, v_as_str(vc));
+				else if (v_is_type(vb)) {
+					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
 				}
 				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
 				}
 				else {
 					vt = vm_meta_get(env, vb, vc);
@@ -794,7 +747,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
@@ -814,7 +767,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
@@ -834,7 +787,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
@@ -854,7 +807,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_index(env, v_as_obj(vb)->_vtable->_name, v_typename(vc));
+					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
@@ -1349,7 +1302,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				goto vm_return;
 			}
 			case BC_FC: {
-				a_cfun cf = bcast(a_cfun, fun->_caps[fun->_len - 1]);
+				a_cfun cf = bit_cast(a_cfun, fun->_caps[fun->_len - 1]);
 
 				a_u32 n = (*cf)(env);
 

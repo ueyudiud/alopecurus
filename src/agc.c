@@ -5,6 +5,8 @@
 #define agc_c_
 #define ALO_LIB
 
+#include "aenv.h"
+#include "atype.h"
 #include "amem.h"
 
 #include "agc.h"
@@ -43,7 +45,7 @@ always_inline void flip_color(Global* g) {
 }
 
 void ai_gc_register_object_(a_henv env, a_hobj obj) {
-	assume(obj->_vtable->_drop != null, "cannot register permanent object.");
+	g_vcheck(obj, drop); /* Only collectable object need be registered. */
 	Global* g = G(env);
 	join_gc(&g->_gc_normal, obj);
 	g_set_white(g, obj);
@@ -68,38 +70,46 @@ void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 	join_gc(&g->_gc_fixed, obj);
 }
 
+static void really_trace_work(Global* g, a_hobj obj) {
+	a_vptr vptr = obj->_vptr;
+	ai_gc_trace_work(g, vptr->_base_size + vptr->_elem_size * obj->_len);
+}
+
 static void really_mark_object(Global* g, a_hobj obj) {
 	/* Color object to black. */
 	g_set_black(obj);
 	/* Call mark virtual method. */
-	a_fp_mark mark_fp = obj->_vtable->_mark;
-	assume(mark_fp != null, "missing mark method.");
-	(*mark_fp)(g, obj);
+	g_vcall(g, obj, mark);
 }
 
 void ai_gc_trace_mark_(Global* g, a_hobj obj) {
-	assume(g_has_white_color(g, obj)); /* Checked in inline function. */
-	VTable const* vtable = obj->_vtable;
-	if (vtable->_flags & VTABLE_FLAG_PLAIN_MARK) {
+	/* Tested in inline function. */
+	assume(g_has_white_color(g, obj));
+	/* Mark object lazily or greedily. */
+	VTable const* vptr = obj->_vptr;
+	if (vptr->_flags & VTABLE_FLAG_GREEDY_MARK) {
 		g_set_gray(obj); /* Mark object to gray before propagation. */
-		if (vtable->_mark != null) {
+		really_trace_work(g, obj);
+		if (vptr->_body[vfp_loc(mark)] != null) {
 			really_mark_object(g, obj);
 		}
+		/* Else keep object as gray since it has no mark function to remark. */
 	}
 	else {
-		assume(vtable->_mark != null, "only a plain data object can has no mark method.");
+		g_vcheck(obj, mark);
 		join_trace(&g->_tr_gray, obj);
 	}
 }
 
 static void drop_object(Global* g, a_hobj obj) {
-	a_fp_drop drop_fp = obj->_vtable->_drop;
-	assume(drop_fp != null);
-	(*drop_fp)(g, obj);
+	/* Call drop virtual method */
+	g_vcall(g, obj, drop);
 }
 
-static void propagagte_once(Global* g, a_trmark* list) {
-	really_mark_object(g, strip_trace(list));
+static void propagate_once(Global* g, a_trmark* list) {
+	a_hobj obj = strip_trace(list);
+	really_trace_work(g, obj);
+	really_mark_object(g, obj);
 }
 
 static a_bool sweep_once(Global* g) {
@@ -116,7 +126,7 @@ static a_bool sweep_once(Global* g) {
 
 static void close_once(Global* g) {
 	GObj* obj = strip_gc(&g->_gc_toclose);
-	(*obj->_vtable->_close)(g->_active, obj);
+	g_vcall(g->_active, obj, close);
 	join_gc(&g->_gc_normal, obj);
 }
 
@@ -127,7 +137,7 @@ static a_bool sweep_till_alive(Global* g) {
 
 static a_bool propagate_work(Global* g, a_trmark* list) {
 	while (*list != trmark_null) {
-		propagagte_once(g, list);
+		propagate_once(g, list);
 		if (g->_mem_work < 0) return false;
 	}
 	return true;
@@ -156,7 +166,7 @@ static a_bool close_work(Global* g) {
 
 static void propagate_all(Global* g, a_trmark* list) {
 	while (*list != trmark_null) {
-		propagagte_once(g, list);
+		propagate_once(g, list);
 	}
 }
 
@@ -219,9 +229,9 @@ static void propagate_atomic(Global* g) {
 	if (v_is_obj(g->_global)) {
 		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
-	ai_mod_cache_mark(g, &g->_mod_cache);
+	ai_type_cache_mark(g, &g->_type_cache);
 	if (g->_gmark != null) {
-		(*g->_gmark)(g, g->_gprotect_ctx);
+		(*g->_gmark)(g, g->_gctx);
 	}
 	propagate_all(g, &g->_tr_gray);
 
@@ -232,7 +242,7 @@ static void propagate_atomic(Global* g) {
 
 	propagate_all(g, &g->_tr_gray);
 
-	g->_mem_estimate = ai_env_mem_total(g);
+	g->_mem_estimate = gbl_mem_total(g);
 	flip_color(g);
 	g->_mem_work = old_work;
 }
@@ -308,7 +318,7 @@ static void run_full_gc(Global* g) {
 }
 
 void ai_gc_set_debt(Global* g, a_isize debt) {
-	a_usize total = ai_env_mem_total(g);
+	a_usize total = gbl_mem_total(g);
 	g->_mem_base = total - debt;
 	g->_mem_debt = debt;
 }

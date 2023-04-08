@@ -5,8 +5,6 @@
 #ifndef aenv_h_
 #define aenv_h_
 
-#include <stdatomic.h>
-
 #include "astr.h"
 #include "astk.h"
 #include "afun.h"
@@ -16,13 +14,11 @@
 #define GLOBAL_FLAG_EMERGENCYGC u16c(0x0004)
 #define GLOBAL_FLAG_DISABLE_GC u16c(0x0008)
 
-typedef void (*a_pfun)(a_henv, void*);
-
 intern GRoute* ai_env_new(a_henv env, a_usize stack_size);
 intern a_henv ai_env_mainof(Global* g);
 intern a_msg ai_env_resume(a_henv env, GRoute* self);
 intern void ai_env_yield(a_henv env);
-intern a_msg ai_env_protect(a_henv env, a_pfun pfun, void* pctx);
+intern a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx);
 intern a_none ai_env_raise(a_henv env, a_msg msg);
 
 #ifndef ALOI_DFL_GCSTEPMUL
@@ -36,37 +32,6 @@ intern a_none ai_env_raise(a_henv env, a_msg msg);
 #ifndef ALOI_INIT_CFRAMESIZE
 # define ALOI_INIT_CFRAMESIZE usizec(8)
 #endif
-
-#define RFLAG_COUNT_VARARG UINT8_MAX
-
-/* Flags of result. */
-typedef struct {
-	a_u8 _count; /* Number of expected return count. */
-} RFlags;
-
-struct Frame {
-	a_henv _env;
-	Frame* _prev;
-	a_insn const* _pc;
-	Value* _stack_bot;
-	RcCap* _caps;
-	RFlags _rflags;
-	StkPtr _bound; /* In strict stack checking mode, the API will use frame bound to check index range. */
-};
-
-struct alo_Env {
-	GOBJ_STRUCT_HEADER;
-	Global* _g;
-	Frame* _frame;
-	Stack _stack;
-	Value _error;
-	GRoute* _from;
-	a_u16 _flags;
-	a_u8 _status;
-	Frame _base_frame;
-};
-
-#define G(env) ((env)->_g)
 
 always_inline void check_in_stack(a_henv env, Value* v) {
 	assume(v >= env->_stack._base && v < env->_stack._limit + RESERVED_STACK_SIZE);
@@ -111,7 +76,7 @@ always_inline a_isize ai_stk_check(a_henv env, Value* top) {
 
 always_inline void ai_env_pop_error(a_henv env, Value* d) {
 	v_cpy(env, d, &env->_error);
-	env->_error = v_of_nil();
+	v_set_nil(&env->_error);
 }
 
 #endif /* aenv_h_ */

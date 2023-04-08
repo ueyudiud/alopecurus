@@ -1236,7 +1236,7 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 
 	Parser par;
 	l_init_parser(env, fun, ctx, file, name, options, &par);
 
-	a_msg msg = ai_env_protect(env, l_scan_root, &par);
+	a_msg msg = ai_env_pcall(env, l_scan_root, &par);
 
 	if (msg == ALO_SOK) {
 		*pfun = ai_code_build_and_close(&par);

@@ -191,9 +191,8 @@ endif
 ACTX_C= actx/x64.w64.win.c
 
 KER_O= aapi.o adump.o acode.o aparse.o alex.o adbg.o aerr.o aload.o \
-asave.o avm.o afmt.o astrx.o aop.o agc.o amem.o aenv.o astk.o amod.o \
-afun.o atable.o alist.o atuple.o astr.o abuf.o aio.o aobj.o abc.o \
-actx.o
+asave.o avm.o afmt.o aop.o agc.o amem.o aenv.o astk.o atype.o afun.o \
+atable.o alist.o atuple.o astr.o abuf.o aio.o aobj.o abc.o actx.o
 LIB_O= asyslib.o adbglib.o abaselib.o aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
 

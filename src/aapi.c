@@ -10,7 +10,7 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
+#include "atype.h"
 #include "actx.h"
 #include "agc.h"
 #include "aerr.h"
@@ -190,7 +190,7 @@ Value* api_wrslot(a_henv env, a_isize id) {
 	return v;
 }
 
-static a_tag tag_of(Value v) {
+static a_tag tag_of(a_henv env, Value v) {
 	switch (v_get_tag(v)) {
 		case T_NIL: 
 			return ALO_TNIL;
@@ -202,7 +202,7 @@ static a_tag tag_of(Value v) {
 		case T_PTR:
 			return ALO_TPTR;
 		case T__MIN_OBJ ... T__MAX_OBJ:
-			return v_as_obj(v)->_vtable->_api_tag;
+			return v_typeof(env, v)->_tag;
 		default:
 			return ALO_TFLOAT;
 	}
@@ -266,7 +266,7 @@ a_tag alo_pushvex(a_henv env, char const* sp, va_list varg) {
 		switch (*(sp++)) {
 			case '\0': { /* Terminate character. */
 				v_set(env, api_incr_stack(env), v);
-				return tag_of(v);
+				return tag_of(env, v);
 			}
 			case 'i': { /* Integer index. */
 				a_isize index = va_arg(varg, a_isize);
@@ -340,8 +340,9 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 	return str2ntstr(val);
 }
 
-void alo_pushmod(a_henv env, a_hmod mod) {
-	v_set_obj(env, api_incr_stack(env), mod);
+void alo_pushtype(a_henv env, a_htype hnd) {
+	api_check(hnd->_nref > 0, "type not referenced by API.");
+	v_set_obj(env, api_incr_stack(env), hnd);
 }
 
 void alo_pushroute(a_henv env) {
@@ -417,9 +418,9 @@ a_usize alo_rawlen(a_henv env, a_isize id) {
 			GTable* value = v_as_table(v);
 			return cast(a_usize, value->_len);
 		}
-		case T_MOD: {
-			GMod* value = v_as_mod(v);
-			return cast(a_usize, value->_table._len);
+		case T_TYPE: {
+			GType* value = v_as_type(v);
+			return cast(a_usize, value->_len);
 		}
 		default:
 			api_panic("unsupported operation.");
@@ -454,7 +455,7 @@ a_tag alo_rawgeti(a_henv env, a_isize id, a_int key) {
 	if (v != null) {
 		v_cpy(env, api_incr_stack(env), v);
 	}
-	return v != null ? tag_of(*v) : ALO_TEMPTY;
+	return v != null ? tag_of(env, *v) : ALO_TEMPTY;
 }
 
 void alo_insert(a_henv env, a_isize id) {
@@ -499,7 +500,7 @@ a_msg alo_pcall(a_henv env, a_usize narg, a_isize nres, a_usize nsav) {
 		._nres = cast(a_i32, nres)
 	};
 	Frame* frame = env->_frame;
-	a_msg msg = ai_env_protect(env, l_pcall, &ctx);
+	a_msg msg = ai_env_pcall(env, l_pcall, &ctx);
 	if (unlikely(msg != ALO_SOK)) {
 		env->_frame = frame; /* Recover frame. */
 		env->_stack._top = ai_stk_bot(env) + nsav;
@@ -524,7 +525,7 @@ void alo_yield(a_henv env) {
 
 a_tag alo_tagof(a_henv env, a_isize id) {
 	Value const* slot = api_roslot(env, id);
-	return slot != null ? tag_of(*slot) : ALO_TEMPTY;
+	return slot != null ? tag_of(env, *slot) : ALO_TEMPTY;
 }
 
 a_bool alo_tobool(a_henv env, a_isize id) {
@@ -576,47 +577,45 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	return str2ntstr(val);
 }
 
+static a_htype l_use_type(GType* type) {
+	if (unlikely(type->_nref == UINT32_MAX))
+		return null;
+	type->_nref += 1;
+	return type;
+}
+
 a_htype alo_typeof(a_henv env, a_isize id) {
-	Value v = api_elem(env, id);
-
-	if (!v_is_user(v)) {
-		a_usize addr = tag_of(v) + 1;
-		return cast(a_htype, addr);
-	}
-
-	//TODO
-	panic("not implemented.");
-}
-
-char const* alo_typename(unused a_henv env, a_htype type) {
-	a_usize type_addr = addr_of(type);
-	if (type_addr == 0) {
-		return "empty";
-	}
-	else if (type_addr - 1 < T__MAX_FAST) {
-		return ai_api_tagname[type_addr - 1];
-	}
-	else {
-		//TODO
-		panic("not implemented.");
-	}
-}
-
-a_hmod alo_openmod(a_henv env, a_isize id) {
-	Value v = api_elem(env, id);
-	if (likely(v_is_mod(v))) {
-		GMod* mod = v_as_mod(v);
-		if (unlikely(mod->_rc == UINT32_MAX))
-			return null;
-		mod->_rc += 1;
-		return mod;
+	Value const* pv = api_roslot(env, id);
+	if (pv != null) {
+		GType* type = v_typeof(env, *pv);
+		return l_use_type(type);
 	}
 	return null;
 }
 
-void alo_closemod(unused a_henv env, a_hmod mod) {
-	api_check(mod->_rc > 0, "bad module reference count.");
-	mod->_rc -= 1;
+char const* alo_typename(unused a_henv env, a_htype type) {
+	if (type == null) {
+		return "empty";
+	}
+	else {
+		return str2ntstr(type->_name);
+	}
+}
+
+a_htype alo_opentype(a_henv env, a_isize id) {
+	Value v = api_elem(env, id);
+	if (likely(v_is_type(v))) {
+		GType* type = v_as_type(v);
+		return l_use_type(type);
+	}
+	return null;
+}
+
+void alo_closetype(unused a_henv env, a_htype type) {
+	if (type != null) {
+		api_check(type->_nref > 0, "type not referenced by API.");
+		type->_nref -= 1;
+	}
 }
 
 void alo_fullgc(a_henv env) {
@@ -665,6 +664,6 @@ char const ai_api_tagname[][8] = {
 	[ALO_TLIST] = "list",
 	[ALO_TTABLE] = "table",
 	[ALO_TFUNC] = "func",
-	[ALO_TMOD] = "mod",
+	[ALO_TTYPE] = "type",
 	[ALO_TUSER] = "user"
 };

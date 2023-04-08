@@ -71,9 +71,9 @@ always_inline void ai_ctx_yield(Route* from, Route* to, a_msg msg) {
     register a_gpr p1 asm("rcx");
     register a_gpr p2 asm("rdx");
     register a_gpr p3 asm("rax");
-    p1 = bcast(a_gpr, from);
-    p2 = bcast(a_gpr, to);
-    p3 = bcast(a_gpr, cast(a_isize, msg));
+    p1 = bit_cast(a_gpr, from);
+    p2 = bit_cast(a_gpr, to);
+    p3 = bit_cast(a_gpr, cast(a_isize, msg));
     asm("call %c0"::"p"(ai_ctx_resume), "r"(p1), "r"(p2), "r"(p3));
 	unreachable();
 }

@@ -5,7 +5,7 @@
 #ifndef agc_h_
 #define agc_h_
 
-#include "agbl.h"
+#include "aobj.h"
 
 typedef struct {
 	a_gclist _head;
@@ -101,7 +101,7 @@ always_inline void g_set_black(a_hobj v) {
 always_inline void v_check_alive(a_henv env, Value v) {
 	if (v_is_obj(v)) {
 		GObj* obj = v_as_obj(v);
-		a_usize raw_tag = v._ ^ obj->_vtable->_val_mask;
+		a_usize raw_tag = v._ ^ obj->_vptr->_mask;
 		assume((raw_tag & ~V_PAYLOAD_MASK) == 0 && !g_has_other_color(G(env), obj));
 	}
 }
@@ -132,7 +132,7 @@ intern void ai_gc_clean(Global* g);
 #define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, gobj_cast(obj))
 
 always_inline void ai_gc_trace_mark(Global* g, a_hobj obj) {
-	if (g_has_white_color_within_assume_alive(g, obj) && obj->_vtable->_mark != null) {
+	if (g_has_white_color_within_assume_alive(g, obj)) {
 		ai_gc_trace_mark_(g, obj);
 	}
 }
@@ -140,9 +140,7 @@ always_inline void ai_gc_trace_mark(Global* g, a_hobj obj) {
 #define ai_gc_trace_mark(g,obj) ai_gc_trace_mark(g, gobj_cast(obj))
 
 always_inline void ai_gc_trace_mark_val(Global* g, Value v) {
-	if (v_is_obj(v)) {
-		ai_gc_trace_mark_(g, v_as_obj(v));
-	}
+	if (v_is_obj(v)) ai_gc_trace_mark(g, v_as_obj(v));
 }
 
 #define ai_gc_should_run(g) unlikely((g)->_mem_debt >= 0)

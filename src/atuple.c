@@ -15,8 +15,8 @@
 static VTable const tuple_vtable;
 
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
-    GTuple* self = ai_mem_alloc(env, tuple_size(len));
-	self->_vtable = &tuple_vtable;
+    GTuple* self = ai_mem_alloc(env, sizeof_GTuple(len));
+	self->_vptr = &tuple_vtable;
     self->_len = len;
 	self->_hash = 0;
 	v_cpy_all(env, self->_body, src, len);
@@ -69,16 +69,15 @@ static void tuple_mark(Global* g, GTuple* self) {
     for (a_u32 i = 0; i < len; ++i) {
 		ai_gc_trace_mark_val(g, self->_body[i]);
     }
-	ai_gc_trace_work(g, tuple_size(len));
 }
 
 static void tuple_drop(Global* g, GTuple* self) {
-    ai_mem_dealloc(g, self, tuple_size(self->_len));
+    ai_mem_dealloc(g, self, sizeof_GTuple(self->_len));
 }
 
 Value ai_tuple_get(a_henv env, GTuple* self, Value key) {
 	if (unlikely(!v_is_int(key))) {
-		ai_err_bad_index(env, "tuple", v_typename(key));
+		ai_err_bad_get(env, "tuple", v_nameof(env, key));
 	}
 	return ai_tuple_geti(env, self, v_as_int(key));
 }
@@ -92,13 +91,15 @@ Value ai_tuple_geti(a_henv env, GTuple* self, a_int key) {
 }
 
 static VTable const tuple_vtable = {
-	._val_mask = V_MASKED_TAG(T_TUPLE),
-	._api_tag = ALO_TTUPLE,
-	._repr_id = REPR_TUPLE,
-	._flags = VTABLE_FLAG_PLAIN_LEN | VTABLE_FLAG_READONLY,
-	._name = "tuple",
-	._mark = fpcast(a_fp_mark, tuple_mark),
-	._drop = fpcast(a_fp_drop, tuple_drop),
-	._hash = fpcast(a_fp_hash, ai_tuple_hash),
-	._equals = fpcast(a_fp_equals, tuple_equals)
+	._mask = V_MASKED_TAG(T_TUPLE),
+	._iname = env_type_iname(_tuple),
+	._base_size = sizeof(GTuple),
+	._elem_size = sizeof(Value),
+	._flags = VTABLE_FLAG_NONE,
+	._body = {
+		vfp_def(mark, tuple_mark),
+		vfp_def(drop, tuple_drop),
+		vfp_def(hash, ai_tuple_hash),
+		vfp_def(equals, tuple_equals)
+	}
 };

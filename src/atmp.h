@@ -1,12 +1,19 @@
 /**
- ** Intrusive hash map and linked array list template.
- *@file amap.h
+ ** Intrusive templates.
+ *@file atmp.h
  */
 
-#ifndef amap_h_
-#define amap_h_
+#ifndef atmp_h_
+#define atmp_h_
 
-#include "abuf.h"
+#include "adef.h"
+
+#define BUF_PTR_NAME _ptr
+#define BUF_PTR_DEF(t) typeof(t)* BUF_PTR_NAME
+#define BUF_PTR_REF BUF_PTR_NAME
+
+#define BUF_LEN_NAME _len
+#define BUF_LEN_REF BUF_LEN_NAME
 
 #define MAP_HMASK_NAME _hmask
 #define MAP_HMASK_DEF a_u32 MAP_HMASK_NAME
@@ -183,4 +190,4 @@
 	}                                               \
 })
 
-#endif /* amap_h_ */
+#endif /* atmp_h_ */

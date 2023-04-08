@@ -11,7 +11,7 @@
 #include "aenv.h"
 #include "aerr.h"
 #include "acode.h"
-#include "astrx.h"
+#include "aname.h"
 #include "afmt.h"
 #include "aparse.h"
 
@@ -215,11 +215,11 @@ void ai_lex_close(Lexer* lex) {
 
 char const* ai_lex_tagname(a_i32 tag) {
 	switch (tag) {
-#define CASE_KW(id,repr) case TK_##id: return strx_raw_kw(id);
-		KEYWORD_LIST(CASE_KW)
+#define CASE_KW(id,repr) case TK_##id: return name_str_kw(id)._ptr;
+		KW_LIST(CASE_KW)
 #undef CASE_KW
 #define CASE_OP(id,repr) case TK_##id: return "'"repr"'";
-		OPERATOR_LIST(CASE_OP)
+		OP_LIST(CASE_OP)
 #undef CASE_OP
 		case TK_EOF: return "<eof>";
 		case TK_IDENT: return "<identifier>";
@@ -313,7 +313,7 @@ static a_i32 l_scan_ident(Lexer* lex, Token* tk) {
     }
     GStr* str = l_to_str(lex);
     tk->_str = str;
-    return strx_iskw(str) ? strx_totk(str) : TK_IDENT;
+    return name_iskw(str) ? name_totk(str) : TK_IDENT;
 }
 
 static a_float l_10pow(a_i32 i) {
@@ -909,7 +909,7 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 			tk->_str = l_to_str(lex);
 		}
 		else {
-			tk->_str = ai_env_strx(G(lex->_env), STRX__EMPTY);
+			tk->_str = env_name(lex->_env, NAME__EMPTY);
 		}
 	}
 	else {
@@ -991,7 +991,7 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 			return l_scan_multiline_template_string_body(lex, tk);
 		}
 		else {
-			tk->_str = ai_env_strx(G(lex->_env), STRX__EMPTY);
+			tk->_str = env_name(lex->_env, NAME__EMPTY);
 			return TK_STRING;
 		}
 	}

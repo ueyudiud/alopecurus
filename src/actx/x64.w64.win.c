@@ -289,7 +289,7 @@ static EXCEPTION_DISPOSITION catch_except_hook(
 	a_henv env = &ptr_of(Route, DispatcherContext->ContextRecord->Rsi)->_body;
 	Global* g = G(env);
 	if (g->_gexecpt != null) {
-		(*g->_gexecpt)(env, g->_gprotect_ctx, msg);
+		(*g->_gexecpt)(env, g->_gctx, msg);
 	}
 
 	a_usize target_ip = DispatcherContext->ImageBase + *((a_u32*) DispatcherContext->HandlerData);

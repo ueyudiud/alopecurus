@@ -10,13 +10,13 @@
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
+#include "atype.h"
 #include "actx.h"
 #include "amem.h"
 #include "agc.h"
 #include "aerr.h"
 
 #include "aenv.h"
-#include "agbl.h"
 
 /* Main route. */
 typedef struct MRoute {
@@ -41,8 +41,11 @@ static Route* env2route(a_henv env) {
 	return from_member(Route, _body, env);
 }
 
+static VTable const route_vtable;
+
 static void route_new(GRoute* self, Global* g) {
 	*self = new(GRoute) {
+		._vptr = &route_vtable,
 		._status = ALO_SYIELD,
 		._flags = 0,
 		._g = g,
@@ -56,10 +59,7 @@ static void route_new(GRoute* self, Global* g) {
 	};
 }
 
-static VTable const route_vtable;
-
 static a_bool route_init(a_henv env, GRoute* self) {
-	self->_vtable = &route_vtable;
 	if (ai_stk_init(env, &self->_stack)) return true;
 	self->_base_frame._stack_bot = val2stk(env, self->_stack._base);
 	return false;
@@ -118,12 +118,12 @@ static void route_drop(Global* g, GRoute* self) {
 }
 
 static VTable const route_vtable = {
-	._val_mask = V_MASKED_TAG(T_USER_TEQ),
-	._api_tag = ALO_TROUTE,
-	._flags = VTABLE_FLAG_NONE,
-	._name = "route",
-	._mark = fpcast(a_fp_mark, route_mark),
-	._drop = fpcast(a_fp_drop, route_drop)
+	._mask = V_MASKED_TAG(T_USER_TEQ),
+	._iname = env_type_iname(_route),
+	._body = {
+		vfp_def(drop, route_drop),
+		vfp_def(mark, route_mark)
+	}
 };
 
 a_msg ai_env_resume(a_henv env, GRoute* self) {
@@ -141,7 +141,7 @@ void ai_env_yield(a_henv env) {
 	ai_ctx_yield(env2route(env), env2route(from_env), ALO_SOK);
 }
 
-a_msg ai_env_protect(a_henv env, a_pfun pfun, void* pctx) {
+a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx) {
 	return ai_ctx_catch(env2route(env), pfun, pctx);
 }
 
@@ -152,7 +152,6 @@ a_none ai_env_raise(a_henv env, a_msg msg) {
 GRoute* ai_env_new(a_henv env, a_usize stack_size) {
 	Route* self = ai_mem_alloc(env, sizeof(Route));
 	route_new(&self->_body, G(env));
-	self->_body._vtable = &route_vtable;
 	if (route_init(env, &self->_body)) {
 		ai_mem_dealloc(G(env), self, sizeof(Route));
 		ai_mem_nomem(env);
@@ -165,14 +164,20 @@ GRoute* ai_env_new(a_henv env, a_usize stack_size) {
 static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env2route(env));
 	ai_str_boost(env);
-	ai_strx_boost(env, m->_reserved, m->_global._strx - 1);
+	ai_obj_boost(env, m->_reserved);
 
 	GTable* gtable = ai_table_new(env);
 	v_set_obj(env, &G(env)->_global, gtable);
 }
 
 static a_usize sizeof_MRoute() {
-	return sizeof(MRoute) + STRX_RESERVE_SPACE;
+	return sizeof(MRoute) + sizeof_IStr(0)
+#define SIZE(id,name) + sizeof_IStr(sizeof(name) - 1)
+		KW_LIST(SIZE)
+		TM_LIST(SIZE)
+#undef SIZE
+			;
+	;
 }
 
 a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
@@ -210,7 +215,7 @@ a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
 	if (route_init(env, env)) return ALO_ENOMEM;
 
 	/* Initialize remaining components. */
-	a_msg msg = ai_env_protect(env, global_init, null);
+	a_msg msg = ai_env_pcall(env, global_init, null);
 
 	if (unlikely(msg != ALO_SOK)) {
 		alo_destroy(env);
@@ -235,10 +240,10 @@ void alo_destroy(a_henv env) {
 	/* Clean resources. */
 	ai_gc_clean(g);
 	ai_str_clean(g);
-	ai_mod_clean(g);
+	ai_type_clean(g);
 	route_destroy(g, &mr->_route._body);
 
-	assume(ai_env_mem_total(g) == sizeof_MRoute(), "memory leak");
+	assume(gbl_mem_total(g) == sizeof_MRoute(), "memory leak.");
 	ai_mem_vdealloc(&g->_af, g->_ac, mr, sizeof_MRoute());
 }
 

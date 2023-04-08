@@ -31,7 +31,7 @@ static a_u32 sys_exit(a_henv env) {
 			break;
 		}
 		default: {
-			aloL_errorf(env, "bad exit code.");
+			aloL_argerror(env, 0, "bad exit code.");
 			unreachable();
 		}
 	}

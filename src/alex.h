@@ -7,7 +7,7 @@
 
 #include "akw.h"
 #include "abuf.h"
-#include "amap.h"
+#include "atmp.h"
 #include "aobj.h"
 #include "aio.h"
 
@@ -35,8 +35,8 @@ enum {
     TK__NONE,
 
 #define TKDEF(id,repr) TK_##id,
-	KEYWORD_LIST(TKDEF)
-	OPERATOR_LIST(TKDEF)
+	KW_LIST(TKDEF)
+	OP_LIST(TKDEF)
 #undef TKDEF
 	TK_EOF,
 	TK_IDENT,

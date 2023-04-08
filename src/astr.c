@@ -9,10 +9,10 @@
 #include <string.h>
 
 #include "aop.h"
+#include "abuf.h"
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
-#include "astrx.h"
 
 #include "astr.h"
 
@@ -53,7 +53,7 @@ static void cache_grow(a_henv env, IStrCache* cache) {
         IStr** q = &table[i + old_size];
         IStr* s = *p;
         while (s != null) {
-            if (s->_body._hash & old_size) {
+            if (s->_hash & old_size) {
                 *q = s;
                 q = &s->_cache_next;
             }
@@ -75,26 +75,26 @@ static IStr** cache_head(IStrCache* cache, a_hash hash) {
 }
 
 static void cache_emplace(IStrCache* cache, IStr* self) {
-	IStr** slot = cache_head(cache, self->_body._hash);
+	IStr** slot = cache_head(cache, self->_hash);
 	self->_cache_next = *slot;
 	*slot = self;
 	cache->_len += 1;
 }
 
 static GStr* hstr_alloc(a_henv env, a_usize len) {
-	GStr* self = ai_mem_alloc(env, hstr_size(len));
-	self->_vtable = &hstr_vtable;
+	GStr* self = ai_mem_alloc(env, sizeof_HStr(len));
+	self->_vptr = &hstr_vtable;
 	self->_len = len;
 	self->_data[len] = '\0';
 	return self;
 }
 
 static void istr_init(IStr* self, void const* src, a_usize len, a_hash hash) {
-	self->_body._vtable = &istr_vtable;
-    self->_body._len = len;
-    self->_body._hash = hash;
-    memcpy(self->_body._data, src, len);
-    self->_body._data[len] = '\0';
+	self->_vptr = &istr_vtable;
+    self->_len = len;
+    self->_hash = hash;
+    memcpy(self->_data, src, len);
+    self->_data[len] = '\0';
 }
 
 static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
@@ -105,10 +105,10 @@ static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
 
     /* Try lookup string in intern table. */
     for (IStr* str = istable->_table[hash & istable->_hmask]; str != null; str = str->_cache_next) {
-        if (str->_body._hash == hash && likely(str->_body._len == len && memcmp(str->_body._data, src, len) == 0)) {
+        if (str->_hash == hash && likely(str->_len == len && memcmp(str->_data, src, len) == 0)) {
             /* Revive string object if it is dead. */
-            if (unlikely(g_has_other_color(g, gobj_cast(&str->_body)))) {
-                str->_body._tnext = white_color(g);
+            if (unlikely(g_has_other_color(g, str))) {
+                str->_tnext = white_color(g);
             }
             return &str->_body;
         }
@@ -119,10 +119,10 @@ static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
     }
 
 	/* String not found, create new string. */
-	IStr* self = ai_mem_alloc(env, istr_size(len));
+	IStr* self = ai_mem_alloc(env, sizeof_IStr(len));
 	istr_init(self, src, len, hash);
 	cache_emplace(istable, self);
-    ai_gc_register_object(env, &self->_body);
+    ai_gc_register_object(env, self);
     return &self->_body;
 }
 
@@ -139,10 +139,10 @@ GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 t
     IStr* self = cast(IStr*, blk);
     a_hash hash = ai_str_hashof(g->_seed, src, len);
 
-	g_set_gray(&self->_body);
+	g_set_gray(self);
 
 	istr_init(self, src, len, hash);
-	strx_id_set(&self->_body, tag);
+	name_id_set(self, tag);
 
 	cache_emplace(&g->_istr_cache, self);
 	return &self->_body;
@@ -166,14 +166,12 @@ a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr) {
 		return ALO_SOK;
 	}
 	else {
-		GStr* self = ai_mem_alloc(env, hstr_size(len));
+		GStr* self = hstr_alloc(env, len);
 		a_msg msg = ai_io_iget(in, self->_data, len);
 		if (unlikely(msg != ALO_SOK)) {
-			ai_mem_dealloc(G(env), self, hstr_size(len));
+			ai_mem_dealloc(G(env), self, sizeof_HStr(len));
 			return msg;
 		}
-		self->_vtable = &hstr_vtable;
-		self->_len = len;
 		self->_hash = ai_str_hashof(G(env)->_seed, self->_data, len);
 		ai_gc_register_object(env, self);
 		*pstr = self;
@@ -193,9 +191,7 @@ GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
         return istr_get(env, buf, len);
     }
     else {
-        GStr* self = ai_mem_alloc(env, sizeof(GStr) + len);
-		self->_vtable = &hstr_vtable;
-        self->_len = len;
+        GStr* self = hstr_alloc(env, len);
         vsprintf(cast(char*, self->_data), fmt, varg);
         self->_hash = ai_str_hashof(G(env)->_seed, self->_data, len);
         ai_gc_register_object(env, self);
@@ -225,7 +221,7 @@ void ai_str_boost(a_henv env) {
 
 void ai_str_clean(Global* g) {
     IStrCache* cache = &g->_istr_cache;
-    assume(cache->_len == STRX__END - 1);
+    assume(cache->_len == NAME__END - 1);
     ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 }
 
@@ -247,35 +243,32 @@ static void cache_remove(IStrCache* cache, IStr* str) {
 static void istr_drop(Global* g, a_hobj raw_self) {
 	IStr* self = g_cast(IStr, raw_self);
 	cache_remove(&g->_istr_cache, self);
-	ai_mem_dealloc(g, self, istr_size(self->_body._len));
+	ai_mem_dealloc(g, self, sizeof_IStr(self->_body._len));
 }
 
 static void hstr_drop(Global* g, GStr* self) {
-    ai_mem_dealloc(g, self, hstr_size(self->_len));
-}
-
-static void str_tostr(a_henv env, GStr* self, GBuf* buf) {
-	ai_buf_putls(env, buf, self->_data, self->_len);
+    ai_mem_dealloc(g, self, sizeof_HStr(self->_len));
 }
 
 static VTable const istr_vtable = {
-	._val_mask = V_MASKED_TAG(T_ISTR),
-	._api_tag = ALO_TSTR,
-	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_PLAIN_LEN | VTABLE_FLAG_PLAIN_MARK,
-	._name = "str",
-	._mark = null,
-	._drop = istr_drop,
-	._tostr = fpcast(a_fp_tostr, str_tostr)
+	._mask = V_MASKED_TAG(T_ISTR),
+	._iname = env_type_iname(_str),
+	._base_size = sizeof(IStr),
+	._elem_size = sizeof(a_byte),
+	._flags = VTABLE_FLAG_GREEDY_MARK,
+	._body = {
+		vfp_def(drop, istr_drop)
+	}
 };
 
 static VTable const hstr_vtable = {
-	._val_mask = V_MASKED_TAG(T_HSTR),
-	._api_tag = ALO_TSTR,
-	._repr_id = REPR_STR,
-	._flags = VTABLE_FLAG_PLAIN_MARK,
-	._name = "str",
-	._mark = null,
-	._drop = fpcast(a_fp_drop, hstr_drop),
-	._tostr = fpcast(a_fp_tostr, str_tostr)
+	._mask = V_MASKED_TAG(T_HSTR),
+	._iname = env_type_iname(_str),
+	._base_size = sizeof(GStr),
+	._elem_size = sizeof(a_byte),
+	._flags = VTABLE_FLAG_GREEDY_MARK,
+	._body = {
+		vfp_def(drop, hstr_drop)
+	}
 };
+
