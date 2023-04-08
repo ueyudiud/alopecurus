@@ -588,6 +588,19 @@ static a_htype l_use_type(GType* type) {
 	return type;
 }
 
+void alo_newtype(a_henv env, char const* name) {
+	api_check_slot(env, 1);
+
+	GType* type = ai_type_alloc(env, 4);  //TODO
+	v_set_obj(env, api_incr_stack(env), type);
+
+	type->_name = ai_str_new(env, name, strlen(name));
+
+	ai_type_ready(env, type);
+
+	ai_gc_trigger(env);
+}
+
 a_htype alo_typeof(a_henv env, a_isize id) {
 	Value const* pv = api_roslot(env, id);
 	if (pv != null) {

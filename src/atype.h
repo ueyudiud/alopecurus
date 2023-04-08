@@ -7,8 +7,11 @@
 
 #include "aobj.h"
 
-intern GType* ai_ctype_alloc(a_henv env, a_usize len);
+intern GType* ai_type_alloc(a_henv env, a_usize len);
+intern GType* ai_atype_new(a_henv env);
 intern void ai_type_ready(a_henv env, GType* self);
+intern void ai_type_hint(a_henv env, GType* self, a_usize len);
+intern void ai_type_set(a_henv env, GType* self, Value key, Value value);
 intern void ai_type_setis(a_henv env, GType* self, GStr* key, Value value);
 intern Value ai_type_getis(a_henv env, GType* self, GStr* key);
 

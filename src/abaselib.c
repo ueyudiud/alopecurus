@@ -9,9 +9,7 @@
 
 #include "atmp.h"
 #include "atuple.h"
-#include "alist.h"
-#include "atable.h"
-#include "agc.h"
+#include "avm.h"
 #include "aapi.h"
 
 #include "alolib.h"
@@ -182,7 +180,6 @@ static a_u32 base_assert(a_henv env) {
 		}
 		alo_settop(env, 2);
 		alo_raise(env);
-		return 0;
 	}
 }
 
@@ -192,5 +189,7 @@ void aloopen_base(a_henv env) {
 		{ "assert", base_assert }
 	};
 
-	aloL_newtype(env, ALO_LIB_BASE_NAME, bindings);
+	aloL_newmod(env, ALO_LIB_BASE_NAME, bindings);
+
+	ai_vm_set(env, G(env)->_global, v_of_obj(env_name(env, NAME_TM_GET)), api_elem(env, -1));
 }

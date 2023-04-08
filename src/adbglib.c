@@ -23,5 +23,5 @@ void aloopen_debug(a_henv env) {
 		{ "dump", debug_dump }
 	};
 
-	aloL_newtype(env, ALO_LIB_DEBUG_NAME, bindings);
+	aloL_newmod(env, ALO_LIB_DEBUG_NAME, bindings);
 }

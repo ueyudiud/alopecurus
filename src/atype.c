@@ -14,22 +14,39 @@
 
 #include "atype.h"
 
-static VTable const ctype_vtable;
+static VTable const type_vtable;
 
-static a_usize sizeof_GType(a_usize len) {
-	return sizeof(GType) + sizeof(void*) * len;
+static a_usize sizeof_GType(a_usize extra) {
+	return sizeof(GType) + extra;
 }
 
-GType* ai_ctype_alloc(a_henv env, a_usize len) {
-	a_usize size = sizeof_GType(len);
+GType* ai_type_alloc(a_henv env, a_usize len) {
+	a_usize size = sizeof_GType(sizeof(VTable) + sizeof(a_vslot) * len);
 	GType* self = ai_mem_alloc(env, size);
 	memclr(self, sizeof(GType));
 
-	self->_vptr = &ctype_vtable;
+	self->_vptr = &type_vtable;
 	self->_size = size;
-	self->_hash = v_trivial_hash(v_of_obj(self));
 
 	ai_gc_register_object(env, self);
+
+	return self;
+}
+
+GType* ai_atype_new(a_henv env) {
+	GType* self = ai_type_alloc(env, 4); //TODO
+
+	*self->_opt_vtbl = new(VTable) {
+		._mask = v_masked_tag(T_USER_TEQ),
+		._iname = ptr_diff(self->_opt_vtbl, G(env)),
+		._base_size = sizeof(GTable),
+		._elem_size = 0,
+		._flags = VTABLE_FLAG_NONE
+	};
+	self->_opt_vtbl->_body[vfp_loc(drop)] = ai_table_drop;
+	self->_opt_vtbl->_body[vfp_loc(mark)] = ai_table_mark;
+	self->_opt_vtbl->_body[vfp_loc(hash)] = ai_obj_trivial_hash;
+	self->_opt_vtbl->_body[vfp_loc(equals)] = ai_obj_trivial_equals;
 
 	return self;
 }
@@ -132,7 +149,7 @@ static void type_emplace(a_henv env, GType* self, GStr* key, Value value, a_u32 
 	v_set(env, &self->_values[index], value);
 }
 
-static void type_hint(a_henv env, GType* self, a_u32 len) {
+void ai_type_hint(a_henv env, GType* self, a_usize len) {
 	a_usize old_cap = self->_ptr != null ? self->_hmask + 1 : 0;
 	a_usize expect = self->_len + len;
 	if (expect > old_cap) {
@@ -157,6 +174,18 @@ static void type_hint(a_henv env, GType* self, a_u32 len) {
 	}
 }
 
+void ai_type_set(a_henv env, GType* self, Value key, Value value) {
+	if (!v_is_str(key)) {
+		ai_err_bad_get(env, "type", v_nameof(env, key));
+	}
+	else if (!v_is_istr(key)) {
+		ai_err_raisef(env, ALO_EINVAL, "type field name too long.");
+	}
+	else {
+		ai_type_setis(env, self, v_as_str(key), value);
+	}
+}
+
 void ai_type_setis(a_henv env, GType* self, GStr* key, Value value) {
 	Value* pv = type_refis(env, self, key);
 
@@ -164,7 +193,7 @@ void ai_type_setis(a_henv env, GType* self, GStr* key, Value value) {
 		v_set(env, pv, value);
 	}
 	else {
-		type_hint(env, self, 1);
+		ai_type_hint(env, self, 1);
 		type_emplace(env, self, key, value, self->_len);
 		self->_len += 1;
 		if (name_istm(key)) {
@@ -186,7 +215,7 @@ Value ai_type_getis(a_henv env, GType* self, GStr* key) {
 	return pv != null ? *pv : v_of_nil();
 }
 
-static void ctype_drop(Global* g, a_hobj raw_self) {
+static void type_drop(Global* g, a_hobj raw_self) {
 	GType* self = g_cast(GType, raw_self);
 	if (self->_ptr != null) {
 		ai_mem_dealloc(g, self->_ptr, (sizeof(TDNode) + sizeof(Value)) * (self->_hmask + 1));
@@ -194,7 +223,7 @@ static void ctype_drop(Global* g, a_hobj raw_self) {
 	ai_mem_dealloc(g, self, self->_size);
 }
 
-static void ctype_mark(Global* g, a_hobj raw_self) {
+static void type_mark(Global* g, a_hobj raw_self) {
 	GType* self = g_cast(GType, raw_self);
 	if (self->_loader != null) {
 		ai_gc_trace_mark(g, self->_loader);
@@ -321,14 +350,14 @@ void ai_type_clean(Global* g) {
 	type_cache_drop(g, &g->_type_cache);
 }
 
-static VTable const ctype_vtable = {
+static VTable const type_vtable = {
 	._mask = V_MASKED_TAG(T_TYPE),
 	._iname = env_type_iname(_type),
 	._base_size = 0,
 	._elem_size = 1,
 	._flags = VTABLE_FLAG_NONE,
 	._body = {
-		vfp_def(drop, ctype_drop),
-		vfp_def(mark, ctype_mark)
+		vfp_def(drop, type_drop),
+		vfp_def(mark, type_mark)
 	}
 };

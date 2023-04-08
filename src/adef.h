@@ -74,11 +74,7 @@
 #define unused __attribute__((__unused__))
 
 /* Types. */
-#if __STDC_VERSION__ >= 201112L
-# define a_none _Noreturn void
-#else
-# define a_none __attribute__((__noreturn__)) void
-#endif
+#define a_none ALO_NORETURN void
 
 #if ALO_M64
 typedef __int128_t a_isize2;
@@ -173,7 +169,7 @@ typedef a_u32 a_insn;
 #define addr_of(e) cast(a_usize, e)
 #define ptr_of(t,e) ({ typeof(e) _e = (e); quiet(&_e == zero(a_usize*)); cast(typeof(t)*, _e); })
 #define off_of(t,f) addr_of(&null_of(t)->f)
-#define ptr_diff(p,q) ({ typeof(&*(p)) _p = (p), _q = (q); (_p - _q) * cast(a_isize, sizeof(*_p)); })
+#define ptr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
 #define ptr_disp(t,p,d) ptr_of(t, addr_of(p) + (d))
 #define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &null_of(t)->f); ptr_of(t, addr_of(_v) - off_of(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))

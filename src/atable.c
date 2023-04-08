@@ -347,7 +347,14 @@ void ai_table_set(a_henv env, GTable* self, Value key, Value value) {
 	}
 }
 
-static void table_mark(Global* g, GTable* self) {
+void ai_table_drop(Global* g, GTable* self) {
+	if (self->_ptr != null) {
+		ai_mem_vdel(g, self->_ptr, self->_hmask + 1);
+	}
+	ai_mem_dealloc(g, self, sizeof(GTable));
+}
+
+void ai_table_mark(Global* g, GTable* self) {
     a_usize len = self->_ptr != null ? self->_hmask + 1 : 0;
     for (a_usize i = 0; i < len; ++i) {
         HNode* node = &self->_ptr[i];
@@ -359,13 +366,6 @@ static void table_mark(Global* g, GTable* self) {
 	ai_gc_trace_work(g, sizeof(HNode) * len);
 }
 
-static void table_drop(Global* g, GTable* self) {
-	if (self->_ptr != null) {
-		ai_mem_vdel(g, self->_ptr, self->_hmask + 1);
-	}
-    ai_mem_dealloc(g, self, sizeof(GTable));
-}
-
 static VTable const table_vtable = {
 	._mask = V_MASKED_TAG(T_TABLE),
 	._iname = env_type_iname(_table),
@@ -373,7 +373,7 @@ static VTable const table_vtable = {
 	._elem_size = 0,
 	._flags = VTABLE_FLAG_NONE,
 	._body = {
-		vfp_def(drop, table_drop),
-		vfp_def(mark, table_mark)
+		vfp_def(drop, ai_table_drop),
+		vfp_def(mark, ai_table_mark)
 	}
 };

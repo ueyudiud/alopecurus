@@ -54,6 +54,14 @@ typedef double a_f64;
 # define ALO_EXPORT extern
 #endif
 
+#if __STDC_VERSION__ >= 201112L
+# define ALO_NORETURN _Noreturn
+#elif defined(__GNUC__)
+# define ALO_NORETURN __attribute__((__noreturn__))
+#else
+# define ALO_NORETURN
+#endif
+
 typedef a_i32 a_msg;
 typedef a_u32 a_enum;
 typedef a_usize a_flags;
@@ -174,7 +182,7 @@ ALO_EXPORT a_tag (alo_rawgeti)(a_henv env, a_isize id, a_int key);
 ALO_EXPORT void (alo_insert)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_call)(a_henv env, a_usize narg, a_isize nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsav);
-ALO_EXPORT void (alo_raise)(a_henv env);
+ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
 
@@ -187,6 +195,7 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 #define alo_tostr(env,id) alo_tolstr(env, id, NULL)
 
 /* Type operations. */
+ALO_EXPORT void (alo_newtype)(a_henv env, char const* name);
 ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
 ALO_EXPORT char const* (alo_typename)(a_henv env, a_htype type);
 ALO_EXPORT a_msg (alo_looktype)(a_henv env, char const* src, a_usize len);

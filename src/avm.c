@@ -106,9 +106,34 @@ static Value vm_meta_get(a_henv env, Value v1, Value v2) {
 	if (unlikely(v_is_nil(vf))) {
 		l_bad_tm_err(env, TM_GET);
 	}
+	else if (v_is_func(v1)) {
+		Value* base = vm_push_args(env, vf, v1, v2);
+		return ai_vm_call(env, base, RFLAGS_META_CALL);
+	}
+	else {
+		return ai_vm_get(env, vf, v2);
+	}
+}
 
-	Value* base = vm_push_args(env, vf, v1, v2);
-	return ai_vm_call(env, base, RFLAGS_META_CALL);
+Value ai_vm_get(a_henv env, Value v1, Value v2) {
+	if (v_is_tuple(v1)) {
+		return ai_tuple_get(env, v_as_tuple(v1), v2);
+	}
+	else if (v_is_list(v1)) {
+		return ai_list_get(env, v_as_list(v1), v2);
+	}
+	else if (v_is_table(v1)) {
+		return ai_table_get(env, v_as_table(v1), v2);
+	}
+	else if (v_is_type(v1)) {
+		if (!v_is_str(v1)) {
+			ai_err_bad_get(env, "type", v_nameof(env, v2));
+		}
+		return ai_type_getis(env, v_as_type(v1), v_as_str(v2));
+	}
+	else {
+		return vm_meta_get(env, v1, v2);
+	}
 }
 
 static void vm_meta_set(a_henv env, Value v1, Value v2, Value v3) {
@@ -117,9 +142,28 @@ static void vm_meta_set(a_henv env, Value v1, Value v2, Value v3) {
 	if (unlikely(v_is_nil(vf))) {
 		l_bad_tm_err(env, TM_SET);
 	}
+	else if (v_is_func(v1)) {
+		Value* base = vm_push_args(env, vf, v1, v2, v3);
+		ai_vm_call(env, base, RFLAGS_META_CALL);
+	}
+	else {
+		ai_vm_set(env, vf, v2, v3);
+	}
+}
 
-	Value* base = vm_push_args(env, vf, v1, v2, v3);
-	ai_vm_call(env, base, RFLAGS_META_CALL);
+void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
+	if (v_is_list(v1)) {
+		ai_list_set(env, v_as_list(v1), v2, v3);
+	}
+	else if (v_is_table(v1)) {
+		ai_table_set(env, v_as_table(v1), v2, v3);
+	}
+	else if (v_is_type(v1)) {
+		ai_type_set(env, v_as_type(v1), v2, v3);
+	}
+	else {
+		vm_meta_set(env, v1, v2, v3);
+	}
 }
 
 static Value vm_meta_len(a_henv env, Value v1) {
@@ -710,6 +754,9 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				else if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
+				else if (v_is_type(vb)) {
+					ai_type_set(env, v_as_type(vb), vc, va);
+				}
 				else {
 					vm_meta_set(env, R[b], R[c], R[a]);
 					reload_stack();
@@ -729,6 +776,9 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				else if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), v_of_int(c), va);
 				}
+				else if (v_is_type(vb)) {
+					ai_err_bad_get(env, v_nameof(env, vb), "int");
+				}
 				else {
 					vm_meta_set(env, R[b], v_of_int(c), R[a]);
 					reload_stack();
@@ -746,8 +796,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
+				else if (v_is_type(vb)) {
+					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
+				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
+					ai_err_bad_get(env, v_nameof(env, vb), "str");
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
@@ -766,8 +819,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
+				else if (v_is_type(vb)) {
+					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
+				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
+					ai_err_bad_get(env, v_nameof(env, vb), "str");
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
@@ -786,8 +842,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
+				else if (v_is_type(vb)) {
+					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
+				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
+					ai_err_bad_get(env, v_nameof(env, vb), "str");
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);
@@ -806,8 +865,11 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				if (v_is_table(vb)) {
 					ai_table_set(env, v_as_table(vb), vc, va);
 				}
+				else if (v_is_type(vb)) {
+					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
+				}
 				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
+					ai_err_bad_get(env, v_nameof(env, vb), "str");
 				}
 				else {
 					vm_meta_set(env, vb, vc, va);

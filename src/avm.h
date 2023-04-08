@@ -11,6 +11,8 @@ intern a_u32 ai_vm_lock_hook(Global* g);
 intern void ai_vm_hook(a_henv env, a_msg msg, a_u32 test);
 intern a_hash ai_vm_hash(a_henv env, Value v);
 intern a_bool ai_vm_equals(a_henv env, Value v1, Value v2);
+intern Value ai_vm_get(a_henv env, Value v1, Value v2);
+intern void ai_vm_set(a_henv env, Value v1, Value v2, Value v3);
 intern Value ai_vm_call(a_henv env, Value* base, RFlags rflags);
 
 #define RFLAGS_META_CALL (new(RFlags) { ._count = 0 })

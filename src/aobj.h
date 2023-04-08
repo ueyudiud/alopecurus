@@ -550,7 +550,6 @@ struct TDNode {
 struct alo_Type {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _size;
-	a_hash _hash; /* Trivial hash only, at same offset with string hash. */
 
 	a_u32 _sig; /* Type methods signature, changed when the order of existed fields changed. */
 	a_u32 _nref; /* Reference counter. */
@@ -563,12 +562,12 @@ struct alo_Type {
 
 	GLoader* _loader;
 	GStr* _name;
+	BUF_PTR_DEF(TDNode);
+	Value* _values;
 
 	GType* _next; /* Used for linked list in loader. */
 
-	BUF_PTR_DEF(TDNode);
-
-	Value* _values;
+	VTable _opt_vtbl[0];
 };
 
 struct TypeCache {
@@ -831,6 +830,14 @@ always_inline char const* v_nameof(a_henv env, Value v) {
 }
 
 intern char const ai_obj_names[NAME_POS__MAX];
+
+inline a_hash ai_obj_trivial_hash(unused a_henv env, a_hobj self) {
+	return v_trivial_hash_unchecked(v_of_obj(self));
+}
+
+inline a_bool ai_obj_trivial_equals(unused a_henv env, a_hobj self, Value other) {
+	return v_trivial_equals_unchecked(v_of_obj(self), other);
+}
 
 intern void ai_obj_boost(a_henv env, void* blk);
 

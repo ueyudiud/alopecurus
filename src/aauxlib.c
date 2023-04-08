@@ -308,27 +308,32 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 	return ALO_EINVAL;
 }
 
-void aloL_newtype_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
+void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
 	api_check_slot(env, 1);
 
-	GType* mod = ai_ctype_alloc(env, nb);
-	v_set_obj(env, api_incr_stack(env), mod);
+	GType* type = ai_type_alloc(env, 0);
+	v_set_obj(env, api_incr_stack(env), type);
 
-	mod->_name = ai_str_new(env, name, strlen(name));
+	type->_name = ai_str_new(env, name, strlen(name));
+
+	ai_type_hint(env, type, nb);
 
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
 		assume(b->name != null);
 
 		GStr* key = ai_str_new(env, b->name, strlen(b->name));
+		Value value = v_of_nil();
 
 		if (b->fptr != null) {
 			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
-			ai_type_setis(env, mod, key, v_of_obj(fun));
+			value = v_of_obj(fun);
 		}
+
+		ai_type_setis(env, type, key, value);
 	}
 
-	ai_type_ready(env, mod);
+	ai_type_ready(env, type);
 
 	ai_gc_trigger(env);
 }
