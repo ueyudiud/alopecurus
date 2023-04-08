@@ -40,10 +40,24 @@ static a_u32 sys_exit(a_henv env) {
 	exit(code);
 }
 
+static a_u32 sys_command(a_henv env) {
+	char const* cmd = aloL_optstr(env, 0);
+	errno = 0;
+	int stat = system(cmd);
+	if (cmd != null) {
+		return aloL_execresult(env, stat);
+	}
+	else {
+		alo_pushbool(env, stat);
+		return 1;
+	}
+}
+
 void aloopen_sys(a_henv env) {
-	static aloL_Binding bindings[] = {
+	static aloL_Entry const bindings[] = {
+		{ "command", sys_command },
 		{ "exit", sys_exit }
 	};
 
-	aloL_newmod(env, ALO_LIB_SYS_NAME, bindings);
+	aloL_newtype(env, ALO_LIB_SYS_NAME, bindings);
 }

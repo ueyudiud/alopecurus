@@ -325,6 +325,10 @@ char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 	return str2ntstr(val);
 }
 
+char const* alo_pushntstr(a_henv env, char const* src) {
+	return alo_pushstr(env, src, strlen(src));
+}
+
 char const* alo_pushfstr(a_henv env, char const* fmt, ...) {
 	va_list varg;
 	va_start(varg, fmt);

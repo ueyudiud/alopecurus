@@ -187,10 +187,10 @@ static a_u32 base_assert(a_henv env) {
 }
 
 void aloopen_base(a_henv env) {
-	static aloL_Binding bindings[] = {
+	static aloL_Entry bindings[] = {
 		{ "print", base_print },
 		{ "assert", base_assert }
 	};
 
-	aloL_newmod(env, ALO_LIB_BASE_NAME, bindings);
+	aloL_newtype(env, ALO_LIB_BASE_NAME, bindings);
 }

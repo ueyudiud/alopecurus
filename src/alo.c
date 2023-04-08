@@ -86,7 +86,7 @@ static void l_read_line(a_henv env) {
 
 error:
 	l_free_input();
-	aloL_errorf(env, "fail to read script.");
+	aloL_raisef(env, "fail to read script.");
 }
 
 static a_i32 l_source_input(unused a_henv env, void* rctx, void const** pdst, a_usize* plen) {

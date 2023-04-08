@@ -46,8 +46,8 @@ a_henv aloL_create(void) {
 
 void aloL_argerror(a_henv env, a_usize id, char const* what) {
 	char const* name = ai_dbg_get_func_name(env, env->_frame);
-	if (name == null) return aloL_errorf(env, "bad argument #%tu, %s", id, what);
-	return aloL_errorf(env, "bad argument #%tu to '%s', %s", id, name, what);
+	if (name == null) return aloL_raisef(env, "bad argument #%tu, %s", id, what);
+	return aloL_raisef(env, "bad argument #%tu to '%s', %s", id, name, what);
 }
 
 static char const* l_typename(a_henv env, a_isize id) {
@@ -64,6 +64,124 @@ void aloL_checktag(a_henv env, a_usize id, a_tag tag) {
 	api_check(tag >= ALO_TEMPTY && tag <= ALO_TUSER, "bad type tag.");
 	if (alo_tagof(env, cast(a_isize, id)) != tag) {
 		aloL_typeerror(env, id, ai_api_tagname[tag]);
+	}
+}
+
+a_int aloL_checkint(a_henv env, a_usize id) {
+	Value v = api_elem(env, cast(a_isize, id));
+	if (!v_is_int(v)) {
+		aloL_typeerror(env, id, ai_api_tagname[ALO_TINT]);
+	}
+	return v_as_int(v);
+}
+
+a_float aloL_checknum(a_henv env, a_usize id) {
+	Value v = api_elem(env, cast(a_isize, id));
+	if (!v_is_num(v)) {
+		aloL_typeerror(env, id, ai_api_tagname[ALO_TFLOAT]);
+	}
+	return v_as_num(v);
+}
+
+char const* aloL_checklstr(a_henv env, a_usize id, a_usize* plen) {
+	Value v = api_elem(env, cast(a_isize, id));
+	if (!v_is_str(v)) {
+		aloL_typeerror(env, id, ai_api_tagname[ALO_TSTR]);
+	}
+	GStr* str = v_as_str(v);
+	if (plen != null) {
+		*plen = str->_len;
+	}
+	return str2ntstr(str);
+}
+
+a_bool aloL_optint_(a_henv env, a_usize id, a_int* pval) {
+	Value v = api_elem(env, cast(a_usize, id));
+	if (!v_is_int(v)) {
+		if (v_is_nil(v)) {
+			return false;
+		}
+		aloL_typeerror(env, id, ai_api_tagname[ALO_TINT]);
+	}
+	*pval = v_as_int(v);
+	return true;
+}
+
+a_bool aloL_optnum_(a_henv env, a_usize id, a_float* pval) {
+	Value v = api_elem(env, cast(a_usize, id));
+	if (!v_is_num(v)) {
+		if (v_is_nil(v)) {
+			return false;
+		}
+		aloL_typeerror(env, id, ai_api_tagname[ALO_TFLOAT]);
+	}
+	*pval = v_as_num(v);
+	return true;
+}
+
+char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
+	Value v = api_elem(env, cast(a_usize, id));
+	if (!v_is_str(v)) {
+		if (v_is_nil(v)) {
+			return null;
+		}
+		aloL_typeerror(env, id, ai_api_tagname[ALO_TSTR]);
+	}
+	GStr* str = v_as_str(v);
+	if (plen != null) {
+		*plen = str->_len;
+	}
+	return str2ntstr(str);
+}
+
+a_u32 aloL_fileresult(a_henv env, a_bool stat, char const* fname) {
+	errno_t err = errno;
+	if (stat) {
+		alo_pushbool(env, true);
+		return 1;
+	}
+	else {
+		aloL_pushfail(env);
+		if (fname != null) {
+			alo_pushfstr(env, "%s: %s", fname, strerror(err));
+		}
+		else {
+			alo_pushntstr(env, strerror(err));
+		}
+		alo_pushint(env, err);
+		return 3;
+	}
+}
+
+#if ALO_OS_POSIX
+
+# include <sys/wait.h>
+# define l_inspect_result(stat) \
+	if (WIFEXITED(stat)) { stat = WEXITSTATUS(stat); } \
+	else if (WIFSIGNALED(stat)) { stat = WTERMSIG(stat); what = "signal"; }
+
+#else
+
+# define l_inspect_result(stat) quiet()
+
+#endif
+
+a_u32 aloL_execresult(a_henv env, a_i32 stat) {
+	char const* what = "exit";
+	if (stat != 0 && errno != 0) {
+		return aloL_fileresult(env, false, null);
+	}
+	else {
+		l_inspect_result(stat);
+		if (*what == 'e' && stat == 0) {
+			alo_pushbool(env, true);
+		}
+		else {
+			aloL_pushfail(env);
+		}
+		alo_pushntstr(env, what);
+		alo_pushint(env, stat);
+		return 3;
 	}
 }
 
@@ -115,7 +233,7 @@ a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
 	return msg;
 }
 
-void aloL_errorf(a_henv env, char const* fmt, ...) {
+void aloL_raisef(a_henv env, char const* fmt, ...) {
 	va_list varg;
 	va_start(varg, fmt);
 	alo_pushvfstr(env, fmt, varg);
@@ -190,7 +308,7 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 	return ALO_EINVAL;
 }
 
-void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize nb) {
+void aloL_newtype_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
 	api_check_slot(env, 1);
 
 	GType* mod = ai_ctype_alloc(env, nb);
@@ -199,7 +317,7 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Binding const* bs, a_usize 
 	mod->_name = ai_str_new(env, name, strlen(name));
 
 	for (a_usize i = 0; i < nb; ++i) {
-		aloL_Binding const* b = &bs[i];
+		aloL_Entry const* b = &bs[i];
 		assume(b->name != null);
 
 		GStr* key = ai_str_new(env, b->name, strlen(b->name));

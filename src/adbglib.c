@@ -19,9 +19,9 @@ static a_u32 debug_dump(a_henv env) {
 }
 
 void aloopen_debug(a_henv env) {
-	static aloL_Binding bindings[] = {
+	static aloL_Entry bindings[] = {
 		{ "dump", debug_dump }
 	};
 
-	aloL_newmod(env, ALO_LIB_DEBUG_NAME, bindings);
+	aloL_newtype(env, ALO_LIB_DEBUG_NAME, bindings);
 }
