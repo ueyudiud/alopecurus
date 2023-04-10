@@ -59,5 +59,6 @@ void aloopen_sys(a_henv env) {
 		{ "exit", sys_exit }
 	};
 
-	aloL_newmod(env, ALO_LIB_SYS_NAME, bindings);
+	alo_newtype(env, ALO_LIB_SYS_NAME, ALO_NEWTYPE_FLAG_STATIC);
+	aloL_putfields(env, -1, bindings);
 }

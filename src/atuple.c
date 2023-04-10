@@ -60,10 +60,6 @@ a_hash ai_tuple_hash(a_henv env, GTuple* self) {
 	return self->_hash;
 }
 
-static a_bool tuple_equals(a_henv env, GTuple* self, Value other) {
-	return v_is_tuple(other) && ai_tuple_equals(env, self, v_as_tuple(other));
-}
-
 static void tuple_mark(Global* g, GTuple* self) {
     a_u32 len = self->_len;
     for (a_u32 i = 0; i < len; ++i) {
@@ -93,13 +89,12 @@ Value ai_tuple_geti(a_henv env, GTuple* self, a_int key) {
 static VTable const tuple_vtable = {
 	._mask = V_MASKED_TAG(T_TUPLE),
 	._iname = env_type_iname(_tuple),
+	._sname = "tuple",
 	._base_size = sizeof(GTuple),
 	._elem_size = sizeof(Value),
 	._flags = VTABLE_FLAG_NONE,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(mark, tuple_mark),
-		vfp_def(drop, tuple_drop),
-		vfp_def(hash, ai_tuple_hash),
-		vfp_def(equals, tuple_equals)
+		vfp_def(drop, tuple_drop)
 	}
 };

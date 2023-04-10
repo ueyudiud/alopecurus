@@ -9,6 +9,9 @@
 
 #include "atmp.h"
 #include "atuple.h"
+#include "atype.h"
+#include "auser.h"
+#include "agc.h"
 #include "avm.h"
 #include "aapi.h"
 
@@ -136,8 +139,8 @@ static void l_show_impl(Value v, a_u32 depth) {
 			aloi_show("<mod:%s>", str2ntstr(v_as_type(v)->_name));
 			break;
 		}
-		case T_USER_TEQ:
-		case T_USER_NEQ: {
+		case T_AUSER:
+		case T_CUSER: {
 			aloi_show("<%p>", v_as_obj(v));
 			break;
 		}
@@ -186,10 +189,18 @@ static a_u32 base_assert(a_henv env) {
 void aloopen_base(a_henv env) {
 	static aloL_Entry bindings[] = {
 		{ "print", base_print },
-		{ "assert", base_assert }
+		{ "assert", base_assert },
+		{ "__get__", null }
 	};
 
-	aloL_newmod(env, ALO_LIB_BASE_NAME, bindings);
+	alo_newtype(env, ALO_LIB_BASE_NAME, 0);
+	aloL_putfields(env, -1, bindings);
 
-	ai_vm_set(env, G(env)->_global, v_of_obj(env_name(env, NAME_TM_GET)), api_elem(env, -1));
+	a_htype type = v_as_type(api_elem(env, -1));
+	ai_type_setis(env, type, env_name(env, NAME_TM_GET), v_of_obj(type));
+
+	GTable* gtable = ai_auser_new(env, type);
+	v_set_obj(env, &G(env)->_global, gtable);
+
+	ai_gc_trigger(env);
 }

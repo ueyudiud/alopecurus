@@ -87,10 +87,10 @@ void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 	assume(g_has_white_color(g, obj));
 	/* Mark object lazily or greedily. */
 	VTable const* vptr = obj->_vptr;
-	if (vptr->_flags & VTABLE_FLAG_GREEDY_MARK) {
+	if (vtable_has_flag(vptr, VTABLE_FLAG_GREEDY_MARK)) {
 		g_set_gray(obj); /* Mark object to gray before propagation. */
 		really_trace_work(g, obj);
-		if (vptr->_body[vfp_loc(mark)] != null) {
+		if (vptr->_vfps[vfp_loc(mark)] != null) {
 			really_mark_object(g, obj);
 		}
 		/* Else keep object as gray since it has no mark function to remark. */

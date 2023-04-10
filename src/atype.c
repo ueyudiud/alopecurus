@@ -5,7 +5,10 @@
 #define atype_c_
 #define ALO_LIB
 
+#include <string.h>
+
 #include "atable.h"
+#include "auser.h"
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
@@ -20,41 +23,35 @@ static a_usize sizeof_GType(a_usize extra) {
 	return sizeof(GType) + extra;
 }
 
-GType* ai_type_alloc(a_henv env, a_usize len) {
-	a_usize size = sizeof_GType(sizeof(VTable) + sizeof(a_vslot) * len);
+GType* ai_type_alloc(a_henv env, a_usize len, a_vptr proto) {
+	a_usize size = sizeof_GType(proto != null || len > 0 ? sizeof(VTable) + sizeof(a_vslot) * len : 0);
+
 	GType* self = ai_mem_alloc(env, size);
-	memclr(self, sizeof(GType));
+	memclr(self, size);
 
 	self->_vptr = &type_vtable;
 	self->_size = size;
+	if (proto != null) {
+		VTable* vtbl = self->_opt_vtbl;
+		memcpy(vtbl, proto, sizeof(VTable) + sizeof(a_vslot) * len);
+		vtbl->_iname = ptr_diff(self, G(env));
+	}
 
 	ai_gc_register_object(env, self);
 
 	return self;
 }
 
-GType* ai_atype_new(a_henv env) {
-	GType* self = ai_type_alloc(env, 4); //TODO
-
-	*self->_opt_vtbl = new(VTable) {
-		._mask = v_masked_tag(T_USER_TEQ),
-		._iname = ptr_diff(self->_opt_vtbl, G(env)),
-		._base_size = sizeof(GTable),
-		._elem_size = 0,
-		._flags = VTABLE_FLAG_NONE
-	};
-	self->_opt_vtbl->_body[vfp_loc(drop)] = ai_table_drop;
-	self->_opt_vtbl->_body[vfp_loc(mark)] = ai_table_mark;
-	self->_opt_vtbl->_body[vfp_loc(hash)] = ai_obj_trivial_hash;
-	self->_opt_vtbl->_body[vfp_loc(equals)] = ai_obj_trivial_equals;
-
-	return self;
+void ai_type_init(a_henv env, GType* self, a_tag tag, a_u32 nid) {
+	self->_vptr = &type_vtable;
+	self->_tag = tag;
+	self->_name = nid != 0 ? env_name(env, nid) : null;
 }
 
-void ai_type_ready(a_henv env, GType* self) {
-	assume(!type_has_flag(self, TYPE_FLAG_READY), "type already built.");
-	quiet(env);
-	self->_flags |= TYPE_FLAG_READY;
+GType* ai_atype_new(a_henv env) {
+	GType* self = ai_type_alloc(env, 3, &ai_auser_vtable); //TODO
+	self->_tag = ALO_TUSER;
+	return self;
 }
 
 static void type_alloc_array(a_henv env, GType* self, a_usize new_cap) {
@@ -202,11 +199,22 @@ void ai_type_setis(a_henv env, GType* self, GStr* key, Value value) {
 				self->_flags |= TYPE_FLAG_FAST_TM(tm);
 			}
 		}
+
+		ai_gc_barrier_backward(env, self, key);
 	}
 
-	if (self->_flags & TYPE_FLAG_READY) {
-		self->_sig += 1;
-		self->_flags &= ~TYPE_FLAG_READY;
+	ai_gc_barrier_backward_val(env, self, value);
+}
+
+Value ai_type_get(a_henv env, GType* self, Value key) {
+	if (!v_is_str(key)) {
+		ai_err_bad_get(env, "type", v_nameof(env, key));
+	}
+	else if (!v_is_istr(key)) {
+		return v_of_nil();
+	}
+	else {
+		return ai_type_getis(env, self, v_as_str(key));
 	}
 }
 
@@ -353,10 +361,11 @@ void ai_type_clean(Global* g) {
 static VTable const type_vtable = {
 	._mask = V_MASKED_TAG(T_TYPE),
 	._iname = env_type_iname(_type),
+	._sname = "type",
 	._base_size = 0,
 	._elem_size = 1,
 	._flags = VTABLE_FLAG_NONE,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, type_drop),
 		vfp_def(mark, type_mark)
 	}

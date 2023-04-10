@@ -11,6 +11,7 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
+#include "auser.h"
 #include "atype.h"
 #include "afmt.h"
 #include "aenv.h"
@@ -48,11 +49,6 @@ void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
 	}
 }
 
-static a_none l_bad_tm_err(a_henv env, a_u32 tm) {
-	GStr* tm_name = env_name(env, NAME_TM__FIRST + tm);
-	ai_err_raisef(env, ALO_EINVAL, "'%s' method not found.", str2ntstr(tm_name));
-}
-
 static a_none l_div_0_err(a_henv env) {
 	ai_err_raisef(env, ALO_EINVAL, "attempt to divide by 0.");
 }
@@ -68,8 +64,17 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 		return ai_tuple_hash(env, v_as_tuple(v));
 	}
 	else {
-		a_hobj p = v_as_obj(v);
-		return g_vcall(env, p, hash);
+		Value vf = ai_obj_vlookftm(env, v, TM_HASH);
+
+		if (v_is_nil(vf)) {
+			return v_trivial_hash_unchecked(v);
+		}
+
+		Value* base = vm_push_args(env, vf, v);
+
+		Value vr = ai_vm_call(env, base, RFLAGS_META_CALL);
+		if (!v_is_int(vr)) ai_err_raisef(env, ALO_EINVAL, "result for '__hash__' should be int.");
+		return cast(a_hash, v_as_int(vr));
 	}
 }
 
@@ -87,26 +92,23 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 		else if (likely(v_is_tuple(v1))) {
 			return ai_tuple_equals(env, v_as_tuple(v1), v_as_tuple(v2));
 		}
-		else {
-			a_hobj p = v_as_obj(v1);
-			return g_vcall(env, p, equals, v2);
-		}
 	}
 	else if (v_is_num(v1) && v_is_num(v2)) {
 		return ai_op_eq_float(v_as_num(v1), v_as_num(v2));
 	}
-	else {
-		return false;
+
+	Value vf = ai_obj_vlookftm(env, v1, TM_EQ);
+
+	if (v_is_nil(vf)) {
+		return v_trivial_equals_unchecked(v1, v2);
 	}
+
+	Value* base = vm_push_args(env, vf, v1, v2);
+	return v_to_bool(ai_vm_call(env, base, RFLAGS_META_CALL));
 }
 
-static Value vm_meta_get(a_henv env, Value v1, Value v2) {
-	Value vf = ai_obj_vlookftm(env, v1, TM_GET);
-
-	if (unlikely(v_is_nil(vf))) {
-		l_bad_tm_err(env, TM_GET);
-	}
-	else if (v_is_func(v1)) {
+Value ai_vm_meta_get(a_henv env, Value vf, Value v1, Value v2) {
+	if (v_is_func(v1)) {
 		Value* base = vm_push_args(env, vf, v1, v2);
 		return ai_vm_call(env, base, RFLAGS_META_CALL);
 	}
@@ -116,33 +118,27 @@ static Value vm_meta_get(a_henv env, Value v1, Value v2) {
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
-	if (v_is_tuple(v1)) {
-		return ai_tuple_get(env, v_as_tuple(v1), v2);
-	}
-	else if (v_is_list(v1)) {
-		return ai_list_get(env, v_as_list(v1), v2);
-	}
-	else if (v_is_table(v1)) {
-		return ai_table_get(env, v_as_table(v1), v2);
-	}
-	else if (v_is_type(v1)) {
-		if (!v_is_str(v1)) {
-			ai_err_bad_get(env, "type", v_nameof(env, v2));
+	switch (v_get_tag(v1)) {
+		case T_TUPLE:
+			return ai_tuple_get(env, v_as_tuple(v1), v2);
+		case T_LIST:
+			return ai_list_get(env, v_as_list(v1), v2);
+		case T_TABLE:
+			return ai_table_get(env, v_as_table(v1), v2);
+		case T_TYPE:
+			return ai_type_get(env, v_as_type(v1), v2);
+		case T_AUSER:
+			return ai_auser_get(env, v_as_auser(v1), v2);
+		default: {
+			Value vf = ai_obj_vlookftm(env, v1, TM_GET);
+			if (v_is_nil(vf)) ai_err_bad_tm(env, TM_GET);
+			return ai_vm_meta_get(env, vf, v1, v2);
 		}
-		return ai_type_getis(env, v_as_type(v1), v_as_str(v2));
-	}
-	else {
-		return vm_meta_get(env, v1, v2);
 	}
 }
 
-static void vm_meta_set(a_henv env, Value v1, Value v2, Value v3) {
-	Value vf = ai_obj_vlookftm(env, v1, TM_SET);
-
-	if (unlikely(v_is_nil(vf))) {
-		l_bad_tm_err(env, TM_SET);
-	}
-	else if (v_is_func(v1)) {
+void ai_vm_meta_set(a_henv env, Value vf, Value v1, Value v2, Value v3) {
+	if (v_is_func(v1)) {
 		Value* base = vm_push_args(env, vf, v1, v2, v3);
 		ai_vm_call(env, base, RFLAGS_META_CALL);
 	}
@@ -161,30 +157,41 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
 	else if (v_is_type(v1)) {
 		ai_type_set(env, v_as_type(v1), v2, v3);
 	}
+	else if (v_is_auser(v1)) {
+		ai_auser_set(env, v_as_auser(v1), v2, v3);
+	}
 	else {
-		vm_meta_set(env, v1, v2, v3);
+		Value vf = ai_obj_vlookftm(env, v1, TM_SET);
+		if (v_is_nil(vf)) ai_err_bad_tm(env, TM_SET);
+		ai_vm_meta_set(env, vf, v1, v2, v3);
 	}
 }
 
 static Value vm_meta_len(a_henv env, Value v1) {
-	GType* type = v_typeof(env, v1);
-	if (!type_has_method(type, TM_LEN)) {
-		if (type_has_flag(type, TYPE_FLAG_FAST_LEN)) {
-			return v_of_int(cast(a_int, v_as_obj(v1)->_len));
-		}
-		l_bad_tm_err(env, TM_LEN);
-	}
-
 	Value vf = ai_obj_vlookftm(env, v1, TM_LEN);
-	Value* base = vm_push_args(env, vf, v1);
-	return ai_vm_call(env, base, RFLAGS_META_CALL);
+	if (v_is_nil(vf)) {
+		if (v_is_auser(v1)) {
+			return v_of_int(v_as_auser(v1)->_len);
+		}
+		else {
+			ai_err_bad_tm(env, TM_LEN);
+		}
+	}
+	else {
+		Value* base = vm_push_args(env, vf, v1);
+		Value vr = ai_vm_call(env, base, RFLAGS_META_CALL);
+		if (!v_is_int(vr)) {
+			ai_err_raisef(env, ALO_EINVAL, "result for '__len__' should be int.");
+		}
+		return vr;
+	}
 }
 
 static Value vm_meta_unbox(a_henv env, Value v1, Value* vb, a_usize n) {
 	Value vf = ai_obj_vlooktm(env, v1, TM_UNBOX);
 
 	if (unlikely(v_is_nil(vf))) {
-		l_bad_tm_err(env, TM_UNBOX);
+		ai_err_bad_tm(env, TM_UNBOX);
 	}
 
 	env->_stack._top = vb;
@@ -196,7 +203,7 @@ static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
 	Value vf = ai_obj_vlooktm(env, v1, tm);
 
 	if (v_is_nil(vf)) {
-		l_bad_tm_err(env, tm);
+		ai_err_bad_tm(env, tm);
 	}
 
 	Value* base = vm_push_args(env, vf, v1);
@@ -207,7 +214,7 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 	Value vf = ai_obj_vlooktm(env, v1, tm);
 
 	if (v_is_nil(vf)) {
-		l_bad_tm_err(env, tm);
+		ai_err_bad_tm(env, tm);
 	}
 
 	Value* base = vm_push_args(env, vf, v1, v2);
@@ -218,7 +225,7 @@ static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
 	Value vf = ai_obj_vlooktm(env, v1, tm);
 
 	if (v_is_nil(vf)) {
-		l_bad_tm_err(env, tm);
+		ai_err_bad_tm(env, tm);
 	}
 
 	Value* base = vm_push_args(env, vf, v1, v2);
@@ -390,7 +397,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		while (unlikely(!v_is_func(vf))) {
 			vf = ai_obj_vlooktm(env, vf, TM_CALL);
 			if (v_is_nil(vf)) {
-				l_bad_tm_err(env, TM_CALL);
+				ai_err_bad_tm(env, TM_CALL);
 			}
 
 			for (Value* p = env->_stack._top; p > base; --p) {
@@ -595,26 +602,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = R[c];
 
-				Value vt;
-				if (v_is_tuple(vb)) {
-					vt = ai_tuple_get(env, v_as_tuple(vb), vc);
-				}
-				else if (v_is_list(vb)) {
-					vt = ai_list_get(env, v_as_list(vb), vc);
-				}
-				else if (v_is_table(vb)) {
-					vt = ai_table_get(env, v_as_table(vb), vc);
-				}
-				else if (v_is_type(vb)) {
-					if (!v_is_str(vc)) {
-						ai_err_bad_get(env, "type", v_nameof(env, vc));
-					}
-					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
-				}
-				else {
-					vt = vm_meta_get(env, vb, vc);
-					reload_stack();
-				}
+				Value vt = ai_vm_get(env, vb, vc);
+				reload_stack();
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -624,23 +613,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				Value vb = R[b];
 
-				Value vt;
-				if (v_is_tuple(vb)) {
-					vt = ai_tuple_geti(env, v_as_tuple(vb), c);
-				}
-				else if (v_is_list(vb)) {
-					vt = ai_list_geti(env, v_as_list(vb), c);
-				}
-				else if (v_is_table(vb)) {
-					vt = ai_table_get(env, v_as_table(vb), v_of_int(c));
-				}
-				else if (v_is_type(vb)) {
-					ai_err_bad_get(env, "type", "int");
-				}
-				else {
-					vt = vm_meta_get(env, vb, v_of_int(c));
-					reload_stack();
-				}
+				Value vt = ai_vm_get(env, vb, v_of_int(c));
+				reload_stack();
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -651,20 +625,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = K[c];
 
-				Value vt;
-				if (v_is_table(vb)) {
-					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
-				}
-				else if (v_is_type(vb)) {
-					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
-				}
-				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), "str");
-				}
-				else {
-					vt = vm_meta_get(env, vb, vc);
-					reload_stack();
-				}
+				Value vt = ai_vm_get(env, vb, vc);
+				reload_stack();
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -675,20 +637,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = K[ex];
 
-				Value vt;
-				if (v_is_table(vb)) {
-					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
-				}
-				else if (v_is_type(vb)) {
-					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
-				}
-				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
-				}
-				else {
-					vt = vm_meta_get(env, vb, vc);
-					reload_stack();
-				}
+				Value vt = ai_vm_get(env, vb, vc);
+				reload_stack();
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -699,20 +649,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = *fun->_caps[b]->_ptr;
 				Value vc = K[c];
 
-				Value vt;
-				if (v_is_table(vb)) {
-					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
-				}
-				else if (v_is_type(vb)) {
-					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
-				}
-				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
-				}
-				else {
-					vt = vm_meta_get(env, vb, vc);
-					reload_stack();
-				}
+				Value vt = ai_vm_get(env, vb, vc);
+				reload_stack();
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -723,20 +661,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = *fun->_caps[b]->_ptr;
 				Value vc = K[ex];
 
-				Value vt;
-				if (v_is_table(vb)) {
-					vt = ai_table_getis(env, v_as_table(vb), v_as_str(vc));
-				}
-				else if (v_is_type(vb)) {
-					vt = ai_type_getis(env, v_as_type(vb), v_as_str(vc));
-				}
-				else if (unlikely(v_is_tuple(vb) || v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), v_nameof(env, vc));
-				}
-				else {
-					vt = vm_meta_get(env, vb, vc);
-					reload_stack();
-				}
+				Value vt = ai_vm_get(env, vb, vc);
+				reload_stack();
 				v_set(env, &R[a], vt);
 				break;
 			}
@@ -748,19 +674,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = R[c];
 
-				if (v_is_list(vb)) {
-					ai_list_set(env, v_as_list(vb), vc, va);
-				}
-				else if (v_is_table(vb)) {
-					ai_table_set(env, v_as_table(vb), vc, va);
-				}
-				else if (v_is_type(vb)) {
-					ai_type_set(env, v_as_type(vb), vc, va);
-				}
-				else {
-					vm_meta_set(env, R[b], R[c], R[a]);
-					reload_stack();
-				}
+				ai_vm_set(env, vb, vc, va);
+				reload_stack();
 				break;
 			}
 			case BC_SETI: {
@@ -770,19 +685,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value va = R[a];
 				Value vb = R[b];
 
-				if (v_is_list(vb)) {
-					ai_list_seti(env, v_as_list(vb), c, va);
-				}
-				else if (v_is_table(vb)) {
-					ai_table_set(env, v_as_table(vb), v_of_int(c), va);
-				}
-				else if (v_is_type(vb)) {
-					ai_err_bad_get(env, v_nameof(env, vb), "int");
-				}
-				else {
-					vm_meta_set(env, R[b], v_of_int(c), R[a]);
-					reload_stack();
-				}
+				ai_vm_set(env, vb, v_of_int(c), va);
+				reload_stack();
 				break;
 			}
 			case BC_SETS: {
@@ -793,19 +697,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = K[c];
 
-				if (v_is_table(vb)) {
-					ai_table_set(env, v_as_table(vb), vc, va);
-				}
-				else if (v_is_type(vb)) {
-					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
-				}
-				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), "str");
-				}
-				else {
-					vm_meta_set(env, vb, vc, va);
-					reload_stack();
-				}
+				ai_vm_set(env, vb, vc, va);
+				reload_stack();
 				break;
 			}
 			case BC_SETSX: {
@@ -816,19 +709,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = R[b];
 				Value vc = K[ex];
 
-				if (v_is_table(vb)) {
-					ai_table_set(env, v_as_table(vb), vc, va);
-				}
-				else if (v_is_type(vb)) {
-					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
-				}
-				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), "str");
-				}
-				else {
-					vm_meta_set(env, vb, vc, va);
-					reload_stack();
-				}
+				ai_vm_set(env, vb, vc, va);
+				reload_stack();
 				break;
 			}
 			case BC_CSETS: {
@@ -839,19 +721,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = *fun->_caps[b]->_ptr;
 				Value vc = K[c];
 
-				if (v_is_table(vb)) {
-					ai_table_set(env, v_as_table(vb), vc, va);
-				}
-				else if (v_is_type(vb)) {
-					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
-				}
-				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), "str");
-				}
-				else {
-					vm_meta_set(env, vb, vc, va);
-					reload_stack();
-				}
+				ai_vm_set(env, vb, vc, va);
+				reload_stack();
 				break;
 			}
 			case BC_CSETSX: {
@@ -862,19 +733,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				Value vb = *fun->_caps[b]->_ptr;
 				Value vc = K[ex];
 
-				if (v_is_table(vb)) {
-					ai_table_set(env, v_as_table(vb), vc, va);
-				}
-				else if (v_is_type(vb)) {
-					ai_type_setis(env, v_as_type(vb), v_as_str(vc), va);
-				}
-				else if (unlikely(v_is_list(vb))) {
-					ai_err_bad_get(env, v_nameof(env, vb), "str");
-				}
-				else {
-					vm_meta_set(env, vb, vc, va);
-					reload_stack();
-				}
+				ai_vm_set(env, vb, vc, va);
+				reload_stack();
 				break;
 			}
 			case BC_NEG: {

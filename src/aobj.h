@@ -24,6 +24,8 @@ typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 typedef struct GLoader GLoader;
 
+typedef GTable GAUser;
+
 /* Object pointer. */
 typedef GObj* a_hobj;
 
@@ -47,24 +49,24 @@ typedef struct Buf Buf;
 #define T_FALSE u32c(1)
 #define T_TRUE u32c(2)
 #define T_PTR u32c(3)
-#define T_USER_TEQ u32c(4)
-#define T_LIST u32c(5)
-#define T_TABLE u32c(6)
-#define T_TYPE u32c(7)
-#define T_FUNC u32c(8)
-#define T_ISTR u32c(9)
-#define T_HSTR u32c(10)
-#define T_TUPLE u32c(11)
-#define T_USER_NEQ u32c(12)
+#define T_LIST u32c(4)
+#define T_TABLE u32c(5)
+#define T_TYPE u32c(6)
+#define T_FUNC u32c(7)
+#define T_ISTR u32c(8)
+#define T_HSTR u32c(9)
+#define T_TUPLE u32c(10)
+#define T_AUSER u32c(11)
+#define T_CUSER u32c(12)
 #define T_INT u32c(14)
 #define T_NAN u32c(15)
 
-#define T__MIN_OBJ T_USER_TEQ
-#define T__MAX_OBJ T_USER_NEQ
+#define T__MIN_OBJ T_LIST
+#define T__MAX_OBJ T_CUSER
 #define T__MIN_NEQ T_HSTR
-#define T__MAX_NEQ T_USER_NEQ
+#define T__MAX_NEQ T_CUSER
 #define T__MIN_NHH T_ISTR
-#define T__MAX_NHH T_USER_NEQ
+#define T__MAX_NHH T_CUSER
 #define T__MAX_FAST u32c(15)
 
 #define T_FLOAT u32c(16)
@@ -236,6 +238,7 @@ always_inline void v_set_ptr(Value* d, void* v) {
 
 typedef struct { a_usize _; } ObjHeadMark[0];
 typedef VTable const* a_vptr;
+typedef void const* a_vslot;
 
 #define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; a_gcnext _gnext; a_trmark _tnext; a_vptr _vptr
 
@@ -254,16 +257,17 @@ struct VTable {
 	/* The size and alignment information of object. */
 	a_u16 _base_size;
 	a_u8 _elem_size;
+	/* The tag of layout. */
+	a_u8 _tag;
 	/* The properties of type. */
-	a_u8 _flags;
+	a_u32 _flags;
 	/* The unique indexed name of the type, equals to the displacement between type object and global. */
-	a_usize _iname;
+	a_usize _iname; /* 0 for no companion type. */
+	/* The string name of the type. */
+	char const* _sname;
 	/* The virtual function pointers. */
-	void* _body[];
+	a_vslot const* _vfps;
 };
-
-#define VTABLE_FLAG_NONE u8c(0x00)
-#define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
 
 #define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
 
@@ -283,10 +287,6 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 }
 
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
-
-#define g_is(p,f) ((p)->_vptr->_iname == env_type_iname(f))
-
-#define v_is_user(v) (V_GET_TAG((v)._) >> 1 == T_USER_TEQ >> 1)
 
 /*=========================================================*
  * String
@@ -491,32 +491,43 @@ struct LineInfo {
 
 #define v_is_func(v) v_is(v, T_FUNC)
 
-#define g_is_func(p) g_is(p, ALO_TFUNC)
-
 always_inline GFun* v_as_func(Value v) {
 	assume(v_is_func(v), "not function.");
 	return g_cast(GFun, v_as_obj(v));
 }
 
 /*=========================================================*
+ * Userdata
+ *=========================================================*/
+
+#define v_is_auser(v) v_is(v, T_AUSER)
+
+always_inline GAUser* v_as_auser(Value v) {
+	assume(v_is_auser(v), "not userdata.");
+	return g_cast(GAUser, v_as_obj(v));
+}
+
+#define v_is_cuser(v) v_is(v, T_CUSER)
+
+#define v_is_user(v) v_is_in(v, T_AUSER, T_CUSER)
+
+/*=========================================================*
  * Type
  *=========================================================*/
 
-typedef void* a_vslot;
+#define VTABLE_FLAG_NONE        u8c(0x00)
+#define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
+
+#define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
 
 #define METHOD_LIST(_) \
-	/* Object                                            */ \
-	_( 0, drop  ,    void, Global* g , a_hobj             ) \
-	_( 1, mark  ,    void, Global* g , a_hobj             ) \
-	/* Special Key       ,                               */ \
-	_( 2, hash  ,  a_hash, a_henv env, a_hobj             ) \
-	_( 3, equals,  a_bool, a_henv env, a_hobj, Value other) \
-	/* Closeable         ,                               */ \
-	_( 2, close ,    void, a_henv env, a_hobj             )
+	_( 0, drop  ,    void, Global* g                   ) \
+	_( 1, mark  ,    void, Global* g                   ) \
+	_( 2, close ,    void, a_henv env                  )
 
 /* Method Slot Table. */
 union MST {
-#define DEF(id,name,ret,params...) struct { a_vslot M_cat(_off_,name)[id]; ret (*name)(params);  };
+#define DEF(i,n,r,p1,pn...) struct { a_vslot M_cat(_off_,n)[i]; r (*n)(p1, a_hobj, ##pn);  };
 	METHOD_LIST(DEF)
 #undef DEF
 };
@@ -526,8 +537,8 @@ union MST {
 
 #define g_vcheck(p,f) ({ \
 	a_vptr _v2 = (p)->_vptr; \
-	a_vslot _f2 = _v2->_body[vfp_loc(f)]; \
-	assume(_f2 != null, "method '@%llu:"#f"' is null.", (_v2)->_iname); \
+	a_vslot _f2 = _v2->_vfps[vfp_loc(f)]; \
+	assume(_f2 != null, "method '@%zu:"#f"' is null.", (_v2)->_iname); \
 	cast(typeof(cast(union MST*, null)->f), _f2); \
 })
 
@@ -586,15 +597,8 @@ struct GLoader {
 	Loader _body;
 };
 
-static_assert(offsetof(GType, _hash) == offsetof(GStr, _hash));
-
 #define TYPE_FLAG_NONE u16c(0)
 #define TYPE_FLAG_FAST_TM(tm) (u16c(1) << (tm))
-#define TYPE_FLAG_PLAIN u16c(0x0100)
-#define TYPE_FLAG_FAST_LEN u16c(0x0200)
-#define TYPE_FLAG_FAST_HASH u16c(0x0400)
-#define TYPE_FLAG_STATIC u16c(0x0800)
-#define TYPE_FLAG_READY u16c(0x8000)
 
 #define v_is_type(v) v_is(v, T_TYPE)
 
@@ -712,7 +716,6 @@ struct Global {
 		GType _table;
 		GType _func;
 		GType _type;
-		GType _proto;
 		GType _route;
 		GType _float;
 		GType _buf;
@@ -768,7 +771,15 @@ BUF_STRUCT_DECLARE(GBuf, a_byte, GOBJ_STRUCT_HEADER);
 #define v_has_trivial_equals(v) (!v_is_in(v, T__MIN_NEQ, T__MAX_NEQ))
 
 /* Identity hashcode. */
-#define v_trivial_hash_unchecked(v) ((v)._)
+always_inline a_hash v_trivial_hash_unchecked(Value v) {
+	a_u32 h = v._ * u32c(0xcc9e2d51);
+	h = (h << 15) | (h >> 17);
+	h *= u32c(0x1b873593);
+	h ^= h >> 17;
+	h *= u32c(0x85ebca6b);
+	h ^= h >> 13;
+	return h;
+}
 
 always_inline a_hash v_trivial_hash(Value v) {
 	assume(v_has_trivial_hash(v), "no trivial hash.");
@@ -786,11 +797,12 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 intern char const ai_obj_type_names[][8];
 
 always_inline GType* g_typeof(a_henv env, a_hobj p) {
+	assume(env->_vptr->_iname != 0, "object does not have type.");
 	return ptr_disp(GType, G(env), p->_vptr->_iname);
 }
 
-always_inline char const* g_nameof(a_henv env, a_hobj p) {
-	return str2ntstr(g_typeof(env, p)->_name);
+always_inline char const* g_nameof(unused a_henv env, a_hobj p) {
+	return p->_vptr->_sname;
 }
 
 always_inline GType* v_typeof(a_henv env, Value v) {
@@ -830,14 +842,6 @@ always_inline char const* v_nameof(a_henv env, Value v) {
 }
 
 intern char const ai_obj_names[NAME_POS__MAX];
-
-inline a_hash ai_obj_trivial_hash(unused a_henv env, a_hobj self) {
-	return v_trivial_hash_unchecked(v_of_obj(self));
-}
-
-inline a_bool ai_obj_trivial_equals(unused a_henv env, a_hobj self, Value other) {
-	return v_trivial_equals_unchecked(v_of_obj(self), other);
-}
 
 intern void ai_obj_boost(a_henv env, void* blk);
 

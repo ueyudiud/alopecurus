@@ -194,8 +194,10 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 
 #define alo_tostr(env,id) alo_tolstr(env, id, NULL)
 
+#define ALO_NEWTYPE_FLAG_STATIC 0x0001
+
 /* Type operations. */
-ALO_EXPORT void (alo_newtype)(a_henv env, char const* name);
+ALO_EXPORT void (alo_newtype)(a_henv env, char const* name, a_flags options);
 ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
 ALO_EXPORT char const* (alo_typename)(a_henv env, a_htype type);
 ALO_EXPORT a_msg (alo_looktype)(a_henv env, char const* src, a_usize len);

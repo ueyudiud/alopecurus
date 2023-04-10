@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include "astr.h"
+#include "atype.h"
 
 #include "aobj.h"
 
@@ -22,8 +23,8 @@ char const ai_obj_type_names[][8] = {
 	[T_TABLE] = "table",
 	[T_FUNC] = "func",
 	[T_TYPE] = "type",
-	[T_USER_TEQ] = "user",
-	[T_USER_NEQ] = "user",
+	[T_AUSER] = "user",
+	[T_CUSER] = "user",
 	[T_NAN] = "float",
 	[T_FLOAT] = "float"
 };
@@ -41,7 +42,9 @@ static void* l_intern(a_henv env, void* blk, GStr** dst, a_lstr str, a_u32 tag) 
 }
 
 void ai_obj_boost(a_henv env, void* blk) {
-	GStr** dst = G(env)->_names;
+	Global* g = G(env);
+
+	GStr** dst = g->_names;
 	/* Intern empty string. */
 	blk = l_intern(env, blk, dst, new(a_lstr) {null, 0}, NAME__EMPTY);
 
@@ -52,4 +55,17 @@ void ai_obj_boost(a_henv env, void* blk) {
 #define TMINT(id,name) blk = l_intern(env, blk, dst, name_str_tm(id), NAME_TM_##id);
 	TM_LIST(TMINT)
 #undef TMINT
+
+	ai_type_init(env, &g->_types._nil, ALO_TNIL, NAME_KW_NIL);
+	ai_type_init(env, &g->_types._bool, ALO_TBOOL, NAME__NORMAL);
+	ai_type_init(env, &g->_types._int, ALO_TINT, NAME__NORMAL);
+	ai_type_init(env, &g->_types._float, ALO_TFLOAT, NAME__NORMAL);
+	ai_type_init(env, &g->_types._ptr, ALO_TPTR, NAME__NORMAL);
+	ai_type_init(env, &g->_types._str, ALO_TSTR, NAME__NORMAL);
+	ai_type_init(env, &g->_types._list, ALO_TLIST, NAME__NORMAL);
+	ai_type_init(env, &g->_types._table, ALO_TTABLE, NAME__NORMAL);
+	ai_type_init(env, &g->_types._route, ALO_TROUTE, NAME__NORMAL);
+	ai_type_init(env, &g->_types._func, ALO_TFUNC, NAME__NORMAL);
+	ai_type_init(env, &g->_types._type, ALO_TTYPE, NAME__NORMAL);
+	ai_type_init(env, &g->_types._buf, ALO_TUSER, NAME__NORMAL);
 }

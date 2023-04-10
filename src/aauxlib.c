@@ -15,6 +15,7 @@
 #include "atype.h"
 #include "aenv.h"
 #include "agc.h"
+#include "avm.h"
 #include "adbg.h"
 #include "aapi.h"
 
@@ -248,9 +249,20 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		GFun* fun = ai_dbg_get_func(env, frame);
 		assume(fun != null);
 		GProto* proto = fun->_proto;
-		char const* file = proto->_dbg_file != null ? str2ntstr(proto->_dbg_file) : null;
-		a_insn const* pc = head ? frame->_pc : frame->_pc - 1;
-		a_u32 line = ai_dbg_get_line(proto, pc);
+		a_insn const* pc = frame->_pc - 1;
+		char const* file;
+		char const* name;
+		a_u32 line;
+		if (!(proto->_flags & FUN_FLAG_NATIVE)) {
+			file = proto->_dbg_file != null ? str2ntstr(proto->_dbg_file) : null;
+			line = ai_dbg_get_line(proto, pc);
+			name = proto->_name != null ? str2ntstr(proto->_name) : null;
+		}
+		else {
+			file = null;
+			line = 0;
+			name = null;
+		}
 		if (head) {
 			if (file != null) {
 				ai_buf_xputfs(env, buf, "%s:%u: ", file, line);
@@ -284,11 +296,14 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 			assume(file != null);
 			ai_buf_xputfs(env, buf, "at %s:%u", file, line);
 		}
+		else if (proto->_flags & FUN_FLAG_NATIVE) {
+			ai_buf_xputs(env, buf, "at [C]");
+		}
 		else {
 			ai_buf_xputfs(env, buf, "at %s", file ?: "?");
 		}
-		if (proto->_name != null) {
-			ai_buf_xputfs(env, buf, " (%s)", str2ntstr(proto->_name));
+		if (name != null) {
+			ai_buf_xputfs(env, buf, " (%s)", name);
 		}
 	}
 	GStr* str = ai_str_new(env, buf->_ptr, buf->_len);
@@ -308,10 +323,35 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 	return ALO_EINVAL;
 }
 
+void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
+	Value v = api_elem(env, id);
+	api_check(v_is_type(v), "type expected.");
+
+	GType* type = v_as_type(v);
+
+	ai_type_hint(env, type, nb);
+	for (a_usize i = 0; i < nb; ++i) {
+		aloL_Entry const* b = &bs[i];
+		assume(b->name != null);
+
+		GStr* key = ai_str_new(env, b->name, strlen(b->name));
+		Value value = v_of_nil();
+
+		if (b->fptr != null) {
+			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
+			value = v_of_obj(fun);
+		}
+
+		ai_type_setis(env, type, key, value);
+	}
+
+	ai_gc_trigger(env);
+}
+
 void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
 	api_check_slot(env, 1);
 
-	GType* type = ai_type_alloc(env, 0);
+	GType* type = ai_type_alloc(env, 0, null);
 	v_set_obj(env, api_incr_stack(env), type);
 
 	type->_name = ai_str_new(env, name, strlen(name));
@@ -333,8 +373,6 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb
 		ai_type_setis(env, type, key, value);
 	}
 
-	ai_type_ready(env, type);
-
 	ai_gc_trigger(env);
 }
 
@@ -347,7 +385,7 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
 	a_htype type = v_as_type(api_elem(env, -1));
 	ai_type_cache(env, null, type);
-	ai_table_set(env, v_as_table(G(env)->_global), v_of_obj(type->_name), v_of_obj(type));
+	ai_vm_set(env, G(env)->_global, v_of_obj(type->_name), v_of_obj(type));
 	api_decr_stack(env);
 }
 

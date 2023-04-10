@@ -412,19 +412,23 @@ a_usize alo_rawlen(a_henv env, a_isize id) {
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
 			GTuple* value = v_as_tuple(v);
-			return cast(a_usize, value->_len);
+			return value->_len;
 		}
 		case T_LIST: {
 			GList* value = v_as_list(v);
-			return cast(a_usize, value->_len);
+			return value->_len;
 		}
 		case T_TABLE: {
 			GTable* value = v_as_table(v);
-			return cast(a_usize, value->_len);
+			return value->_len;
 		}
 		case T_TYPE: {
 			GType* value = v_as_type(v);
-			return cast(a_usize, value->_len);
+			return value->_len;
+		}
+		case T_AUSER: {
+			GAUser* value = v_as_auser(v);
+			return value->_len;
 		}
 		default:
 			api_panic("unsupported operation.");
@@ -434,32 +438,44 @@ a_usize alo_rawlen(a_henv env, a_isize id) {
 a_tag alo_rawgeti(a_henv env, a_isize id, a_int key) {
 	api_check_elem(env, 1);
 
-	Value const* v = api_roslot(env, id);
-	if (v == null) return ALO_TEMPTY;
+	Value v = api_elem(env, id);
 
-	switch (v_get_tag(*v)) {
+	switch (v_get_tag(v)) {
 		case T_TUPLE: {
-			GTuple* value = v_as_tuple(*v);
-			v = ai_tuple_refi(env, value, key);
+			GTuple* value = v_as_tuple(v);
+			Value const* pv = ai_tuple_refi(env, value, key);
+			if (pv == null) return ALO_TEMPTY;
+			v = *pv;
 			break;
 		}
 		case T_LIST: {
-			GList* value = v_as_list(*v);
-			v = ai_list_refi(env, value, key);
+			GList* value = v_as_list(v);
+			Value const* pv = ai_list_refi(env, value, key);
+			if (pv == null) return ALO_TEMPTY;
+			v = *pv;
 			break;
 		}
 		case T_TABLE: {
-			GTable* value = v_as_table(*v);
-			v = ai_table_refi(env, value, key);
+			GTable* value = v_as_table(v);
+			a_hash hash;
+			Value const* pv = ai_table_ref(env, value, v_of_int(key), &hash);
+			if (pv == null) return ALO_TEMPTY;
+			v = *pv;
+			break;
+		}
+		case T_AUSER: {
+			GAUser* value = v_as_auser(v);
+			a_hash hash;
+			Value const* pv = ai_table_ref(env, value, v_of_int(key), &hash);
+			if (pv == null) return ALO_TEMPTY;
+			v = *pv;
 			break;
 		}
 		default:
-			api_panic("unsupported operation.");
+			api_panic("bad value for 'geti' operation.");
 	}
-	if (v != null) {
-		v_cpy(env, api_incr_stack(env), v);
-	}
-	return v != null ? tag_of(env, *v) : ALO_TEMPTY;
+
+	return tag_of(env, v);
 }
 
 void alo_insert(a_henv env, a_isize id) {
@@ -588,15 +604,15 @@ static a_htype l_use_type(GType* type) {
 	return type;
 }
 
-void alo_newtype(a_henv env, char const* name) {
+void alo_newtype(a_henv env, char const* name, a_flags options) {
 	api_check_slot(env, 1);
 
-	GType* type = ai_type_alloc(env, 4);  //TODO
+	GType* type = options & ALO_NEWTYPE_FLAG_STATIC ? ai_type_alloc(env, 0, null) : ai_atype_new(env);
 	v_set_obj(env, api_incr_stack(env), type);
 
-	type->_name = ai_str_new(env, name, strlen(name));
-
-	ai_type_ready(env, type);
+	if (name != null) {
+		type->_name = ai_str_new(env, name, strlen(name));
+	}
 
 	ai_gc_trigger(env);
 }
@@ -611,12 +627,7 @@ a_htype alo_typeof(a_henv env, a_isize id) {
 }
 
 char const* alo_typename(unused a_henv env, a_htype type) {
-	if (type == null) {
-		return "empty";
-	}
-	else {
-		return str2ntstr(type->_name);
-	}
+	return type != null ? str2ntstr(type->_name) : "empty";
 }
 
 a_htype alo_opentype(a_henv env, a_isize id) {
@@ -650,7 +661,11 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	GFun* out;
 	api_check_slot(env, 1);
 	id_env = alo_absindex(env, id_env);
-	a_msg msg = ai_parse(env, fun, ctx, l_get_str(env, id_file), l_get_str(env, id_name), options, &out);
+
+	GStr* file = l_get_str(env, id_file);
+	GStr* name = l_get_str(env, id_name);
+
+	a_msg msg = ai_parse(env, fun, ctx, file, name, options, &out);
 	if (likely(msg == ALO_SOK)) {
 		v_set_obj(env, api_incr_stack(env), out);
 		if (out->_proto->_ncap > 0) {

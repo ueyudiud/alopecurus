@@ -9,6 +9,18 @@
 #include "akw.h"
 #include "aop.h"
 
+#define PT_LIST(_) \
+	_(BOOL, "bool") \
+	_(INT, "int") \
+	_(PTR, "ptr") \
+	_(STR, "str") \
+	_(TUPLE, "tuple") \
+	_(LIST, "list") \
+	_(TABLE, "table") \
+	_(FUNC, "func") \
+	_(ROUTE, "route") \
+	_(user, "user")
+
 enum {
     NAME__NORMAL,
 

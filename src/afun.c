@@ -121,6 +121,7 @@ static GFun* fun_new(a_henv env, VTable const* vptr, GProto* proto, a_u32 ncap) 
 	self->_vptr = vptr;
 	self->_proto = proto;
 	self->_len = ncap;
+	self->_sym = 0;
 	return self;
 }
 
@@ -339,7 +340,10 @@ void ai_proto_drop(Global* g, GProto* self) {
 static VTable const afun_vtable = {
 	._mask = V_MASKED_TAG(T_FUNC),
 	._iname = env_type_iname(_func),
-	._body = {
+	._sname = "func",
+	._base_size = sizeof(GFun),
+	._elem_size = sizeof(RcCap*),
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, afun_drop),
 		vfp_def(mark, afun_mark)
 	}
@@ -348,22 +352,22 @@ static VTable const afun_vtable = {
 static VTable const cfun_vtable = {
 	._mask = V_MASKED_TAG(T_FUNC),
 	._iname = env_type_iname(_func),
+	._sname = "func",
 	._base_size = sizeof(GFun),
 	._elem_size = sizeof(Value),
 	._flags = VTABLE_FLAG_NONE,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, cfun_drop),
 		vfp_def(mark, cfun_mark)
 	}
 };
 
 static VTable const proto_vtable = {
-	._mask = V_MASKED_TAG(T_USER_TEQ),
-	._iname = env_type_iname(_proto),
+	._mask = V_MASKED_TAG(T_CUSER),
 	._base_size = 0,
 	._elem_size = 1,
 	._flags = VTABLE_FLAG_NONE,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, ai_proto_drop),
 		vfp_def(mark, proto_mark)
 	}

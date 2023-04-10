@@ -116,10 +116,11 @@ void ai_list_seti(a_henv env, GList* self, a_int index, Value value) {
 static VTable const list_vtable = {
 	._mask = V_MASKED_TAG(T_LIST),
 	._iname = env_type_iname(_list),
+	._sname = "list",
 	._base_size = sizeof(GList),
 	._elem_size = 0,
 	._flags = VTABLE_FLAG_NONE,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(mark, list_mark),
 		vfp_def(drop, list_drop)
 	}

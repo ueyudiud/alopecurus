@@ -118,9 +118,13 @@ static void route_drop(Global* g, GRoute* self) {
 }
 
 static VTable const route_vtable = {
-	._mask = V_MASKED_TAG(T_USER_TEQ),
+	._mask = V_MASKED_TAG(T_CUSER),
 	._iname = env_type_iname(_route),
-	._body = {
+	._sname = "route",
+	._base_size = sizeof(Route),
+	._elem_size = 0,
+	._flags = VTABLE_FLAG_NONE,
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, route_drop),
 		vfp_def(mark, route_mark)
 	}
@@ -165,9 +169,6 @@ static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env2route(env));
 	ai_str_boost(env);
 	ai_obj_boost(env, m->_reserved);
-
-	GTable* gtable = ai_table_new(env);
-	v_set_obj(env, &G(env)->_global, gtable);
 }
 
 static a_usize sizeof_MRoute() {

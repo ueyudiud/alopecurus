@@ -253,10 +253,11 @@ static void hstr_drop(Global* g, GStr* self) {
 static VTable const istr_vtable = {
 	._mask = V_MASKED_TAG(T_ISTR),
 	._iname = env_type_iname(_str),
+	._sname = "str",
 	._base_size = sizeof(IStr),
 	._elem_size = sizeof(a_byte),
 	._flags = VTABLE_FLAG_GREEDY_MARK,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, istr_drop)
 	}
 };
@@ -264,10 +265,11 @@ static VTable const istr_vtable = {
 static VTable const hstr_vtable = {
 	._mask = V_MASKED_TAG(T_HSTR),
 	._iname = env_type_iname(_str),
+	._sname = "str",
 	._base_size = sizeof(GStr),
 	._elem_size = sizeof(a_byte),
 	._flags = VTABLE_FLAG_GREEDY_MARK,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, hstr_drop)
 	}
 };

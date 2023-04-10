@@ -9,6 +9,7 @@
 #include "astr.h"
 #include "amem.h"
 #include "agc.h"
+#include "avm.h"
 #include "aapi.h"
 
 #include "atable.h"
@@ -225,7 +226,7 @@ Value const* ai_table_refis(a_henv env, GTable* self, GStr* key) {
 	return table_find_id(env, self, key->_hash, v_of_obj(key));
 }
 
-static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* restrict phash) {
+Value* ai_table_ref(a_henv env, GTable* self, Value key, a_u32* restrict phash) {
 	if (likely(v_is_istr(key))) {
 		GStr* str = v_as_str(key);
 		*phash = str->_hash;
@@ -249,21 +250,14 @@ static Value* table_get_opt(a_henv env, GTable* self, Value key, a_u32* restrict
 		return table_find_id(env, self, *phash, key);
 	}
 	else {
-		GObj* obj = v_as_obj(key);
+		*phash = ai_vm_hash(env, key);
 
-		*phash = g_vcall(env, obj, hash);
-
-#define test(n) g_vcall(env, obj, equals, (n)->_key)
+#define test(n) ai_vm_equals(env, key, (n)->_key)
 #define con(n) ({ return &(n)->_value; })
 		return map_find_template(self, *phash, test, hnode_is_empty, con);
 #undef test
 #undef con
 	}
-}
-
-Value const* ai_table_ref(a_henv env, GTable* self, Value key) {
-	a_u32 hash;
-	return table_get_opt(env, self, key, &hash);
 }
 
 a_usize alo_hnext(a_henv env, a_isize id, a_ritr itr) {
@@ -327,24 +321,29 @@ Value ai_table_getis(a_henv env, GTable* self, GStr* key) {
 
 Value ai_table_get(a_henv env, GTable* self, Value key) {
 	a_u32 hash;
-	Value const* value = table_get_opt(env, self, key, &hash);
+	Value const* value = ai_table_ref(env, self, key, &hash);
 	return value != null ? *value : v_of_nil();
 }
 
 void ai_table_set(a_henv env, GTable* self, Value key, Value value) {
-	a_u32 hash;
-	Value* ref = table_get_opt(env, self, key, &hash);
+	a_hash hash;
+	Value* ref = ai_table_ref(env, self, key, &hash);
 	if (ref != null) {
 		v_set(env, ref, value);
 		ai_gc_barrier_backward_val(env, self, value);
 	}
 	else {
 		ai_table_hint(env, self, 1);
-		table_emplace(env, self, key, hash, value);
-		ai_gc_barrier_backward_val(env, self, key);
-		ai_gc_barrier_backward_val(env, self, value);
-		self->_len += 1;
+		ai_table_put(env, self, key, hash, value);
 	}
+}
+
+void ai_table_put(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
+	assume(self->_ptr != null && self->_len + 1 <= (self->_hmask + 1) * ALOI_TABLE_LOAD_FACTOR, "need hint before emplace.");
+	table_emplace(env, self, key, hash, value);
+	ai_gc_barrier_backward_val(env, self, key);
+	ai_gc_barrier_backward_val(env, self, value);
+	self->_len += 1;
 }
 
 void ai_table_drop(Global* g, GTable* self) {
@@ -369,10 +368,11 @@ void ai_table_mark(Global* g, GTable* self) {
 static VTable const table_vtable = {
 	._mask = V_MASKED_TAG(T_TABLE),
 	._iname = env_type_iname(_table),
+	._sname = "table",
 	._base_size = sizeof(GTable),
 	._elem_size = 0,
 	._flags = VTABLE_FLAG_NONE,
-	._body = {
+	._vfps = (a_vslot[]) {
 		vfp_def(drop, ai_table_drop),
 		vfp_def(mark, ai_table_mark)
 	}
