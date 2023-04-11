@@ -2561,6 +2561,7 @@ static void l_topR(Parser* par, InoutExpr e) {
 		case EXPR_DYN_AC: {
 			a_u32 reg = bc_load_a(par->_code[e->_label]);
 			assume(par->_scope->_top_reg == reg, "vararg are not in the top.");
+			par->_scope->_top_reg = reg + 1;
 			expr_tmp(e, reg, e->_line);
 			break;
 		}
@@ -2590,6 +2591,8 @@ static void l_anyR(Parser* par, InoutExpr e) {
 			a_insn* pc = &par->_code[e->_label];
 			a_u32 reg = bc_load_a(*pc);
 			bc_swap_c(pc, 1);
+			assume(par->_scope->_top_reg == reg, "vararg are not in the top.");
+			par->_scope->_top_reg = reg + 1;
 			expr_tmp(e, reg, e->_line);
 			break;
 		}
