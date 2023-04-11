@@ -306,7 +306,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 		return cache;
 	}
 
-	run buffered: { /* Cannot aasm string trivially, try to compute string size and create buffer. */
+	run buffered: { /* Cannot build string trivially, try to compute string size and create buffer. */
 		GBuf* buf = ai_buf_new(env);
 		vm_push_args(env, v_of_obj(buf));
 
@@ -319,43 +319,60 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				GStr* val = v_as_str(v);
 				ai_buf_putls(env, buf, val->_data, val->_len);
 			}
-			else switch (v_get_tag(v)) {
-				case T_NIL: {
-					ai_buf_puts(env, buf, "nil");
-					break;
-				}
-				case T_FALSE: {
-					ai_buf_puts(env, buf, "false");
-					break;
-				}
-				case T_TRUE: {
-					ai_buf_puts(env, buf, "true");
-					break;
-				}
-				case T_INT: {
-					if (unlikely(ai_fmt_nputi(env, buf, v_as_int(v))))
-						ai_mem_nomem(env);
-					break;
-				}
-				case T_PTR: {
-					if (unlikely(ai_fmt_nputp(env, buf, v_as_ptr(v))))
-						ai_mem_nomem(env);
-					break;
-				}
-				case T_HSTR:
-				case T_ISTR: {
-					GStr* str = v_as_str(v);
-					ai_buf_putls(env, buf, str->_data, str->_len);
-					break;
-				}
-				default: {
-					if (v_is_obj(v)) {
-						//TODO for userdata.
-						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+			else {
+				switch (v_get_tag(v)) {
+					case T_NIL: {
+						ai_buf_puts(env, buf, "nil");
+						break;
 					}
-					else if (unlikely(ai_fmt_nputf(env, buf, v_as_float(v))))
-						ai_mem_nomem(env);
-					break;
+					case T_FALSE: {
+						ai_buf_puts(env, buf, "false");
+						break;
+					}
+					case T_TRUE: {
+						ai_buf_puts(env, buf, "true");
+						break;
+					}
+					case T_INT: {
+						ai_fmt_puti(env, buf, v_as_int(v));
+						break;
+					}
+					case T_PTR: {
+						ai_fmt_putp(env, buf, v_as_ptr(v));
+						break;
+					}
+					case T_HSTR:
+					case T_ISTR: {
+							GStr* str = v_as_str(v);
+							ai_buf_putls(env, buf, str->_data, str->_len);
+							break;
+						}
+					case T_TUPLE:
+					case T_LIST:
+					case T_TABLE:
+					case T_FUNC:
+					case T_CUSER:
+					case T_AUSER:
+					case T_TYPE: {
+						Value vf = ai_obj_vlooktm(env, v, TM_STR);
+						if (v_is_nil(vf)) {
+							ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+						}
+						Value* args = vm_push_args(env, vf, v);
+						StkPtr bptr = val2stk(env, base);
+						Value vs = ai_vm_call(env, args, RFLAGS_META_CALL);
+						base = stk2val(env, bptr);
+						if (!v_is_str(vs)) {
+							ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
+						}
+						GStr* str = v_as_str(v);
+						ai_buf_putls(env, buf, str->_data, str->_len);
+						break;
+					}
+					default: {
+						ai_fmt_putf(env, buf, v_as_float(v));
+						break;
+					}
 				}
 			}
 			if (i == n) break;
@@ -364,7 +381,6 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 
 		GStr* result = ai_buf_tostr(env, buf);
 		ai_buf_deinit(G(env), buf);
-		env->_stack._top -= 1;
 
 		return result;
 	}
@@ -1246,8 +1262,10 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				loadB();
 				loadC();
 
-				GStr* st = vm_cat(env, &R[b], c != 0 ? c - 1 : cast(a_usize, env->_stack._top - &R[b]));
+				env->_stack._top = &R[b + c];
+				GStr* st = vm_cat(env, &R[b], c);
 				v_set_obj(env, &R[a], st);
+				adjust_top();
 
 				check_gc();
 				break;

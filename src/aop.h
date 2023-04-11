@@ -30,7 +30,8 @@
 	_(NEG, "__neg__")      \
 	_(BIT_NOT, "__bnot__") \
 	_(UNBOX, "__unbox__")  \
-	_(CALL, "__call__")
+	_(CALL, "__call__")    \
+	_(STR, "__str__")
 
 enum {
 #define TMDEF(id,name) M_cat(TM_,id),

@@ -50,11 +50,14 @@ enum {
 
 enum {
     CHANNEL_NORMAL = 0x0,
-    CHANNEL_TSTR_ESCAPE = 0x2,
-    CHANNEL_TSTR_BODY = 0x3,
-    CHANNEL_MTSTR_ESCAPE = 0x4,
-    CHANNEL_MTSTR_BODY = 0x5
+    CHANNEL_ISTR_ESCAPE = 0x2,
+    CHANNEL_ISTR_BODY = 0x3,
+    CHANNEL_MISTR_ESCAPE = 0x4,
+    CHANNEL_MISTR_BODY = 0x5
 };
+
+static_assert((CHANNEL_ISTR_BODY ^ 1) == CHANNEL_ISTR_ESCAPE);
+static_assert((CHANNEL_MISTR_BODY ^ 1) == CHANNEL_MISTR_ESCAPE);
 
 struct Token {
     a_i16 _tag;

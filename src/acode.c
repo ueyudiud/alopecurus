@@ -1362,6 +1362,7 @@ static void l_va_push(Parser* par, InoutExpr es, InExpr e, a_line line) {
 
 	if (es->_kind == EXPR_UNIT) {
 		expr_copy(es, e);
+		return;
 	}
 	else if (unlikely(es->_kind == EXPR_NEVER)) {
 		return;
@@ -1599,19 +1600,19 @@ a_u32 ai_code_args_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_lin
 	}
 }
 
-static a_bool l_try_append(Parser* par, QBuf* buf, InExpr e) {
+static a_bool l_try_fold_append(Parser* par, QBuf* buf, InExpr e) {
 	switch (e->_kind) {
 		case EXPR_INT: {
-			l_check_alloc(ai_fmt_nputi(par->_env, buf, e->_int));
+			ai_fmt_puti(par->_env, buf, e->_int);
 			return true;
 		}
 		case EXPR_FLOAT: {
-			l_check_alloc(ai_fmt_nputf(par->_env, buf, e->_float));
+			ai_fmt_putf(par->_env, buf, e->_float);
 			return true;
 		}
 		case EXPR_STR: {
 			GStr* str = e->_str;
-			l_check_alloc(ai_buf_nputls(par->_env, buf, str->_data, str->_len));
+			ai_buf_putls(par->_env, buf, str->_data, str->_len);
 			return true;
 		}
 		default: {
@@ -1628,7 +1629,7 @@ static GStr* buf_to_str(Parser* par, QBuf* buf) {
 
 void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line) {
 	if (unlikely(e->_kind == EXPR_NEVER)) return;
-	if (l_try_append(par, &ce->_buf, e)) {
+	if (l_try_fold_append(par, &ce->_buf, e)) {
 		if (par->_qbq != &ce->_buf) {
 			/* Link queue. */
 			ce->_buf._last = par->_qbq;
@@ -1638,14 +1639,14 @@ void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line) {
 	else if (ce->_buf._len > 0) {
 		l_dynR(par, e); /* Drop used register. */
 
-		a_u32 reg = l_alloc_stack(par, line);
-		l_fixR(par, e, l_alloc_stack(par, line));
+		a_u32 reg = l_succ_alloc_stack(par, 2, line);
+		l_fixR(par, e, reg + 1);
 
 		GStr* str = buf_to_str(par, &ce->_buf);
 		l_emit_k(par, reg, v_of_obj(str), line);
 		if (ce->_expr->_kind != EXPR_NTMP) {
 			l_topV(par, ce->_expr);
-			ce->_expr->_base = reg;
+			ce->_expr->_args._top = reg + 2;
 		}
 
 		ai_buf_reset(&ce->_buf);
@@ -1657,19 +1658,22 @@ void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line) {
 
 void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 	if (ce->_expr->_kind == EXPR_UNIT) {
-		e->_kind = EXPR_STR;
-		e->_str = buf_to_str(par, &ce->_buf);
-		e->_line = line;
+		ai_code_constS(par, e, buf_to_str(par, &ce->_buf), line);
 	}
 	else {
+		l_topV(par, ce->_expr);
 		if (ce->_buf._len > 0) {
 			GStr* str = buf_to_str(par, &ce->_buf);
 			a_u32 reg = l_alloc_stack(par, line);
+			assume(reg == ce->_expr->_args._top, "not top of stack.");
 			l_emit_k(par, reg, v_of_obj(str), line);
+			ce->_expr->_args._top += 1;
 		}
-		expr_dyn(e, l_emit(par, bc_make_iabc(BC_CAT, DYN, ce->_expr->_base, par->_scope->_top_reg - ce->_expr->_base), line));
+		Args* args = &ce->_expr->_args;
+		expr_dyn(e, l_emit(par, bc_make_iabc(BC_CAT, DYN, args->_base, args->_top - args->_base), line));
 		l_drop_ntmp(par, ce->_expr);
 	}
+
 	/* Check and drop_object string buffer. */
 	if (par->_qbq == &ce->_buf) {
 		l_bdel(par, ce->_buf);

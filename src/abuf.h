@@ -26,9 +26,8 @@ always_inline a_msg ai_buf_ngrow(a_henv env, void* raw_buf, a_usize new_cap, a_u
         return ALO_ENOMEM;
     a_usize old_cap = buf->_cap;
     void* ptr = ai_mem_nrealloc(env, buf->BUF_PTR_REF, size * old_cap, size * new_cap);
-    if (unlikely(ptr == null)) {
+    if (unlikely(ptr == null))
 		return ALO_ENOMEM;
-	}
 	buf->BUF_PTR_REF = ptr;
 	buf->_cap = new_cap;
     return ALO_SOK;

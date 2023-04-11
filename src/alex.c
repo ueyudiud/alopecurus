@@ -930,9 +930,9 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 	return TK_STRING;
 }
 
-static a_i32 l_scan_template_string_escape(Lexer* lex, Token* tk);
+static a_i32 l_scan_interpolated_string_escape(Lexer* lex, Token* tk);
 
-static a_i32 l_scan_template_string_body(Lexer* lex, Token* tk) {
+static a_i32 l_scan_interpolated_string_body(Lexer* lex, Token* tk) {
 	while (!l_testskip(lex, '\"')) {
 		switch (l_peek(lex)) {
 			case ALO_ESTMUF:
@@ -940,15 +940,10 @@ static a_i32 l_scan_template_string_body(Lexer* lex, Token* tk) {
 			case '\n':
 				ai_lex_error(lex, "unclosed string.");
 			case '$': {
-				if (lex->_buf._len != 0) {
-					tk->_str = l_to_str(lex);
-					return TK_TSTRING;
-				}
-				else {
-					lex->_channel = CHANNEL_TSTR_ESCAPE;
-					l_skip(lex);
-					return l_scan_template_string_escape(lex, tk);
-				}
+				tk->_str = l_to_str(lex);
+				lex->_channel = CHANNEL_ISTR_ESCAPE;
+				l_skip(lex);
+				return TK_TSTRING;
 			}
 			default: {
 				l_scan_echar(lex);
@@ -961,7 +956,7 @@ static a_i32 l_scan_template_string_body(Lexer* lex, Token* tk) {
 	return TK_STRING;
 }
 
-static a_i32 l_scan_multiline_template_string_body(Lexer* lex, Token* tk) {
+static a_i32 l_scan_multiline_interpolated_string_body(Lexer* lex, Token* tk) {
 	/* Multiline string. */
 	a_u32 indent = lex->_scope->_indent;
 	if (indent > 0) {
@@ -982,13 +977,13 @@ static a_i32 l_scan_multiline_template_string_body(Lexer* lex, Token* tk) {
 static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 	if (l_testskip(lex, '\"')) {
 		if (l_testskip(lex, '\"')) {
-			l_switch_scope(lex, CHANNEL_MTSTR_BODY);
+			l_switch_scope(lex, CHANNEL_MISTR_BODY);
 			if (l_testskip(lex, '\n')) {
 				a_i32 n = l_scan_string_indent(lex);
 				check(n);
 				lex->_scope->_indent = n;
 			}
-			return l_scan_multiline_template_string_body(lex, tk);
+			return l_scan_multiline_interpolated_string_body(lex, tk);
 		}
 		else {
 			tk->_str = env_name(lex->_env, NAME__EMPTY);
@@ -996,8 +991,8 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 		}
 	}
 	else {
-		l_switch_scope(lex, CHANNEL_TSTR_BODY);
-		return l_scan_template_string_body(lex, tk);
+		l_switch_scope(lex, CHANNEL_ISTR_BODY);
+		return l_scan_interpolated_string_body(lex, tk);
 	}
 }
 
@@ -1177,7 +1172,7 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
     }
 }
 
-static a_i32 l_scan_template_string_escape(Lexer* lex, Token* tk) {
+static a_i32 l_scan_interpolated_string_escape(Lexer* lex, Token* tk) {
 	a_i32 ch = l_poll(lex);
 	a_u32 channel = lex->_channel ^ 0x1; /* Load body channel. */
 	switch (ch) {
@@ -1208,17 +1203,17 @@ static void l_scan(Lexer* lex, Token* tk) {
 	}
 	else {
 		switch (lex->_channel) { /* Slow path of scanner. */
-			case CHANNEL_TSTR_ESCAPE:
-			case CHANNEL_MTSTR_ESCAPE: {
-				tk->_tag = l_scan_template_string_escape(lex, tk);
+			case CHANNEL_ISTR_ESCAPE:
+			case CHANNEL_MISTR_ESCAPE: {
+				tk->_tag = l_scan_interpolated_string_escape(lex, tk);
 				break;
 			}
-			case CHANNEL_TSTR_BODY: {
-				tk->_tag = l_scan_template_string_body(lex, tk);
+			case CHANNEL_ISTR_BODY: {
+				tk->_tag = l_scan_interpolated_string_body(lex, tk);
 				break;
 			}
-			case CHANNEL_MTSTR_BODY: {
-				tk->_tag = l_scan_multiline_template_string_body(lex, tk);
+			case CHANNEL_MISTR_BODY: {
+				tk->_tag = l_scan_multiline_interpolated_string_body(lex, tk);
 				break;
 			}
 			default: unreachable();
