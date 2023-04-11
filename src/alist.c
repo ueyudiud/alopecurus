@@ -50,7 +50,7 @@ void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
 	ai_list_hint(env, self, len);
 
 	v_cpy_all(env, self->_ptr + self->_len, src, len);
-	self->_len += 1;
+	self->_len += len;
 	/* We assume the elements in source has white value. */
 	if (g_has_black_color(self)) {
 		join_trace(&G(env)->_tr_regray, self);

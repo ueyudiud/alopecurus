@@ -589,6 +589,21 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				check_gc();
 				break;
 			}
+			case BC_LBOX: {
+				loadB();
+				loadC();
+
+				GList* val = ai_list_new(env);
+				v_set_obj(env, env->_stack._top, val);
+				env->_stack._top += 1;
+
+				ai_list_push_all(env, val, &R[b], c);
+				v_set_obj(env, &R[a], val);
+				check_gc();
+
+				adjust_top();
+				break;
+			}
 			case BC_LBOXM: {
 				loadB();
 

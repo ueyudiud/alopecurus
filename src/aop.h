@@ -78,7 +78,7 @@ enum MonadOp {
 enum VarargOp {
 	OP_CALL, OP_RETURN,
 	OP_VA_PUSH, OP_VA_POP,
-	OP_TNEW
+	OP_TNEW, OP_LNEW
 };
 
 #ifdef aloi_op_neg_int

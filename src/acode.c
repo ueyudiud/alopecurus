@@ -789,10 +789,6 @@ static void l_instantiate_branch(Parser* par, InoutExpr e, a_u32 reg) {
 	l_emit(par, bc_make_ia(e->_kind == EXPR_TRY_TRUE ? BC_KT : BC_KF, reg), e->_line);
 }
 
-void ai_code_new_list(Parser* par, InoutExpr e, a_line line) {
-	expr_dyn(e, l_emit(par, bc_make_iabx(BC_LNEW, DYN, 0), line));
-}
-
 void ai_code_new_table(Parser* par, InoutExpr e, a_line line) {
 	expr_dyn(e, l_emit(par, bc_make_iabx(BC_HNEW, DYN, 0), line));
 }
@@ -1367,7 +1363,7 @@ static void l_va_push(Parser* par, InoutExpr es, InExpr e, a_line line) {
 	else if (unlikely(es->_kind == EXPR_NEVER)) {
 		return;
 	}
-	else if (es->_kind != EXPR_NTMP) {
+	else if (es->_kind != EXPR_NTMP && es->_kind != EXPR_NTMPC) {
 		l_topV(par, es);
 	}
 
@@ -1453,6 +1449,37 @@ void ai_code_vararg1(Parser* par, InoutExpr es, a_enum op, a_line line) {
 			}
 
 			expr_dyn(es, l_emit(par, i, line));
+			break;
+		}
+		case OP_LNEW: {
+			l_stbV(par, es);
+			switch (es->_kind) {
+				case EXPR_NEVER: {
+					break;
+				}
+				case EXPR_UNIT: {
+					expr_dyn(es, l_emit(par, bc_make_iabx(BC_LNEW, DYN, 0), line));
+					break;
+				}
+				case EXPR_NTMP: {
+					l_drop_ntmp(par, es);
+
+					Args* args = &es->_args;
+					expr_dyn(es, l_emit(par, bc_make_iabc(BC_LBOX, DYN, args->_base, args->_top - args->_base), line));
+					break;
+				}
+				case EXPR_NTMPC: {
+					Args* args = &es->_args;
+					assume(args->_base == args->_coll, "collector should at bottom of argument pack.");
+					if (args->_top != args->_base + 1) {
+						l_emit(par, bc_make_iabc(BC_LPUSH, args->_base, args->_base + 1, args->_top - args->_base - 1), line);
+						l_succ_free_stack(par, args->_base + 1);
+					}
+					expr_tmp(es, args->_base, line);
+					break;
+				}
+				default: unreachable();
+			}
 			break;
 		}
 		case OP_CALL: {
@@ -2652,10 +2679,13 @@ static void l_anyRK(Parser* par, InoutExpr e) {
 
 static void l_stbV(Parser* par, InoutExpr e) {
 	if (par->_fnscope->_fvarg) {
+		par->_fnscope->_fvarg = false;
 		switch (e->_kind) {
 			case EXPR_DYN_C: {
 				a_insn* pi = &par->_code[e->_label];
-				a_u32 reg = bc_load_a(*pi);
+
+				a_u32 reg = l_alloc_stack(par, e->_line);
+				assume(reg == bc_load_a(*pi), "not top of stack.");
 
 				bc_swap_op(pi, bc_load_op(*pi) + 1);
 				bc_swap_c(pi, DMB);
@@ -2668,7 +2698,8 @@ static void l_stbV(Parser* par, InoutExpr e) {
 			}
 			case EXPR_DYN_AC: {
 				a_insn* pi = &par->_code[e->_label];
-				a_u32 reg = par->_scope->_top_reg;
+
+				a_u32 reg = l_alloc_stack(par, e->_line);
 
 				bc_swap_op(pi, bc_load_op(*pi) + 1);
 				bc_swap_a(pi, reg);
@@ -2703,7 +2734,7 @@ static void l_stbV(Parser* par, InoutExpr e) {
 			}
 		}
 	}
-	else if (e->_kind != EXPR_UNIT) {
+	else if (e->_kind != EXPR_UNIT && e->_kind != EXPR_NTMP && e->_kind != EXPR_NTMPC) {
 		l_topV(par, e);
 	}
 }
