@@ -68,6 +68,7 @@ VTable const ai_auser_vtable = {
 	._flags = VTABLE_FLAG_NONE,
 	._vfps = (a_vslot[]) {
 		vfp_def(drop, ai_table_drop),
-		vfp_def(mark, tuser_mark)
+		vfp_def(mark, tuser_mark),
+		vfp_def(close, null)
 	}
 };

@@ -347,8 +347,16 @@ static void l_scan_suffixed_expr(Parser* par, OutExpr e) {
 			case TK_COLON: {
 				a_line line = ln_cur(par);
 				l_skip(par);
+
 				GStr* name = l_check_ident(par);
-				ai_code_lookupS(par, e, name, line);
+				ai_code_lookupV(par, e, name, line);
+
+				l_check_skip(par, TK_LBK);
+				if (!l_test_skip(par, TK_RBK)) {
+					l_scan_exprs(par, e, true);
+					l_check_pair_right(par, TK_LBK, TK_RBK, line);
+				}
+				ai_code_vararg1(par, e, OP_CALL, line);
 				break;
 			}
 			case TK_LSQ: {

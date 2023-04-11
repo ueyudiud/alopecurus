@@ -25,6 +25,7 @@ intern void ai_code_loadfunc(Parser* par, OutExpr e, GProto* fun);
 intern void ai_code_lookupG(Parser* par, OutExpr e, GStr* name, a_line line);
 
 intern void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line);
+intern void ai_code_lookupV(Parser* par, InoutExpr e, GStr* name, a_line line);
 intern void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line);
 intern void ai_code_new_list(Parser* par, InoutExpr e, a_line line);
 intern void ai_code_new_table(Parser* par, InoutExpr e, a_line line);

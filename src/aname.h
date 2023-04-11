@@ -12,6 +12,7 @@
 #define PT_LIST(_) \
 	_(BOOL, "bool") \
 	_(INT, "int") \
+	_(FLOAT, "float") \
 	_(PTR, "ptr") \
 	_(STR, "str") \
 	_(TUPLE, "tuple") \
@@ -19,7 +20,8 @@
 	_(TABLE, "table") \
 	_(FUNC, "func") \
 	_(ROUTE, "route") \
-	_(user, "user")
+	_(TYPE, "type") \
+	_(USER, "user")
 
 enum {
     NAME__NORMAL,
@@ -42,7 +44,15 @@ enum {
 	NAME_TM__FIRST = NAME_TM__BEGIN + 1,
 	NAME_TM__LAST = NAME_TM__END - 1,
 
-    NAME__END = NAME_TM__END
+	NAME_PT__BEGIN = NAME_TM__LAST,
+#define PTDEF(id,name) M_cat(NAME_PT_,id),
+	PT_LIST(PTDEF)
+#undef PTDEF
+	NAME_PT__END,
+	NAME_PT__FIRST = NAME_PT__BEGIN + 1,
+	NAME_PT__LAST = NAME_PT__END - 1,
+
+    NAME__END = NAME_PT__END
 };
 
 #define name_id(str) ((str)->_tnext >> 32)
@@ -60,6 +70,9 @@ enum {
 #define TMPOS(id,name) NAME_POS_TM_##id, NAME_EPOS_TM_##id = NAME_POS_TM_##id + sizeof(name) - 1,
 	TM_LIST(TMPOS)
 #undef TMPOS
+#define PTPOS(id,name) NAME_POS_PT_##id, NAME_EPOS_PT_##id = NAME_POS_PT_##id + sizeof(name) - 1,
+	PT_LIST(PTPOS)
+#undef PTPOS
 	NAME_POS__MAX,
 
 	NAME__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
@@ -68,5 +81,6 @@ enum {
 #define name_ptr(p) (&ai_obj_names[p])
 #define name_str_kw(id) (new(a_lstr) { name_ptr(NAME_POS_KW_##id), NAME_EPOS_KW_##id - NAME_POS_KW_##id })
 #define name_str_tm(id) (new(a_lstr) { name_ptr(NAME_POS_TM_##id), NAME_EPOS_TM_##id - NAME_POS_TM_##id })
+#define name_str_pt(id) (new(a_lstr) { name_ptr(NAME_POS_PT_##id), NAME_EPOS_PT_##id - NAME_POS_PT_##id })
 
 #endif /* aname_h_ */

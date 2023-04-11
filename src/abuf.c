@@ -74,8 +74,8 @@ static void buf_drop(Global* g, a_hobj raw_self) {
 
 static VTable const buf_vtable = {
 	._mask = V_MASKED_TAG(T_CUSER),
-	._iname = env_type_iname(_buf),
-	._sname = "buf",
+	._base_size = sizeof(GBuf),
+	._elem_size = 0,
 	._vfps = (a_vslot[]) {
 		vfp_def(drop, buf_drop),
 		vfp_def(mark, buf_mark)

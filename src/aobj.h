@@ -718,7 +718,6 @@ struct Global {
 		GType _type;
 		GType _route;
 		GType _float;
-		GType _buf;
 	} _types;
 };
 

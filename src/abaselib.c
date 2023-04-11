@@ -12,7 +12,6 @@
 #include "atype.h"
 #include "auser.h"
 #include "agc.h"
-#include "avm.h"
 #include "aapi.h"
 
 #include "alolib.h"
@@ -21,7 +20,7 @@
 #define MAX_SHOW_LEN 16
 #define MAX_SHOW_DEPTH 16
 
-static void l_show_impl(Value v, a_u32 depth) {
+static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 	switch (v_get_tag(v)) {
 		case T_NIL: {
 			aloi_show("nil");
@@ -58,10 +57,10 @@ static void l_show_impl(Value v, a_u32 depth) {
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("(");
-					l_show_impl(val->_body[0], depth + 1);
+					l_show_impl(env, val->_body[0], depth + 1);
 					for (a_u32 i = 1; i < n; ++i) {
 						aloi_show(", ");
-						l_show_impl(val->_body[i], depth + 1);
+						l_show_impl(env, val->_body[i], depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -83,10 +82,10 @@ static void l_show_impl(Value v, a_u32 depth) {
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("[");
-					l_show_impl(val->_ptr[0], depth + 1);
+					l_show_impl(env, val->_ptr[0], depth + 1);
 					for (a_u32 i = 1; i < n; ++i) {
 						aloi_show(", ");
-						l_show_impl(val->_ptr[i], depth + 1);
+						l_show_impl(env, val->_ptr[i], depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -109,16 +108,16 @@ static void l_show_impl(Value v, a_u32 depth) {
 				if (val->_len > 0) {
 					aloi_show("{");
 					HNode* itr = list_first(val);
-					l_show_impl(itr->_key, depth + 1);
+					l_show_impl(env, itr->_key, depth + 1);
 					aloi_show(" -> ");
-					l_show_impl(itr->_value, depth + 1);
+					l_show_impl(env, itr->_value, depth + 1);
 					while (--n > 0) {
 						assume(itr != null);
 						itr = link_get(itr, _lnext);
 						aloi_show(", ");
-						l_show_impl(itr->_key, depth + 1);
+						l_show_impl(env, itr->_key, depth + 1);
 						aloi_show(" -> ");
-						l_show_impl(itr->_value, depth + 1);
+						l_show_impl(env, itr->_value, depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -136,12 +135,12 @@ static void l_show_impl(Value v, a_u32 depth) {
 			break;
 		}
 		case T_TYPE: {
-			aloi_show("<mod:%s>", str2ntstr(v_as_type(v)->_name));
+			aloi_show("<type:%s>", str2ntstr(v_as_type(v)->_name));
 			break;
 		}
 		case T_AUSER:
 		case T_CUSER: {
-			aloi_show("<%p>", v_as_obj(v));
+			aloi_show("<%s:%p>", v_nameof(env, v), v_as_obj(v));
 			break;
 		}
 		default: {
@@ -159,7 +158,7 @@ static void l_show_impl(Value v, a_u32 depth) {
 void aloB_show(a_henv env, a_isize id) {
 	Value const* v = api_roslot(env, id);
 	api_check(v != null, "bad slot id.");
-	l_show_impl(*v, 0);
+	l_show_impl(env, *v, 0);
 }
 
 static a_u32 base_print(a_henv env) {
@@ -186,10 +185,18 @@ static a_u32 base_assert(a_henv env) {
 	}
 }
 
+static a_u32 base_typeof(a_henv env) {
+	Value v = api_elem(env, 0);
+	alo_settop(env, 1);
+	v_set_obj(env, api_wrslot(env, 0), v_typeof(env, v));
+	return 1;
+}
+
 void aloopen_base(a_henv env) {
 	static aloL_Entry bindings[] = {
-		{ "print", base_print },
 		{ "assert", base_assert },
+		{ "print", base_print },
+		{ "typeof", base_typeof },
 		{ "__get__", null }
 	};
 

@@ -176,6 +176,7 @@ static a_usize sizeof_MRoute() {
 #define SIZE(id,name) + sizeof_IStr(sizeof(name) - 1)
 		KW_LIST(SIZE)
 		TM_LIST(SIZE)
+		PT_LIST(SIZE)
 #undef SIZE
 			;
 	;

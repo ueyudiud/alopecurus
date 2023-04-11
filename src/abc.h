@@ -107,7 +107,9 @@ always_inline void bc_swap_sc(a_insn* i, a_i32 c) { *i = (*i & ~BC_MASK_C) | bc_
     _(  BGEI,  "bgei", iAsBx, ___) /* if R[a] >= int(b) { pc := pc + 1 }           */ \
     _( BNGEI, "bngei", iAsBx, ___) /* if !(R[a] >= int(b)) { pc := pc + 1 }        */ \
 /*=================================================================================*/ \
-    _(   LDF,   "ldf",  iABx, ___) /* R[a] := func(F[b] )                          */ \
+    _(   LDF,   "ldf",  iABx, ___) /* R[a] := func(F[b])                           */ \
+    _(  LOOK,  "look",  iABC, ___) /* R[a:a+1] := look(R[b], K[c]), R[b]           */ \
+    _( LOOKX, "lookx", iABEx, ___) /* R[a:a+1] := look(R[b], K[ex]), R[b]          */ \
     _(   GET,   "get",  iABC, ___) /* R[a] := R[b][R[c]]                           */ \
     _(  GETI,  "geti", iABsC, ___) /* R[a] := R[b][int(c)]                         */ \
     _(  GETS,  "gets",  iABC, ___) /* R[a] := R[b][K[c]: str]                      */ \

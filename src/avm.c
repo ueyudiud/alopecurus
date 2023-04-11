@@ -107,6 +107,15 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	return v_to_bool(ai_vm_call(env, base, RFLAGS_META_CALL));
 }
 
+static Value vm_look(a_henv env, Value v, GStr* key) {
+	GType* type = v_typeof(env, v);
+	Value vf = ai_type_getis(env, type, key);
+	if (v_is_nil(vf)) {
+		ai_err_bad_look(env, v_nameof(env, v), key);
+	}
+	return vf;
+}
+
 Value ai_vm_meta_get(a_henv env, Value vf, Value v1, Value v2) {
 	if (v_is_func(v1)) {
 		Value* base = vm_push_args(env, vf, v1, v2);
@@ -167,23 +176,39 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
 	}
 }
 
-static Value vm_meta_len(a_henv env, Value v1) {
-	Value vf = ai_obj_vlookftm(env, v1, TM_LEN);
+static Value vm_meta_len(a_henv env, Value v) {
+	Value vf = ai_obj_vlookftm(env, v, TM_LEN);
 	if (v_is_nil(vf)) {
-		if (v_is_auser(v1)) {
-			return v_of_int(v_as_auser(v1)->_len);
+		if (v_is_auser(v)) {
+			return v_of_int(v_as_auser(v)->_len);
 		}
 		else {
 			ai_err_bad_tm(env, TM_LEN);
 		}
 	}
 	else {
-		Value* base = vm_push_args(env, vf, v1);
+		Value* base = vm_push_args(env, vf, v);
 		Value vr = ai_vm_call(env, base, RFLAGS_META_CALL);
 		if (!v_is_int(vr)) {
 			ai_err_raisef(env, ALO_EINVAL, "result for '__len__' should be int.");
 		}
 		return vr;
+	}
+}
+
+static Value vm_len(a_henv env, Value v) {
+	switch (v_get_tag(v)) {
+		case T_ISTR:
+		case T_HSTR:
+			return v_of_int(v_as_str(v)->_len);
+		case T_TUPLE:
+			return v_of_int(v_as_tuple(v)->_len);
+		case T_LIST:
+			return v_of_int(v_as_list(v)->_len);
+		case T_TABLE:
+			return v_of_int(v_as_table(v)->_len);
+		default:
+			return vm_meta_len(env, v);
 	}
 }
 
@@ -595,6 +620,32 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				check_gc();
 				break;
 			}
+			case BC_LOOK: {
+				loadB();
+				loadC();
+
+				Value vb = R[b];
+				Value vc = K[c];
+
+				Value vt = vm_look(env, vb, v_as_str(vc));
+				v_set(env, &R[a], vt);
+				v_set(env, &R[a + 1], vb);
+
+				break;
+			}
+			case BC_LOOKX: {
+				loadB();
+				loadEx();
+
+				Value vb = R[b];
+				Value vc = K[ex];
+
+				Value vt = vm_look(env, vb, v_as_str(vc));
+				v_set(env, &R[a], vt);
+				v_set(env, &R[a + 1], vb);
+
+				break;
+			}
 			case BC_GET: {
 				loadB();
 				loadC();
@@ -778,7 +829,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				Value vb = R[b];
 
-				Value vt = vm_meta_len(env, vb);
+				Value vt = vm_len(env, vb);
 				reload_stack();
 				v_set(env, &R[a], vt);
 				break;

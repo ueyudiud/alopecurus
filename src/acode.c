@@ -687,6 +687,24 @@ void ai_code_lookupS(Parser* par, InoutExpr e, GStr* name, a_line line) {
 	e->_line = line;
 }
 
+void ai_code_lookupV(Parser* par, InoutExpr e, GStr* name, a_line line) {
+	if (e->_kind == EXPR_NEVER) {
+		e->_line = line;
+		return;
+	}
+
+	l_anyR(par, e);
+	l_drop_tmp(par, e);
+
+	a_u32 reg = l_succ_alloc_stack(par, 2, line);
+
+	l_emit_refx(par, BC_LOOK, reg, e->_reg, l_const_index(par, v_of_obj(name)), line);
+
+	e->_kind = EXPR_NTMP;
+	e->_args = new(Args) { ._base = reg, ._top = reg + 2 };
+	e->_line = line;
+}
+
 /**
  ** Make reference of indexed expression.
  *@param par the parser.

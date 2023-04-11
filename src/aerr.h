@@ -15,9 +15,13 @@ always_inline a_none ai_err_bad_get(a_henv env, char const* coll, char const* ke
 	ai_err_raisef(env, ALO_EINVAL, "%s cannot be index for %s.", key, coll);
 }
 
+always_inline a_none ai_err_bad_look(a_henv env, char const* type, GStr* key) {
+	ai_err_raisef(env, ALO_EINVAL, "method '%s' not found for %s.", str2ntstr(key), type);
+}
+
 always_inline a_none ai_err_bad_tm(a_henv env, a_u32 tm) {
 	GStr* name = env_name(env, NAME_TM__FIRST + tm);
-	ai_err_raisef(env, ALO_EINVAL, "'%s' method not found.", str2ntstr(name));
+	ai_err_raisef(env, ALO_EINVAL, "method '%s' not found.", str2ntstr(name));
 }
 
 #endif /* aerr_h_ */
