@@ -256,7 +256,7 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 
 void ai_lex_close(Lexer* lex) {
 	strs_close(lex->_env, &lex->_strs);
-	buf_deinit(G(lex->_env), &lex->_buf);
+	ai_buf_drop(G(lex->_env), &lex->_buf);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {

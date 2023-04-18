@@ -69,7 +69,7 @@ static void buf_mark(Global* g, a_hobj raw_self) {
 
 static void buf_drop(Global* g, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	buf_deinit(g, self);
+	ai_buf_drop(g, self);
 	ai_mem_dealloc(g, self, sizeof(GBuf));
 }
 

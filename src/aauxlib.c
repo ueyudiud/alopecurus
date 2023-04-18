@@ -314,9 +314,9 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 	if (env->_frame->_prev != null) {
 		Buf buf;
-		buf_init(&buf);
+		ai_buf_init(&buf);
 		a_msg msg = l_wrap_error(env, id, limit, &buf);
-		buf_deinit(G(env), &buf);
+		ai_buf_drop(G(env), &buf);
 		return msg;
 	}
 

@@ -32,7 +32,7 @@ enum {
 	_id; \
 })
 
-#define l_bdel(par,buf) buf_deinit(G((par)->_env), &(buf))
+#define l_bdel(par,buf) ai_buf_drop(G((par)->_env), &(buf))
 
 /**
  ** Load the index for constant.

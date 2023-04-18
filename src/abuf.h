@@ -14,21 +14,21 @@ intern a_msg ai_buf_nputvfs(a_henv env, void* buf, char const* fmt, va_list varg
 intern GBuf* ai_buf_new(a_henv env);
 intern a_none ai_buf_error(a_msg msg, a_henv env, char const *what);
 
-always_inline void buf_init(void* raw_buf) {
+always_inline void ai_buf_init(void* raw_buf) {
 	Buf* buf = raw_buf;
 	buf->_ptr = null;
 	buf->_len = 0;
 	buf->_cap = 0;
 }
 
-always_inline void buf_deinit_(Global* g, void* raw_buf, a_usize size) {
+always_inline void ai_buf_drop_(Global* g, void* raw_buf, a_usize size) {
 	Buf* buf = raw_buf;
 	ai_mem_dealloc(g, buf->_ptr, buf->_cap * size);
 	buf->_ptr = null;
 	buf->_cap = 0;
 }
 
-#define buf_deinit(g,b) buf_deinit_(g, b, sizeof((b)->_ptr[0]))
+#define ai_buf_drop(g,b) ai_buf_drop_(g, b, sizeof((b)->_ptr[0]))
 
 #define buf_end(b) cast(char*, (b)->_ptr + (b)->_len)
 
