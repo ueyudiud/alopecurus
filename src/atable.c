@@ -70,6 +70,10 @@ static HNode* bucket_init(HBucket* self, a_usize cap) {
 	return &self->_nodes[-1];
 }
 
+static HNode* bucket_index(HBucket* self, a_x32 id) {
+	return &self->_nodes[unwrap_unsafe(id) - 1];
+}
+
 static void bucket_alloc(a_henv env, GTable* table, a_usize cap) {
 	HBucket* self = ai_mem_alloc(env, bucket_size(cap));
 	table->_ptr = bucket_init(self, cap);
@@ -107,8 +111,9 @@ static void hnode_put(a_henv env, HNode* node, Value key, a_hash hash, Value val
 }
 
 static void hnode_link(GTable* table, HNode* restrict node, a_x32 prev, a_x32 next) {
-	HNode* nodep = &table->_ptr[unwrap_unsafe(prev)];
-	HNode* noden = &table->_ptr[unwrap_unsafe(next)];
+	HBucket* bucket = table_bucket(table);
+	HNode* nodep = bucket_index(bucket, prev);
+	HNode* noden = bucket_index(bucket, next);
 	a_x32 id = wrap(node - table->_ptr);
 	noden->_link._prev = nodep->_link._next = id;
 	node->_link = new(HLink) { ._prev = prev, ._next = next };
@@ -135,11 +140,11 @@ static void hnode_move(a_henv env, GTable* table, HNode* restrict noded, HNode* 
  */
 static HNode* table_pop_free(GTable* self) {
 	HBucket* bucket = table_bucket(self);
-	HNode* node = &bucket->_nodes[unwrap_unsafe(bucket->_hfree) - 1];
+	HNode* node = bucket_index(bucket, bucket->_hfree);
 	assume(is_nil(node->_link._prev), "not head of free node.");
 
 	bucket->_hfree = node->_link._next;
-	HNode* noden = &bucket->_nodes[unwrap_unsafe(node->_link._next)];
+	HNode* noden = bucket_index(bucket, node->_link._next);
 	noden->_link._prev = nil;
 
 	assume(node != null && hnode_is_empty(node));
@@ -156,10 +161,10 @@ static void table_unlink_free(GTable* self, HNode* node) {
 		bucket->_hfree = next;
 	}
 	else {
-		bucket->_nodes[unwrap(prev) - 1]._link._next = next;
+		bucket_index(bucket, prev)->_link._next = next;
 	}
 	if (!is_nil(next)) {
-		bucket->_nodes[unwrap(next) - 1]._link._prev = prev;
+		bucket_index(bucket, next)->_link._prev = prev;
 	}
 }
 
@@ -238,8 +243,8 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 
 		if (bucket != null) {
 			HNode* node;
-			for (a_x32 id = bucket->_lfirst; !is_nil(id); id = node->_link._next) {
-				node = &bucket->_nodes[unwrap(id) - 1];
+			for (a_x32 i = bucket->_lfirst; !is_nil(i); i = node->_link._next) {
+				node = bucket_index(bucket, i);
 				table_put(env, self, node->_key, node->_hash, node->_value);
 			}
 
@@ -251,10 +256,12 @@ void ai_table_hint(a_henv env, GTable* self, a_usize len) {
 static void table_remove(a_henv env, GTable* self, HNode* node) {
 	assume(!hnode_is_empty(node), "cannot remove empty node.");
 
+	HBucket* bucket = table_bucket(self);
+
 	/* Remove from link */
 	HLink link = node->_link;
-	HNode* nodep = &self->_ptr[unwrap_unsafe(link._prev)];
-	HNode* noden = &self->_ptr[unwrap_unsafe(link._next)];
+	HNode* nodep = bucket_index(bucket, link._prev);
+	HNode* noden = bucket_index(bucket, link._next);
 
 	nodep->_link._next = link._next;
 	noden->_link._prev = link._prev;
@@ -262,7 +269,7 @@ static void table_remove(a_henv env, GTable* self, HNode* node) {
 	/* Remove from hash */
 	if (hnode_is_hhead(self, node)) {
 		if (!is_nil(node->_hnext)) {
-			HNode* nodeh = &self->_ptr[unwrap(node->_hnext)];
+			HNode* nodeh = bucket_index(bucket, node->_hnext);
 			hnode_move(env, self, node, nodeh);
 		}
 	}
@@ -272,7 +279,6 @@ static void table_remove(a_henv env, GTable* self, HNode* node) {
 	}
 
 	/* Add to free list */
-	HBucket* bucket = table_bucket(self);
 	node->_link = new(HLink) { ._prev = nil, ._next = bucket->_hfree };
 	bucket->_hfree = wrap(node - self->_ptr);
 
@@ -280,7 +286,7 @@ static void table_remove(a_henv env, GTable* self, HNode* node) {
 }
 
 static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value key) {
-	if (self->_ptr != null) {
+	if (self->_len > 0) {
 		HNode* node = table_hfirst(self, hash);
 		if (!hnode_is_empty(node)) {
 			do {
@@ -295,7 +301,7 @@ static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value 
 }
 
 static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* key) {
-	if (self->_ptr != null) {
+	if (self->_len > 0) {
 		HNode* node = table_hfirst(self, hash);
 		if (!hnode_is_empty(node)) {
 			do {
@@ -310,7 +316,7 @@ static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lst
 }
 
 static Value* table_find_any(unused a_henv env, GTable* self, a_hash hash, Value key) {
-	if (self->_ptr != null) {
+	if (self->_len > 0) {
 		HNode* node = table_hfirst(self, hash);
 		if (!hnode_is_empty(node)) {
 			do {
