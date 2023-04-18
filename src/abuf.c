@@ -45,7 +45,7 @@ GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
 	self->_vptr = &buf_vtable;
-	buf_init(self);
+	ai_buf_init(self);
 
 	ai_gc_register_object(env, self);
 
