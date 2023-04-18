@@ -32,7 +32,7 @@ static a_msg in_fetch(ZIn* in) {
 
 a_i32 ai_io_igetc(ZIn* in) {
     if (unlikely(in->_len == 0)) {
-        check(in_fetch(in));
+        try(in_fetch(in));
         if (in->_len == 0)
             return ALO_ESTMUF;
     }
@@ -56,7 +56,7 @@ a_msg ai_io_iget(ZIn* in, void* dst, a_usize len) {
 		in->_len = 0;
 
 	fetch:
-		check(in_fetch(in));
+		try(in_fetch(in));
 		if (unlikely(in->_len == 0))
 			return ALO_ESTMUF;
 	}

@@ -8,20 +8,11 @@
 #include <stdio.h>
 
 #include "agc.h"
+#include "aerr.h"
 
 #include "abuf.h"
 
 static VTable const buf_vtable;
-
-a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add) {
-	if (add > buf->_cap - buf->_len) {
-		a_usize old_cap = buf->_cap;
-		a_usize new_cap = max(old_cap * 2, usizec(16));
-		new_cap = max(new_cap, buf->_len + add);
-		check(ai_buf_ngrow(env, buf, new_cap));
-	}
-	return ALO_SOK;
-}
 
 a_msg ai_buf_nputfs(a_henv env, void* buf, char const* fmt, ...) {
 	va_list varg;
@@ -36,14 +27,14 @@ a_msg ai_buf_nputvfs(a_henv env, void* raw_buf, char const* fmt, va_list varg) {
 	a_usize rem = buf->_cap - buf->_len;
 	va_list varg2;
 	va_copy(varg2, varg);
-	a_usize len = vsnprintf(buf_fdst(buf), rem, fmt, varg);
+	a_usize len = vsnprintf(buf_end(buf), rem, fmt, varg);
 	if (len + 1 > rem) {
-		a_msg msg = ai_buf_ncheck(env, raw_buf, len + 1);
-		if (msg != ALO_SOK) {
+		a_msg msg = ai_buf_ncheck(env, buf, len + 1);
+		if (unlikely(msg != ALO_SOK)) {
 			va_end(varg2);
 			return msg;
 		}
-		vsnprintf(buf_fdst(buf), len + 1, fmt, varg2);
+		vsnprintf(buf_end(buf), len + 1, fmt, varg2);
 	}
 	va_end(varg2);
 	buf->_len += len;
@@ -54,11 +45,21 @@ GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
 	self->_vptr = &buf_vtable;
-	ai_buf_init(self);
+	buf_init(self);
 
 	ai_gc_register_object(env, self);
 
 	return self;
+}
+
+a_none ai_buf_error(a_msg msg, a_henv env, char const *what) {
+	if (msg == ALO_EINVAL) {
+		ai_err_raisef(env, msg, "too many %s.", what);
+	}
+	else {
+		assume(msg == ALO_ENOMEM);
+		ai_mem_nomem(env);
+	}
 }
 
 static void buf_mark(Global* g, a_hobj raw_self) {
@@ -68,7 +69,7 @@ static void buf_mark(Global* g, a_hobj raw_self) {
 
 static void buf_drop(Global* g, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	ai_buf_deinit(g, self);
+	buf_deinit(g, self);
 	ai_mem_dealloc(g, self, sizeof(GBuf));
 }
 

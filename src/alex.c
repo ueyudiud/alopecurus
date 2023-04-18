@@ -17,13 +17,18 @@
 
 #include "alex.h"
 
+static a_none l_foreign_error(Lexer* lex) {
+	Parser* par = from_member(Parser, _lex, lex);
+	ai_par_report(par, false, par_err_f_arg(par, "IO error. code: %tx"), lex->_in._err);
+}
+
 always_inline void l_switch_scope(Lexer* lex, a_u32 channel) {
 	lex->_scope->_last_channel = lex->_channel;
 	lex->_scope->_begin_line = lex->_line;
 	lex->_channel = channel;
 }
 
-always_inline a_i32 l_pollx(Lexer* lex) {
+always_inline a_i32 l_poll(Lexer* lex) {
     a_i32 ch = lex->_ch;
     lex->_ch = ai_io_igetc(&lex->_in);
     return ch;
@@ -36,45 +41,46 @@ static void l_unwind(Lexer* lex, a_i32 ch) {
     lex->_ch = ch;
 }
 
-#define l_peekx(lex) ((lex)->_ch)
+#define l_peek(lex) ((lex)->_ch)
 
-static a_none l_foreign_error(Lexer* lex) {
-	ai_par_report(from_member(Parser, _lex, lex), false, "%s: IO error. code: %tx", lex->_in._err);
-}
-
-static a_i32 l_poll(Lexer* lex) {
-	a_i32 ch = l_pollx(lex);
+static a_i32 l_poll_checked(Lexer* lex) {
+	a_i32 ch = l_poll(lex);
 	if (unlikely(ch < ALO_ESTMUF)) {
 		l_foreign_error(lex);
 	}
 	return ch;
 }
 
-static a_i32 l_peek(Lexer* lex) {
-	a_i32 ch = l_peekx(lex);
+static a_i32 l_peek_checked(Lexer* lex) {
+	a_i32 ch = l_peek(lex);
 	if (unlikely(ch < ALO_ESTMUF)) {
 		l_foreign_error(lex);
 	}
 	return ch;
 }
 
-#define l_skip(lex) l_pollx(lex)
+#define l_skip(lex) quiet(l_poll(lex))
 
-#define l_testx(lex,ch) (l_peekx(lex) == (ch))
-#define l_testskip(lex,ch) (l_testx(lex, ch) && (l_pollx(lex), true))
+#define l_test(lex,ch) (l_peek(lex) == (ch))
+
+#define l_test_skip(lex,ch) (l_test(lex, ch) && (l_poll(lex), true))
 
 static a_i32 c_bdigit(a_i32 ch) {
-    switch (ch) {
-        case '0' ... '1': return ch - '0';
-        default: return -1;
-    }
+	if (ch >= '0' && ch <= '1') {
+		return ch - '0';
+	}
+	else {
+		return -1;
+	}
 }
 
 static a_i32 c_ddigit(a_i32 ch) {
-    switch (ch) {
-        case '0' ... '9': return ch - '0';
-        default: return -1;
-    }
+	if (ch >= '0' && ch <= '9') {
+		return ch - '0';
+	}
+	else {
+		return -1;
+	}
 }
 
 static a_i32 c_hdigit(a_i32 ch) {
@@ -98,13 +104,8 @@ static a_bool c_isibody(a_i32 ch) {
     }
 }
 
-always_inline a_msg l_bputx(Lexer* lex, a_i32 ch) {
-    ai_buf_xput(lex->_env, &lex->_buf, ch);
-	return ALO_SOK;
-}
-
 static void l_bput(Lexer* lex, a_i32 ch) {
-	a_msg msg = l_bputx(lex, ch);
+	a_msg msg = ai_buf_nput(lex->_env, &lex->_buf, ch);
 	if (unlikely(msg != ALO_SOK)) {
 		if (msg == ALO_EINVAL) {
 			ai_lex_error(lex, "token too long.");
@@ -205,12 +206,12 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 	strs_alloc_array(env, &lex->_strs, STRS_INIT_CAP);
 	lex->_strs._len = 0;
 
-    l_pollx(lex);
+	l_poll(lex);
 }
 
 void ai_lex_close(Lexer* lex) {
 	strs_close(lex->_env, &lex->_strs);
-	ai_buf_deinit(G(lex->_env), &lex->_buf);
+	buf_deinit(G(lex->_env), &lex->_buf);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {
@@ -288,13 +289,13 @@ GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
 
 static a_i32 l_skip_line(Lexer* lex) {
     loop {
-		switch (l_pollx(lex)) {
+		switch (l_poll(lex)) {
 			case ALO_ESTMUF:
 				return TK_EOF;
 			case ALO_EOUTER:
 				return ALO_EOUTER;
 			case '\r': {
-				l_testskip(lex, '\n');
+				l_test_skip(lex, '\n');
 				fallthrough;
 			}
 			case '\n': {
@@ -308,8 +309,8 @@ static a_i32 l_skip_line(Lexer* lex) {
 }
 
 static a_i32 l_scan_ident(Lexer* lex, Token* tk) {
-    while (c_isibody(l_peekx(lex))) {
-        l_bput(lex, l_pollx(lex));
+    while (c_isibody(l_peek(lex))) {
+        l_bput(lex, l_poll(lex));
     }
     GStr* str = l_to_str(lex);
     tk->_str = str;
@@ -354,36 +355,41 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
     a_bool sep = false;
 
 /* Check end seperator. */
-#define check_end_sep() if (sep) goto error_bad_format
+#define check_end_sep() if (sep) goto error_format
 
 /* Check gap between number and other identifiers. */
 #define check_gap() if (c_isibody(ch)) goto error_no_gap;
 
 /* Scan seperator. */
-#define scan_sep() do { \
-    if (ch == '\'') { \
-        if (sep) goto error_bad_format; \
-        sep = true; \
-        l_skip(lex); \
-        continue; \
-    } \
-} while (false)
+#define scan_sep() ({          \
+    if (ch == '\'') {          \
+        if (sep)               \
+			goto error_format; \
+        sep = true;            \
+        l_skip(lex);           \
+        if (l_test(lex, '\'')) \
+			goto error_format; \
+    }                          \
+})
 
 /* Scan digit sequence. */
-#define scan_digits(d,e...) do { \
-    ch = l_peekx(lex); \
-    j = d(ch); \
-    if (unlikely(j < 0)) { scan_sep(); break; } \
-    l_skip(lex); \
-    sep = false; \
-    (e); \
-} while (true)
+#define scan_digits(d) while ( \
+	ch = l_peek(lex),          \
+	j = d(ch),                 \
+	(j >= 0 ? (                \
+		l_skip(lex),           \
+		sep = false,           \
+		true                   \
+	) : (                      \
+		scan_sep(),            \
+		false                  \
+	)))
 
     if (ch == '0') {
         a_u32 i = 0;
-        switch (ch = l_peekx(lex)) {
+        switch (ch = l_peek(lex)) {
             case '.': {
-                ch = l_peekx(lex);
+                ch = l_peek(lex);
                 j = c_ddigit(ch);
                 if (j > 0) {
                     e = 0;
@@ -393,7 +399,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 else if (j == 0) {
                     eb = 1;
                     loop {
-                        ch = l_peekx(lex);
+                        ch = l_peek(lex);
                         if (ch != '0') {
                             scan_sep();
                             break;
@@ -413,20 +419,20 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 return TK_INTEGER;
             }
             case 'x': case 'X': {
-                l_skip(lex);
-                scan_digits(c_hdigit, {
-                    a_u32 t;
-                    if (unlikely(checked_mul_u32(i, 16, &t))) {
-                        n = cast(a_u64, i) * 16 + j;
-                        eb = 0;
-                        goto float_hex_head;
-                    }
-                    i = t + j;
-                });
+				l_skip(lex);
+                scan_digits(c_hdigit) {
+					a_u32 t;
+					if (unlikely(checked_mul_u32(i, 16, &t))) {
+						n = cast(a_u64, i) * 16 + j;
+						eb = 0;
+						goto float_hex_head;
+					}
+					i = t + j;
+				}
 
-                if (l_testskip(lex, '.')) {
+                if (l_test_skip(lex, '.')) {
                     n = cast(a_u64, cast(a_i64, i));
-                    ch = l_peekx(lex);
+                    ch = l_peek(lex);
                     j = c_hdigit(ch);
                     if (j >= 0) goto float_hex_frag;
                     l_unwind(lex, '.');
@@ -437,60 +443,63 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 return TK_INTEGER;
             }
             float_hex_head: {
-                scan_digits(c_ddigit, {
-                    n = n * 16 + j;
-                    if (unlikely(n >= u64c(0x1000000000000))) {
-                        eb = 1;
-                        goto float_hex_ignore_int;
-                    }
-                });
+                scan_digits(c_ddigit) {
+					n = n * 16 + j;
+					if (unlikely(n >= u64c(0x1000000000000))) {
+						eb = 1;
+						goto float_hex_ignore_int;
+					}
+				}
 
                 check_end_sep();
-                if (unlikely(!l_testskip(lex, '.')))
+                if (unlikely(!l_test_skip(lex, '.')))
                     goto error_overflow;
 
             float_hex_frag: /* Fragment part. */
                 eb = 0;
                 sep = true;
-                scan_digits(c_ddigit, {
-                    n = n * 16 + j;
-                    eb -= 1;
-                    if (unlikely(n >= u64c(0x1000000000000)))
-                        goto float_hex_ignore_frag;
-                });
+                scan_digits(c_ddigit) {
+					n = n * 16 + j;
+					eb -= 1;
+					if (unlikely(n >= u64c(0x1000000000000)))
+						goto float_hex_ignore_frag;
+				}
                 goto float_hex_exp;
 
             float_hex_ignore_int:
-                scan_digits(c_hdigit, eb += 1);
+                scan_digits(c_hdigit) {
+					eb += 1;
+				}
 
                 check_end_sep();
-                if (unlikely(!l_testskip(lex, '.')))
+                if (unlikely(!l_test_skip(lex, '.')))
                     goto error_overflow;
-                ch = l_pollx(lex);
+                ch = l_poll(lex);
                 if (unlikely(c_hdigit(ch) < 0))
                     goto error_overflow;
             
             float_hex_ignore_frag:
-                scan_digits(c_hdigit, { /* Ignore digits. */ });
+				/* Ignore digits. */
+                scan_digits(c_hdigit);
 
             float_hex_exp:
                 check_end_sep();
                 if (!(ch == 'p' || ch == 'P')) 
-                    goto error_bad_format;
-                l_skip(lex);
+                    goto error_format;
+				l_skip(lex);
                 e = 0;
-                if (l_testskip(lex, '-')) {
-                    scan_digits(c_ddigit, {
-                        if (unlikely(checked_mul_i32(e, 10, &e) || checked_sub_i32(e, j, &e))) 
-                            goto error_overflow;
-                    });
+                if (l_test_skip(lex, '-')) {
+                    scan_digits(c_ddigit) {
+						if (unlikely(checked_mul_i32(e, 10, &e) || checked_sub_i32(e, j, &e)))
+							goto error_overflow;
+					}
                 }
                 else {
-                    l_testskip(lex, '+');
-                    scan_digits(c_ddigit, {
-                        if (unlikely(checked_mul_i32(e, 10, &e) || checked_add_i32(e, j, &e))) 
-                            goto error_overflow;
-                    });
+                    l_test_skip(lex, '+');
+                    scan_digits(c_ddigit) {
+						if (unlikely(checked_mul_i32(e, 10, &e) || checked_add_i32(e, j, &e)))
+							goto error_overflow;
+					}
                 }
                 if (unlikely(checked_add_i32(e, eb, &e)))
                     goto error_overflow;
@@ -501,13 +510,13 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 return TK_FLOAT;
             }
             case 'b': case 'B': {
-                l_skip(lex);
-                scan_digits(c_bdigit, {
-                    a_u32 t;
-                    if (unlikely(checked_mul_u32(i, 2, &t)))
-                        goto error_overflow;
-                    i = t + j;
-                });
+				l_skip(lex);
+                scan_digits(c_bdigit) {
+					a_u32 t;
+					if (unlikely(checked_mul_u32(i, 2, &t)))
+						goto error_overflow;
+					i = t + j;
+				}
                 check_gap();
                 tk->_int = cast(a_int, i);
                 return TK_INTEGER;
@@ -523,19 +532,19 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
         switch (sign) {
             case 0: { /* Unsigned number. */
                 a_u32 i = c_ddigit(ch);
-                scan_digits(c_ddigit, {
-                    a_u32 t;
-                    if (unlikely(checked_mul_u32(i, 10, &t) || checked_add_u32(t, j, &t))) {
-                        n = cast(a_u64, i) * 10 + j;
-                        sign = 1;
-                        goto float_head;
-                    }
-                    i = t;
-                });
+                scan_digits(c_ddigit) {
+					a_u32 t;
+					if (unlikely(checked_mul_u32(i, 10, &t) || checked_add_u32(t, j, &t))) {
+						n = cast(a_u64, i) * 10 + j;
+						sign = 1;
+						goto float_head;
+					}
+					i = t;
+				}
                 check_end_sep();
-                if (l_testskip(lex, '.')) {
+                if (l_test_skip(lex, '.')) {
                     n = cast(a_u64, i);
-                    ch = l_peekx(lex);
+                    ch = l_peek(lex);
                     j = c_ddigit(ch);
                     if (j >= 0) goto float_frag_base;
                     l_unwind(lex, '.');
@@ -548,18 +557,18 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
             }
             case 1: { /* Positive number. */
                 a_i32 i = c_ddigit(ch);
-                scan_digits(c_ddigit, {
-                    a_i32 t;
-                    if (unlikely(checked_mul_i32(i, 10, &t) || checked_add_i32(t, j, &t))) {
-                        n = cast(a_u64, cast(a_i64, i)) * 10 + j;
-                        goto float_head;
-                    }
-                    i = t;
-                });
+                scan_digits(c_ddigit) {
+					a_i32 t;
+					if (unlikely(checked_mul_i32(i, 10, &t) || checked_add_i32(t, j, &t))) {
+						n = cast(a_u64, cast(a_i64, i)) * 10 + j;
+						goto float_head;
+					}
+					i = t;
+				}
                 check_end_sep();
-                if (l_testskip(lex, '.')) {
+                if (l_test_skip(lex, '.')) {
                     n = cast(a_u64, cast(a_i64, i));
-                    ch = l_peekx(lex);
+                    ch = l_peek(lex);
                     j = c_ddigit(ch);
                     if (j >= 0) goto float_frag_base;
                     l_unwind(lex, '.');
@@ -572,18 +581,18 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
             }
             case -1: { /* Negative number. */
                 a_i32 i = -c_ddigit(ch);
-                scan_digits(c_ddigit, {
-                    a_i32 t;
-                    if (unlikely(checked_mul_i32(i, 10, &t) || checked_sub_i32(t, j, &t))) {
-                        n = cast(a_u64, -cast(a_i64, i)) * 10 + j;
-                        goto float_head;
-                    }
-                    i = t;
-                });
+                scan_digits(c_ddigit) {
+					a_i32 t;
+					if (unlikely(checked_mul_i32(i, 10, &t) || checked_sub_i32(t, j, &t))) {
+						n = cast(a_u64, -cast(a_i64, i)) * 10 + j;
+						goto float_head;
+					}
+					i = t;
+				}
                 check_end_sep();
-                if (l_testskip(lex, '.')) {
+                if (l_test_skip(lex, '.')) {
                     n = cast(a_u64, -cast(a_i64, i));
-                    ch = l_peekx(lex);
+                    ch = l_peek(lex);
                     j = c_ddigit(ch);
                     if (j >= 0) goto float_frag_base;
                     l_unwind(lex, '.');
@@ -595,16 +604,16 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 return TK_INTEGER;
             }
             float_head: {
-                scan_digits(c_ddigit, {
-                    n = n * 10 + j;
-                    if (unlikely(n >= u64c(10000000000000000)))
-                        goto float_ignore_int;
-                });
+                scan_digits(c_ddigit) {
+					n = n * 10 + j;
+					if (unlikely(n >= u64c(10000000000000000)))
+						goto float_ignore_int;
+				}
 
                 check_end_sep();
-                if (unlikely(!l_testskip(lex, '.')))
+                if (unlikely(!l_test_skip(lex, '.')))
                     goto error_overflow;
-                ch = l_peekx(lex);
+                ch = l_peek(lex);
                 j = c_ddigit(ch);
                 if (unlikely(j < 0))
                     goto error_overflow;
@@ -613,46 +622,49 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 eb = -1; /* For first digit. */
 
             float_frag: /* Fragment part. */
-                l_skip(lex);
+				l_skip(lex);
                 n = n * 10 + j;
-                scan_digits(c_ddigit, {
-                    n = n * 10 + j;
-                    eb -= 1;
-                    if (unlikely(n >= u64c(10000000000000000)))
-                        goto float_ignore_frag;
-                });
+                scan_digits(c_ddigit) {
+					n = n * 10 + j;
+					eb -= 1;
+					if (unlikely(n >= u64c(10000000000000000)))
+						goto float_ignore_frag;
+				}
                 goto float_exp;
                 
             float_ignore_int:
                 eb = 1;
-                scan_digits(c_ddigit, eb += 1);
+                scan_digits(c_ddigit) {
+					eb += 1;
+				}
 
                 check_end_sep();
-                if (unlikely(!l_testskip(lex, '.')))
+                if (unlikely(!l_test_skip(lex, '.')))
                     goto error_overflow;
-                ch = l_pollx(lex);
+                ch = l_poll(lex);
                 if (unlikely(c_ddigit(ch) < 0))
                     goto error_overflow;
             
             float_ignore_frag:
-                scan_digits(c_ddigit, { /* Ignore digits. */ });
+				/* Ignore digits. */
+                scan_digits(c_ddigit);
 
             float_exp:
                 if (ch == 'e' || ch == 'E') { /* Exponent part. */
-                    l_skip(lex);
+					l_skip(lex);
                     e = 0;
-                    if (l_testskip(lex, '-')) {
-                        scan_digits(c_ddigit, {
-                            if (unlikely(checked_mul_i32(e, 10, &e) || checked_sub_i32(e, j, &e))) 
-                                goto error_overflow;
-                        });
+                    if (l_test_skip(lex, '-')) {
+                        scan_digits(c_ddigit) {
+							if (unlikely(checked_mul_i32(e, 10, &e) || checked_sub_i32(e, j, &e)))
+								goto error_overflow;
+						}
                     }
                     else {
-                        l_testskip(lex, '+');
-                        scan_digits(c_ddigit, {
-                            if (unlikely(checked_mul_i32(e, 10, &e) || checked_add_i32(e, j, &e))) 
-                                goto error_overflow;
-                        });
+                        l_test_skip(lex, '+');
+                        scan_digits(c_ddigit) {
+							if (unlikely(checked_mul_i32(e, 10, &e) || checked_add_i32(e, j, &e)))
+								goto error_overflow;
+						}
                     }
                     if (unlikely(checked_add_i32(e, eb, &e)))
                         goto error_overflow;
@@ -673,11 +685,11 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 error_overflow:
     ai_lex_error(lex, "number overflow.");
 
-error_bad_format:
+error_format:
     ai_lex_error(lex, "bad number format.");
 
 error_no_gap:
-    ai_lex_error(lex, "seperator expected between number and other identifier.");
+    ai_lex_error(lex, "separator expected between number and other identifier.");
 
 #undef check_end_sep
 #undef check_gap
@@ -686,15 +698,15 @@ error_no_gap:
 }
 
 static a_i32 l_scan_edigit(Lexer* lex) {
-    a_i32 i = c_hdigit(l_poll(lex));
+    a_i32 i = c_hdigit(l_poll_checked(lex));
     if (i < 0) ai_lex_error(lex, "bad escape character.");
     return i;
 }
 
 static void l_scan_echar(Lexer* lex) {
-    a_i32 ch = l_poll(lex);
+    a_i32 ch = l_poll_checked(lex);
 	if (ch == '\\') {
-		switch (l_poll(lex)) {
+		switch (l_poll_checked(lex)) {
 			case 'b': {
 				l_bput(lex, '\b');
 				break;
@@ -770,7 +782,7 @@ static void l_scan_echar(Lexer* lex) {
 				break;
 			}
 			case '\r': {
-				l_testskip(lex, '\n');
+				l_test_skip(lex, '\n');
 				fallthrough;
 			}
 			case '\n': {
@@ -790,9 +802,9 @@ static void l_scan_echar(Lexer* lex) {
 #endif
 
 static a_bool l_scan_triple_quotes(Lexer* lex, a_i32 quote) {
-	if (l_testskip(lex, quote)) {
-		if (l_testskip(lex, quote)) {
-			if (likely(l_testskip(lex, quote))) {
+	if (l_test_skip(lex, quote)) {
+		if (l_test_skip(lex, quote)) {
+			if (likely(l_test_skip(lex, quote))) {
 				return true;
 			}
 			l_bput(lex, quote);
@@ -811,9 +823,9 @@ static a_none l_error_unclosed(Lexer* lex, a_u32 line) {
 #define S_TEXT i32c(3)
 
 static a_i32 l_scan_multi_echar(Lexer* lex, a_i32 quote, a_u32 line) {
-	switch (l_pollx(lex)) {
+	switch (l_poll(lex)) {
 		case '\r': {
-			l_testskip(lex, '\n');
+			l_test_skip(lex, '\n');
 			fallthrough;
 		}
 		case '\n': {
@@ -836,7 +848,7 @@ static a_i32 l_scan_multi_echar(Lexer* lex, a_i32 quote, a_u32 line) {
 static a_i32 l_scan_string_indent(Lexer* lex) {
 	a_i32 ident = 0;
 	loop {
-		switch (l_peek(lex)) {
+		switch (l_peek_checked(lex)) {
 			case ' ': {
 				ident += 1;
 				break;
@@ -854,7 +866,7 @@ static a_i32 l_scan_string_indent(Lexer* lex) {
 
 static a_bool l_skip_string_indent(Lexer* lex, a_u32 indent, a_i32 quote) {
 	loop {
-		switch (l_pollx(lex)) {
+		switch (l_poll(lex)) {
 			case ' ': {
 				indent -= 1;
 				if (indent == 0) return false;
@@ -869,16 +881,16 @@ static a_bool l_skip_string_indent(Lexer* lex, a_u32 indent, a_i32 quote) {
 				break;
 			}
 			case '\r': {
-				l_testskip(lex, '\n');
+				l_test_skip(lex, '\n');
 				fallthrough;
 			}
 			case '\n': {
 				lex->_line += 1;
-				l_bputx(lex, '\n');
+				l_bput(lex, '\n');
 				return false;
 			}
 			default: {
-				if (l_testskip(lex, quote) && l_testskip(lex, quote) && l_testskip(lex, quote))
+				if (l_test_skip(lex, quote) && l_test_skip(lex, quote) && l_test_skip(lex, quote))
 					return true;
 				goto error_bad_indent;
 			}
@@ -891,12 +903,12 @@ error_bad_indent:
 
 static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 	a_u32 line = lex->_line;
-	if (l_testskip(lex, '\'')) {
-		if (l_testskip(lex, '\'')) {
+	if (l_test_skip(lex, '\'')) {
+		if (l_test_skip(lex, '\'')) {
 			/* Multiline string. */
-			if (l_testskip(lex, '\n')) {
+			if (l_test_skip(lex, '\n')) {
 				a_i32 indent = l_scan_string_indent(lex);
-				check(indent);
+				try(indent);
 				while (!l_skip_string_indent(lex, indent, '\'')) {
 					a_i32 msg;
 					while (!((msg = l_scan_multi_echar(lex, '\'', line)) & S_LINE));
@@ -913,8 +925,8 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 		}
 	}
 	else {
-		while (!l_testskip(lex, '\'')) {
-			switch (l_peek(lex)) {
+		while (!l_test_skip(lex, '\'')) {
+			switch (l_peek_checked(lex)) {
 				case ALO_ESTMUF:
 				case '\r':
 				case '\n':
@@ -933,8 +945,8 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 static a_i32 l_scan_interpolated_string_escape(Lexer* lex, Token* tk);
 
 static a_i32 l_scan_interpolated_string_body(Lexer* lex, Token* tk) {
-	while (!l_testskip(lex, '\"')) {
-		switch (l_peek(lex)) {
+	while (!l_test_skip(lex, '\"')) {
+		switch (l_peek_checked(lex)) {
 			case ALO_ESTMUF:
 			case '\r':
 			case '\n':
@@ -975,12 +987,12 @@ static a_i32 l_scan_multiline_interpolated_string_body(Lexer* lex, Token* tk) {
 }
 
 static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
-	if (l_testskip(lex, '\"')) {
-		if (l_testskip(lex, '\"')) {
+	if (l_test_skip(lex, '\"')) {
+		if (l_test_skip(lex, '\"')) {
 			l_switch_scope(lex, CHANNEL_MISTR_BODY);
-			if (l_testskip(lex, '\n')) {
+			if (l_test_skip(lex, '\n')) {
 				a_i32 n = l_scan_string_indent(lex);
-				check(n);
+				try(n);
 				lex->_scope->_indent = n;
 			}
 			return l_scan_multiline_interpolated_string_body(lex, tk);
@@ -999,7 +1011,7 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
     loop {
         a_i32 ch;
-        switch (ch = l_poll(lex)) {
+        switch (ch = l_poll_checked(lex)) {
             case ALO_ESTMUF: {
                 return TK_EOF;
             }
@@ -1009,7 +1021,7 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
                 break;
             }
             case '\r': {
-                l_testskip(lex, '\n');
+                l_test_skip(lex, '\n');
                 fallthrough;
             }
             case '\n': {
@@ -1051,8 +1063,8 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
 				return TK_SEMI;
 			}
             case '.': {
-                if (l_testskip(lex, '.')) {
-                    if (l_testskip(lex, '.')) {
+                if (l_test_skip(lex, '.')) {
+                    if (l_test_skip(lex, '.')) {
                         return TK_TDOT;
                     }
                     return TK_BDOT;
@@ -1060,24 +1072,24 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
                 return TK_DOT;
             }
             case ':': {
-                if (l_testskip(lex, ':')) {
+                if (l_test_skip(lex, ':')) {
                     return TK_BCOLON;
                 }
                 return TK_COLON;
             }
             case '+': {
-                if (l_peekx(lex) >= '0' && l_peekx(lex) <= '9') {
-                    return l_scan_number(lex, tk, 1, l_pollx(lex));
+                if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
+                    return l_scan_number(lex, tk, 1, l_poll(lex));
                 }
                 return TK_PLUS;
             }
             case '-': {
-                if (l_testskip(lex, '-')) {
-                    check(l_skip_line(lex));
+                if (l_test_skip(lex, '-')) {
+                    try(l_skip_line(lex));
                     break;
                 }
-                else if (l_peekx(lex) >= '0' && l_peekx(lex) <= '9') {
-                    return l_scan_number(lex, tk, -1, l_pollx(lex));
+                else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
+                    return l_scan_number(lex, tk, -1, l_poll(lex));
                 }
                 return TK_MINUS;
             }
@@ -1097,55 +1109,55 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
                 return TK_HAT;
             }
             case '=': {
-                if (l_testskip(lex, '=')) {
+                if (l_test_skip(lex, '=')) {
                     return TK_EQ;
                 }
                 return TK_ASSIGN;
             }
             case '!': {
-				if (l_testskip(lex, '=')) {
+				if (l_test_skip(lex, '=')) {
 					return TK_NE;
 				}
                 return TK_BANG;
             }
             case '<': {
-                if (l_testskip(lex, '<')) {
+                if (l_test_skip(lex, '<')) {
                     return TK_SHL;
                 }
-                else if (l_testskip(lex, '=')) {
+                else if (l_test_skip(lex, '=')) {
                     return TK_LE;
                 }
                 return TK_LT;
             }
             case '>': {
-                if (l_testskip(lex, '>')) {
+                if (l_test_skip(lex, '>')) {
                     return TK_SHR;
                 }
-                else if (l_testskip(lex, '=')) {
+                else if (l_test_skip(lex, '=')) {
                     return TK_GE;
                 }
                 return TK_GT;
             }
             case '&': {
-                if (l_testskip(lex, '&')) {
+                if (l_test_skip(lex, '&')) {
                     return TK_BAMP;
                 }
                 return TK_AMP;
             }
             case '|': {
-                if (l_testskip(lex, '|')) {
+                if (l_test_skip(lex, '|')) {
                     return TK_BBAR;
                 }
                 return TK_BAR;
             }
             case '?': {
-				if (l_testskip(lex, ':')) {
+				if (l_test_skip(lex, ':')) {
 					return TK_ELVIS;
 				}
-				else if (l_testskip(lex, '\\')) {
+				else if (l_test_skip(lex, '\\')) {
 					return TK_RSLASH;
 				}
-				else if (l_testskip(lex, '.')) {
+				else if (l_test_skip(lex, '.')) {
 					return TK_QDOT;
 				}
                 return TK_QUESTION;
@@ -1173,7 +1185,7 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
 }
 
 static a_i32 l_scan_interpolated_string_escape(Lexer* lex, Token* tk) {
-	a_i32 ch = l_poll(lex);
+	a_i32 ch = l_poll_checked(lex);
 	a_u32 channel = lex->_channel ^ 0x1; /* Load body channel. */
 	switch (ch) {
 		case '{': {
@@ -1184,7 +1196,7 @@ static a_i32 l_scan_interpolated_string_escape(Lexer* lex, Token* tk) {
 		case 'a' ... 'z':
 		case 'A' ... 'Z':
 		case '_': {
-			l_bputx(lex, ch);
+			l_bput(lex, ch);
 			a_i32 t = l_scan_ident(lex, tk);
 			lex->_channel = channel;
 			return t;

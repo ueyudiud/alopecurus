@@ -21,7 +21,7 @@ struct OutCtx {
     a_flags _flags;
 };
 
-#define l_out(oc,p,l) check(ai_io_oput(&(oc)->_out, p, l))
+#define l_out(oc,p,l) try(ai_io_oput(&(oc)->_out, p, l))
 #define l_put(oc,t,v) ({ t _v = cast(t, v); l_out(oc, &_v, sizeof(t)); })
 #define l_putv(oc,v,l) ({ typeof(&(v)[0]) _v = (v); l_out(oc, &_v, sizeof(_v[0]) * (l)); })
 
@@ -95,11 +95,11 @@ static a_msg l_save(OutCtx* oc, GProto* proto, a_bool root) {
 	};
 	l_put(oc, ProtoFlags, flags);
     for (a_u32 i = 0; i < proto->_nconst; ++i) {
-        check(l_save_const(oc, proto->_consts[i]));
+        try(l_save_const(oc, proto->_consts[i]));
     }
     l_putv(oc, proto->_code, proto->_ninsn);
     for (a_u32 i = 0; i < proto->_nsub; ++i) {
-        check(l_save(oc, proto->_subs[i], false));
+        try(l_save(oc, proto->_subs[i], false));
     }
     return ALO_SOK;
 }

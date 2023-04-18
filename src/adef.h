@@ -215,9 +215,11 @@ typedef a_u32 a_insn;
 
 /* Error handling functions. */
 
-#undef check
+#undef catch
+#undef try
 
-#define check(e) ({ typeof(e) _e = (e); if (unlikely(_e != ALO_SOK)) return _e; })
+#define catch(e,f,a...) ({ typeof(e) _e = (e); if (unlikely(_e)) { f(_e, ##a); } })
+#define try(e) catch(e, return)
 
 #if ALO_DEBUG && defined(ALO_LIB)
 intern a_none ai_dbg_panic(char const* fmt, ...);

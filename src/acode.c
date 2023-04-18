@@ -37,7 +37,7 @@ enum {
 	_index; \
 })
 
-#define l_bdel(par,buf) ai_buf_deinit(G((par)->_env), &(buf))
+#define l_bdel(par,buf) buf_deinit(G((par)->_env), &(buf))
 
 /**
  ** Load the index for constant.

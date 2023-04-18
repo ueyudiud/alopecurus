@@ -85,5 +85,5 @@ void ai_fmt_putp(a_henv env, void* raw_buf, void* v) {
 	if (unlikely(msg != ALO_SOK)) {
 		ai_mem_nomem(env);
 	}
-	buf->_len += ai_fmt_ptr2str(buf_fdst(buf) + BUFF_SIZE_FOR_PTR, v);
+	buf->_len += ai_fmt_ptr2str(buf_end(buf) + BUFF_SIZE_FOR_PTR, v);
 }

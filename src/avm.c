@@ -380,7 +380,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 		}
 
 		GStr* result = ai_buf_tostr(env, buf);
-		ai_buf_deinit(G(env), buf);
+		buf_deinit(G(env), buf);
 
 		return result;
 	}

@@ -60,7 +60,7 @@ static_assert((CHANNEL_ISTR_BODY ^ 1) == CHANNEL_ISTR_ESCAPE);
 static_assert((CHANNEL_MISTR_BODY ^ 1) == CHANNEL_MISTR_ESCAPE);
 
 struct Token {
-    a_i16 _tag;
+    a_i32 _tag;
     a_line _line;
     union {
         a_int _int;
@@ -101,7 +101,7 @@ struct Lexer {
     Buf _buf;
     GStr* _file; /* Source file name. */
     a_line _line;
-    a_i16 _ch; /* Next character. */
+    a_i32 _ch; /* Next character. */
     a_u32 _channel;
     Token _current;
 	Token _forward;

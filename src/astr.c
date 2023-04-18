@@ -161,7 +161,7 @@ GStr* ai_str_new(a_henv env, void const* src, a_usize len) {
 a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr) {
 	if (len <= ISTR_MAX_LEN) {
 		char buf[ISTR_MAX_LEN + 1];
-		check(ai_io_iget(in, buf, len));
+		try(ai_io_iget(in, buf, len));
 		*pstr = istr_get(env, buf, len);
 		return ALO_SOK;
 	}

@@ -24,7 +24,7 @@ struct InCtx {
     RefQueue _rq;
 };
 
-#define l_in(ic,p,l) check(ai_io_iget(&(ic)->_in, p, l))
+#define l_in(ic,p,l) try(ai_io_iget(&(ic)->_in, p, l))
 #define l_get(ic,t) ({ t _v0; l_in(ic, &_v0, sizeof(t));  _v0; })
 #define l_getv(ic,p,l) l_in(ic, p, sizeof((p)[0]) * (l))
 
@@ -65,13 +65,13 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
         case LVTAG_LSTR: {
             a_u32 len = l_getvi(ic, a_u32) + LVLSTR_LEN_BIAS;
             GStr* val;
-            check(ai_str_load(ic->_env, &ic->_in, len, &val));
+            try(ai_str_load(ic->_env, &ic->_in, len, &val));
             v_set_obj(ic->_in._env, v, val);
             break;
         }
         default: { /* For short string */
             GStr* val;
-			check(ai_str_load(ic->_env, &ic->_in, tag, &val));
+			try(ai_str_load(ic->_env, &ic->_in, tag, &val));
             v_set_obj(ic->_in._env, v, val);
             break;
         }
@@ -102,11 +102,11 @@ static a_msg l_load_meta(InCtx* ic, ProtoDesc const* info, GProto* meta) {
 	rq_push(&ic->_rq, meta);
     
     for (a_u32 i = 0; i < info->_nconst; ++i) {
-        check(l_load_const(ic, &meta->_consts[i]));
+        try(l_load_const(ic, &meta->_consts[i]));
     }
     l_getv(ic, meta->_code, info->_ninsn);
     for (a_u16 i = 0; i < info->_nsub; ++i) {
-        check(l_load_sub(ic, &meta->_subs[i]));
+        try(l_load_sub(ic, &meta->_subs[i]));
     }
     
     return ALO_SOK;
@@ -115,12 +115,12 @@ static a_msg l_load_meta(InCtx* ic, ProtoDesc const* info, GProto* meta) {
 static a_msg l_load_sub(InCtx* ic, GProto** pf) {
     /* Load function header */
     ProtoDesc info;
-    check(l_load_info(ic, &info, false));
+    try(l_load_info(ic, &info, false));
 
     GProto* meta = ai_proto_xalloc(ic->_env, &info);
     if (meta == null) return ALO_ENOMEM;
 
-    check(l_load_meta(ic, &info, meta));
+    try(l_load_meta(ic, &info, meta));
     *pf = meta;
     return ALO_SOK;
 }
@@ -128,18 +128,18 @@ static a_msg l_load_sub(InCtx* ic, GProto** pf) {
 static a_msg l_load_root(InCtx* ic) {
     /* Load function header */
     ProtoDesc info;
-    check(l_load_info(ic, &info, true));
+    try(l_load_info(ic, &info, true));
 
 	GProto* meta = ai_proto_xalloc(ic->_env, &info);
 	if (meta == null) return ALO_ENOMEM;
 
-    check(l_load_meta(ic, &info, meta));
+    try(l_load_meta(ic, &info, meta));
     
     return ALO_SOK;
 }
 
 static a_msg l_load(InCtx* ic) {
-    check(l_load_root(ic));
+    try(l_load_root(ic));
 	ai_gc_register_objects(ic->_in._env, &ic->_rq);
     return ALO_SOK;
 }

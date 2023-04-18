@@ -265,18 +265,18 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 		}
 		if (head) {
 			if (file != null) {
-				ai_buf_xputfs(env, buf, "%s:%u: ", file, line);
+				try(ai_buf_nputfs(env, buf, "%s:%u: ", file, line));
 			}
 			switch (v_get_tag(*err)) {
 				case T_HSTR:
 				case T_ISTR: {
 					GStr* str = v_as_str(*err);
-					ai_buf_xputls(env, buf, str->_data, str->_len);
+					try(ai_buf_nputls(env, buf, str->_data, str->_len));
 					break;
 				}
 				case T_INT: {
 					a_u32 code = cast(a_u32, v_as_int(*err));
-					ai_buf_xputfs(env, buf, "error code: %08x", code);
+					try(ai_buf_nputfs(env, buf, "error code: %08x", code));
 					break;
 				}
 				default: {
@@ -284,26 +284,26 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 				}
 			}
 			if (limit == 0) break;
-			ai_buf_xputs(env, buf, "\nstack trace:");
+			try(ai_buf_nputs(env, buf, "\nstack trace:"));
 			head = false;
 		}
-		ai_buf_xputs(env, buf, "\n\t");
+		try(ai_buf_nputs(env, buf, "\n\t"));
 		if (limit-- == 0) {
-			ai_buf_xputs(env, buf, "...");
+			try(ai_buf_nputs(env, buf, "..."));
 			break;
 		}
 		if (line != 0) {
 			assume(file != null);
-			ai_buf_xputfs(env, buf, "at %s:%u", file, line);
+			try(ai_buf_nputfs(env, buf, "at %s:%u", file, line));
 		}
 		else if (proto->_flags & FUN_FLAG_NATIVE) {
-			ai_buf_xputs(env, buf, "at [C]");
+			try(ai_buf_nputs(env, buf, "at [C]"));
 		}
 		else {
-			ai_buf_xputfs(env, buf, "at %s", file ?: "?");
+			try(ai_buf_nputfs(env, buf, "at %s", file ?: "?"));
 		}
 		if (name != null) {
-			ai_buf_xputfs(env, buf, " (%s)", name);
+			try(ai_buf_nputfs(env, buf, " (%s)", name));
 		}
 	}
 	GStr* str = ai_str_new(env, buf->_ptr, buf->_len);
@@ -314,9 +314,9 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 	if (env->_frame->_prev != null) {
 		Buf buf;
-		ai_buf_init(&buf);
+		buf_init(&buf);
 		a_msg msg = l_wrap_error(env, id, limit, &buf);
-		ai_buf_deinit(G(env), &buf);
+		buf_deinit(G(env), &buf);
 		return msg;
 	}
 
