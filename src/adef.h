@@ -155,7 +155,6 @@ typedef a_u32 a_insn;
 #undef null_of
 #undef addr_of
 #undef ptr_of
-#undef off_of
 #undef ptr_diff
 #undef ptr_disp
 #undef from_member
@@ -168,10 +167,9 @@ typedef a_u32 a_insn;
 #define null_of(t) ((t*) 0)
 #define addr_of(e) cast(a_usize, e)
 #define ptr_of(t,e) ({ typeof(e) _e = (e); quiet(&_e == zero(a_usize*)); cast(typeof(t)*, _e); })
-#define off_of(t,f) addr_of(&null_of(t)->f)
 #define ptr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
 #define ptr_disp(t,p,d) ptr_of(t, addr_of(p) + (d))
-#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &null_of(t)->f); ptr_of(t, addr_of(_v) - off_of(t, f)); })
+#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == null_of(typeof(((t*) 0)->f))); ptr_of(t, addr_of(_v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
 
 /**

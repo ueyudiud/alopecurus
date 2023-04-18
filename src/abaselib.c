@@ -7,7 +7,6 @@
 
 #include <stdio.h>
 
-#include "atmp.h"
 #include "atuple.h"
 #include "atype.h"
 #include "auser.h"
@@ -105,28 +104,26 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			else {
 				GTable* val = v_as_table(v);
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
-				if (val->_len > 0) {
-					aloi_show("{");
-					HNode* itr = list_first(val);
-					l_show_impl(env, itr->_key, depth + 1);
-					aloi_show(" -> ");
-					l_show_impl(env, itr->_value, depth + 1);
-					while (--n > 0) {
-						assume(itr != null);
-						itr = link_get(itr, _lnext);
+				HNode* node;
+				aloi_show("{");
+				a_bool tail = false;
+				for (a_x32 itr = val->_ptr->_link._next; !is_nil(itr); itr = node->_link._next) {
+					node = &val->_ptr[unwrap(itr)];
+					if (tail) {
 						aloi_show(", ");
-						l_show_impl(env, itr->_key, depth + 1);
-						aloi_show(" -> ");
-						l_show_impl(env, itr->_value, depth + 1);
 					}
-					if (val->_len > MAX_SHOW_LEN) {
+					else {
+						tail = true;
+					}
+					l_show_impl(env, node->_key, depth + 1);
+					aloi_show(" -> ");
+					l_show_impl(env, node->_value, depth + 1);
+					if (--n > 0) {
 						aloi_show(", ...");
+						break;
 					}
-					aloi_show("}");
 				}
-				else {
-					aloi_show("{}");
-				}
+				aloi_show("}");
 			}
 			break;
 		}

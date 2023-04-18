@@ -9,7 +9,6 @@
 #include <math.h>
 
 #include "adef.h"
-#include "atmp.h"
 #include "aname.h"
 
 typedef struct GObj GObj;
@@ -382,6 +381,12 @@ always_inline GList* v_as_list(Value v) {
  *=========================================================*/
 
 typedef struct HNode HNode;
+typedef struct HLink HLink;
+
+struct HLink {
+	a_x32 _prev;
+	a_x32 _next;
+};
 
 /**
  ** Linked hash table.
@@ -389,10 +394,8 @@ typedef struct HNode HNode;
 struct GTable {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
-	a_u32 _hmask; /* Hash mask. */
+	a_u32 _hmask;
 	HNode* _ptr; /* Data pointer. */
-	LIST_LINK_DEF; /* Head of linked list. */
-	a_u32 _hfree; /* Last hash free slot. */
 };
 
 /**
@@ -402,11 +405,13 @@ struct HNode {
 	Value _value;
 	Value _key;
 	a_hash _hash;
-	HLINK_NEXT_DEF;
-	NODE_LINK_DEF;
+	a_x32 _hnext;
+	HLink _link;
 };
 
 static_assert(offsetof(GObj, _len) == offsetof(GTable, _len));
+
+static_assert(offsetof(HNode, _hash) % sizeof(a_u64) == 0);
 
 #define v_is_table(v) v_is(v, T_TABLE)
 
@@ -565,15 +570,15 @@ struct alo_Type {
 	a_u32 _sig; /* Type methods signature, changed when the order of existed fields changed. */
 	a_u32 _nref; /* Reference counter. */
 
-	a_u32 BUF_LEN_NAME;
-	MAP_HMASK_DEF;
+	a_u32 _len;
+	a_u32 _hmask;
 
 	a_u16 _flags;
 	a_u8 _tag; /* The type tag. */
 
 	GLoader* _loader;
 	GStr* _name;
-	BUF_PTR_DEF(TDNode);
+	TDNode* _ptr;
 	Value* _values;
 
 	GType* _next; /* Used for linked list in loader. */
@@ -749,7 +754,7 @@ always_inline GStr* env_name(a_henv env, a_u32 tag) {
 }
 
 #define env_type(env,f) (&G(env)->_types.f)
-#define env_type_iname(f) off_of(Global, _types.f)
+#define env_type_iname(f) offsetof(Global, _types.f)
 
 /*=========================================================*
  * Buffer
@@ -757,7 +762,7 @@ always_inline GStr* env_name(a_henv env, a_u32 tag) {
 
 #define BUF_STRUCT_DECLARE(n,t,e...) \
     typedef struct n n; \
-    struct n { BUF_PTR_DEF(t); a_usize BUF_LEN_NAME; a_usize _cap; e; }
+    struct n { t* _ptr; a_usize _len; a_usize _cap; e; }
 
 BUF_STRUCT_DECLARE(Buf, a_byte);
 BUF_STRUCT_DECLARE(QBuf, a_byte, QBuf* _last);

@@ -33,7 +33,7 @@ enum {
         l_check_alloc(ai_buf_ngrow((par)->_env, _buf, _buf->_cap + u)); \
     } \
 	a_usize _index = _buf->_len++; \
-    _buf->BUF_PTR_REF[_index] = (v); \
+    _buf->_ptr[_index] = (v); \
 	_index; \
 })
 

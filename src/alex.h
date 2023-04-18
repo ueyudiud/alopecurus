@@ -7,7 +7,6 @@
 
 #include "akw.h"
 #include "abuf.h"
-#include "atmp.h"
 #include "aobj.h"
 #include "aio.h"
 
@@ -74,14 +73,14 @@ typedef struct StrNode StrNode;
 struct StrNode { 
     GStr* _str;
 	a_x32 _hprev;
-	HLINK_NEXT_DEF;
+	a_x32 _hnext;
 };
 
 typedef struct {
-	BUF_PTR_DEF(StrNode);
-    a_u32 BUF_LEN_NAME;
-	MAP_HMASK_DEF;
-	a_u32 _hfree;
+	StrNode* _ptr;
+    a_u32 _len;
+	a_u32 _hmask;
+	a_x32 _hfree;
 } LexStrs;
 
 struct LexScope {

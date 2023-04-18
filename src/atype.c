@@ -31,6 +31,7 @@ GType* ai_type_alloc(a_henv env, a_usize len, a_vptr proto) {
 
 	self->_vptr = &type_vtable;
 	self->_size = size;
+
 	if (proto != null) {
 		VTable* vtbl = self->_opt_vtbl;
 		memcpy(vtbl, proto, sizeof(VTable) + sizeof(a_vslot) * len);
@@ -49,7 +50,7 @@ void ai_type_init(a_henv env, GType* self, a_tag tag, a_u32 nid) {
 }
 
 GType* ai_atype_new(a_henv env) {
-	GType* self = ai_type_alloc(env, 3, &ai_auser_vtable); //TODO
+	GType* self = ai_type_alloc(env, 3, &ai_auser_vtable); //TODO 3 is a magic number.
 	self->_tag = ALO_TUSER;
 	return self;
 }
@@ -58,25 +59,33 @@ static void type_alloc_array(a_henv env, GType* self, a_usize new_cap) {
 	void* block = ai_mem_alloc(env, (sizeof(TDNode) + sizeof(Value)) * new_cap);
 
 	self->_hmask = new_cap - 1;
-	self->_ptr = block;
+	self->_ptr = cast(TDNode*, block) - 1;
 	self->_values = block + sizeof(TDNode) * new_cap;
 
 	memclr(block, sizeof(TDNode) * new_cap);
 }
 
+static TDNode* type_hfirst(GType* self, a_hash hash) {
+	return &self->_ptr[(hash & self->_hmask) + 1];
+}
+
 static a_bool tdnode_is_head(GType* self, TDNode* node) {
-	return node->_key != null && node == map_hash_first(self, node->_key->_hash);
+	return node->_key != null && node == type_hfirst(self, node->_key->_hash);
 }
 
 static Value* type_refis(unused a_henv env, GType* self, GStr* key) {
 	assume(g_is_istr(key), "not short string.");
-#define test(n) ((n)->_key == key)
-#define empty(n) (!tdnode_is_head(self, n))
-#define con(n) ({ return &self->_values[(n)->_index]; })
-	map_find_template(self, key->_hash, test, empty, con);
-#undef test
-#undef empty
-#undef con
+	if (self->_len > 0) {
+		TDNode* node = type_hfirst(self, key->_hash);
+		if (tdnode_is_head(self, node)) {
+			do {
+				if (node->_key == key) {
+					return &self->_values[node->_index];
+				}
+			}
+			while (!is_nil(node->_hnext) && (node = &self->_ptr[unwrap(node->_hnext)], true));
+		}
+	}
 	return null;
 }
 
@@ -94,31 +103,33 @@ static TDNode* type_find_free(GType* self, TDNode* node) {
 }
 
 static TDNode* type_get_hprev(GType* self, TDNode* node) {
-	TDNode* nodep = map_hash_first(self, node->_key->_hash);
-	TDNode* noden;
-	while ((noden = link_get(nodep, _hnext)) != node) {
+	TDNode* nodep = type_hfirst(self, node->_key->_hash);
+	loop {
+		TDNode* noden  = &self->_ptr[unwrap(nodep->_hnext)];
+		if (noden == node)
+			break;
 		nodep = noden;
 	}
 	return nodep;
 }
 
 static void type_emplace(a_henv env, GType* self, GStr* key, Value value, a_u32 index) {
-	TDNode* nodeh = map_hash_first(self, key->_hash);
+	TDNode* nodeh = type_hfirst(self, key->_hash);
 	if (tdnode_is_head(self, nodeh)) {
 		/* Insert into hash list. */
 		TDNode* nodet = type_find_free(self, nodeh);
-		TDNode* noden = link_get(nodeh, _hnext);
 
 		/* Emplace node at another free node. */
 		/*                       v
 		 * h -> n -> ... => h -> t -> n -> ...
 		 */
 
-		nodet->_key = key;
-		nodet->_index = index;
-
-		link_set(nodeh, _hnext, nodet);
-		link_set(nodet, _hnext, noden);
+		*nodet = new(TDNode) {
+			._key = key,
+			._index = index,
+			._hnext = nodeh->_hnext
+		};
+		nodeh->_hnext = wrap(nodet - self->_ptr);
 	}
 	else {
 		if (nodeh->_key != null) {
@@ -128,20 +139,23 @@ static void type_emplace(a_henv env, GType* self, GStr* key, Value value, a_u32 
 			 */
 			TDNode* nodef = type_find_free(self, nodeh);
 			TDNode* nodep = type_get_hprev(self, nodeh);
-			TDNode* noden = link_get(nodeh, _hnext);
-			nodef->_key = nodeh->_key;
-			nodef->_index = nodeh->_index;
-			link_set(nodef, _hnext, noden);
-			link_set(nodep, _hnext, nodef);
+			*nodef = new(TDNode) {
+				._key = nodeh->_key,
+				._index = nodeh->_index,
+				._hnext = nodeh->_hnext
+			};
+			nodep->_hnext = wrap(nodef - self->_ptr);
 		}
 		/* Emplace node locally. */
 		/*    v
 		 * => h
 		 */
 
-		nodeh->_key = key;
-		nodeh->_index = index;
-		nodeh->_hnext = nil;
+		*nodeh = new(TDNode) {
+			._key = key,
+			._index = index,
+			._hnext = nil
+		};
 	}
 	v_set(env, &self->_values[index], value);
 }
@@ -226,7 +240,7 @@ Value ai_type_getis(a_henv env, GType* self, GStr* key) {
 static void type_drop(Global* g, a_hobj raw_self) {
 	GType* self = g_cast(GType, raw_self);
 	if (self->_ptr != null) {
-		ai_mem_dealloc(g, self->_ptr, (sizeof(TDNode) + sizeof(Value)) * (self->_hmask + 1));
+		ai_mem_dealloc(g, self->_ptr + 1, (sizeof(TDNode) + sizeof(Value)) * (self->_hmask + 1));
 	}
 	ai_mem_dealloc(g, self, self->_size);
 }
