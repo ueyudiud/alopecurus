@@ -25,16 +25,11 @@ enum {
 /* Variable length of arguments. */
 #define VARARG cast(a_u32, -1)
 
-#define l_check_alloc(e) if (unlikely((e) != ALO_SOK)) ai_mem_nomem((par)->_env)
-
-#define l_bput(par,b,v,u)  ({ \
-    typeof(b)* _buf = &(b); \
-    if (unlikely(_buf->_len == _buf->_cap)) { \
-        l_check_alloc(ai_buf_ngrow((par)->_env, _buf, _buf->_cap + u)); \
-    } \
-	a_usize _index = _buf->_len++; \
-    _buf->_ptr[_index] = (v); \
-	_index; \
+#define l_bput(par,b,v,w)  ({ \
+    typeof(b)* _b0 = &(b);    \
+	a_usize _id = _b0->_len;     \
+    ai_buf_put((par)->_env, _b0, v, w); \
+	_id; \
 })
 
 #define l_bdel(par,buf) buf_deinit(G((par)->_env), &(buf))
@@ -59,7 +54,7 @@ static a_u32 l_const_index(Parser* par, Value val) {
 		ai_par_report(par, false, par_err_f_arg(par, "too many constants."));
 	}
 
-	return l_bput(par, *consts, val, 256);
+	return l_bput(par, *consts, val, "constant");
 }
 
 static a_bool l_const_is_istr(Parser* par, a_u32 index) {
@@ -83,7 +78,7 @@ static void l_emit_line(Parser* par, a_line line) {
 	FnScope* scope = par->_fnscope;
 	if (scope->_head_line != line) {
 		LineInfo info = new(LineInfo) {UINT32_MAX, line};
-		a_u32 index = l_bput(par, par->_lines, info, 512);
+		a_u32 index = l_bput(par, par->_lines, info, "line");
 		if (index > scope->_line_off) { /* Settle end label for last line info. */
 			par->_lines._ptr[index - 1]._end = par->_head_label;
 		}
@@ -94,7 +89,7 @@ static void l_emit_line(Parser* par, a_line line) {
 static a_u32 l_emit_direct(Parser* par, a_insn insn, a_u32 line) {
 	insn_check(insn);
 	l_emit_line(par, line);
-	return l_bput(par, par->_insns, insn, 1024);
+	return l_bput(par, par->_insns, insn, "code");
 }
 
 static a_bool l_should_eval(Parser* par) {
@@ -588,7 +583,7 @@ static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth
 	else { /* Acquire capture index from upper function. */
 		info._src_index = l_lookup_capture(par, scope->_fn_up, sym,depth - 1);
 	}
-	return l_bput(par, scope->_caps, info, 16);
+	return l_bput(par, scope->_caps, info, "capture");
 }
 
 static a_u32 l_capture(Parser* par, Sym* sym) {
@@ -1929,14 +1924,12 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 	}
 }
 
-#define NAMES_GROW_UNIT 64
-
 static a_u32 l_push_symbol(Parser* par, Sym sym) {
-	return l_bput(par, par->_syms, sym, NAMES_GROW_UNIT);
+	return l_bput(par, par->_syms, sym, "symbol");
 }
 
 static a_u32 l_push_local(Parser* par, LocalInfo info) {
-	a_u32 index = l_bput(par, par->_locals, info, 32);
+	a_u32 index = l_bput(par, par->_locals, info, "local variable");
 	return index - par->_fnscope->_local_off;
 }
 

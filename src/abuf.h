@@ -79,17 +79,18 @@ always_inline a_msg ai_buf_ncheck_(a_henv env, void* raw_buf, a_usize add, a_usi
 always_inline a_msg ai_buf_nputv_(a_henv env, void* raw_buf, void const* src, a_usize len, a_usize size, a_usize lim) {
 	Buf* buf = raw_buf;
 	try(ai_buf_ncheck_(env, raw_buf, len, size, lim));
-	memcpy(buf_end(buf), src, len * size);
+	memcpy(buf->_ptr + size * buf->_len, src, len * size);
 	buf->_len += len;
 	return ALO_SOK;
 }
 
-#define ai_buf_ngrow(env,b,n) ai_buf_ngrow_(env, b, n, sizeof((b)->_ptr[0]))
 #define ai_buf_ncheck(env,b,a) ai_buf_ncheck_(env, b, a, sizeof((b)->_ptr[0]), SIZE_MAX / sizeof((b)->_ptr[0]))
 #define ai_buf_nputv(env,b,s,l) ai_buf_nputv_(env, b, s, l, sizeof((b)->_ptr[0]), SIZE_MAX / sizeof((b)->_ptr[0]))
 #define ai_buf_nput(env,b,s) ({ typeof((b)->_ptr[0]) _va = (s); ai_buf_nputv(env, b, &_va, 1); })
 #define ai_buf_nputls(env,b,s,l) ai_buf_nputv_(env, b, s, l, 1, SIZE_MAX)
 #define ai_buf_nputs(env,b,s) ai_buf_nputls(env, b, s, strlen(s))
+
+#define ai_buf_put(env,b,s,w) catch(ai_buf_nput(env, b, s), ai_buf_error, env, w)
 
 always_inline void ai_buf_putls(a_henv env, void* buf, void const* src, a_usize len) {
 	a_msg msg = ai_buf_nputls(env, buf, src, len);
