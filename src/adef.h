@@ -63,11 +63,6 @@
 # define intern extern
 #endif
 
-#undef always_inline
-#undef never_inline
-#undef naked
-#undef unused
-
 #define always_inline __attribute__((__always_inline__, __gnu_inline__)) extern __inline__
 #define never_inline __attribute__((__noinline__))
 #define naked __attribute__((__naked__))
@@ -96,15 +91,6 @@ typedef a_u32 a_insn;
 
 /* Literal function. */
 
-#undef u8c
-#undef u16c
-#undef u32c
-#undef u64c
-#undef i8c
-#undef i16c
-#undef i32c
-#undef i64c
-
 #define u8c  UINT8_C
 #define u16c UINT16_C
 #define u32c UINT32_C
@@ -121,12 +107,6 @@ typedef a_u32 a_insn;
 #define ISIZE_MIN PTRDIFF_MIN
 
 /* Other literals. */
-
-#undef null
-#undef false
-#undef true
-#undef zero
-#undef nil
 
 #define null NULL
 #define false ((a_bool) M_false)
@@ -147,18 +127,6 @@ typedef a_u32 a_insn;
 #endif
 
 /* Special generic functors. */
-
-#undef new
-#undef cast
-#undef bit_cast
-#undef quiet
-#undef null_of
-#undef addr_of
-#undef ptr_of
-#undef ptr_diff
-#undef ptr_disp
-#undef from_member
-#undef fallthrough
 
 #define new(t) (t)
 #define cast(t,e) ((t) (e))
@@ -193,15 +161,6 @@ typedef a_u32 a_insn;
 
 /* Utility functions. */
 
-#undef max
-#undef min
-#undef swap
-#undef expect
-#undef likely
-#undef unlikely
-#undef trap
-#undef unreachable
-
 #define max(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a >= _b ? _a : _b; })
 #define min(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a <= _b ? _a : _b; })
 #define swap(a,b) ({ typeof(a)* _a = &(a); typeof(b)* _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
@@ -212,9 +171,6 @@ typedef a_u32 a_insn;
 #define unreachable() __builtin_unreachable()
 
 /* Error handling functions. */
-
-#undef catch
-#undef try
 
 #define catch(e,f,a...) ({ typeof(e) _e = (e); if (unlikely(_e)) { f(_e, ##a); } })
 #define try(e) catch(e, return)
@@ -230,15 +186,8 @@ intern a_none ai_dbg_panic(char const* fmt, ...);
 
 /* Special control flow. */
 
-#undef run
-#undef loop
-
 #define run if (true)
 #define loop while (true)
-
-/* Extend arithmetic operations. */
-
-#undef memclr
 
 /**
  ** Fill memory with zero bits.
