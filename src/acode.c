@@ -712,6 +712,9 @@ void ai_code_index(Parser* par, InoutExpr ev, InExpr ek, a_line line) {
 		expr_never(ev, line);
 		return;
 	}
+    if (unlikely(par->_fnscope->_fvarg)) {
+        ai_par_error(par, "cannot index by variable arguments", line);
+    }
 	switch (ek->_kind) {
 		/* Optimize for specific expressions. */
 		case EXPR_NEVER: {
@@ -2172,6 +2175,18 @@ void ai_code_enter(Parser* par, Scope* scope, a_line line) {
 void ai_code_leave(Parser* par, a_line line) {
 	assume(par->_scope->_up != null);
 	scope_pop(par, line);
+}
+
+void ai_code_leave_with(Parser* par, a_line line, InoutExpr e) {
+    assume(par->_scope->_up != null);
+    if ((e->_kind == EXPR_TMP || e->_kind == EXPR_VAR) && e->_reg == par->_scope->_up->_top_reg) {
+        scope_pop(par, line);
+        par->_scope->_top_reg += 1;
+    }
+    else {
+        l_dynR(par, e);
+        scope_pop(par, line);
+    }
 }
 
 void ai_code_prologue(Parser* par, FnScope* fnscope, a_line line) {

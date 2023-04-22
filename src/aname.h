@@ -55,13 +55,13 @@ enum {
     NAME__END = NAME_PT__END
 };
 
-#define name_id(str) ((str)->_tnext >> 32)
+#define name_id(str) ((str)->_tnext >> 16)
 #define name_iskw(str) (name_id(str) >= NAME_KW__FIRST && name_id(str) <= NAME_KW__LAST)
 #define name_istm(str) (name_id(str) >= NAME_TM__FIRST && name_id(str) <= NAME_TM__LAST)
 #define name_totk(str) (cast(a_i32, name_id(str)) + TK_IF - NAME_KW_IF)
 #define name_totm(str) (cast(a_i32, name_id(str)) + TM_GET - NAME_TM_GET)
 
-#define name_id_set(str,tag) quiet((str)->_tnext = cast(a_u64, tag) << 32)
+#define name_id_set(str,tag) quiet((str)->_tnext = cast(a_u64, tag) << 16)
 
 enum {
 #define KWPOS(id,name) NAME_POS_KW_##id, NAME_EPOS_KW_##id = NAME_POS_KW_##id + sizeof(name) - 1,

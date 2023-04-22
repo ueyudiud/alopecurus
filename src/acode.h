@@ -58,6 +58,7 @@ intern void ai_code_compact(Parser* par);
 
 intern void ai_code_enter(Parser* par, Scope* scope, a_line line);
 intern void ai_code_leave(Parser* par, a_line line);
+intern void ai_code_leave_with(Parser* par, a_line line, InoutExpr e);
 intern void ai_code_prologue(Parser* par, FnScope* fnscope, a_line line);
 intern GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line);
 intern void ai_code_open(Parser* par);

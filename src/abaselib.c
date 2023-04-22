@@ -102,29 +102,34 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 				aloi_show("{...}");
 			}
 			else {
-				GTable* val = v_as_table(v);
-				a_u32 n = min(val->_len, MAX_SHOW_LEN);
-				HNode* node;
-				aloi_show("{");
-				a_bool tail = false;
-				for (a_x32 itr = val->_ptr->_link._next; !is_nil(itr); itr = node->_link._next) {
-					node = &val->_ptr[unwrap(itr)];
-					if (tail) {
-						aloi_show(", ");
-					}
-					else {
-						tail = true;
-					}
-					l_show_impl(env, node->_key, depth + 1);
-					aloi_show(" -> ");
-					l_show_impl(env, node->_value, depth + 1);
-					if (--n > 0) {
-						aloi_show(", ...");
-						break;
-					}
-				}
-				aloi_show("}");
-			}
+                GTable *val = v_as_table(v);
+                if (val->_len == 0) {
+                    aloi_show("{}");
+                }
+                else {
+                    a_u32 n = MAX_SHOW_LEN;
+                    aloi_show("{");
+                    a_bool tail = false;
+                    HNode *node;
+                    for (a_x32 itr = val->_ptr->_link._next; !is_nil(itr); itr = node->_link._next) {
+                        node = &val->_ptr[unwrap(itr)];
+                        if (tail) {
+                            aloi_show(", ");
+                        }
+                        else {
+                            tail = true;
+                        }
+                        l_show_impl(env, node->_key, depth + 1);
+                        aloi_show(" -> ");
+                        l_show_impl(env, node->_value, depth + 1);
+                        if (--n == 0) {
+                            aloi_show(", ...");
+                            break;
+                        }
+                    }
+                    aloi_show("}");
+                }
+            }
 			break;
 		}
 		case T_FUNC: {

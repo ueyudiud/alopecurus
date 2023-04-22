@@ -8,7 +8,6 @@
 #include <string.h>
 
 #include "amem.h"
-#include "agc.h"
 
 #include "aio.h"
 
@@ -25,7 +24,7 @@ void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in) {
 
 static a_msg in_fetch(ZIn* in) {
     assume(in->_len == 0);
-    a_isize err = (*in->_fun)(in->_env, in->_ctx, cast(void const**, &in->_ptr), &in->_len);
+    a_i32 err = (*in->_fun)(in->_env, in->_ctx, cast(void const**, &in->_ptr), &in->_len);
     in->_err = err;
     return likely(!err) ? ALO_SOK : ALO_EOUTER;
 }
