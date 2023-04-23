@@ -24,6 +24,14 @@ a_none ai_dbg_panic(char const* fmt, ...) {
 	trap();
 }
 
+void ai_dbg_debug(char const* fmt, ...) {
+	va_list varg;
+	va_start(varg, fmt);
+	vfprintf(stdout, fmt, varg);
+	fflush(stdout);
+	va_end(varg);
+}
+
 #endif
 
 GFun* ai_dbg_get_func(a_henv env, Frame* frame) {

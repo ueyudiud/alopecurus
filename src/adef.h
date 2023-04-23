@@ -24,12 +24,21 @@
 #define ALO_COMP_OPT_EVAL 0x2000000
 
 /**
- ** Debug aasm mode. If enabled, all assumption will be checked and panic if failed.
+ ** Debug mode. If enabled, all assumption will be checked and panic if failed.
  */
 #ifdef ALOI_DEBUG
 # define ALO_DEBUG M_true
 #else
 # define ALO_DEBUG M_false
+#endif
+
+/**
+ ** Dump more information in compilation pass.
+ */
+#if ALO_DEBUG && defined(ALOI_DEBUG_COMPILE)
+# define ALO_DEBUG_COMPILE M_true
+#else
+# define ALO_DEBUG_COMPILE M_false
 #endif
 
 /**
@@ -133,6 +142,7 @@ typedef a_u32 a_insn;
 #define bit_cast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
 #define null_of(t) ((t*) 0)
+#define dangling_of(t) ((t*) sizeof(t))
 #define addr_of(e) cast(a_usize, e)
 #define ptr_of(t,e) ({ typeof(e) _e = (e); quiet(&_e == zero(a_usize*)); cast(typeof(t)*, _e); })
 #define ptr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
@@ -176,10 +186,16 @@ typedef a_u32 a_insn;
 #define try(e) catch(e, return)
 
 #if ALO_DEBUG && defined(ALO_LIB)
+
 intern a_none ai_dbg_panic(char const* fmt, ...);
 # define panic(m...) ai_dbg_panic(""m)
+
+intern void ai_dbg_debug(char const* fmt, ...);
+# define debug(m...) ai_dbg_debug(""m)
+
 #else
 # define panic(...) unreachable()
+# define debug(...) quiet()
 #endif
 
 #define assume(e,m...) ((void) (!!(e) || (panic(m), false)))
