@@ -32,6 +32,8 @@ always_inline void ai_buf_drop_(Global* g, void* raw_buf, a_usize size) {
 
 #define buf_end(b) cast(char*, (b)->_ptr + (b)->_len)
 
+#define buf_for(b,v) for (typeof((b)->_ptr) v = (b)->_ptr, _end_##v = (b)->_ptr + (b)->_len; v < _end_##v; v += 1)
+
 always_inline a_msg ai_buf_ngrow_(a_henv env, void* raw_buf, a_usize new_cap, a_usize size) {
 	Buf* buf = raw_buf;
 	assume(buf->_cap <= SIZE_MAX / size);
