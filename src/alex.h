@@ -6,8 +6,8 @@
 #define alex_h_
 
 #include "akw.h"
-#include "abuf.h"
 #include "aobj.h"
+#include "abuf.h"
 #include "aio.h"
 
 typedef a_u16 a_line;
@@ -97,7 +97,7 @@ struct Lexer {
 		ZIn _in;
 		a_henv _env;
 	};
-    Buf _buf;
+    ByteBuf _buf;
     GStr* _file; /* Source file name. */
     a_line _line;
     a_i32 _ch; /* Next character. */

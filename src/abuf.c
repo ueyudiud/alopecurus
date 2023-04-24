@@ -14,27 +14,26 @@
 
 static VTable const buf_vtable;
 
-a_msg ai_buf_nputfs(a_henv env, void* buf, char const* fmt, ...) {
+a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...) {
 	va_list varg;
 	va_start(varg, fmt);
-	a_msg msg = ai_buf_nputvfs(env, buf, fmt, varg);
+	a_msg msg = ai_buf_nputvfs_(env, buf, fmt, varg);
 	va_end(varg);
 	return msg;
 }
 
-a_msg ai_buf_nputvfs(a_henv env, void* raw_buf, char const* fmt, va_list varg) {
-	Buf* buf = raw_buf;
+a_msg ai_buf_nputvfs_(a_henv env, a_hbuf buf, char const* fmt, va_list varg) {
 	a_usize rem = buf->_cap - buf->_len;
 	va_list varg2;
 	va_copy(varg2, varg);
-	a_usize len = vsnprintf(buf_end(buf), rem, fmt, varg);
+	a_usize len = vsnprintf(buf->_ptr + buf->_len, rem, fmt, varg);
 	if (len + 1 > rem) {
-		a_msg msg = ai_buf_ncheck(env, buf, len + 1);
+		a_msg msg = ai_buf_ncheck(env, buf, len + 1, 1, SIZE_MAX);
 		if (unlikely(msg != ALO_SOK)) {
 			va_end(varg2);
 			return msg;
 		}
-		vsnprintf(buf_end(buf), len + 1, fmt, varg2);
+		vsnprintf(buf->_ptr + buf->_len, len + 1, fmt, varg2);
 	}
 	va_end(varg2);
 	buf->_len += len;
@@ -45,14 +44,14 @@ GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
 	self->_vptr = &buf_vtable;
-	ai_buf_init(self);
+	at_buf_init(*self);
 
 	ai_gc_register_object(env, self);
 
 	return self;
 }
 
-a_none ai_buf_error(a_msg msg, a_henv env, char const *what) {
+a_none ai_buf_error(a_msg msg, a_henv env, char const* what) {
 	if (msg == ALO_EINVAL) {
 		ai_err_raisef(env, msg, "too many %s.", what);
 	}
@@ -69,7 +68,7 @@ static void buf_mark(Global* g, a_hobj raw_self) {
 
 static void buf_drop(Global* g, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	ai_buf_drop(g, self);
+	at_buf_deinit(g, *self);
 	ai_mem_dealloc(g, self, sizeof(GBuf));
 }
 

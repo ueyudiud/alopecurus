@@ -105,7 +105,7 @@ static a_bool c_isibody(a_i32 ch) {
 }
 
 static void l_bput(Lexer* lex, a_i32 ch) {
-	a_msg msg = ai_buf_nput(lex->_env, &lex->_buf, ch);
+	a_msg msg = at_buf_nput(lex->_env, lex->_buf, ch);
 	if (unlikely(msg != ALO_SOK)) {
 		if (msg == ALO_EINVAL) {
 			ai_lex_error(lex, "token too long.");
@@ -229,9 +229,9 @@ static void strs_close(a_henv env, LexStrs* strs) {
 }
 
 static GStr* l_to_str(Lexer* lex) {
-    Buf* buf = &lex->_buf;
+    ByteBuf* buf = &lex->_buf;
     GStr* str = ai_lex_to_str(lex, buf->_ptr, buf->_len);
-	ai_buf_reset(&lex->_buf);
+	at_buf_clear(lex->_buf);
     return str;
 }
 
@@ -256,7 +256,7 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 
 void ai_lex_close(Lexer* lex) {
 	strs_close(lex->_env, &lex->_strs);
-	ai_buf_drop(G(lex->_env), &lex->_buf);
+	at_buf_deinit(G(lex->_env), lex->_buf);
 }
 
 char const* ai_lex_tagname(a_i32 tag) {

@@ -42,7 +42,7 @@ typedef struct Stack Stack;
 typedef struct Global Global;
 typedef struct Loader Loader;
 typedef struct TypeCache TypeCache;
-typedef struct Buf Buf;
+typedef struct ByteBuf ByteBuf;
 
 #define T_NIL u32c(0)
 #define T_FALSE u32c(1)
@@ -755,18 +755,6 @@ always_inline GStr* env_name(a_henv env, a_u32 tag) {
 
 #define env_type(env,f) (&G(env)->_types.f)
 #define env_type_iname(f) offsetof(Global, _types.f)
-
-/*=========================================================*
- * Buffer
- *=========================================================*/
-
-#define BUF_STRUCT_DECLARE(n,t,e...) \
-    typedef struct n n; \
-    struct n { t* _ptr; a_usize _len; a_usize _cap; e; }
-
-BUF_STRUCT_DECLARE(Buf, a_byte);
-BUF_STRUCT_DECLARE(QBuf, a_byte, QBuf* _last);
-BUF_STRUCT_DECLARE(GBuf, a_byte, GOBJ_STRUCT_HEADER);
 
 /*=========================================================*/
 

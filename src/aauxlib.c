@@ -242,7 +242,7 @@ void aloL_raisef(a_henv env, char const* fmt, ...) {
 	alo_raise(env);
 }
 
-static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
+static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, a_hbuf buf) {
 	a_bool head = true;
 	Value* err = api_wrslot(env, id);
 	for (Frame* frame = env->_frame; frame->_prev != null; frame = frame->_prev) {
@@ -314,9 +314,9 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, Buf* buf) {
 a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
 	if (env->_frame->_prev != null) {
 		Buf buf;
-		ai_buf_init(&buf);
-		a_msg msg = l_wrap_error(env, id, limit, &buf);
-		ai_buf_drop(G(env), &buf);
+		at_buf_init(buf);
+		a_msg msg = l_wrap_error(env, id, limit, at_buf_cast(buf));
+		at_buf_deinit(G(env), buf);
 		return msg;
 	}
 

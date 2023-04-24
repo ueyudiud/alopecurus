@@ -28,11 +28,11 @@ enum {
 #define l_bput(par,b,v,w)  ({ \
     typeof(b)* _b0 = &(b);    \
 	a_usize _id = _b0->_len;     \
-    ai_buf_put((par)->_env, _b0, v, w); \
+    at_buf_put((par)->_env, _b0, v, w); \
 	_id; \
 })
 
-#define l_bdel(par,buf) ai_buf_drop(G((par)->_env), &(buf))
+#define l_bdel(par,buf) at_buf_deinit(G((par)->_env), &(buf))
 
 /**
  ** Load the index for constant.
@@ -54,7 +54,7 @@ static a_u32 l_const_index(Parser* par, Value val) {
 		ai_par_report(par, false, par_err_f_arg(par, "too many constants."));
 	}
 
-	return l_bput(par, *consts, val, "constant");
+	return at_buf_put(par->_env, *consts, val, "constant");
 }
 
 static a_bool l_const_is_istr(Parser* par, a_u32 index) {
@@ -78,7 +78,7 @@ static void l_emit_line(Parser* par, a_line line) {
 	FnScope* scope = par->_fnscope;
 	if (scope->_head_line != line) {
 		LineInfo info = new(LineInfo) {UINT32_MAX, line};
-		a_u32 index = l_bput(par, par->_lines, info, "line");
+		a_u32 index = at_buf_put(par->_env, par->_lines, info, "line");
 		if (index > scope->_line_off) { /* Settle end label for last line info. */
 			par->_lines._ptr[index - 1]._end = par->_head_label;
 		}
@@ -89,7 +89,7 @@ static void l_emit_line(Parser* par, a_line line) {
 static a_u32 l_emit_direct(Parser* par, a_insn insn, a_u32 line) {
 	insn_check(insn);
 	l_emit_line(par, line);
-	return l_bput(par, par->_insns, insn, "code");
+	return at_buf_put(par->_env, par->_insns, insn, "code");
 }
 
 static a_bool l_should_eval(Parser* par) {
@@ -583,7 +583,7 @@ static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth
 	else { /* Acquire capture index from upper function. */
 		info._src_index = l_lookup_capture(par, scope->_fn_up, sym,depth - 1);
 	}
-	return l_bput(par, scope->_caps, info, "capture");
+	return at_buf_put(par->_env, scope->_caps, info, "capture");
 }
 
 static a_u32 l_capture(Parser* par, Sym* sym) {
@@ -1628,16 +1628,16 @@ a_u32 ai_code_args_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_lin
 static a_bool l_try_fold_append(Parser* par, QBuf* buf, InExpr e) {
 	switch (e->_kind) {
 		case EXPR_INT: {
-			ai_fmt_puti(par->_env, buf, e->_int);
+			at_fmt_puti(par->_env, buf, e->_int);
 			return true;
 		}
 		case EXPR_FLOAT: {
-			ai_fmt_putf(par->_env, buf, e->_float);
+			at_fmt_putf(par->_env, buf, e->_float);
 			return true;
 		}
 		case EXPR_STR: {
 			GStr* str = e->_str;
-			ai_buf_putls(par->_env, buf, str->_data, str->_len);
+			at_buf_putls(par->_env, buf, str->_data, str->_len);
 			return true;
 		}
 		default: {
@@ -1648,7 +1648,7 @@ static a_bool l_try_fold_append(Parser* par, QBuf* buf, InExpr e) {
 
 static GStr* buf_to_str(Parser* par, QBuf* buf) {
 	GStr* str = ai_lex_to_str(&par->_lex, buf->_ptr, buf->_len);
-	ai_buf_reset(buf);
+	at_buf_clear(*buf);
 	return str;
 }
 
@@ -1664,17 +1664,17 @@ void ai_code_concat_next(Parser* par, ConExpr* ce, InExpr e, a_line line) {
 	else if (ce->_buf._len > 0) {
 		l_dynR(par, e); /* Drop used register. */
 
+		l_topV(par, ce->_expr);
+
 		a_u32 reg = l_succ_alloc_stack(par, 2, line);
 		l_fixR(par, e, reg + 1);
 
 		GStr* str = buf_to_str(par, &ce->_buf);
 		l_emit_k(par, reg, v_of_obj(str), line);
-		if (ce->_expr->_kind != EXPR_NTMP) {
-			l_topV(par, ce->_expr);
-			ce->_expr->_args._top = reg + 2;
-		}
 
-		ai_buf_reset(&ce->_buf);
+		ce->_expr->_args._top = reg + 2;
+
+		at_buf_clear(ce->_buf);
 	}
 	else {
 		l_va_push(par, ce->_expr, e, line);
@@ -1701,7 +1701,7 @@ void ai_code_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 
 	/* Check and drop_object string buffer. */
 	if (par->_qbq == &ce->_buf) {
-		l_bdel(par, ce->_buf);
+		at_buf_deinit(G(par->_env), ce->_buf);
 		par->_qbq = ce->_buf._last;
 	}
 }
@@ -1928,11 +1928,11 @@ void ai_code_bind(Parser* par, InExpr e1, InExpr e2, a_line line) {
 }
 
 static a_u32 l_push_symbol(Parser* par, Sym sym) {
-	return l_bput(par, par->_syms, sym, "symbol");
+	return at_buf_put(par->_env, par->_syms, sym, "symbol");
 }
 
 static a_u32 l_push_local(Parser* par, LocalInfo info) {
-	a_u32 index = l_bput(par, par->_locals, info, "local variable");
+	a_u32 index = at_buf_put(par->_env, par->_locals, info, "local variable");
 	return index - par->_fnscope->_local_off;
 }
 
@@ -2279,7 +2279,7 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 		proto->_dbg_lnldef = line;
 	}
 
-	l_bdel(par, scope->_caps);
+	at_buf_deinit(G(par->_env), scope->_caps);
 
 	FnScope* up_scope = scope->_fn_up;
 
@@ -2304,11 +2304,11 @@ static void l_del_proto(a_henv env, GProto* proto) {
 }
 
 static void parser_close(Parser* par) {
-	l_bdel(par, par->_insns);
-	l_bdel(par, par->_consts);
-	l_bdel(par, par->_lines);
-	l_bdel(par, par->_locals);
-	l_bdel(par, par->_syms);
+	at_buf_deinit(G(par->_env), par->_insns);
+	at_buf_deinit(G(par->_env), par->_consts);
+	at_buf_deinit(G(par->_env), par->_lines);
+	at_buf_deinit(G(par->_env), par->_locals);
+	at_buf_deinit(G(par->_env), par->_syms);
 	ai_lex_close(&par->_lex);
 
 	gbl_unprotect(par->_env);
@@ -2334,10 +2334,10 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 	rq_for(obj, &par->_rq) { l_del_proto(par->_env, g_cast(GProto, obj)); }
 	/* Close linked buffers. */
 	for (QBuf* qb = par->_qbq; qb != null; qb = qb->_last) {
-		l_bdel(par, *qb);
+		at_buf_deinit(G(par->_env), *qb);
 	}
 	for (FnScope* scope = par->_fnscope; scope != null; scope = scope->_fn_up) {
-		l_bdel(par, scope->_caps);
+		at_buf_deinit(G(par->_env), scope->_caps);
 	}
 	/* Close parser. */
 	parser_close(par);

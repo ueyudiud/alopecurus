@@ -311,40 +311,40 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 		vm_push_args(env, v_of_obj(buf));
 
 		if (cache != null) {
-			ai_buf_putls(env, buf, cache->_data, cache->_len);
+			at_buf_putls(env, buf, cache->_data, cache->_len);
 		}
 
 		loop {
 			if (likely(v_is_str(v))) {
 				GStr* val = v_as_str(v);
-				ai_buf_putls(env, buf, val->_data, val->_len);
+				at_buf_putls(env, buf, val->_data, val->_len);
 			}
 			else {
 				switch (v_get_tag(v)) {
 					case T_NIL: {
-						ai_buf_puts(env, buf, "nil");
+						at_buf_puts(env, buf, "nil");
 						break;
 					}
 					case T_FALSE: {
-						ai_buf_puts(env, buf, "false");
+						at_buf_puts(env, buf, "false");
 						break;
 					}
 					case T_TRUE: {
-						ai_buf_puts(env, buf, "true");
+						at_buf_puts(env, buf, "true");
 						break;
 					}
 					case T_INT: {
-						ai_fmt_puti(env, buf, v_as_int(v));
+						at_fmt_puti(env, buf, v_as_int(v));
 						break;
 					}
 					case T_PTR: {
-						ai_fmt_putp(env, buf, v_as_ptr(v));
+						at_fmt_putp(env, buf, v_as_ptr(v));
 						break;
 					}
 					case T_HSTR:
 					case T_ISTR: {
 							GStr* str = v_as_str(v);
-							ai_buf_putls(env, buf, str->_data, str->_len);
+							at_buf_putls(env, buf, str->_data, str->_len);
 							break;
 						}
 					case T_TUPLE:
@@ -366,11 +366,11 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 							ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
 						}
 						GStr* str = v_as_str(v);
-						ai_buf_putls(env, buf, str->_data, str->_len);
+						at_buf_putls(env, buf, str->_data, str->_len);
 						break;
 					}
 					default: {
-						ai_fmt_putf(env, buf, v_as_float(v));
+						at_fmt_putf(env, buf, v_as_float(v));
 						break;
 					}
 				}
@@ -379,8 +379,8 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 			v = base[i++];
 		}
 
-		GStr* result = ai_buf_tostr(env, buf);
-		ai_buf_drop(G(env), buf);
+		GStr* result = at_buf_tostr(env, buf);
+		at_buf_deinit(G(env), *buf);
 
 		return result;
 	}

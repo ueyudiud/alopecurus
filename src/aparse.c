@@ -152,7 +152,10 @@ static void l_scan_tstring(Parser* par, OutExpr e) {
 			case TK_LBR: {
 				l_skip(par);
 				ai_lex_push_scope(&par->_lex, &scope);
+
+				expr_unit(e);
 				l_scan_expr(par, e);
+
 				ai_lex_pop_scope(&par->_lex);
 				l_check_pair_right(par, TK_LBR, TK_RBR, line);
 				break;
