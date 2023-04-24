@@ -48,7 +48,12 @@ always_inline void ai_buf_deinit(Global* g, a_hbuf buf, a_usize size) {
 
 #define at_buf_deinit(g,b) ai_buf_deinit(g, at_buf_cast(b), at_buf_elem_size(b))
 
-#define at_buf_for(b,v) for (at_buf_elem_type(b)* v = (b)->_ptr, _end_##v = (b)->_ptr + (b)->_len; v < _end_##v; v += 1)
+#define at_buf_for(b,v) for ( \
+	typeof(at_buf_elem_type(b)*) v = (b)._ptr, \
+	_end_##v = (b)._ptr + (b)._len; \
+	v < _end_##v; \
+	v += 1 \
+)
 
 always_inline a_msg ai_buf_ngrow(a_henv env, a_hbuf buf, a_usize new_cap, a_usize size) {
 	assume(buf->_cap <= SIZE_MAX / size);
