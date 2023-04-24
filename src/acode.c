@@ -51,7 +51,7 @@ static a_u32 l_const_index(Parser* par, Value val) {
 	}
 
 	if (unlikely(par->_fnscope->_const_off + consts->_len == BC_MAX_BX + 1)) {
-		ai_par_report(par, false, par_err_f_arg(par, "too many constants."));
+		ai_par_report(par, "too many constants.", 0);
 	}
 
 	return at_buf_put(par->_env, *consts, val, "constant");
@@ -2274,7 +2274,7 @@ GProto* ai_code_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
 	}
 	proto->_name = name;
 	if (desc._flags._fdebug) {
-		proto->_dbg_file = par->_lex._file;
+		proto->_dbg_file = par->_file;
 		proto->_dbg_lndef = scope->_begin_line;
 		proto->_dbg_lnldef = line;
 	}

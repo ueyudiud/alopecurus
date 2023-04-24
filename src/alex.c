@@ -10,7 +10,6 @@
 
 #include "aenv.h"
 #include "aerr.h"
-#include "acode.h"
 #include "aname.h"
 #include "afmt.h"
 #include "aparse.h"
@@ -18,8 +17,7 @@
 #include "alex.h"
 
 static a_none l_foreign_error(Lexer* lex) {
-	Parser* par = from_member(Parser, _lex, lex);
-	ai_par_report(par, false, par_err_f_arg(par, "IO error. code: %tx"), lex->_in._err);
+	ai_err_raise(lex->_env, ALO_EIO, v_of_int(lex->_in._err));
 }
 
 always_inline void l_switch_scope(Lexer* lex, a_u32 channel) {
@@ -203,8 +201,7 @@ static void strs_alloc_array(a_henv env, LexStrs* self, a_usize cap) {
 static void strs_grow(Lexer* lex, LexStrs* self) {
     a_usize old_cap = self->_hmask + 1;
 	if (old_cap == u32c(1) << 31) {
-		Parser* par = from_member(Parser, _lex, lex);
-		ai_par_report(par, false, par_err_f_arg(par, "too many symbol and string in chunk."));
+		ai_lex_error(lex, "too many symbol and string in chunk.");
 	}
 
 	a_usize new_cap = old_cap * 2;
@@ -239,7 +236,6 @@ static GStr* l_to_str(Lexer* lex) {
 
 void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 	ai_io_iinit(env, fun, ctx, &lex->_in);
-    lex->_file = null;
     lex->_line = 1;
     lex->_current = new(Token) {};
 	lex->_channel = CHANNEL_NORMAL;
@@ -267,7 +263,7 @@ char const* ai_lex_tagname(a_i32 tag) {
 #define CASE_OP(id,repr) case TK_##id: return "'"repr"'";
 		OP_LIST(CASE_OP)
 #undef CASE_OP
-		case TK_EOF: return "<eof>";
+		case TK_EOF: return "<EOF>";
 		case TK_IDENT: return "<identifier>";
 		case TK_INTEGER: return "<integer>";
 		case TK_FLOAT: return "<float>";

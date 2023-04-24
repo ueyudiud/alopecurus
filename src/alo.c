@@ -104,74 +104,12 @@ static a_i32 l_source_input(unused a_henv env, void* rctx, void const** pdst, a_
 	return 0;
 }
 
-static a_bool l_try_comp_console(a_henv env, a_bool expr, a_bool* psuccess) {
-	InLine* ctx = l_in._head;
+#define EOF_MARK ", got <EOF>"
 
-	/* stack: name */
-	a_msg msg = alo_compile(
-		env, 
-		l_source_input, 
-		&ctx, 
-		ALO_STACK_INDEX_GLOBAL, 
-		0,
-		1,
-		ALO_COMP_OPT_ALOC1 | (expr ? ALO_COMP_OPT_EVAL : 0));
-
-	switch (msg) {
-		case ALO_SOK: {
-			*psuccess = true;
-			return true;
-		}
-		case ALO_ECHUNK: {
-			if (!expr) goto error;
-			fallthrough;
-		}
-		case ALO_ESTMUF: {
-			alo_settop(env, 2);
-			return false;
-		}
-		default: {
-		error:
-			aloB_show(env, -1);
-			aloi_show_newline();
-			*psuccess = false;
-			alo_settop(env, 1);
-			return true;
-		}
-	}
-}
-
-static a_bool l_comp_console(a_henv env) {
-	a_bool success;
-	/* stack: <empty> */
-
-	alo_pushlstr(env, "__main__");
-	alo_pushlstr(env, "stdin");
-
-	/* stack: file name */
-
-	l_in = new(InFull) { ._head = null, ._tail = &l_in._head };
-
-	l_hint("> ");
-	l_read_line(env);
-	if (l_try_comp_console(env, true, &success) || l_try_comp_console(env, false, &success))
-		goto end;
-
-	do {
-		l_hint(">> ");
-		l_read_line(env);
-	}
-	while (!l_try_comp_console(env, false, &success));
-
-end:
-	if (success) {
-		alo_pop(env, 0); /* Drop arguments. */
-		alo_settop(env, 1);
-	}
-	else {
-		alo_settop(env, 0);
-	}
-	return success;
+static a_bool l_is_eof_error(a_henv env) {
+	a_usize len;
+	char const* ptr = alo_tolstr(env, -1, &len);
+	return len >= sizeof(EOF_MARK) - 1 && strcmp(ptr + len - sizeof(EOF_MARK) + 1, EOF_MARK) == 0;
 }
 
 static void l_print_result(a_henv env) {
@@ -198,6 +136,79 @@ static void l_print_error(a_henv env) {
 			break;
 		}
 	}
+}
+
+static a_bool l_try_comp_console(a_henv env, a_bool* peval, a_bool* psucc) {
+	InLine* ctx = l_in._head;
+
+	/* stack: name */
+	a_msg msg = alo_compile(
+		env,
+		l_source_input,
+		&ctx,
+		ALO_STACK_INDEX_GLOBAL,
+		0,
+		1,
+		ALO_COMP_OPT_ALOC1 | (*peval ? ALO_COMP_OPT_EVAL : 0));
+
+	switch (msg) {
+		case ALO_SOK: {
+			*psucc = true;
+			return true;
+		}
+		case ALO_ECHUNK: {
+			if (l_is_eof_error(env)) {
+				alo_settop(env, 2);
+				return false;
+			}
+			else if (*peval) {
+				/* Try again within statement mode. */
+				*peval = false;
+				alo_settop(env, 2);
+				return l_try_comp_console(env, peval, psucc);
+			}
+			fallthrough;
+		}
+		default: {
+			l_print_error(env);
+			*psucc = false;
+			alo_settop(env, 1);
+			return true;
+		}
+	}
+}
+
+static a_bool l_comp_console(a_henv env) {
+	a_bool eval = true, succ;
+	/* stack: <empty> */
+
+	alo_pushlstr(env, "__main__");
+	alo_pushlstr(env, "stdin");
+
+	/* stack: file name */
+
+	l_in = new(InFull) { ._head = null, ._tail = &l_in._head };
+
+	l_hint("> ");
+	l_read_line(env);
+	if (l_try_comp_console(env, &eval, &succ))
+		goto end;
+
+	do {
+		l_hint(">> ");
+		l_read_line(env);
+	}
+	while (!l_try_comp_console(env, &eval, &succ));
+
+end:
+	if (succ) {
+		alo_pop(env, 0); /* Drop arguments. */
+		alo_settop(env, 1);
+	}
+	else {
+		alo_settop(env, 0);
+	}
+	return succ;
 }
 
 static a_none l_run_console(a_henv env) {

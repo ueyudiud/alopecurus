@@ -28,7 +28,7 @@ intern GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len);
 intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
 
-#define ai_lex_error(lex,fmt,args...) ai_par_report(from_member(Parser, _lex, lex), false, "%s:%u: "fmt, lex_file(lex), (lex)->_line, ##args)
+#define ai_lex_error(lex,fmt,args...) ai_par_error(from_member(Parser, _lex, lex), fmt, (lex)->_line, ##args)
 
 enum {
     TK__NONE,
@@ -98,7 +98,6 @@ struct Lexer {
 		a_henv _env;
 	};
     ByteBuf _buf;
-    GStr* _file; /* Source file name. */
     a_line _line;
     a_i32 _ch; /* Next character. */
     a_u32 _channel;
@@ -108,10 +107,6 @@ struct Lexer {
     LexScope* _scope;
     LexScope _scope0;
 };
-
-always_inline char const* lex_file(Lexer* lex) {
-	return lex->_file != null ? str2ntstr(lex->_file) : "<in>";
-}
 
 always_inline void ai_lex_push_scope(Lexer* lex, LexScope* scope) {
     scope->_up = lex->_scope;

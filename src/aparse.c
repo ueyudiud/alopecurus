@@ -12,6 +12,13 @@
 
 #include "aparse.h"
 
+a_none ai_par_report(Parser* par, char const* fmt, ...) {
+	va_list varg;
+	va_start(varg, fmt);
+	ai_err_raisevf(par->_env, ALO_ECHUNK, fmt, varg);
+	va_end(varg);
+}
+
 #define lex(par) (&(par)->_lex)
 #define ln_cur(par) (lex(par)->_current._line)
 #define tk_cur(par) (&lex(par)->_current)
@@ -44,26 +51,9 @@ static a_bool l_test_skip(Parser* par, a_i32 tk) {
 	return false;
 }
 
-a_none ai_par_report(Parser* par, a_bool eof, char const* fmt, ...) {
-	if (!eof || !(par->_options & ALO_COMP_OPT_ALOC1)) {
-		va_list varg;
-		va_start(varg, fmt);
-		ai_err_raisevf(par->_env, ALO_ECHUNK, fmt, varg);
-		va_end(varg);
-	}
-	else {
-		ai_env_raise(par->_env, ALO_ESTMUF);
-	}
-}
-
 #define l_error_got(par,fmt,args...) ({ \
 	a_tkbuf _buf; \
-    ai_par_report( \
-		par, \
-		tk_cur(par)->_tag == TK_EOF, \
-		par_err_fl_arg(par, fmt", got %s", ln_cur(par)), \
-		##args, \
-		ai_lex_tkrepr(tk_cur(par), _buf)); \
+    ai_par_error(par, fmt", got %s", ln_cur(par), ##args, ai_lex_tkrepr(tk_cur(par), _buf)); \
 })
 
 static void l_error_expected(Parser* par, a_i32 tk) {
@@ -1341,10 +1331,12 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 }
 
 static void l_init_parser(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, Parser* par) {
-	*par = new(Parser) { ._options = options };
+	*par = new(Parser) {
+		._options = options,
+		._file = file,
+		._name = name
+	};
 	ai_lex_init(env, &par->_lex, fun, ctx);
-	par->_lex._file = file;
-	par->_name = name;
 	rq_init(&par->_rq);
 }
 
