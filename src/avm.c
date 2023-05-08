@@ -1062,6 +1062,12 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				goto vm_test;
 			}
+			case BC_BN:
+			case BC_BNN: {
+				z = v_is_nil(R[a]);
+
+				goto vm_test;
+			}
 			case BC_BEQ:
 			case BC_BNE: {
 				loadB();

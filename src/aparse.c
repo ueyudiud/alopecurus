@@ -46,11 +46,14 @@ struct Parser {
     Buf _secs;
     GStr* _file; /* Source file name. */
     GStr* _name;
+	GStr* _gname;
     Scope* _scope;
     FnScope* _fnscope;
     RefQueue _rq; /* Function prototype queue. */
     QBuf* _qbq; /* Queued string buffer queue, used for concatenate expression. */
 };
+
+#define lex(par) (&(par)->_lex)
 
 #define NO_LABEL (~u32c(0))
 #define NIL_SEC_REF (~u32c(0))
@@ -143,16 +146,11 @@ enum ExprTag {
 	/**
 	 ** The reference of export symbol.
 	 ** repr: _ENV[_s]
-	 *@param _s the name of symbol.
+	 *@param _d1 the const index of variable name.
+	 *@param _d2 the symbol of variable.
+	 *@param _fsym if symbol exists.
 	 */
 	EXPR_GBL,
-	/**
-	 ** The reference of free symbol.
-	 ** repr: sym(_d2)
-	 *@param _d2 the name of symbol.
-	 *@param _fsym is always true.
-	 */
-	EXPR_SYM,
 	/**
 	 ** The expressions bind to unpacked arguments.
 	 *@param _d1 the base register index.
@@ -408,7 +406,7 @@ typedef union {
 } SymMods;
 
 struct Sym {
-	a_u8 _kind;
+	a_u8 _tag;
 	a_u8 _scope;
     SymMods _mods;
 	a_u32 _index;
@@ -979,7 +977,7 @@ static a_enum expr_test_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line);
 static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line);
 static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line);
 
-static void expr_resolved(Parser* par, OutExpr e);
+static void expr_resolve(Parser* par, OutExpr e, a_u32 id);
 static a_bool l_lookup_symbol(Parser* par, GStr* name, a_u32* pid);
 
 static a_u32 l_local(Parser* par, Sym* sym) {
@@ -1003,7 +1001,7 @@ static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth
 		._name = sym->_name
 	};
 	if (sym->_scope >= depth - 1) {
-		switch (sym->_kind) {
+		switch (sym->_tag) {
 			case SYM_LOCAL: {
 				info._src_index = l_local(par, sym); /* Get variable index. */
 				break;
@@ -1029,40 +1027,60 @@ static a_u32 l_capture(Parser* par, Sym* sym) {
 
 static void expr_env(Parser* par, OutExpr e) {
 	a_u32 id;
-	GStr* name = env_name(par->_env, NAME_KW__ENV);
-	a_bool res = l_lookup_symbol(par, name, &id);
+	a_bool res = l_lookup_symbol(par, par->_gname, &id);
 	assume(res, "variable '_ENV' not defined.");
-	expr_init(e, EXPR_SYM, ._d2 = id, ._fsym = true);
-	expr_resolved(par, e);
+	expr_resolve(par, e, id);
 }
 
-static void expr_gvar(Parser* par, InoutExpr e, GStr* sym) {
+static void expr_gvar(Parser* par, InoutExpr e) {
+	a_u32 id = e->_d1;
+	assume(e->_tag == EXPR_GBL, "not global variable.");
 	expr_env(par, e);
-	expr_index_str(par, e, sym, e->_line);
+	if (e->_tag == EXPR_CAP) {
+		e->_tag = EXPR_REFCK;
+		e->_d2 = id;
+	}
+	else {
+		expr_to_reg(par, e);
+		e->_tag = EXPR_REFK;
+		e->_d2 = id;
+	}
 }
 
-static void expr_resolved(Parser* par, OutExpr e) {
-	assume(e->_tag == EXPR_SYM);
-	Sym* sym = &par->_syms._ptr[e->_d2];
-	switch (sym->_kind) {
+static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
+	Sym* sym = &par->_syms._ptr[id];
+	switch (sym->_tag) {
 		case SYM_LOCAL: {
 			if (par->_scope_depth == sym->_scope) {
-				e->_tag = EXPR_REG;
-				e->_d1 = l_local(par, sym);
+				expr_init(e, EXPR_REG,
+					._d1 = l_local(par, sym),
+					._d2 = id,
+					._fsym = true
+				);
 			}
 			else {
-				e->_tag = EXPR_CAP;
-				e->_d1 = l_capture(par, sym);
+				expr_init(e, EXPR_CAP,
+					._d1 = l_capture(par, sym),
+					._d2 = id,
+					._fsym = true
+				);
 			}
 			break;
 		}
 		case SYM_CAPTURE: {
-			e->_tag = EXPR_CAP;
-			e->_d1 = l_capture(par, sym);
+			expr_init(e, EXPR_CAP,
+				._d1 = l_capture(par, sym),
+				._d2 = id,
+				._fsym = true
+			);
 			break;
 		}
 		case SYM_EXPORT: {
-			expr_gvar(par, e, sym->_name);
+			expr_init(e, EXPR_GBL,
+				._d1 = const_index(par, v_of_obj(sym->_name)),
+				._d2 = id,
+				._fsym = true
+			);
 			break;
 		}
 		default: unreachable();
@@ -1091,15 +1109,11 @@ static a_bool l_lookup_symbol(Parser* par, GStr* name, a_u32* pid) {
 static void expr_symbol(Parser* par, OutExpr e, GStr* name, a_line line) {
 	a_u32 id;
 	if (l_lookup_symbol(par, name, &id)) {
-		expr_init(e, EXPR_SYM,
-			._d2 = id,
-			._fsym = true,
-			._line = line
-		);
+		expr_resolve(par, e, id);
 	}
 	else {
 		expr_init(e, EXPR_GBL,
-			._s = name,
+			._d1 = const_index(par, v_of_obj(name)),
 			._fsym = false,
 			._line = line
 		);
@@ -2365,14 +2379,15 @@ assign:
             expr_drop(par, e2);
             break;
 		}
-		case EXPR_SYM: {
-			expr_resolved(par, e1);
-			// TODO check symbol readable.
-			goto assign;
-		}
 		case EXPR_GBL: {
-			ai_par_error(par, "add 'pub' modifier to export variable '%s'", e1->_line, str2ntstr(e1->_s));
-			break;
+			if (e1->_fsym) {
+				sym_check_writable(par, e1, line);
+			}
+			else {
+				ai_par_error(par, "cannot assign to anonymous variable '%s'", e1->_line, str2ntstr(e1->_s));
+			}
+			expr_gvar(par, e1);
+			goto assign;
 		}
 		default: {
 			panic("cannot assign to the expression.");
@@ -2572,7 +2587,7 @@ static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, Sy
 	});
 
 	return syms_push(par, new(Sym) {
-		._kind = SYM_LOCAL,
+		._tag = SYM_LOCAL,
 		._scope = par->_scope_depth,
 		._mods = mods,
 		._index = index,
@@ -2731,11 +2746,12 @@ static void sym_export(Parser* par, OutExpr e, GStr* name, a_line line) {
 	Scope* scope = par->_scope;
 	assume(scope->_top_ntr == scope->_top_reg, "stack not balanced.");
 	a_u32 id = syms_push(par, new(Sym) {
-		._kind = SYM_EXPORT,
+		._tag = SYM_EXPORT,
 		._name = name,
 		._scope = par->_scope_depth,
 	});
-	expr_init(e, EXPR_SYM,
+	expr_init(e, EXPR_GBL,
+		._d1 = const_index(par, v_of_obj(name)),
 		._d2 = id,
 		._fsym = true,
 		._line = line
@@ -2790,7 +2806,7 @@ static void scope_pop(Parser* par, a_line line) {
 		a_u32 label = par->_head_label;
 		for (a_u32 i = bot; i < top; ++i) {
 			Sym* sym = &par->_syms._ptr[i];
-			switch (sym->_kind) {
+			switch (sym->_tag) {
 				case SYM_LOCAL:
 					par->_locals._ptr[par->_fnscope->_local_off + sym->_index]._end_label = label;
 					break;
@@ -2992,18 +3008,22 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 	parser_close(par);
 }
 
+#define ENV_NAME "_ENV"
+
 static void parser_start(Parser* par) {
 	gbl_protect(par->_env, parser_mark, parser_except, par);
 
+	par->_gname = ai_lex_to_str(lex(par), ENV_NAME, sizeof(ENV_NAME) - 1);
+
 	/* Add predefined '_ENV' name. */
 	syms_push(par, new(Sym) {
-		._kind = SYM_CAPTURE,
+		._tag = SYM_CAPTURE,
 		._scope = SCOPE_DEPTH_ENV,
 		._mods = {
 			._readonly = true /* Predefined environment is always readonly variable. */
 		},
 		._index = 0,
-		._name = env_name(par->_env, NAME_KW__ENV)
+		._name = par->_gname
 	});
 }
 
@@ -3144,12 +3164,8 @@ bind:
 			l_merge_optR(par, e->_d2, reg2, e->_line);
 			return l_emit_iab(par, BC_MOV, reg, reg2, e->_line);
 		}
-		case EXPR_SYM: {
-			expr_resolved(par, e);
-			goto bind;
-		}
 		case EXPR_GBL: {
-			expr_gvar(par, e, e->_s);
+			expr_gvar(par, e);
 			goto bind;
 		}
 		default: {
@@ -3237,7 +3253,6 @@ static void expr_to_top_tmp(Parser* par, InoutExpr e) {
 }
 
 static void expr_to_reg(Parser* par, InoutExpr e) {
-bind:
 	switch (e->_tag) {
 		case EXPR_REG: {
 			break;
@@ -3269,10 +3284,6 @@ bind:
 			expr_tmp(e, reg, e->_line);
 			break;
 		}
-        case EXPR_SYM: {
-			expr_resolved(par, e);
-            goto bind;
-        }
 		default: {
             expr_to_top_tmp(par, e);
 			break;
@@ -3411,7 +3422,7 @@ static void exprs_to_top_tmps(Parser* par, InoutExpr e) {
 			break;
 		}
 		case EXPR_VDYN: {
-			a_insn* ip = par->_code[e->_d1];
+			a_insn* ip = code_at(par, e->_d1);
 			a_u32 reg = par->_scope->_top_reg;
 
             bc_store_op(ip, bc_load_op(ip) + 1);
@@ -3423,7 +3434,7 @@ static void exprs_to_top_tmps(Parser* par, InoutExpr e) {
 			break;
 		}
 		case EXPR_VCALL: {
-			a_insn* ip = par->_code[e->_d1];
+			a_insn* ip = code_at(par, e->_d1);
 			a_u32 reg = bc_load_a(ip);
 
             bc_store_op(ip, bc_load_op(ip) + 1);
@@ -3627,7 +3638,6 @@ static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line) {
 
 /*=========================================================*/
 
-#define lex(par) (&(par)->_lex)
 #define lex_line(par) (lex(par)->_current._line)
 #define lex_token(par) (&lex(par)->_current)
 
@@ -4036,14 +4046,26 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 				expr_index_str(par, e, name, line2);
 				break;
 			}
+			case TK_ELVIS: {
+				a_line line2 = lex_line(par);
+                lex_skip(par);
+				expr_or_nil(par, e, &label,  line2);
+
+				GStr* name = lex_check_ident(par);
+				expr_lookup(par, e, name, line2);
+
+				lex_check_skip(par, TK_LBK);
+				if (!lex_test_skip(par, TK_RBK)) {
+					l_scan_exprs(par, e, true);
+					lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
+				}
+				expr_call(par, e, line2);
+				break;
+			}
 			case TK_BANG: {
 				a_line line2 = lex_line(par);
                 lex_skip(par);
 
-				if (label != NO_LABEL) {
-					l_redirect_leave(par, label, bc_make_i(BC_RET0));
-					label = NO_LABEL;
-				}
 				expr_or_ret(par, e, line2);
 				break;
 			}
@@ -4399,28 +4421,15 @@ static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
 		case TK_QUESTION: {
 			a_line line = lex_line(par);
 			a_u32 label1 = expr_test(par, e, line);
-			expr_discard(par, e);
-
-            lex_skip(par);
-
-			expr_unit(e);
-			l_scan_ternary_expr(par, e);
-
-			expr_or_else(par, e, &label1, line);
-
-            lex_check_skip(par, TK_RSLASH);
-
-			Expr e2;
-			l_scan_ternary_expr(par, e2);
-			expr_phi(par, e, e2, label1, line);
-			break;
-		}
-		case TK_BQUESTION: {
-			a_line line = lex_line(par);
-			a_u32 label1 = NO_LABEL;
-			expr_test_nil(par, e, &label1, line);
 
 			lex_skip(par);
+
+			if (!lex_test_skip(par, TK_RSLASH)) {
+				expr_discard(par, e);
+				l_scan_ternary_expr(par, e);
+
+				lex_check_pair_right(par, TK_QUESTION, TK_RSLASH, line);
+			}
 
 			a_u32 label2 = NO_LABEL;
 			expr_or_else(par, e, &label2, line);
@@ -4431,11 +4440,12 @@ static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
 			expr_phi(par, e, e2, label2, line);
 			break;
 		}
-		case TK_ELVIS: {
+		case TK_BQUESTION: {
 			a_line line = lex_line(par);
-			a_u32 label1 = expr_test(par, e, line);
+			a_u32 label1 = NO_LABEL;
+			expr_test_nil(par, e, &label1, line);
 
-            lex_skip(par);
+			lex_skip(par);
 
 			a_u32 label2 = NO_LABEL;
 			expr_or_else(par, e, &label2, line);

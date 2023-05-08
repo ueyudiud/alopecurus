@@ -1198,9 +1198,6 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
 				if (l_test_skip(lex, ':')) {
 					return TK_ELVIS;
 				}
-				else if (l_test_skip(lex, '\\')) {
-					return TK_RSLASH;
-				}
 				else if (l_test_skip(lex, '.')) {
 					return TK_QDOT;
 				}

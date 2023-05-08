@@ -6,7 +6,6 @@
 #define akw_h_
 
 #define KW_LIST(_) \
-    _(_ENV, "_ENV")     \
     _(AS, "as")         \
     _(BREAK, "break")   \
     _(CASE, "case")     \
