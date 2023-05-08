@@ -513,13 +513,14 @@ enum {
  */
 static a_u32 const_index(Parser* par, Value val) {
 	ConstBuf* consts = &par->_consts;
+	a_u32 off = par->_fnscope->_const_off;
 	for (a_u32 i = par->_fnscope->_const_off; i < consts->_len; ++i) {
 		/*
 		 * Since all literals which have the same format provided by compiler should
 		 * have same binary data, use identity equality for comparison.
 		 */
 		if (v_trivial_equals_unchecked(consts->_ptr[i], val)) {
-			return i;
+			return i - off;
 		}
 	}
 
@@ -527,7 +528,7 @@ static a_u32 const_index(Parser* par, Value val) {
 		ai_par_report(par, "too many constants.", 0);
 	}
 
-	return at_buf_put(par->_env, *consts, val, "constant");
+	return at_buf_put(par->_env, *consts, val, "constant") - off;
 }
 
 static a_bool const_is_istr(Parser* par, a_u32 index) {
@@ -2228,6 +2229,7 @@ static void l_direct_jump(Parser* par, a_u32 label, a_line line) {
 
 static a_u32 l_lazy_jump(Parser* par, a_u32 label, a_line line) {
 	if (l_should_eval(par)) {
+		l_flush_close(par); /* Force flush close. */
 		if (likely(par->_fnscope->_fpass)) {
 			if (par->_fnscope->_head_jump == NO_LABEL || label > par->_fnscope->_head_jump) {
 				par->_fnscope->_head_jump_line = line;
@@ -2580,7 +2582,7 @@ static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, Sy
 	l_store(par, reg);
 
 	a_u32 index = locals_push(par, new(LocalInfo) {
-		._begin_label = begin_label,
+		._begin_label = begin_label - par->_fnscope->_begin_label,
 		._end_label = NO_LABEL,
 		._name = name,
 		._reg = reg,
@@ -2785,6 +2787,7 @@ static void scope_push(Parser* par, Scope* scope, a_u32 reg, a_line line) {
 	*scope = new(Scope) {
 		._up = par->_scope,
 		._bot_reg = reg,
+		._top_ntr = reg,
 		._top_reg = reg,
 		._bot_fur = reg,
 		._num_fur = 0,
@@ -2803,7 +2806,7 @@ static void scope_pop(Parser* par, a_line line) {
 	run {
 		a_u32 bot = scope->_sym_off;
 		a_u32 top = par->_syms._len;
-		a_u32 label = par->_head_label;
+		a_u32 label = par->_head_label - par->_fnscope->_begin_label;
 		for (a_u32 i = bot; i < top; ++i) {
 			Sym* sym = &par->_syms._ptr[i];
 			switch (sym->_tag) {
@@ -2863,6 +2866,7 @@ static void fnscope_prologue(Parser* par, FnScope* fnscope, a_line line) {
 	*fnscope = new(FnScope) {
 		._fn_up = par->_fnscope,
 		._base_subs = cast(GProto**, par->_rq._tail),
+		._const_off = par->_consts._len,
 		._line_off = par->_lines._len,
 		._local_off = par->_locals._len,
 		._head_jump = NO_LABEL,
@@ -4589,29 +4593,29 @@ static void l_scan_assign_or_call(Parser* par) {
 }
 
 static void l_scan_if_stat(Parser* par) {
-    lex_skip(par);
+			lex_skip(par);
 
-    lex_check_skip(par, TK_LBK);
-	a_u32 line = lex_line(par);
+			lex_check_skip(par, TK_LBK);
+			a_u32 line = lex_line(par);
 
-	Expr ep = {};
-	l_scan_expr(par, ep);
-	a_u32 label1 = expr_test(par, ep, line);
-	expr_discard(par, ep);
+			Expr ep;
+			l_scan_expr(par, ep);
+			a_u32 label1 = expr_test(par, ep, line);
+			expr_discard(par, ep);
 
-    lex_check_pair_right(par, TK_LBK, TK_RBK, line);
-    lex_skip(par);
+			lex_check_pair_right(par, TK_LBK, TK_RBK, line);
+			lex_skip(par);
 
-	l_scan_stat(par);
+			l_scan_stat(par);
 
-	if (lex_test_skip(par, TK_ELSE)) {
-		a_u32 label2 = l_lazy_jump(par, NO_LABEL, lex_line(par));
+			if (lex_test_skip(par, TK_ELSE)) {
+				a_u32 label2 = l_lazy_jump(par, NO_LABEL, lex_line(par));
 
-        lex_sync(par);
-		l_mark_label(par, label1, lex_line(par));
-		l_scan_stat(par);
+				lex_sync(par);
+				l_mark_label(par, label1, lex_line(par));
+				l_scan_stat(par);
 
-		l_mark_label(par, label2, lex_line(par));
+				l_mark_label(par, label2, lex_line(par));
 	}
 	else {
 		l_mark_label(par, label1, lex_line(par));
@@ -4626,7 +4630,7 @@ static void l_scan_while_stat(Parser* par) {
 
 	a_u32 label1 = l_mark_label(par, NO_LABEL, line);
 
-	Expr ep = {};
+	Expr ep;
 	l_scan_expr(par, ep);
 	a_u32 label2 = expr_test(par, ep, line);
 	expr_discard(par, ep);
@@ -4643,6 +4647,15 @@ static void l_scan_while_stat(Parser* par) {
         lex_sync(par);
 		l_scan_stat(par);
 	}
+}
+
+static void l_scan_loop_stat(Parser* par) {
+	lex_skip(par);
+
+	a_u32 label = l_mark_label(par, NO_LABEL, lex_line(par));
+
+	l_scan_stat(par);
+	l_direct_jump(par, label, lex_line(par));
 }
 
 static void l_scan_return_stat(Parser* par) {
@@ -4784,6 +4797,8 @@ branch_standard:
 			}
 			case TK_RBK: {
 				if (parent->_kind != PAT_TUPLE) {
+					if (parent->_kind == PAT_ROOT)
+						goto load_nils;
 					l_unmatched_pattern(par, parent);
 				}
                 lex_skip(par);
@@ -4791,6 +4806,8 @@ branch_standard:
 			}
 			case TK_RSQ: {
 				if (parent->_kind != PAT_LIST) {
+					if (parent->_kind == PAT_ROOT)
+						goto load_nils;
 					l_unmatched_pattern(par, parent);
 				}
                 lex_skip(par);
@@ -4798,6 +4815,8 @@ branch_standard:
 			}
 			case TK_RBR: {
 				if (parent->_kind != PAT_TABLE) {
+					if (parent->_kind == PAT_ROOT)
+						goto load_nils;
 					l_unmatched_pattern(par, parent);
 				}
                 lex_skip(par);
@@ -4821,7 +4840,8 @@ branch_standard:
 					continue;
 				}
 			}
-			default: {
+			default:
+			load_nils: {
 				return let_load_nils(par, stat, lex_line(par));
 			}
 		}
@@ -4939,6 +4959,10 @@ static void l_scan_stat(Parser* par) {
 			l_scan_while_stat(par);
 			break;
 		}
+		case TK_LOOP: {
+			l_scan_loop_stat(par);
+			break;
+		}
 		case TK_FN: {
 			l_scan_fun_def_stat(par);
 			break;
@@ -4982,6 +5006,10 @@ static void l_scan_stats(Parser* par) {
 			}
 			case TK_WHILE: {
 				l_scan_while_stat(par);
+				break;
+			}
+			case TK_LOOP: {
+				l_scan_loop_stat(par);
 				break;
 			}
 			case TK_FN: {
