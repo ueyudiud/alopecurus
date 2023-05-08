@@ -923,7 +923,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					Value vt = vm_meta_bin(env, vb, vc, bin_op2tm(op));
+					Value vt = vm_meta_bin(env, vb, vc, ai_op_bin2tm(op));
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -951,7 +951,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					Value vt = vm_meta_bin(env, vb, vc, bin_op2tm(op));
+					Value vt = vm_meta_bin(env, vb, vc, ai_op_bin2tm(op));
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -974,7 +974,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_int(&R[a], val);
 				}
 				else {
-					Value vt = vm_meta_bin(env, vb, vc, bin_op2tm(op));
+					Value vt = vm_meta_bin(env, vb, vc, ai_op_bin2tm(op));
 					v_set(env, &R[a], vt);
 				}
 				break;
@@ -998,7 +998,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					Value vt = vm_meta_bin(env, vb, v_of_int(ic), bin_op2tm(op));
+					Value vt = vm_meta_bin(env, vb, v_of_int(ic), ai_op_bin2tm(op));
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -1025,7 +1025,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_float(&R[a], val);
 				}
 				else {
-					Value vt = vm_meta_bin(env, vb, v_of_int(ic), bin_op2tm(op));
+					Value vt = vm_meta_bin(env, vb, v_of_int(ic), ai_op_bin2tm(op));
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}
@@ -1048,7 +1048,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 					v_set_int(&R[a], val);
 				}
 				else {
-					Value vt = vm_meta_bin(env, vb, v_of_int(ic), bin_op2tm(op));
+					Value vt = vm_meta_bin(env, vb, v_of_int(ic), ai_op_bin2tm(op));
 					reload_stack();
 					v_set(env, &R[a], vt);
 				}

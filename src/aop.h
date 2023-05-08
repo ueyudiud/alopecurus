@@ -54,21 +54,10 @@ enum BinaryOp {
 	OP_AND, OP_OR,
 };
 
-always_inline a_enum bin_op2tm(a_enum op) {
+always_inline a_enum ai_op_bin2tm(a_enum op) {
 	assume(op >= OP_ADD && op <= OP_BIT_XOR);
 	return op - OP_ADD + TM_ADD;
 }
-
-enum MonadOp {
-	OP_OR_NIL, OP_OR_RET, OP_OR_ELSE,
-	OP_MERGE
-};
-
-enum VarargOp {
-	OP_CALL, OP_RETURN,
-	OP_VA_PUSH, OP_VA_POP,
-	OP_TNEW, OP_LNEW
-};
 
 #ifdef aloi_op_neg_int
 # define ai_op_neg_int(a) aloi_op_neg_int(a)
