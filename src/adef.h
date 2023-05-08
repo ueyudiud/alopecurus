@@ -141,7 +141,7 @@ typedef a_u32 a_insn;
 #define cast(t,e) ((t) (e))
 #define bit_cast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
-#define null_of(t) ((t*) 0)
+#define null_of(t) ((typeof(t)*) 0)
 #define dangling_of(t) ((t*) sizeof(t))
 #define addr_of(p) cast(a_usize, p)
 #define ptr_of(t,a) ({ a_usize _a = (a); cast(typeof(t)*, _a); })

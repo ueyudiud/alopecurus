@@ -10,7 +10,7 @@
 #include "abuf.h"
 #include "aio.h"
 
-typedef a_u16 a_line;
+typedef a_u32 a_line;
 
 typedef struct Lexer Lexer;
 typedef struct Token Token;
@@ -28,7 +28,7 @@ intern GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len);
 intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
 
-#define ai_lex_error(lex,fmt,args...) ai_par_error(from_member(Parser, _lex, lex), fmt, (lex)->_line, ##args)
+#define ai_lex_error(lex,fmt,args...) ai_par_error(cast(Parser*, lex), fmt, (lex)->_line, ##args)
 
 enum {
     TK__NONE,

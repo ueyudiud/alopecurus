@@ -401,12 +401,11 @@ static void v_mov_all_with_nil(a_henv env, Value* dst, a_usize dst_len, Value co
 	}
 }
 
-static a_u32 vm_fetch_ex(a_insn const** ppc) {
-	a_insn const* pc = *ppc;
-	a_insn insn = *pc;
-	*ppc = pc + 1;
-	assume(bc_load_op(insn) == BC_EX, "not extra operand.");
-	return bc_load_ax(insn);
+static a_u32 vm_fetch_ex(a_insn const** pc) {
+	a_insn const* ip = *pc;
+	*pc = ip + 1;
+	assume(bc_load_op(ip) == BC_EX, "not extra operand.");
+	return bc_load_ax(ip);
 }
 
 /**
@@ -452,7 +451,6 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	}
 
 	GFun* fun = v_as_func(*base);
-	a_insn insn;
 	Value const* K;
 
 	base += 1;
@@ -478,19 +476,18 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	loop {
 		a_u32 bc;
 		a_u32 a;
+        a_insn const* ip = pc++;
 
-#define loadB() a_u32 b = bc_load_b(insn)
-#define loadBx() a_u32 b = bc_load_bx(insn)
-#define loadsBx() a_i16 b = bc_load_sbx(insn)
-#define loadC() a_u32 c = bc_load_c(insn)
-#define loadsC() a_i8 c = bc_load_sc(insn)
-#define loadJ() a_i32 j = bc_load_sax(insn)
+#define loadB() a_u32 b = bc_load_b(ip)
+#define loadBx() a_u32 b = bc_load_bx(ip)
+#define loadsBx() a_i16 b = bc_load_sbx(ip)
+#define loadC() a_u32 c = bc_load_c(ip)
+#define loadsC() a_i8 c = bc_load_sc(ip)
+#define loadJ() a_i32 j = bc_load_sax(ip)
 #define loadEx() a_u32 ex = vm_fetch_ex(&pc)
 
-		insn = *(pc++);
-		insn_check(insn);
-		a = bc_load_a(insn);
-		bc = bc_load_op(insn);
+		a = bc_load_a(ip);
+		bc = bc_load_op(ip);
 		switch (bc) {
 			case BC_MOV: {
 				loadB();
@@ -1273,6 +1270,15 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				check_gc();
 				break;
 			}
+			case BC_TRIM: {
+				loadC();
+
+				assume(&R[a] <= env->_stack._top, "stack corrupt.");
+				v_set_nil_ranged(env->_stack._top, &R[a + c]);
+
+				adjust_top();
+				break;
+			}
 			case BC_CAT: {
 				loadB();
 				loadC();
@@ -1317,13 +1323,6 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				api_check_elem(env, n);
 				v_mov_all_with_nil(env, R - 1, frame._rflags._count, env->_stack._top - n, n);
 				top = R - 1 + n;
-
-				goto vm_return;
-			}
-			case BC_RET1: {
-				ret = R[a];
-				v_cpy(env, &R[-1], &R[a]);
-				top = R;
 
 				goto vm_return;
 			}

@@ -104,7 +104,8 @@ always_inline a_msg ai_buf_nputv(a_henv env, a_hbuf buf, void const* src, a_usiz
 	return ALO_SOK;
 }
 
-#define at_buf_ncheck(env,b,a) ai_buf_ncheck(env, b, a, at_buf_elem_size(b), at_buf_max_len(b))
+#define at_buf_nhint(t,c,l,a) ai_buf_nhint(&(c), l, a, (SIZE_MAX / sizeof(t)))
+#define at_buf_ncheck(env,b,a) ai_buf_ncheck(env, at_buf_cast(b), a, at_buf_elem_size(b), at_buf_max_len(b))
 #define at_buf_nputv(env,b,s,l) ai_buf_nputv(env, at_buf_cast(b), s, l, at_buf_elem_size(b), at_buf_max_len(b))
 #define at_buf_nput(env,b,s) ({ at_buf_elem_type(b) _va = (s); at_buf_nputv(env, b, &_va, 1); })
 

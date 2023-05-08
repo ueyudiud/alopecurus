@@ -1204,6 +1204,9 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
 				else if (l_test_skip(lex, '.')) {
 					return TK_QDOT;
 				}
+				else if (l_test_skip(lex, '?')) {
+					return TK_BQUESTION;
+				}
                 return TK_QUESTION;
             }
             case 'a' ... 'z': 

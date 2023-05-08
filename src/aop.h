@@ -59,17 +59,6 @@ always_inline a_enum bin_op2tm(a_enum op) {
 	return op - OP_ADD + TM_ADD;
 }
 
-enum UnaryOp {
-	/* Arithmetic operator */
-	OP_NEG,
-	/* Bitwise operator */
-	OP_BIT_INV,
-	/* Collection operator */
-	OP_LEN, OP_UNBOX,
-	/* Logical operators */
-	OP_NOT,
-};
-
 enum MonadOp {
 	OP_OR_NIL, OP_OR_RET, OP_OR_ELSE,
 	OP_MERGE

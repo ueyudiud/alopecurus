@@ -71,10 +71,9 @@ static void dump_code(GProto* meta, a_bool fline) {
 	a_insn* begin = meta->_code;
 	a_insn* end = begin + meta->_ninsn;
 	LineItr line_itr = {};
-	for (a_insn* p = begin; p < end; ++p) {
-		a_insn i = *p;
-		a_u32 op = bc_load_op(i);
-		a_u32 n = cast(a_u32, p - meta->_code);
+	for (a_insn* ip = begin; ip < end; ++ip) {
+		a_u32 op = bc_load_op(ip);
+		a_u32 n = cast(a_u32, ip - meta->_code);
 		if (fline) {
 			dump_line(meta, &line_itr, n);
 		}
@@ -89,24 +88,26 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_BKF:
 			case BC_BKT:
 			case BC_CLOSE:
-			case BC_BNZ:
 			case BC_BZ:
+			case BC_BNZ:
+			case BC_BN:
+			case BC_BNN:
 			case BC_CALLMV:
-			case BC_RET1:
 			case BC_RETM: {
-				aloi_show("%4u    _    _\n", bc_load_a(i));
+				aloi_show("%4u    _    _\n", bc_load_a(ip));
 				break;
 			}
 			case BC_K: {
-				a_u32 b = bc_load_bx(i);
-				aloi_show("%4u %9u ; ", bc_load_a(i), b);
+				a_u32 b = bc_load_bx(ip);
+				aloi_show("%4u %9u ; ", bc_load_a(ip), b);
 				dump_const(meta->_consts[b]);
 				aloi_show("\n");
 				break;
 			}
 			case BC_KN:
-			case BC_CALLM: {
-				aloi_show("%4u    _ %4u\n", bc_load_a(i), bc_load_c(i));
+			case BC_CALLM:
+			case BC_TRIM: {
+				aloi_show("%4u    _ %4u\n", bc_load_a(ip), bc_load_c(ip));
 				break;
 			}
 			case BC_KI:
@@ -116,17 +117,17 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_BLEI:
 			case BC_BGTI:
 			case BC_BGEI: {
-				aloi_show("%4u %9d\n", bc_load_a(i), bc_load_sbx(i));
+				aloi_show("%4u %9d\n", bc_load_a(ip), bc_load_sbx(ip));
 				break;
 			}
 			case BC_LNEW:
 			case BC_HNEW: {
-				aloi_show("%4u %9u\n", bc_load_a(i), bc_load_bx(i));
+				aloi_show("%4u %9u\n", bc_load_a(ip), bc_load_bx(ip));
 				break;
 			}
 			case BC_LDF: {
-				a_u32 b = bc_load_bx(i);
-				aloi_show("%4u %4u    _ ; %p\n", bc_load_a(i), b, meta->_subs[b]);
+				a_u32 b = bc_load_bx(ip);
+				aloi_show("%4u %4u    _ ; %p\n", bc_load_a(ip), b, meta->_subs[b]);
 				break;
 			}
 			case BC_MOV:
@@ -142,7 +143,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_BLE:
 			case BC_CALLV:
 			case BC_RET: {
-				aloi_show("%4u %4u    _\n", bc_load_a(i), bc_load_b(i));
+				aloi_show("%4u %4u    _\n", bc_load_a(ip), bc_load_b(ip));
 				break;
 			}
 			case BC_TNEW:
@@ -162,15 +163,16 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_LPUSH:
 			case BC_CALL:
 			case BC_CAT: {
-				aloi_show("%4u %4u %4u\n", bc_load_a(i), bc_load_b(i), bc_load_c(i));
+				aloi_show("%4u %4u %4u\n", bc_load_a(ip), bc_load_b(ip), bc_load_c(ip));
 				break;
 			}
 			case BC_GETS:
 			case BC_CGETS:
 			case BC_SETS:
-			case BC_CSETS: {
-				a_u32 c = bc_load_c(i);
-				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), c);
+			case BC_CSETS:
+			case BC_LOOK: {
+				a_u32 c = bc_load_c(ip);
+				aloi_show("%4u %4u %4u ; ", bc_load_a(ip), bc_load_b(ip), c);
 				dump_const(meta->_consts[c]);
 				aloi_show("\n");
 				break;
@@ -178,9 +180,10 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_GETSX:
 			case BC_CGETSX:
 			case BC_SETSX:
-			case BC_CSETSX: {
-				a_u32 ex = bc_load_ax(*p++);
-				aloi_show("%4u %4u %4u ; ", bc_load_a(i), bc_load_b(i), ex);
+			case BC_CSETSX:
+			case BC_LOOKX: {
+				a_u32 ex = bc_load_ax(ip++);
+				aloi_show("%4u %4u %4u ; ", bc_load_a(ip), bc_load_b(ip), ex);
 				dump_const(meta->_consts[ex]);
 				aloi_show("\n");
 				break;
@@ -197,14 +200,14 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_BANDI:
 			case BC_BORI:
 			case BC_BXORI: {
-				aloi_show("%4u %4u %4d\n", bc_load_a(i), bc_load_b(i), bc_load_sc(i));
+				aloi_show("%4u %4u %4d\n", bc_load_a(ip), bc_load_b(ip), bc_load_sc(ip));
 				break;
 			}
 			case BC_J: {
-				a_i32 a = bc_load_sax(i);
-				aloi_show("%14d ; -> %u\n", a, n + a + 1);
-				break;
-			}
+                a_i32 a = bc_load_sax(ip);
+                aloi_show("%14d ; -> %u\n", a, n + a + 1);
+                break;
+            }
 			default: unreachable();
 		}
 		fflush(stdout);

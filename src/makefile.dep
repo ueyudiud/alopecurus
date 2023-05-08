@@ -11,9 +11,6 @@ abaselib.o: abaselib.c atuple.h aobj.h adef.h aarch.h alo.h aauxlib.h \
 abc.o: abc.c abc.h adef.h aarch.h alo.h aauxlib.h
 abuf.o: abuf.c agc.h aobj.h adef.h aarch.h alo.h aauxlib.h aname.h akw.h \
  aop.h aerr.h abuf.h amem.h
-acode.o: acode.c abc.h adef.h aarch.h alo.h aauxlib.h afun.h aobj.h \
- aname.h akw.h aop.h agc.h afmt.h abuf.h amem.h astr.h aio.h acode.h \
- aparse.h alex.h
 adbg.o: adbg.c afun.h aobj.h adef.h aarch.h alo.h aauxlib.h aname.h akw.h \
  aop.h agc.h aapi.h aenv.h astr.h aio.h astk.h adbg.h
 adbglib.o: adbglib.c adef.h aarch.h alo.h aauxlib.h alolib.h
@@ -31,10 +28,10 @@ afun.o: afun.c abc.h adef.h aarch.h alo.h aauxlib.h aenv.h astr.h aobj.h \
 agc.o: agc.c aenv.h astr.h aobj.h adef.h aarch.h alo.h aauxlib.h aname.h \
  akw.h aop.h aio.h astk.h afun.h atype.h amem.h agc.h
 aio.o: aio.c amem.h aobj.h adef.h aarch.h alo.h aauxlib.h aname.h akw.h \
- aop.h agc.h aio.h
+ aop.h aio.h
 alex.o: alex.c aenv.h astr.h aobj.h adef.h aarch.h alo.h aauxlib.h \
- aname.h akw.h aop.h aio.h astk.h afun.h aerr.h acode.h aparse.h agc.h \
- alex.h abuf.h amem.h afmt.h
+ aname.h akw.h aop.h aio.h astk.h afun.h aerr.h afmt.h abuf.h amem.h \
+ aparse.h agc.h alex.h
 alist.o: alist.c aop.h adef.h aarch.h alo.h aauxlib.h amem.h aobj.h \
  aname.h akw.h agc.h aerr.h alist.h
 alo.o: alo.c adef.h aarch.h alo.h aauxlib.h alolib.h abaselib.h
@@ -45,9 +42,9 @@ amem.o: amem.c aenv.h astr.h aobj.h adef.h aarch.h alo.h aauxlib.h \
 aobj.o: aobj.c astr.h aobj.h adef.h aarch.h alo.h aauxlib.h aname.h akw.h \
  aop.h aio.h atype.h
 aop.o: aop.c aop.h adef.h aarch.h alo.h aauxlib.h
-aparse.o: aparse.c afun.h aobj.h adef.h aarch.h alo.h aauxlib.h aname.h \
- akw.h aop.h aenv.h astr.h aio.h astk.h aerr.h acode.h aparse.h agc.h \
- alex.h abuf.h amem.h
+aparse.o: aparse.c abc.h adef.h aarch.h alo.h aauxlib.h afun.h aobj.h \
+ aname.h akw.h aop.h aenv.h astr.h aio.h astk.h afmt.h abuf.h amem.h \
+ aerr.h aparse.h agc.h alex.h
 asave.o: asave.c aio.h aobj.h adef.h aarch.h alo.h aauxlib.h aname.h \
  akw.h aop.h aenv.h astr.h astk.h afun.h agc.h aload.h
 astk.o: astk.c aenv.h astr.h aobj.h adef.h aarch.h alo.h aauxlib.h \
