@@ -295,9 +295,6 @@ struct ExprDesc {
 			a_u8 _fsym: 1; /* Used for symbol mark or shared mark. */
 			a_u8 _fupk: 1; /* Used for unpack-able mark. */
 			a_u8 _fucf: 1; /* Used for unreachable control flow mark. */
-			a_u8 _f6: 1;
-			a_u8 _f7: 1;
-			a_u8 _f8: 1;
 		};
 	};
 };
@@ -2002,6 +1999,18 @@ static void expr_return(Parser* par, InoutExpr e, a_line line) {
 	l_clear_close(par);
 	if (e->_tag == EXPR_REG) {
 		l_emit_leave(par, bc_make_iab(BC_RET, e->_d1, 1), line);
+	}
+	else if (e->_tag == EXPR_VCALL) {
+		a_insn* ip = code_at(par, e->_d1);
+		a_enum op = bc_load_op(ip);
+
+		assume(e->_d1 == par->_head_label - 1 && !par->_fnscope->_fjump, "not head label.");
+		assume(op == BC_CALL || op == BC_CALLM, "not call operation.");
+
+		bc_store_op(ip, op + 2);
+		bc_store_c(ip, 0);
+
+		par->_fnscope->_fpass = false;
 	}
 	else {
         exprs_to_top_tmps(par, e);

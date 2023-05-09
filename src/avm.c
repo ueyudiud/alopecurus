@@ -401,6 +401,20 @@ static void v_mov_all_with_nil(a_henv env, Value* dst, a_usize dst_len, Value co
 	}
 }
 
+static void v_mov_all(a_henv env, Value* dst, Value const* src, a_usize len) {
+	for (a_usize i = 0; i < len; ++i) {
+		v_cpy(env, &dst[i], &src[i]);
+	}
+}
+
+static void vm_close_all(a_henv env, RcCap* caps) {
+	RcCap* cap;
+	while ((cap = caps) != null) {
+		caps = cap->_next;
+		ai_cap_soft_close(env, cap);
+	}
+}
+
 static a_u32 vm_fetch_ex(a_insn const** pc) {
 	a_insn const* ip = *pc;
 	*pc = ip + 1;
@@ -432,6 +446,7 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 #define check_gc() ai_gc_trigger_ext(env, (void) 0, reload_stack())
 #define adjust_top() quiet(env->_stack._top = &R[fun->_proto->_nstack])
 
+tail_call:
 	run { /* Check for function. */
 		Value vf = *base;
 		while (unlikely(!v_is_func(vf))) {
@@ -458,9 +473,6 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 	run {
 		GProto* proto = fun->_proto;
 		check_stack(base + proto->_nstack);
-		if (!(proto->_flags & FUN_FLAG_VARARG)) {
-			adjust_top();
-		}
 		frame = new(Frame) {
 			._prev = env->_frame,
 			._stack_bot = base,
@@ -471,6 +483,9 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		env->_frame = &frame;
 
 		K = proto->_consts;
+		if (!(proto->_flags & FUN_FLAG_VARARG)) {
+			adjust_top();
+		}
 	}
 
 	loop {
@@ -478,13 +493,13 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 		a_u32 a;
         a_insn const* ip = pc++;
 
-#define loadB() a_u32 b = bc_load_b(ip)
-#define loadBx() a_u32 b = bc_load_bx(ip)
+#define loadB() a_usize b = bc_load_b(ip)
+#define loadBx() a_usize b = bc_load_bx(ip)
 #define loadsBx() a_i16 b = bc_load_sbx(ip)
-#define loadC() a_u32 c = bc_load_c(ip)
+#define loadC() a_usize c = bc_load_c(ip)
 #define loadsC() a_i8 c = bc_load_sc(ip)
 #define loadJ() a_i32 j = bc_load_sax(ip)
-#define loadEx() a_u32 ex = vm_fetch_ex(&pc)
+#define loadEx() a_usize ex = vm_fetch_ex(&pc)
 
 		a = bc_load_a(ip);
 		bc = bc_load_op(ip);
@@ -1258,6 +1273,21 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				check_gc();
 				break;
 			}
+			case BC_TCALL: {
+				loadB();
+				loadC();
+
+				vm_close_all(env, frame._caps);
+
+				v_mov_all(env, R - 1, &R[a], b);
+
+				env->_stack._top = &R[b - 1];
+				base = &R[c - 1];
+				rflags = frame._rflags;
+
+				env->_frame = frame._prev;
+				goto tail_call;
+			}
 			case BC_CALLM: {
 				loadC();
 
@@ -1275,6 +1305,21 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				});
 				check_gc();
 				break;
+			}
+			case BC_TCALLM: {
+				loadC();
+
+				vm_close_all(env, frame._caps);
+
+				a_u32 n = env->_stack._top - &R[a];
+				v_mov_all_with_nil(env, R - 1, frame._rflags._count, &R[a], n);
+
+				env->_stack._top = &R[n - 1];
+				base = &R[c - 1];
+				rflags = frame._rflags;
+
+				env->_frame = frame._prev;
+				goto tail_call;
 			}
 			case BC_TRIM: {
 				loadC();
@@ -1303,6 +1348,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_RET: {
 				loadB();
 
+				vm_close_all(env, frame._caps);
+
 				ret = R[a];
 				v_mov_all_with_nil(env, R - 1, frame._rflags._count, &R[a], b);
 				top = R - 1 + b;
@@ -1312,6 +1359,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 			case BC_RETM: {
 				Value* p = &R[a];
 				a_usize n = env->_stack._top - p;
+
+				vm_close_all(env, frame._caps);
 
 				ret = p != env->_stack._top ? *p : v_of_nil();
 				v_mov_all_with_nil(env, R - 1, frame._rflags._count, p, n);
@@ -1326,6 +1375,8 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 
 				reload_stack();
 
+				vm_close_all(env, frame._caps);
+
 				api_check_elem(env, n);
 				v_mov_all_with_nil(env, R - 1, frame._rflags._count, env->_stack._top - n, n);
 				top = R - 1 + n;
@@ -1336,17 +1387,10 @@ Value ai_vm_call(a_henv env, Value* base, RFlags rflags) {
 				ret = v_of_nil();
 				top = R - 1;
 
+				vm_close_all(env, frame._caps);
 				goto vm_return;
 			}
 			vm_return: {
-				run {
-					RcCap* caps = frame._caps;
-					RcCap* cap;
-					while ((cap = caps) != null) {
-						caps = cap->_next;
-						ai_cap_soft_close(env, cap);
-					}
-				}
 				if (frame._rflags._count == RFLAG_COUNT_VARARG) {
 					env->_stack._top = top;
 				}
