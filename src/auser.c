@@ -65,6 +65,7 @@ VTable const ai_auser_vtable = {
 	._mask = V_MASKED_TAG(T_AUSER),
 	._base_size = sizeof(GTable),
 	._elem_size = 0,
+	._sname = "obj",
 	._flags = VTABLE_FLAG_NONE,
 	._vfps = (a_vslot[]) {
 		vfp_def(drop, ai_table_drop),

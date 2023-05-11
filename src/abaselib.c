@@ -195,7 +195,7 @@ static a_u32 base_typeof(a_henv env) {
 }
 
 void aloopen_base(a_henv env) {
-	static aloL_Entry bindings[] = {
+	static aloL_Entry const bindings[] = {
 		{ "assert", base_assert },
 		{ "print", base_print },
 		{ "typeof", base_typeof },
@@ -208,8 +208,8 @@ void aloopen_base(a_henv env) {
 	a_htype type = v_as_type(api_elem(env, -1));
 	ai_type_setis(env, type, env_name(env, NAME_TM_GET), v_of_obj(type));
 
-	GTable* gtable = ai_auser_new(env, type);
-	v_set_obj(env, &G(env)->_global, gtable);
+	GAUser* global = ai_auser_new(env, type);
+	v_set_obj(env, &G(env)->_global, global);
 
 	ai_gc_trigger(env);
 }

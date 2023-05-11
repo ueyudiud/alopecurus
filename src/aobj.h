@@ -643,10 +643,10 @@ struct Frame {
 	a_henv _env;
 	Frame* _prev;
 	a_insn const* _pc;
-	Value* _stack_bot;
+	StkPtr _stack_bot;
 	RcCap* _caps;
-	RFlags _rflags;
 	StkPtr _bound; /* In strict stack checking mode, the API will use frame bound to check index range. */
+	RFlags _rflags;
 };
 
 struct alo_Env {
