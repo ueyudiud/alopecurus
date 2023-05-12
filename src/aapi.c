@@ -430,8 +430,9 @@ a_usize alo_rawlen(a_henv env, a_isize id) {
 			GAUser* value = v_as_auser(v);
 			return value->_len;
 		}
-		default:
+		default: {
 			api_panic("unsupported operation.");
+		}
 	}
 }
 
@@ -681,8 +682,7 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 void alo_dump(a_henv env, a_isize id, a_flags options) {
 	Value const* v = api_rdslot(env, id);
 	api_check(v_is_func(*v), "only function can be dumped.");
-	GFun* fun = v_as_func(*v);
-	ai_dump_print(env, fun->_proto, options);
+	ai_dump_print(env, v_as_func(*v), options);
 }
 
 char const ai_api_tagname[][8] = {

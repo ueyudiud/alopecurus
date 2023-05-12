@@ -444,8 +444,11 @@ struct GFun {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
 	a_u16 _flags;
-	a_u16 _sym; /* Function symbol. */
-	GProto* _proto;
+	a_u16 _fname; /* Function name. */
+	union {
+		a_cfun _fptr;
+		GProto* _proto;
+	};
 	union {
 		RcCap* _caps[0];
 		Value _vals[0];

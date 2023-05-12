@@ -116,31 +116,16 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	return self;
 }
 
-static GFun* fun_new(a_henv env, VTable const* vptr, GProto* proto, a_u32 ncap) {
-	GFun* self = ai_mem_alloc(env, fun_size(ncap));
-	self->_vptr = vptr;
-	self->_proto = proto;
-	self->_len = ncap;
-	self->_sym = 0;
-	return self;
-}
-
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
-	static a_insn const l_codes[] = {
-		bc_make_i(BC_FC)
-	};
+	GFun* self = ai_mem_alloc(env, fun_size(ncap));
 
-	static GThinProto const l_proto = {
-		._nstack = ALOI_INIT_CFRAME_STACKSIZE,
-		._nparam = 0,
-		._flags = FUN_FLAG_VARARG | FUN_FLAG_NATIVE,
-		._code = cast(a_insn*, l_codes)
-	};
-
-	GFun* self = fun_new(env, &cfun_vtable, g_cast(GProto, &l_proto), ncap + 1);
+	self->_vptr = &cfun_vtable;
+	self->_len = ncap;
+	self->_fptr = hnd;
+	self->_flags = FUN_FLAG_NATIVE | FUN_FLAG_VARARG;
+	self->_fname = 0;
 
 	v_cpy_all(env, self->_vals, pcap, ncap);
-	v_set_raw(self->_vals + ncap, bit_cast(Value, hnd));
 
 	ai_gc_register_object(env, self);
 
@@ -182,7 +167,9 @@ static RcCap* l_load_capture_at(a_henv env, RcCap** now, Value* dst) {
 
 static RcCap* l_load_capture(a_henv env, CapInfo* info, RcCap** up, RcCap** now, Value* stack) {
 	if (info->_fup) {
-		return up[info->_reg];
+        RcCap* cap = up[info->_reg];
+        cap->_rc_and_fopen += 2;
+		return cap;
 	}
 	else {
 		return l_load_capture_at(env, now, stack + info->_reg);
@@ -201,7 +188,13 @@ GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame) {
 
 	a_u32 len = proto->_ncap;
 
-	GFun* self = fun_new(env, &afun_vtable, proto, len);
+	GFun* self = ai_mem_alloc(env, fun_size(len));
+
+	self->_vptr = &afun_vtable;
+	self->_proto = proto;
+	self->_len = len;
+	self->_flags = proto->_flags;
+	self->_fname = 0;
 
 	for (a_u32 i = 0; i < len; ++i) {
 		self->_caps[i] = l_load_capture(env, &infos[i], parent->_caps, &frame->_caps, base);

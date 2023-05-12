@@ -10,6 +10,6 @@
 
 #include "afun.h"
 
-intern void ai_dump_print(a_henv env, GProto* proto, a_u32 options);
+intern void ai_dump_print(a_henv env, GFun* fun, a_u32 options);
 
 #endif /* adump_h_ */

@@ -217,7 +217,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 #define Ks(s,n) n, ((n) > 1 ? s"s" : s"")
 
 static void dump_proto(a_henv env, GProto* proto, a_u32 options) {
-	aloi_show("fn ");
+	aloi_show("fn %p ", proto);
 	if (proto->_name != null) {
 		aloi_show("%s ", str2ntstr(proto->_name));
 	}
@@ -265,7 +265,18 @@ static void dump_proto(a_henv env, GProto* proto, a_u32 options) {
 	}
 }
 
-void ai_dump_print(a_henv env, GProto* proto, a_u32 options) {
-	dump_proto(env, proto, options);
+static void dump_native(a_henv env, GFun* fun, a_u32 options) {
+	aloi_show("fn %p ", fun->_fptr);
+	aloi_show("<native>");
+	aloi_show_flush();
+}
+
+void ai_dump_print(a_henv env, GFun* fun, a_u32 options) {
+	if (fun->_flags & FUN_FLAG_NATIVE) {
+		dump_native(env, fun, options);
+	}
+	else {
+		dump_proto(env, fun->_proto, options);
+	}
 	aloi_show_flush();
 }

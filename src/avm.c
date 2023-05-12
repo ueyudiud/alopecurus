@@ -468,23 +468,56 @@ tail_call:
 	GFun* fun = v_as_func(*base);
 	Value const* K;
 
+	Value ret;
+	Value* top;
+
 	base += 1;
 
 	run {
-		GProto* proto = fun->_proto;
-		check_stack(base + proto->_nstack);
-		frame = new(Frame) {
-			._prev = env->_frame,
-			._stack_bot = base,
-			._caps = null,
-			._pc = proto->_code,
-			._rflags = rflags
-		};
-		env->_frame = &frame;
+		if (fun->_flags & FUN_FLAG_NATIVE) {
+			check_stack(base + ALOI_INIT_CFRAME_STACKSIZE);
+			frame = new(Frame) {
+				._prev = env->_frame,
+				._stack_bot = base,
+				._caps = null,
+				._pc = null,
+				._rflags = rflags
+			};
 
-		K = proto->_consts;
-		if (!(proto->_flags & FUN_FLAG_VARARG)) {
-			adjust_top();
+			env->_frame = &frame;
+
+			a_u32 n = (*fun->_fptr)(env);
+
+			reload_stack();
+
+			vm_close_all(env, frame._caps);
+
+			api_check_elem(env, n);
+
+			Value* p = env->_stack._top - n;
+
+			ret = p != env->_stack._top ? *p : v_of_nil();
+			v_mov_all_with_nil(env, R - 1, frame._rflags._count, env->_stack._top - n, n);
+			top = R - 1 + n;
+
+			goto vm_return;
+		}
+		else {
+			GProto* proto = fun->_proto;
+			check_stack(base + proto->_nstack);
+			frame = new(Frame) {
+				._prev = env->_frame,
+				._stack_bot = base,
+				._caps = null,
+				._pc = proto->_code,
+				._rflags = rflags
+			};
+			env->_frame = &frame;
+
+			K = proto->_consts;
+			if (!(proto->_flags & FUN_FLAG_VARARG)) {
+				adjust_top();
+			}
 		}
 	}
 
@@ -1342,9 +1375,6 @@ tail_call:
 				check_gc();
 				break;
 			}
-			{ /* Begin of return instructions. */
-				Value ret;
-				Value* top;
 			case BC_RET: {
 				loadB();
 
@@ -1368,21 +1398,6 @@ tail_call:
 
 				goto vm_return;
 			}
-			case BC_FC: {
-				a_cfun cf = bit_cast(a_cfun, fun->_caps[fun->_len - 1]);
-
-				a_u32 n = (*cf)(env);
-
-				reload_stack();
-
-				vm_close_all(env, frame._caps);
-
-				api_check_elem(env, n);
-				v_mov_all_with_nil(env, R - 1, frame._rflags._count, env->_stack._top - n, n);
-				top = R - 1 + n;
-
-				goto vm_return;
-			}
 			case BC_RET0: {
 				ret = v_of_nil();
 				top = R - 1;
@@ -1390,14 +1405,6 @@ tail_call:
 				vm_close_all(env, frame._caps);
 				goto vm_return;
 			}
-			vm_return: {
-				if (frame._rflags._count == RFLAG_COUNT_VARARG) {
-					env->_stack._top = top;
-				}
-				env->_frame = frame._prev;
-				return ret;
-			}
-			} /* End of return instructions. */
 			default: {
 				panic("bad opcode");
 			}
@@ -1410,6 +1417,13 @@ tail_call:
 #undef loadsC
 #undef loadEx
 #undef loadJ
+	}
+	run vm_return: {
+		if (frame._rflags._count == RFLAG_COUNT_VARARG) {
+			env->_stack._top = top;
+		}
+		env->_frame = frame._prev;
+		return ret;
 	}
 
 #undef pc

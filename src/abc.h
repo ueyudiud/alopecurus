@@ -178,7 +178,6 @@ always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
     _(  RET0,  "ret0",___,___,___,___) /* return                                  */ \
     _(   RET,   "ret",reg,len,___,___) /* return R[a:a+b+1]                       */ \
     _(  RETM,  "retm",reg,___,___,___) /* return R[a:]                            */ \
-    _(    FC,    "fc",___,___,___,___) /* call C function                         */ \
     _(    EX,    "ex",ext,___,___,___) /*                                         */
 
 enum OpCode {
