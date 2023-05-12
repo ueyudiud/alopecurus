@@ -25,7 +25,6 @@ static void l_hint(char const* msg) {
 
 static void l_hook(a_henv env, a_msg msg, unused a_hctx ctx) {
 	if (msg < 0) {
-		aloL_traceerror(env, ALO_STACK_INDEX_ERROR, 6);
 	}
 }
 

@@ -149,11 +149,18 @@ Value const* api_roslot(a_henv env, a_isize id) {
 		if (v < ai_stk_bot(env))
 			return null;
 	}
-	else if (id == ALO_STACK_INDEX_GLOBAL) {
-		v = &G(env)->_global;
-	}
 	else if (id == ALO_STACK_INDEX_ERROR) {
 		v = &env->_error;
+	}
+	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
+		id -= ALO_STACK_INDEX_CAPTURE_BASE;
+		GFun* fun = v_as_func(*stk2val(env, env->_frame->_stack_bot - 1));
+		if (id >= fun->_len)
+			return null;
+		v = unlikely(fun->_flags & FUN_FLAG_NATIVE) ? &fun->_vals[id] : fun->_caps[id]->_ptr;
+	}
+	else if (id == ALO_STACK_INDEX_GLOBAL) {
+		v = &G(env)->_global;
 	}
 	else {
 		return null;
@@ -182,6 +189,12 @@ Value* api_wrslot(a_henv env, a_isize id) {
 	}
 	else if (id == ALO_STACK_INDEX_ERROR) {
 		v = &env->_error;
+	}
+	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
+		id -= ALO_STACK_INDEX_CAPTURE_BASE;
+		GFun* fun = v_as_func(*stk2val(env, env->_frame->_stack_bot - 1));
+		api_check(id < fun->_len);
+		v = unlikely(fun->_flags & FUN_FLAG_NATIVE) ? &fun->_vals[id] : fun->_caps[id]->_ptr;
 	}
 	else {
 		v = null;
@@ -392,7 +405,6 @@ void alo_newtable(a_henv env, a_usize n) {
 }
 
 void alo_newcfun(a_henv env, a_cfun f, a_usize n) {
-	api_check_slot(env, 1);
 	api_check_elem(env, n);
 	GFun* val = ai_cfun_create(env, f, n, env->_stack._top - n);
 	env->_stack._top -= n;
@@ -458,19 +470,13 @@ a_tag alo_rawgeti(a_henv env, a_isize id, a_int key) {
 		}
 		case T_TABLE: {
 			GTable* value = v_as_table(v);
-			a_hash hash;
-			Value const* pv = ai_table_ref(env, value, v_of_int(key), &hash);
+			Value const* pv = ai_table_refi(env, value, key);
 			if (pv == null) return ALO_TEMPTY;
 			v = *pv;
 			break;
 		}
 		case T_AUSER: {
-			GAUser* value = v_as_auser(v);
-			a_hash hash;
-			Value const* pv = ai_table_ref(env, value, v_of_int(key), &hash);
-			if (pv == null) return ALO_TEMPTY;
-			v = *pv;
-			break;
+			return ALO_TEMPTY;
 		}
 		default:
 			api_panic("bad value for 'geti' operation.");

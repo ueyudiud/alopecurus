@@ -528,8 +528,12 @@ static a_u32 const_index(Parser* par, Value val) {
 	return at_buf_put(par->_env, *consts, val, "constant") - off;
 }
 
+static Value const_at(Parser* par, a_u32 index) {
+	return par->_consts._ptr[par->_fnscope->_const_off + index];
+}
+
 static a_bool const_is_istr(Parser* par, a_u32 index) {
-	return v_is_istr(par->_consts._ptr[par->_fnscope->_const_off + index]);
+	return v_is_istr(const_at(par, index));
 }
 
 #define INSN_NOP ((a_insn) 0)
@@ -2395,7 +2399,8 @@ assign:
 				sym_check_writable(par, e1, line);
 			}
 			else {
-				ai_par_error(par, "cannot assign to anonymous variable '%s'", e1->_line, str2ntstr(e1->_s));
+				GStr* name = v_as_str(const_at(par, e1->_d2));
+				ai_par_error(par, "cannot assign to anonymous variable '%s'", e1->_line, str2ntstr(name));
 			}
 			expr_gvar(par, e1);
 			goto assign;

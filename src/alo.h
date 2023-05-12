@@ -68,8 +68,11 @@ typedef a_usize a_flags;
 typedef a_i32 a_tag;
 
 #define ALO_STACK_INDEX_ERROR (-1000)
+#define ALO_STACK_INDEX_CAPTURE_BASE (-2000)
 #define ALO_STACK_INDEX_GLOBAL (-3000)
 #define ALO_STACK_INDEX_EMPTY (-4000)
+
+#define ALO_STACK_INDEX_CAPTURE(n) (ALO_STACK_INDEX_CAPTURE_BASE + (n))
 
 #define ALO_TEMPTY (-1)
 

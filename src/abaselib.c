@@ -173,6 +173,18 @@ static a_u32 base_print(a_henv env) {
 	return 0;
 }
 
+#define ERROR_DEFAULT_LEVEL 0
+#define ERROR_DEFAULT_LIMIT 6
+
+static a_u32 base_error(a_henv env) {
+    a_int level = aloL_optint(env, 1, ERROR_DEFAULT_LEVEL);
+    a_int limit = aloL_optint(env, 2, ERROR_DEFAULT_LIMIT);
+
+    alo_settop(env, 1);
+    aloL_traceerror(env, 0, level >= 0 ? cast(a_usize, level) : 0, limit >= 0 ? limit : SIZE_MAX);
+    alo_raise(env);
+}
+
 static a_u32 base_assert(a_henv env) {
 	a_u32 n = alo_stacksize(env);
 	if (alo_tobool(env, 0)) {
@@ -183,6 +195,7 @@ static a_u32 base_assert(a_henv env) {
 			alo_pushlstr(env, "assertion failed!");
 		}
 		alo_settop(env, 2);
+        aloL_traceerror(env, 1, 1, 6);
 		alo_raise(env);
 	}
 }
@@ -197,6 +210,7 @@ static a_u32 base_typeof(a_henv env) {
 void aloopen_base(a_henv env) {
 	static aloL_Entry const bindings[] = {
 		{ "assert", base_assert },
+        { "error", base_error },
 		{ "print", base_print },
 		{ "typeof", base_typeof },
 		{ "__get__", null }

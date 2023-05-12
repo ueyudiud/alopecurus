@@ -242,80 +242,118 @@ void aloL_raisef(a_henv env, char const* fmt, ...) {
 	alo_raise(env);
 }
 
-static a_msg l_wrap_error(a_henv env, a_isize id, a_usize limit, a_hbuf buf) {
-	a_bool head = true;
-	Value* err = api_wrslot(env, id);
-	for (Frame* frame = env->_frame; frame->_prev != null; frame = frame->_prev) {
-		GFun* fun = ai_dbg_get_func(env, frame);
-		assume(fun != null);
+typedef struct {
+	char const* _name;
+	char const* _file;
+	a_u32 _line;
+} Trace;
+
+#define TRACE_UNKNOWN_FILE "?"
+#define TRACE_NATIVE_FILE "[C]"
+
+static void trace_fill(a_henv env, Frame* frame, Trace* trace) {
+	GFun* fun = ai_dbg_get_func(env, frame);
+	assume(fun != null, "cannot trace root frame.");
+	if (!(fun->_flags & FUN_FLAG_NATIVE)) {
 		GProto* proto = fun->_proto;
-		a_insn const* pc = frame->_pc - 1;
-		char const* file;
-		char const* name;
-		a_u32 line;
-		if (!(proto->_flags & FUN_FLAG_NATIVE)) {
-			file = proto->_dbg_file != null ? str2ntstr(proto->_dbg_file) : null;
-			line = ai_dbg_get_line(proto, pc);
-			name = proto->_name != null ? str2ntstr(proto->_name) : null;
-		}
-		else {
-			file = null;
-			line = 0;
-			name = null;
-		}
-		if (head) {
-			if (file != null) {
-				try(ai_buf_nputfs(env, buf, "%s:%u: ", file, line));
-			}
-			switch (v_get_tag(*err)) {
-				case T_HSTR:
-				case T_ISTR: {
-					GStr* str = v_as_str(*err);
-					try(ai_buf_nputls(env, buf, str->_data, str->_len));
-					break;
-				}
-				case T_INT: {
-					a_u32 code = cast(a_u32, v_as_int(*err));
-					try(ai_buf_nputfs(env, buf, "error code: %08x", code));
-					break;
-				}
-				default: {
-					return ALO_EINVAL;
-				}
-			}
-			if (limit == 0) break;
-			try(ai_buf_nputs(env, buf, "\nstack trace:"));
-			head = false;
-		}
-		try(ai_buf_nputs(env, buf, "\n\t"));
-		if (limit-- == 0) {
-			try(ai_buf_nputs(env, buf, "..."));
-			break;
-		}
-		if (line != 0) {
-			assume(file != null);
-			try(ai_buf_nputfs(env, buf, "at %s:%u", file, line));
-		}
-		else if (proto->_flags & FUN_FLAG_NATIVE) {
-			try(ai_buf_nputs(env, buf, "at [C]"));
-		}
-		else {
-			try(ai_buf_nputfs(env, buf, "at %s", file ?: "?"));
-		}
-		if (name != null) {
-			try(ai_buf_nputfs(env, buf, " (%s)", name));
-		}
+		trace->_name = proto->_name != null ? str2ntstr(proto->_name) : null;
+		trace->_file = proto->_dbg_file != null ? str2ntstr(proto->_dbg_file) : TRACE_UNKNOWN_FILE;
+		trace->_line = ai_dbg_get_line(proto, frame->_pc - 1);
 	}
+	else {
+		trace->_name = null;
+		trace->_file = TRACE_NATIVE_FILE;
+		trace->_line = 0;
+	}
+}
+
+static Frame* l_frame_at(a_henv env, a_usize level) {
+    Frame* frame = env->_frame;
+
+    loop {
+        if (frame->_prev == null) {
+            return null;
+        }
+        else if (level == 0) {
+            return frame;
+        }
+
+        frame = frame->_prev;
+        level -= 1;
+    }
+}
+
+static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, a_hbuf buf) {
+    Trace trace;
+	Value* err = api_wrslot(env, id);
+    Frame* frame = l_frame_at(env, level);
+    if (frame == null) return ALO_EINVAL;
+
+    trace_fill(env, frame, &trace);
+
+    if (trace._file != null) {
+        if (trace._line != 0) {
+            try(ai_buf_nputfs(env, buf, "%s:%u: ", trace._file, trace._line));
+        }
+        else {
+            try(ai_buf_nputfs(env, buf, "%s: ", trace._file));
+        }
+    }
+
+    switch (v_get_tag(*err)) {
+        case T_HSTR:
+        case T_ISTR: {
+            GStr* str = v_as_str(*err);
+            try(ai_buf_nputls(env, buf, str->_data, str->_len));
+            break;
+        }
+        case T_INT: {
+            a_u32 code = cast(a_u32, v_as_int(*err));
+            try(ai_buf_nputfs(env, buf, "error code: %08x", code));
+            break;
+        }
+        default: {
+            return ALO_EINVAL;
+        }
+    }
+
+    if (limit > 0) {
+        try(ai_buf_nputs(env, buf, "\nstack trace:"));
+        loop {
+            try(ai_buf_nputs(env, buf, "\n\t"));
+            if (limit-- == 0) {
+                try(ai_buf_nputs(env, buf, "..."));
+                break;
+            }
+
+            if (trace._line != 0) {
+                try(ai_buf_nputfs(env, buf, "at %s:%u", trace._file, trace._line));
+            }
+            else {
+                try(ai_buf_nputfs(env, buf, "at %s", trace._file));
+            }
+
+            if (trace._name != null) {
+                try(ai_buf_nputfs(env, buf, " (%s)", trace._name));
+            }
+
+            frame = frame->_prev;
+            if (frame->_prev == null)
+                break;
+            trace_fill(env, frame, &trace);
+        }
+    }
+
 	GStr* str = ai_str_new(env, buf->_ptr, buf->_len);
 	v_set_obj(env, err, str);
 	return ALO_SOK;
 }
 
-a_msg aloL_traceerror(a_henv env, a_isize id, a_usize limit) {
+a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 	if (env->_frame->_prev != null) {
 		Buf buf;
 		at_buf_init(buf);
-		a_msg msg = l_wrap_error(env, id, limit, at_buf_cast(buf));
+		a_msg msg = l_wrap_error(env, id, level, limit, at_buf_cast(buf));
 		at_buf_deinit(G(env), buf);
 		return msg;
 	}

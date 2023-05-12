@@ -161,7 +161,7 @@ static void strs_put(LexStrs* strs, GStr* str) {
 				._hprev = wrap(node - strs->_ptr),
 				._hnext = next
 			};
-			node->_hnext = wrap(node - strs->_ptr);
+			node->_hnext = wrap(node2 - strs->_ptr);
         }
         else {
 			*node2 = new(StrNode) {
@@ -193,7 +193,7 @@ static void strs_alloc_array(a_henv env, LexStrs* self, a_usize cap) {
 		ptr[i] = new(StrNode) {
 			._str = null,
 			._hprev = wrap(i),
-			._hnext = i < cap - 1 ? wrap(i + 1) : nil
+			._hnext = i < cap - 1 ? wrap(i + 2) : nil
 		};
 	}
 }
