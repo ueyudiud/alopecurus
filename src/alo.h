@@ -104,7 +104,6 @@ typedef a_i32 a_tag;
 #define ALO_SOK ((a_msg) 0)
 #define ALO_SYIELD ((a_msg) 1) /* Route is Yield */
 #define ALO_SDEAD ((a_msg) 2) /* Route is Dead */
-#define ALO_SEXIT ((a_msg) 3) /* Exit Process */
 
 /* Hook masks. */
 #define ALO_HMNONE  0x0000

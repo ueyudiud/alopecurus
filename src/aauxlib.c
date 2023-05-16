@@ -6,6 +6,8 @@
 #define ALO_LIB
 
 #include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
 #include <fcntl.h>
 
 #include "abuf.h"
@@ -136,7 +138,7 @@ char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
 }
 
 a_u32 aloL_fileresult(a_henv env, a_bool stat, char const* fname) {
-	errno_t err = errno;
+	typeof(errno) err = errno;
 	if (stat) {
 		alo_pushbool(env, true);
 		return 1;
@@ -318,14 +320,8 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
     }
 
     if (limit > 0) {
-        try(ai_buf_nputs(env, buf, "\nstack trace:"));
+        try(ai_buf_nputs(env, buf, "\nstack trace:\n\t"));
         loop {
-            try(ai_buf_nputs(env, buf, "\n\t"));
-            if (limit-- == 0) {
-                try(ai_buf_nputs(env, buf, "..."));
-                break;
-            }
-
             if (trace._line != 0) {
                 try(ai_buf_nputfs(env, buf, "at %s:%u", trace._file, trace._line));
             }
@@ -337,10 +333,23 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
                 try(ai_buf_nputfs(env, buf, " (%s)", trace._name));
             }
 
+			if (limit-- == 0) {
+				try(ai_buf_nputs(env, buf, "\n\t..."));
+				break;
+			}
+			else if (frame->_ftail) {
+				try(ai_buf_nputs(env, buf, "\n\t... (tail call)"));
+				if (limit > 1) {
+					limit -= 1;
+				}
+			}
+
             frame = frame->_prev;
             if (frame->_prev == null)
                 break;
             trace_fill(env, frame, &trace);
+
+			try(ai_buf_nputs(env, buf, "\n\t"));
         }
     }
 

@@ -137,6 +137,8 @@ else
 ifeq (Darwin,$(TARGET_OS))
 	TARGET_STRIP+= -x
 endif
+	TARGET_CCDEF+= -DALOI_USE_READLINE
+	TARGET_LIBS+= -lreadline
 endif
 
 ##############################################################
@@ -188,24 +190,33 @@ ifeq (debug,$(LEVEL))
   TARGET_STRIP= @:
 endif
 
-ACTX_C= actx/x64.w64.win.c
-
 KER_O= aapi.o adump.o aparse.o alex.o adbg.o aerr.o aload.o asave.o \
 avm.o afmt.o aop.o agc.o amem.o aenv.o astk.o auser.o atype.o afun.o \
-atable.o alist.o atuple.o astr.o abuf.o aio.o aobj.o abc.o actx.o
+atable.o alist.o atuple.o astr.o abuf.o aio.o aobj.o abc.o actx.o \
+ajmp.o
 LIB_O= asyslib.o adbglib.o abaselib.o aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
+
+ifeq (Windows,$(TARGET_OS))
+	ACTX_C= actx/x64.w64.win.c
+	ACTX_S= actx/x64.w64.win.s
+	BASE_DYNO= $(BASE_O)
+else
+	ACTX_C= actx/x64.sysv.posix.c
+	ACTX_S= actx/x64.sysv.posix.s
+	BASE_DYNO= $(BASE_O:.o=_dyn.o)
+endif
 
 ALO_O= alo.o
 
 ALL_O= $(BASE_O) $(ALO_O)
 ALL_T= $(TARGET_T)
-ALL_RM= $(ALL_O) $(ALL_O:.o=_dyn.o) $(ALO_T) $(ALO_A) $(ALO_SO)
+ALL_RM= $(ALL_O) $(BASE_DYNO) $(ALO_T) $(ALO_A) $(ALO_SO)
 
-E=@
-Q=@echo
-#E=
-#Q=@:
+#E=@
+#Q=@echo
+E=
+Q=@:
 
 ##############################################################
 # Make targets.
@@ -222,6 +233,7 @@ echo:
 	$(Q) "    LEVEL=$(LEVEL)"
 	$(Q) "BUILDMODE=$(BUILDMODE)"
 	$(Q) "DEBUGMODE=$(DEBUGMODE)"
+	$(Q) "       OS=$(TARGET_OS)"
 
 depend:
 	$(E) $(HOST_CC) $(HOST_CCFLAGS) -MM *.c > makefile.dep
@@ -246,7 +258,12 @@ actx.o: $(ACTX_C)
 	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o $(@:.o=_dyn.o) -c $<
 	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o $@ -c $<
 
-actx.h: actx.o
+ajmp.o: $(ACTX_S)
+	$(Q) "CC      $@"
+	$(E) $(TARGET_DYCC) $(TARGET_CCFLAGS) -o $(@:.o=_dyn.o) -c $<
+	$(E) $(TARGET_CC) $(TARGET_CCFLAGS) -o $@ -c $<
+
+actx.h: actx.o ajmp.o
 
 include makefile.dep
 
@@ -260,7 +277,7 @@ $(ALO_A): $(BASE_O)
 
 $(ALO_SO): $(BASE_O)
 	$(Q) "DYLINK  $@"
-	$(E) $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(BASE_O) $(TARGET_LIBS)
+	$(E) $(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(BASE_DYNO) $(TARGET_LIBS)
 	$(E) $(TARGET_STRIP) $@
 
 $(ALO_T): $(TARGET_O) $(ALO_O)

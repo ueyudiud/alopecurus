@@ -9,8 +9,6 @@
 #include "aarch.h"
 #include "adef.h"
 #include "aobj.h"
-#include "atmp.h"
-#include "akw.h"
 #include "aop.h"
 #include "abc.h"
 #include "astr.h"

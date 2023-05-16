@@ -40,8 +40,8 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	a_usize limit_page_size = MAX_OVERFLOWED_STACK_SIZE;
 	base = ai_mem_nreserve(null, limit_page_size);
 	if (unlikely(base == null)) return true;
-	void* result = ai_mem_ncommit(base, alloc_size, CTX_VALLOC_RW);
-	if (unlikely(result == null)) {
+	a_bool result = ai_mem_ncommit(base, base, alloc_size, NCOMMIT_PROT_READWRITE);
+	if (unlikely(!result)) {
 		ai_mem_nrelease(base, limit_page_size);
 		return true;
 	}
@@ -69,7 +69,7 @@ static void stack_reloc(a_henv env, a_isize diff) {
 	for (Frame* frame = env->_frame; frame != null; frame = frame->_prev) {
 		frame->_stack_bot = ptr_disp(Value, frame->_stack_bot, diff);
 
-		for (RcCap* cap = frame->_caps; cap != null; cap = cap->_next) {
+		for (RcCap* cap = frame->_open_caps; cap != null; cap = cap->_next) {
 			cap->_ptr = ptr_disp(Value, cap->_ptr, diff);
 		}
 	}
@@ -104,8 +104,8 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	if (likely(stack->_alloc_size < sizeof(Value) * size_new)) {
 		a_usize size_old = stack->_alloc_size;
 		assume(size_new > size_old, "grow nothing.");
-		void* result = ai_mem_ncommit(stack->_base + size_old, size_new - size_old, CTX_VALLOC_RW);
-		if (unlikely(result == null))
+		a_bool result = ai_mem_ncommit(stack->_base, stack->_base + size_old, size_new - size_old, NCOMMIT_PROT_READWRITE);
+		if (unlikely(!result))
 			ai_mem_nomem(env);
 		stack->_alloc_size = size_new;
 	}
@@ -167,6 +167,6 @@ void ai_stk_deinit(Global* g, Stack* stack) {
 	ai_mem_dealloc(g, stack->_base, stack->_alloc_size);
 #else
 	quiet(g);
-	ai_mem_ndecommit(stack->_base, sizeof(Value) * MAX_OVERFLOWED_STACK_SIZE);
+	ai_mem_nrelease(stack->_base, MAX_OVERFLOWED_STACK_SIZE);
 #endif
 }

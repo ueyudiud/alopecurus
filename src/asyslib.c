@@ -6,7 +6,7 @@
 #define ALO_LIB
 
 #include <stdlib.h>
-#include <process.h>
+#include <errno.h>
 
 #include "avm.h"
 #include "aapi.h"
@@ -35,7 +35,6 @@ static a_u32 sys_exit(a_henv env) {
 			unreachable();
 		}
 	}
-	ai_vm_hook(env, ALO_SEXIT, ALO_HMRAISE);
 	alo_destroy(env);
 	exit(code);
 }

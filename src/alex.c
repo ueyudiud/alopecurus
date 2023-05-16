@@ -257,12 +257,12 @@ void ai_lex_close(Lexer* lex) {
 
 char const* ai_lex_tagname(a_i32 tag) {
 	switch (tag) {
-#define CASE_KW(id,repr) case TK_##id: return name_str_kw(id)._ptr;
-		KW_LIST(CASE_KW)
-#undef CASE_KW
-#define CASE_OP(id,repr) case TK_##id: return "'"repr"'";
-		OP_LIST(CASE_OP)
-#undef CASE_OP
+#define AI_SYM(g,i,n) case TK_##i: return name_ptr(NAME_POS_##g##_##i);
+# include "asym/kw.h"
+#undef AI_SYM
+#define AI_SYM(g,i,n) case TK_##i: return "'"n"'";
+# include "asym/op.h"
+#undef AI_SYM
 		case TK_EOF: return "<EOF>";
 		case TK_IDENT: return "<identifier>";
 		case TK_INTEGER: return "<integer>";

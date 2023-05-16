@@ -221,7 +221,7 @@ void ai_str_boost(a_henv env) {
 
 void ai_str_clean(Global* g) {
     IStrCache* cache = &g->_istr_cache;
-    assume(cache->_len == NAME__END - 1);
+    assume(cache->_len == NAME__COUNT);
     ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 }
 

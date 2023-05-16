@@ -181,7 +181,7 @@ static a_u32 base_error(a_henv env) {
     a_int limit = aloL_optint(env, 2, ERROR_DEFAULT_LIMIT);
 
     alo_settop(env, 1);
-    aloL_traceerror(env, 0, level >= 0 ? cast(a_usize, level) : 0, limit >= 0 ? limit : SIZE_MAX);
+    aloL_traceerror(env, 0, cast(a_usize, max(level, 0) + 1), limit >= 0 ? cast(a_usize, limit) : SIZE_MAX);
     alo_raise(env);
 }
 

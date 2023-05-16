@@ -6,53 +6,21 @@
 #define aname_h_
 
 #include "adef.h"
-#include "akw.h"
 #include "aop.h"
 
-#define PT_LIST(_) \
-	_(BOOL, "bool") \
-	_(INT, "int") \
-	_(FLOAT, "float") \
-	_(PTR, "ptr") \
-	_(STR, "str") \
-	_(TUPLE, "tuple") \
-	_(LIST, "list") \
-	_(TABLE, "table") \
-	_(FUNC, "func") \
-	_(ROUTE, "route") \
-	_(TYPE, "type") \
-	_(USER, "user")
-
 enum {
-    NAME__NORMAL,
-
     NAME__EMPTY,
-    
-    NAME_KW__BEGIN = NAME__EMPTY,
-#define KWDEF(id,name) M_cat(NAME_KW_,id),
-    KW_LIST(KWDEF)
-#undef KWDEF
-    NAME_KW__END,
-    NAME_KW__FIRST = NAME_KW__BEGIN + 1,
-    NAME_KW__LAST = NAME_KW__END - 1,
+#define AI_SYM_PROLOGUE(g) NAME_##g##__FIRST, NAME_##g##__STUB1 = NAME_##g##__FIRST - 1,
+#define AI_SYM_EPILOGUE(g) NAME_##g##__STUB2, NAME_##g##__LAST = NAME_##g##__STUB2 - 1,
+#define AI_SYM(g,i,n) NAME_##g##_##i,
+# include "asym/kw.h"
+# include "asym/tm.h"
+# include "asym/pt.h"
+#undef AI_SYM_PROLOGUE
+#undef AI_SYM_EPILOGUE
+#undef AI_SYM
 
-	NAME_TM__BEGIN = NAME_KW__LAST,
-#define TMDEF(id,name) M_cat(NAME_TM_,id),
-	TM_LIST(TMDEF)
-#undef TMDEF
-	NAME_TM__END,
-	NAME_TM__FIRST = NAME_TM__BEGIN + 1,
-	NAME_TM__LAST = NAME_TM__END - 1,
-
-	NAME_PT__BEGIN = NAME_TM__LAST,
-#define PTDEF(id,name) M_cat(NAME_PT_,id),
-	PT_LIST(PTDEF)
-#undef PTDEF
-	NAME_PT__END,
-	NAME_PT__FIRST = NAME_PT__BEGIN + 1,
-	NAME_PT__LAST = NAME_PT__END - 1,
-
-    NAME__END = NAME_PT__END
+	NAME__COUNT
 };
 
 #define name_id(str) ((str)->_tnext >> 16)
@@ -64,23 +32,16 @@ enum {
 #define name_id_set(str,tag) quiet((str)->_tnext = cast(a_u64, tag) << 16)
 
 enum {
-#define KWPOS(id,name) NAME_POS_KW_##id, NAME_EPOS_KW_##id = NAME_POS_KW_##id + sizeof(name) - 1,
-	KW_LIST(KWPOS)
-#undef KWPOS
-#define TMPOS(id,name) NAME_POS_TM_##id, NAME_EPOS_TM_##id = NAME_POS_TM_##id + sizeof(name) - 1,
-	TM_LIST(TMPOS)
-#undef TMPOS
-#define PTPOS(id,name) NAME_POS_PT_##id, NAME_EPOS_PT_##id = NAME_POS_PT_##id + sizeof(name) - 1,
-	PT_LIST(PTPOS)
-#undef PTPOS
-	NAME_POS__MAX,
+#define AI_SYM(g,i,n) NAME_POS_##g##_##i, NAME_EPOS_##g##_##i = NAME_POS_##g##_##i + sizeof(n) - 1,
+# include "asym/kw.h"
+# include "asym/tm.h"
+# include "asym/pt.h"
+#undef AI_SYM
+	NAME_LEN,
 
 	NAME__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
 };
 
 #define name_ptr(p) (&ai_obj_names[p])
-#define name_str_kw(id) (new(a_lstr) { name_ptr(NAME_POS_KW_##id), NAME_EPOS_KW_##id - NAME_POS_KW_##id })
-#define name_str_tm(id) (new(a_lstr) { name_ptr(NAME_POS_TM_##id), NAME_EPOS_TM_##id - NAME_POS_TM_##id })
-#define name_str_pt(id) (new(a_lstr) { name_ptr(NAME_POS_PT_##id), NAME_EPOS_PT_##id - NAME_POS_PT_##id })
 
 #endif /* aname_h_ */

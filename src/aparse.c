@@ -428,7 +428,6 @@ struct Scope {
 
 struct RichCapInfo {
 	a_u8 _scope; /* The depth of first captured scope. */
-	a_u8 _sym_index; /* Qualified variable index. */
 	a_u8 _src_index;
 	GStr* _name;
 };
@@ -982,15 +981,27 @@ static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line);
 static void expr_resolve(Parser* par, OutExpr e, a_u32 id);
 static a_bool l_lookup_symbol(Parser* par, GStr* name, a_u32* pid);
 
-static a_u32 l_local(Parser* par, Sym* sym) {
-	return par->_locals._ptr[par->_fnscope->_local_off + sym->_index]._reg;
+static void l_capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo* info) {
+	quiet(scope);
+
+	switch (sym->_tag) {
+		case SYM_LOCAL: {
+			info->_src_index = par->_locals._ptr[sym->_index]._reg; /* Get variable index. */
+			break;
+		}
+		case SYM_CAPTURE: {
+			info->_src_index = sym->_index;
+			break;
+		}
+		default: unreachable();
+	}
 }
 
 static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
 	/* Find in captured values. */
 	for (a_u32 i = 0; i < scope->_caps._len; ++i) {
 		RichCapInfo* info = &scope->_caps._ptr[i];
-		if (info->_sym_index == sym->_index) {
+		if (info->_name == sym->_name) {
 			/* Already captured. */
 			return i;
 		}
@@ -999,25 +1010,12 @@ static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth
 	/* Not found, create a new capture value. */
 	RichCapInfo info = {
 		._scope = sym->_scope,
-		._sym_index = sym->_index,
 		._name = sym->_name
 	};
 	if (sym->_scope >= depth - 1) {
-		switch (sym->_tag) {
-			case SYM_LOCAL: {
-				info._src_index = l_local(par, sym); /* Get variable index. */
-				break;
-			}
-			case SYM_CAPTURE: {
-				info._src_index = sym->_index;
-				break;
-			}
-			default: {
-				unreachable();
-			}
-		}
+		l_capture_locally(par, scope, sym, &info);
 	}
-	else { /* Acquire capture index from upper function. */
+	else { /* Capture recursively. */
 		info._src_index = l_lookup_capture(par, scope->_fn_up, sym,depth - 1);
 	}
 	return at_buf_put(par->_env, scope->_caps, info, "capture");
@@ -1055,7 +1053,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 		case SYM_LOCAL: {
 			if (par->_scope_depth == sym->_scope) {
 				expr_init(e, EXPR_REG,
-					._d1 = l_local(par, sym),
+					._d1 = par->_locals._ptr[par->_fnscope->_local_off + sym->_index]._reg,
 					._d2 = id,
 					._fsym = true
 				);
@@ -2411,6 +2409,11 @@ assign:
 	}
 }
 
+static void expr_tbc(Parser* par, InExpr e, a_line line) {
+    assume(e->_tag == EXPR_REG, "cannot mark a non-register storage variable to-be-closed.");
+    l_emit_ia(par, BC_TBC, e->_d1, line);
+}
+
 static a_u32 syms_push(Parser* par, Sym sym) {
 	return at_buf_put(par->_env, par->_syms, sym, "symbol");
 }
@@ -2588,8 +2591,7 @@ static void l_emit_section(Parser* par, InoutExpr e, SecHead const* restrict sec
 }
 
 static a_u32 locals_push(Parser* par, LocalInfo info) {
-	a_u32 index = at_buf_put(par->_env, par->_locals, info, "local variable");
-	return index - par->_fnscope->_local_off;
+	return at_buf_put(par->_env, par->_locals, info, "local variable");
 }
 
 static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, SymMods mods) {
@@ -2821,14 +2823,14 @@ static void scope_pop(Parser* par, a_line line) {
 		a_u32 bot = scope->_sym_off;
 		a_u32 top = par->_syms._len;
 		a_u32 label = par->_head_label - par->_fnscope->_begin_label;
+		a_u32 local_off = par->_fnscope->_local_off;
 		for (a_u32 i = bot; i < top; ++i) {
 			Sym* sym = &par->_syms._ptr[i];
 			switch (sym->_tag) {
-				case SYM_LOCAL:
-					par->_locals._ptr[par->_fnscope->_local_off + sym->_index]._end_label = label;
+				case SYM_LOCAL: {
+					par->_locals._ptr[sym->_index - local_off]._end_label = label;
 					break;
-				default:
-					unreachable();
+				}
 			}
 		}
 		par->_syms._len = bot;
@@ -2935,7 +2937,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 			RichCapInfo* cap_info = &scope->_caps._ptr[i];
 			proto->_caps[i] = new(CapInfo) {
 				._reg = cap_info->_src_index,
-				._fup = cap_info->_scope != par->_scope_depth
+				._fup = cap_info->_scope != par->_scope_depth - 1
 			};
 			if (desc._flags._fdebug) {
 				proto->_dbg_cap_names[i] = cap_info->_name;
@@ -2945,10 +2947,17 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 	run { /* Build sub function */
 		GProto** src = scope->_base_subs;
 		GProto** dst = proto->_subs;
-		GProto** end = cast(GProto**, par->_rq._tail);
+		GProto* val = *src;
+
+		GProto** const end = cast(GProto**, par->_rq._tail);
+		par->_rq._tail = cast(a_gclist*, src);
+
 		while (src != end) {
-			*dst = *src;
-			src = cast(GProto**, &(*src)->_gnext);
+			*dst = val;
+			*src = null;
+
+			src = cast(GProto**, &val->_gnext);
+			val = *src;
 			dst += 1;
 		}
 	}
@@ -4880,10 +4889,25 @@ static void l_scan_let_stat(Parser* par) {
             lex_skip(par);
 			GStr* name = lex_check_ident(par);
             local_bind(par, e1, name, line);
+
 			l_scan_function(par, e2, name, line);
 			expr_assign(par, e1, e2, line);
 			break;
 		}
+        case TK_TRY: {
+            Expr e1, e2;
+            lex_skip(par);
+            GStr* name = lex_check_ident(par);
+            local_bind(par, e1, name, line);
+
+            lex_check_skip(par, TK_ASSIGN);
+
+            l_scan_expr(par, e2);
+            expr_or_ret(par, e2, line);
+            expr_assign(par, e1, e2, line);
+            expr_tbc(par, e1, line);
+            break;
+        }
 		default: {
 			LetStat stat = {
 				._root = {

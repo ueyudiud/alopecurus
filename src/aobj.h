@@ -10,6 +10,7 @@
 
 #include "adef.h"
 #include "aname.h"
+#include "actx.h"
 
 typedef struct GObj GObj;
 typedef struct GStr GStr;
@@ -622,8 +623,6 @@ always_inline GType* v_as_type(Value v) {
  * Route
  *=========================================================*/
 
-typedef void (*a_pfun)(a_henv, void*);
-
 struct Stack {
 	Value* _base;
 	Value* _top;
@@ -637,32 +636,52 @@ typedef a_isize StkPtr;
 typedef Value* StkPtr;
 #endif
 
-/* Flags of result. */
-typedef struct {
-	a_u8 _count; /* Number of expected return count. */
-} RFlags;
-
 struct Frame {
 	a_henv _env;
 	Frame* _prev;
 	a_insn const* _pc;
 	StkPtr _stack_bot;
-	RcCap* _caps;
 	StkPtr _bound; /* In strict stack checking mode, the API will use frame bound to check index range. */
-	RFlags _rflags;
+	union {
+		a_u8 _flags;
+		struct {
+			a_u8 _fvret: 1; /* Variable length result mark. */
+			a_u8 _ftail: 1; /* Tail call mark. */
+			a_u8 _fmeta: 1; /* Meta call mark. */
+		};
+	};
+	a_u8 _nret;
 };
+
+typedef void* a_rctx;
 
 struct alo_Env {
 	GOBJ_STRUCT_HEADER;
 	Global* _g;
+	a_rctx _rctx;
+	void* _rctx_alloc;
+	GRoute* _from;
 	Frame* _frame;
 	Stack _stack;
 	Value _error;
-	GRoute* _from;
 	a_u16 _flags;
 	a_u8 _status;
+	PCtx _pctx;
+	RcCap* _open_caps;
 	Frame _base_frame;
 };
+
+#if ALO_M64
+static_assert(offsetof(GRoute, _rctx) == 0x20);
+static_assert(offsetof(GRoute, _rctx_alloc) == 0x28);
+static_assert(offsetof(GRoute, _from) == 0x30);
+static_assert(offsetof(GRoute, _stack._base) == 0x40);
+#else
+static_assert(offsetof(GRoute, _rctx) == 0x10);
+static_assert(offsetof(GRoute, _rctx_alloc) == 0x14);
+static_assert(offsetof(GRoute, _from) == 0x18);
+static_assert(offsetof(GRoute, _stack._base) == 0x20);
+#endif
 
 #define G(env) ((env)->_g)
 
@@ -712,7 +731,7 @@ struct Global {
 	a_u8 _white_color;
 	a_u8 _gcstep;
 	volatile atomic_uint_fast8_t _hookm;
-	GStr* _names[NAME__END - 1];
+	GStr* _names[NAME__COUNT];
 	struct {
 		GType _nil;
 		GType _bool;
@@ -836,7 +855,7 @@ always_inline char const* v_nameof(a_henv env, Value v) {
 	}
 }
 
-intern char const ai_obj_names[NAME_POS__MAX];
+intern char const ai_obj_names[NAME_LEN];
 
 intern void ai_obj_boost(a_henv env, void* blk);
 

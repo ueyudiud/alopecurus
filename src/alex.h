@@ -5,7 +5,6 @@
 #ifndef alex_h_
 #define alex_h_
 
-#include "akw.h"
 #include "aobj.h"
 #include "abuf.h"
 #include "aio.h"
@@ -33,10 +32,10 @@ intern a_i32 ai_lex_peek(Lexer* lex);
 enum {
     TK__NONE,
 
-#define TKDEF(id,repr) TK_##id,
-	KW_LIST(TKDEF)
-	OP_LIST(TKDEF)
-#undef TKDEF
+#define AI_SYM(g,i,n) TK_##i,
+# include "asym/kw.h"
+# include "asym/op.h"
+#undef AI_SYM
 	TK_EOF,
 	TK_IDENT,
 	TK_INTEGER,

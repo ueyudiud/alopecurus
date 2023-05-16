@@ -62,6 +62,15 @@
 # define ALO_STRICT_STACK_CHECK M_false
 #endif
 
+/**
+ ** Add valgrind support if enable this option.
+ */
+#ifdef ALOI_USE_VALGRIND
+# define ALO_USE_VALGRIND M_true
+#else
+# define ALO_USE_VALGRIND M_false
+#endif
+
 /* Special attributes. */
 
 #undef intern

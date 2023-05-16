@@ -9,26 +9,23 @@
 
 intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
-intern GFun* ai_fun_new(a_henv env, GProto* proto, Frame* frame);
+intern GFun *ai_fun_new(a_henv env, GProto *proto);
 intern void ai_proto_drop(Global* g, GProto* self);
-intern void ai_cap_mark_tbc(a_henv env, Frame* frame, Value* ptr);
+intern void ai_cap_mark_tbc(a_henv env, Value* pv);
 intern void ai_cap_really_drop(Global* g, RcCap* self);
-intern void ai_cap_soft_close(a_henv env, RcCap* self);
-intern void ai_cap_hard_close(a_henv env, RcCap* self);
+intern void ai_cap_close(a_henv env, RcCap* self);
+intern void ai_cap_close_above(a_henv env, Value* pv);
+intern void ai_cap_clean(Global* g);
 
 #define FUN_FLAG_VARARG u16c(0x0001)
 #define FUN_FLAG_NATIVE u16c(0x0002)
-
-typedef struct {
-	GPROTO_STRUCT_HEADER;
-} GThinProto;
 
 /**
  ** The capture value using reference counter.
  */
 struct RcCap {
 	Value* _ptr;
-	a_u32 _rc_and_fopen;
+	a_u32 _rc;
 	union {
 		a_u8 _flags;
 		struct {

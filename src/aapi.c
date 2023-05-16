@@ -497,9 +497,7 @@ void alo_insert(a_henv env, a_isize id) {
 static void l_call(a_henv env, a_u32 narg, a_i32 nres) {
 	Value* base = env->_stack._top - narg - 1;
 
-	ai_vm_call(env, base, new(RFlags) {
-		._count = nres < 0 ? RFLAG_COUNT_VARARG : nres
-	});
+	ai_vm_call(env, base, nres);
 }
 
 void alo_call(a_henv env, a_usize narg, a_isize nres) {
@@ -530,7 +528,10 @@ a_msg alo_pcall(a_henv env, a_usize narg, a_isize nres, a_usize nsav) {
 	a_msg msg = ai_env_pcall(env, l_pcall, &ctx);
 	if (unlikely(msg != ALO_SOK)) {
 		env->_frame = frame; /* Recover frame. */
-		env->_stack._top = ai_stk_bot(env) + nsav;
+
+		Value* bot = ai_stk_bot(env) + nsav;
+		env->_stack._top = bot;
+		ai_cap_close_above(env, bot);
 		ai_env_pop_error(env, api_incr_stack(env));
 	}
 	return msg;

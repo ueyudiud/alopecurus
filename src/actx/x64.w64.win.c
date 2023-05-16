@@ -2,37 +2,21 @@
  *@file actx/x64.w64.win.c
  */
 
+#include "../actx.h"
+
+#ifdef actx_x64_w64_win_h_
+
 #define actx_x64_w64_win_c_
 #define ALO_LIB
 
-#include "../actx.h"
-#include "../avm.h"
+#include <memoryapi.h>
+#include <intrin.h>
+
+#include "../aobj.h"
 
 #define ext(n) M_cat(ext_,n) /* Avoid for type redefinition. */
 
 typedef int NTSTATUS;
-
-#define CTX_NVGPR_LIST(_) \
-	_(rbx,Rbx) \
-	_(rsp,Rsp) \
-	_(rbp,Rbp) \
-	_(rsi,Rsi) \
-	_(rdi,Rdi) \
-	_(r12,R12) \
-	_(r13,R13) \
-	_(r14,R14) \
-	_(r15,R15)
-#define CTX_NVFPR_LIST(_) \
-	_(xmm6,Xmm6) \
-	_(xmm7,Xmm7) \
-	_(xmm8,Xmm8) \
-	_(xmm9,Xmm9) \
-	_(xmm10,Xmm10) \
-	_(xmm11,Xmm11) \
-	_(xmm12,Xmm12) \
-	_(xmm13,Xmm13) \
-	_(xmm14,Xmm14) \
-	_(xmm15,Xmm15)
 
 typedef struct ext(TEB) ext(TEB), *ext(PTEB);
 typedef struct ext(PEB) ext(PEB), *ext(PPEB);
@@ -140,140 +124,68 @@ a_msg ai_ctx_init(void) {
 	return ALO_SOK;
 }
 
-#define PROC_NULL null
-
-#define L_ENTER ".long_enter"
-
-#define Fenv(f) "i"(addr_of(&cast(GRoute*, null)->f))
-#define Fctx(f) "i"(addr_of(&cast(Route*, null)->_ctx.f))
-#define Fgbl(f) "i"(addr_of(&cast(Global*, null)->f))
-#define Fteb(f) "i"(addr_of(&cast(ext(PTEB), null)->f))
-
-naked a_msg ai_ctx_resume(unused Route* from, unused Route* to) {
-	/* %rcx = caller, %rdx = callee */
-	/* Save TEB context. */
-	asm("movq %%gs:%c0, %%r8"::Fteb(DeallocationStack));
-	asm("movq %%r8, %c0(%%rcx)"::Fctx(_stack_alloc_base)); /* callee->_stack_alloc_base = TEB->DeallocationStack */
-	asm("movq %%gs:%c0, %%r8"::Fteb(StackBase));
-	asm("movq %%r8, %c0(%%rcx)"::Fctx(_stack_base)); /* callee->_stack_base = TIB->StackBase */
-	asm("movq %%gs:%c0, %%r8"::Fteb(ExceptionList));
-	asm("movq %%r8, %c0(%%rcx)"::Fctx(_except_list)); /* callee->_except_list = TIB->ExceptionList */
-	asm("movq %%gs:%c0, %%r8"::Fteb(StackLimit));
-	asm("movq %%r8, %c0(%%rcx)"::Fctx(_stack_limit)); /* callee->_stack_limit = TIB->StackLimit */
-	/* Save nonvolatile registers. */
-	asm("movq (%rsp), %r8"); /* Virtual return. */
-	asm("movq %%r8, %c0(%%rcx)"::Fctx(_rip));
-	asm("addq $8, %rsp");
-#define SAVE(n,f) asm("movq %%"#n", %c0(%%rcx)"::Fctx(_##n));
-	CTX_NVGPR_LIST(SAVE) /* Save GPR */
-#undef SAVE
-#define SAVE(n,f) asm("movups %%"#n", %c0(%%rcx)"::Fctx(_##n));
-	CTX_NVFPR_LIST(SAVE) /* Save FPR */
-#undef SAVE
-	asm("stmxcsr %c0(%%rcx)"::Fctx(_mxcsr));
-	asm("fnclex");
-	asm("fstcww %c0(%%rcx)"::Fctx(_fctrl));
-	/* Enter into route. */
-	asm(L_ENTER":");
-
-	/* Check shadow pointer. */
-	asm("movq %c0(%%rdx), %%r8"::Fctx(_ssp));
-	asm("testq %r8, %r8");
-	asm("je ._label1");
-	asm("rdsspq %rbx");
-	asm("rstorssp (%r8)");
-	asm("movq %%rbx, %c0(%%rdx)"::Fctx(_ssp));
-	asm("saveprevssp");
-	asm("subq $-8, %rbx");
-	asm("movq %%rbx, %c0(%%rcx)"::Fctx(_ssp));
-	/* Load TEB context. */
-	asm("._label1:");
-	asm("movq %c0(%%rdx), %%r8"::Fctx(_stack_alloc_base));
-	asm("movq %%r8, %%gs:%c0"::Fteb(DeallocationStack)); /* TEB->DeallocationStack = callee->_stack_alloc_base */
-	asm("movq %c0(%%rdx), %%r8"::Fctx(_stack_base));
-	asm("movq %%r8, %%gs:%c0"::Fteb(StackBase)); /* TIB->StackBase = callee->_stack_base */
-	asm("movq %c0(%%rdx), %%r8"::Fctx(_stack_limit));
-	asm("movq %%r8, %%gs:%c0"::Fteb(StackLimit)); /* TIB->StackLimit = callee->_stack_limit */
-	asm("movq %c0(%%rdx), %%r8"::Fctx(_except_list));
-	asm("movq %%r8, %%gs:%c0"::Fteb(ExceptionList)); /* TIB->ExceptionList = callee->_except_list */
-	/* Load nonvolatile registers. */
-#define LOAD(n,f) asm("movq %c0(%%rdx), %%"#n::Fctx(_##n));
-	CTX_NVGPR_LIST(LOAD) /* Load GPR */
-#undef LOAD
-#define LOAD(n,f) asm("movups %c0(%%rdx), %%"#n::Fctx(_##n));
-	CTX_NVFPR_LIST(LOAD) /* Load FPR */
-#undef LOAD
-	asm("ldmxcsr %c0(%%rdx)"::Fctx(_mxcsr));
-	asm("fldcw %c0(%%rdx)"::Fctx(_fctrl));
-	/* Switch active route. */
-	asm("movq %c0(%%rdx), %%r8"::Fenv(_g));
-	asm("movq %%rdx, %c0(%%r8)"::Fgbl(_active)); /* g->_active = callee */
-	/* Jump. */
-	asm("jmp *%c0(%%rdx)"::Fctx(_rip));
-}
-
-always_inline a_msg code2msg(DWORD code) {
+static a_msg code2msg(DWORD code) {
 	DWORD raw_msg = code ^ EXCEPTION_CODE_PREFIX;
 	assume(raw_msg > 0);
-	return raw_msg <= 0xff ? cast(a_msg, cast(a_i8, raw_msg)) : ALO_EOUTER;
+	return raw_msg <= 0xff ? cast(a_msg, cast(a_i8, raw_msg)) : ALO_SOK;
 }
 
-static EXCEPTION_DISPOSITION start_except_hook(
+static void route_recover(void* rctx, PCONTEXT context, a_bool recover_stack) {
+    a_usize frame = cast(a_usize, rctx);
+
+    context->Xmm6 = *ptr_of(M128A, frame - 0x078);
+    context->Xmm7 = *ptr_of(M128A, frame - 0x088);
+    context->Xmm8 = *ptr_of(M128A, frame - 0x098);
+    context->Xmm9 = *ptr_of(M128A, frame - 0x0A8);
+    context->Xmm10 = *ptr_of(M128A, frame - 0x0B8);
+    context->Xmm11 = *ptr_of(M128A, frame - 0x0C8);
+    context->Xmm12 = *ptr_of(M128A, frame - 0x0D8);
+    context->Xmm13 = *ptr_of(M128A, frame - 0x0E8);
+    context->Xmm14 = *ptr_of(M128A, frame - 0x0F8);
+    context->Xmm15 = *ptr_of(M128A, frame - 0x108);
+    context->Rbp = *ptr_of(DWORD64, frame - 0x028);
+    context->Rsp = frame + 0x008;
+    context->Rbx = *ptr_of(DWORD64, frame - 0x030);
+    context->Rsi = *ptr_of(DWORD64, frame - 0x038);
+    context->Rdi = *ptr_of(DWORD64, frame - 0x040);
+    context->R12 = *ptr_of(DWORD64, frame - 0x048);
+    context->R13 = *ptr_of(DWORD64, frame - 0x050);
+    context->R14 = *ptr_of(DWORD64, frame - 0x058);
+    context->R15 = *ptr_of(DWORD64, frame - 0x060);
+    context->Rip = *ptr_of(DWORD64, frame);
+    context->MxCsr = *ptr_of(DWORD, frame - 0x068);
+    context->FltSave.ControlWord = *ptr_of(WORD, frame - 0x06C);
+
+    if (recover_stack) {
+        ext(PTEB) teb = NtCurrentTeb();
+        teb->NtTib.StackBase = *ptr_of(PVOID, frame - 0x020);
+        teb->NtTib.StackLimit = *ptr_of(PVOID, frame - 0x018);
+        teb->DeallocationStack = *ptr_of(PVOID, frame - 0x010);
+    }
+}
+
+EXCEPTION_DISPOSITION ai_ctx_start_catch(
 		_In_ PEXCEPTION_RECORD ExceptionRecord,
 		_In_ unused PVOID EstablisherFrame,
 		_Inout_ PCONTEXT ContextRecord,
 		_Inout_ PDISPATCHER_CONTEXT unused DispatcherContext) {
-	Route* callee = ptr_of(Route, ContextRecord->Rbx);
-	Route* caller = cast(Route*, callee->_body._from);
+	a_henv callee = cast(a_henv, ContextRecord->Rbx);
+	a_henv caller = callee->_from;
 
 	if (!(ExceptionRecord->ExceptionFlags & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND))) {
-		a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
-		if (msg != ALO_SOK) {
-			asm volatile("jmp "L_ENTER:: "a"(msg), "c"(callee), "d"(caller));
-		}
-	}
- 
-	RCtx* ctx = &caller->_ctx;
-#define LOAD(n,f) ContextRecord->f = ctx->_##n;
-	CTX_NVGPR_LIST(LOAD)
-#undef LOAD
-#define LOAD(n,f) ContextRecord->f = ctx->_##n._win;
-	CTX_NVFPR_LIST(LOAD)
-#undef LOAD
-	ContextRecord->Rip = ctx->_rip;
-	ContextRecord->MxCsr = ctx->_mxcsr;
-	ContextRecord->FltSave.ControlWord = ctx->_fctrl;
+        a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
+        if (msg != ALO_SOK) {
+            callee->_status = msg;
+            ai_ctx_jump(caller, callee, msg);
+        }
+    }
 
-	ext(PTEB) teb = NtCurrentTeb();
-	teb->NtTib.StackBase = ctx->_stack_base;
-	teb->NtTib.StackLimit = ctx->_stack_limit;
-	teb->NtTib.ExceptionList = ctx->_except_list;
-	teb->DeallocationStack = ctx->_stack_alloc_base;
-
+	route_recover(caller->_frame, ContextRecord, TRUE);
 	NtRaiseException(ExceptionRecord, ContextRecord, TRUE);
 	trap();
 }
 
-static never_inline void rmain(a_henv env) {
-	assume(env->_stack._base == stk2val(env, env->_base_frame._stack_bot));
-	ai_vm_call(env, env->_stack._base, new(RFlags) {
-		._count = RFLAG_COUNT_VARARG
-	});
-}
-
-static naked a_none rstart(void) {
-	/* %rdx = callee */
-	asm(".seh_handler %c0, @except"::"p"(start_except_hook));
-	asm("movq %rdx, %rbx");
-	asm("subq $0x8, %rsp");
-	asm("call %c0"::"p"(rmain));
-	asm("addq $0x8, %rsp");
-	asm("movq %rbx, %rcx");
-	asm("movq %c0(%%rbx), %%rdx"::"i"(offsetof(Route, _body._from)));
-	asm("jmp "L_ENTER);
-}
-
-a_none ai_ctx_raise(unused Route* env, a_msg msg) {
+a_none ai_ctx_raise(unused a_henv env, a_msg msg) {
 	RaiseException(EXCEPTION_CODE_PREFIX | cast(DWORD, msg & 0xff), EXCEPTION_NONCONTINUABLE, 0, null);
 	unreachable();
 }
@@ -286,7 +198,7 @@ static EXCEPTION_DISPOSITION catch_except_hook(
 	a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
 	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
-	a_henv env = &ptr_of(Route, DispatcherContext->ContextRecord->Rsi)->_body;
+	a_henv env = ptr_of(GRoute, DispatcherContext->ContextRecord->Rsi);
 	Global* g = G(env);
 	if (g->_gexecpt != null) {
 		(*g->_gexecpt)(env, g->_gctx, msg);
@@ -302,14 +214,14 @@ static EXCEPTION_DISPOSITION catch_except_hook(
 	unreachable();
 }
 
-never_inline a_msg ai_ctx_catch_(Route* env, a_pfun pfun, void* pctx) {
+never_inline a_msg ai_ctx_catch_(a_henv env, a_pfun pfun, void* pctx) {
 	asm(".seh_handler %c0, @except"::"p"(catch_except_hook));
 	asm goto(".seh_handlerdata\n"
 		".rva .final\n"
 		".text"::::final);
 	a_msg msg = ALO_SOK;
 
-	(*pfun)(&env->_body, pctx);
+	(*pfun)(env, pctx);
 
 	asm(""::"a"(msg));
 final:
@@ -318,15 +230,15 @@ final:
 	return msg;
 }
 
-a_msg ai_ctx_open(Route* route, a_usize stack_size) {
+a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
 	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
 	if (header == null) return ALO_EINVAL;
 
-	a_usize commit = stack_size;
+	a_usize commit = pad_to(stack_size, PAGE_SIZE);
 	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
 
-	commit = pad_to(commit, PAGE_SIZE);
-
+	PVOID addr;
+#ifndef ALOI_WIN_NO_USE_UNDOCUMENT_API
 	ext(PROCESS_STACK_ALLOCATION_INFORMATION) alloc_info = {
 		.ReserveSize = max(reserve, commit),
 		.ZeroBits = 0,
@@ -336,43 +248,42 @@ a_msg ai_ctx_open(Route* route, a_usize stack_size) {
 	NTSTATUS status = NtSetInformationProcess(NtCurrentProcess(), ProcessThreadStackAllocation, &alloc_info, sizeof(alloc_info));
 	if (status != 0) return ALO_EINVAL;
 
-	PVOID addr = alloc_info.StackBase;
+	addr = alloc_info.StackBase;
+#else
+	addr = VirtualAlloc(NULL, reserve, MEM_RESERVE, PAGE_NOACCESS);
+    if (addr == null) return ALO_EINVAL;
+#endif
 
 	if (VirtualAlloc(addr, PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == null)
-		return ALO_ENOMEM;
+		goto nomem;
 	if (VirtualAlloc(addr + PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == null)
-		return ALO_ENOMEM;
+		goto nomem;
 	if (VirtualAlloc(addr + PAGE_SIZE * 2, reserve - 2 * PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
-		return ALO_ENOMEM;
+		goto nomem;
 
 	void* stack_base = alloc_info.StackBase + reserve;
-	route->_ctx = new(RCtx) {
-		._stack_alloc_base = alloc_info.StackBase,
-		._stack_base = stack_base,
-		._stack_limit = alloc_info.StackBase + 2 * PAGE_SIZE,
-		._except_list = cast(void*, isizec(-1)),
-		._rsp = cast(a_gpr, stack_base - 0x8),
-		._rip = cast(a_gpr, rstart)
-	};
 
-	*cast(void**, route->_ctx._rsp) = PROC_NULL;
+    cast(void**, stack_base)[0] = null;
+    cast(void**, stack_base)[-1] = null;
+    cast(void**, stack_base)[-2] = ai_ctx_start;
+    env->_rctx = stack_base - sizeof(void*) * 3;
+	env->_rctx_alloc = addr;
 
 	return ALO_SOK;
+
+nomem:
+	VirtualFree(addr, 0, MEM_RELEASE);
+	return ALO_ENOMEM;
 }
 
-static void l_unwind(Route* route) {
+static void route_unwind(a_henv env) {
     DWORD64 EstablisherFrame;
     DWORD64 ImageBase;
 	/* Load context. */
 	CONTEXT Context = { };
-#define CAPTURE(n,f) Context.f = route->_ctx._##n;
-	CTX_NVGPR_LIST(CAPTURE)
-#undef CAPTURE
-#define CAPTURE(n,f) Context.f = route->_ctx._##n._win;
-	CTX_NVFPR_LIST(CAPTURE)
-#undef CAPTURE
-	Context.MxCsr = route->_ctx._mxcsr;
-	Context.FltSave.ControlWord = route->_ctx._fctrl;
+
+	route_recover(env->_rctx, &Context, FALSE);
+
 	/* Initialize unwind history table. */
 	UNWIND_HISTORY_TABLE UnwindHistoryTable = {};
 	
@@ -403,27 +314,14 @@ static void l_unwind(Route* route) {
 		}
 
 		/* Stop if unwind to end. */
-		if (cast(PVOID, Context.Rip) == PROC_NULL) break;
+		if (Context.Rip == 0)
+			break;
 	}
 }
 
-void ai_ctx_close(Route* route) {
-	l_unwind(route);
-	VirtualFree(route->_ctx._stack_alloc_base, 0, MEM_RELEASE);
+void ai_ctx_close(a_henv env) {
+	route_unwind(env);
+	VirtualFree(env->_rctx_alloc, 0, MEM_RELEASE);
 }
 
-void* ai_mem_nreserve(void* addr, a_usize size) {
-	return VirtualAlloc(addr, size, MEM_RESERVE, PAGE_NOACCESS);
-}
-
-void* ai_mem_ncommit(void* addr, a_usize size, a_flags prot) {
-	return VirtualAlloc(addr, size, MEM_COMMIT, prot);
-}
-
-a_bool ai_mem_ndecommit(void* addr, a_usize size) {
-	return VirtualFree(addr, size, MEM_DECOMMIT);
-}
-
-a_bool ai_mem_nrelease(void* addr, unused a_usize size) {
-	return VirtualFree(addr, 0, MEM_RELEASE);
-}
+#endif /* actx_x64_w64_win_h_ */

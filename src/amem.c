@@ -61,13 +61,13 @@ void* ai_mem_nalloc(a_henv env, a_usize sz) {
 	return blk;
 }
 
-void* ai_mem_nrealloc(a_henv env, void* blk, a_usize sz_old, a_usize sz_new) {
+void* ai_mem_nrealloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new) {
 	if (sz_old == 0) {
 		return ai_mem_nalloc(env, sz_new);
 	}
 	else {
 		Global* g = G(env);
-		void* blk_new = ai_mem_vrealloc(&g->_af, g->_ac, blk, sz_old, sz_new);
+		void* blk_new = ai_mem_vrealloc(&g->_af, g->_ac, blk_old, sz_old, sz_new);
 		if (unlikely(blk_new == null)) return null;
 		g->_mem_debt += cast(a_isize, sz_new - sz_old);
 		return blk_new;

@@ -29,36 +29,32 @@ char const ai_obj_type_names[][8] = {
 	[T_FLOAT] = "float"
 };
 
-char const ai_obj_names[NAME_POS__MAX] = {
-#define STR(id,name) name"\0"
-	KW_LIST(STR)
-	TM_LIST(STR)
-	PT_LIST(STR)
-#undef TMSTR
+char const ai_obj_names[NAME_LEN] = {
+#define AI_SYM(g,i,n) n"\0"
+# include "asym/kw.h"
+# include "asym/tm.h"
+# include "asym/pt.h"
+#undef AI_SYM
 };
-
-static void* l_intern(a_henv env, void* blk, GStr** dst, a_lstr str, a_u32 tag) {
-	dst[tag] = ai_str_intern(env, blk, str._ptr, str._len, tag);
-	return blk + sizeof_IStr(str._len);
-}
 
 void ai_obj_boost(a_henv env, void* blk) {
 	Global* g = G(env);
 
-	GStr** dst = g->_names - 1;
-	/* Intern empty string. */
-	blk = l_intern(env, blk, dst, new(a_lstr) {null, 0}, NAME__EMPTY);
+	static a_u16 const l_name_disp_table[NAME__COUNT][2] = {
+		{ 0, 0 }, /* Intern empty string. */
+#define AI_SYM(g,i,d) { NAME_POS_##g##_##i, NAME_EPOS_##g##_##i - NAME_POS_##g##_##i },
+# include "asym/kw.h"
+# include "asym/tm.h"
+# include "asym/pt.h"
+#undef AI_SYM
+	};
 
-	/* Intern keywords. */
-#define KWINT(id,name) blk = l_intern(env, blk, dst, name_str_kw(id), NAME_KW_##id);
-	KW_LIST(KWINT)
-#undef KWINT
-#define TMINT(id,name) blk = l_intern(env, blk, dst, name_str_tm(id), NAME_TM_##id);
-	TM_LIST(TMINT)
-#undef TMINT
-#define PTINT(id,name) blk = l_intern(env, blk, dst, name_str_pt(id), NAME_PT_##id);
-	PT_LIST(PTINT)
-#undef PTINT
+	for (a_u32 i = 0; i < NAME__COUNT; ++i) {
+		a_u16 const* dat = l_name_disp_table[i];
+		a_u32 len = dat[1];
+		g->_names[i] = ai_str_intern(env, blk, name_ptr(dat[0]), len, i);
+		blk += sizeof_IStr(len);
+	}
 
 	ai_type_init(env, &g->_types._nil, ALO_TNIL, NAME_KW_NIL);
 	ai_type_init(env, &g->_types._bool, ALO_TBOOL, NAME_PT_BOOL);

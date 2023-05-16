@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include "aenv.h"
+#include "afun.h"
 #include "atype.h"
 #include "amem.h"
 
@@ -198,7 +199,7 @@ static void begin_propagate(Global* g) {
 	g->_tr_gray = trmark_null;
 	g->_tr_regray = trmark_null;
 	/* Mark nonvolatile root. */
-	join_trace(&g->_tr_gray, ai_env_mainof(g));
+	join_trace(&g->_tr_gray, ai_env_mroute(g));
 	if (v_is_obj(g->_global)) {
 		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
@@ -247,19 +248,9 @@ static void propagate_atomic(Global* g) {
 	g->_mem_work = old_work;
 }
 
-static void drop_cached_caps(Global* g) {
-	RcCap* cap = g->_cap_cache;
-	g->_cap_cache = null;
-	while (cap != null) {
-		RcCap* next = cap->_next;
-		ai_cap_really_drop(g, cap);
-		cap = next;
-	}
-}
-
 static void sweep_atomic(Global* g) {
 	g->_gcstep = GCSTEP_SWEEP_ATOMIC;
-	drop_cached_caps(g);
+	ai_cap_clean(g);
 }
 
 static a_bool run_incr_gc(Global* g) {
@@ -377,5 +368,4 @@ void ai_gc_clean(Global* g) {
 	drop_all(g, &g->_gc_toclose);
 	drop_all(g, &g->_gc_normal);
 	drop_all(g, &g->_gc_fixed);
-	drop_cached_caps(g);
 }
