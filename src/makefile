@@ -169,7 +169,7 @@ ifeq (Windows,$(TARGET_OS))
 	TARGET_DYCC= $(STATIC_CC)
 	ifneq (static,$(BUILDMODE))
 		BUILDMODE= dynamic
-		TARGET_XCCFLAGS+= -D ALO_BUILD_AS_DLL
+		TARGET_XCCFLAGS+= -DALO_BUILD_AS_DLL
 	endif
 endif
 
