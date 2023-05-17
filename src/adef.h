@@ -154,6 +154,8 @@ typedef a_u32 a_insn;
 #define dangling_of(t) ((t*) sizeof(t))
 #define addr_of(p) cast(a_usize, p)
 #define ptr_of(t,a) ({ a_usize _a = (a); cast(typeof(t)*, _a); })
+#define ptr_load(t,a) (*ptr_of(t, a))
+#define ptr_store(t,a,v) quiet(*ptr_of(t, a) = (v))
 #define ptr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
 #define ptr_disp(t,p,d) ptr_of(t, addr_of(p) + (d))
 #define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == null_of(typeof(((t*) 0)->f))); ptr_of(t, addr_of(_v) - offsetof(t, f)); })

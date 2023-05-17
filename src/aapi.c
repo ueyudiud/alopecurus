@@ -551,6 +551,10 @@ void alo_yield(a_henv env) {
 	ai_env_yield(env);
 }
 
+a_bool alo_canyield(a_henv env) {
+	return true; //TODO
+}
+
 a_tag alo_tagof(a_henv env, a_isize id) {
 	Value const* slot = api_roslot(env, id);
 	return slot != null ? tag_of(env, *slot) : ALO_TEMPTY;

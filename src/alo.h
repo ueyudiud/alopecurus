@@ -187,6 +187,7 @@ ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsa
 ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
+ALO_EXPORT a_bool (alo_canyield)(a_henv env);
 
 ALO_EXPORT a_tag (alo_tagof)(a_henv env, a_isize id);
 ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_isize id);
