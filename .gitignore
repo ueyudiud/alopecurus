@@ -1,18 +1,3 @@
-# Build & runtime directories.
-/build/
-/run/
-
-# IDEA settings
-.idea
-
-# VSCode settings
-.vscode
-
-# Eclipse settings
-.settings
-.project
-.cproject
-
 # Prerequisites
 *.d
 
@@ -44,6 +29,7 @@
 *.dylib
 
 # Executables
+src/alo
 *.exe
 *.out
 *.app
