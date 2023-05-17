@@ -20,7 +20,7 @@ always_inline a_none ai_err_bad_look(a_henv env, char const* type, GStr* key) {
 }
 
 always_inline a_none ai_err_bad_tm(a_henv env, a_u32 tm) {
-	GStr* name = env_name(env, NAME_TM__FIRST + tm);
+	GStr* name = env_int_str(env, STR_TM__FIRST + tm);
 	ai_err_raisef(env, ALO_EINVAL, "method '%s' not found.", str2ntstr(name));
 }
 

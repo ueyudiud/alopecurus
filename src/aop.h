@@ -8,10 +8,10 @@
 #include "adef.h"
 
 enum {
-#define AI_SYM(g,i,n) TM_##i,
+#define STRDEF(n) TM_##n,
 # include "asym/tm.h"
-#undef AI_SYM
-	TM__FAST_MAX = TM_EQ
+#undef STRDEF
+	TM__FAST_MAX = TM___eq__
 };
 
 enum BinaryOp {
@@ -30,7 +30,7 @@ enum BinaryOp {
 
 always_inline a_enum ai_op_bin2tm(a_enum op) {
 	assume(op >= OP_ADD && op <= OP_BIT_XOR);
-	return op - OP_ADD + TM_ADD;
+	return op - OP_ADD + TM___add__;
 }
 
 #ifdef aloi_op_neg_int

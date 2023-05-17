@@ -28,7 +28,7 @@ Value ai_auser_get(a_henv env, GAUser* self, Value key) {
 		return *ref;
 	}
 
-	Value vf = ai_obj_glookftm(env, self, TM_GET);
+	Value vf = ai_obj_glookftm(env, self, TM___get__);
 	if (v_is_nil(vf)) {
 		return v_of_nil();
 	}
@@ -46,7 +46,7 @@ void ai_auser_set(a_henv env, GAUser* self, Value key, Value value) {
 		return;
 	}
 
-	Value vf = ai_obj_glookftm(env, self, TM_SET);
+	Value vf = ai_obj_glookftm(env, self, TM___set__);
 	if (v_is_nil(vf)) {
 		ai_table_hint(env, self, 1);
 		return ai_table_put(env, self, key, hash, value);

@@ -10,7 +10,7 @@
 
 #include "aenv.h"
 #include "aerr.h"
-#include "aname.h"
+#include "astrs.h"
 #include "afmt.h"
 #include "aparse.h"
 
@@ -256,21 +256,16 @@ void ai_lex_close(Lexer* lex) {
 }
 
 char const* ai_lex_tagname(a_i32 tag) {
-	switch (tag) {
-#define AI_SYM(g,i,n) case TK_##i: return name_ptr(NAME_POS_##g##_##i);
+	static a_u16 const l_offs[] = {
+#define STRDEF(n) STR_POS_##n,
+#define STRDEF2(n,r) STR_POS_##n,
 # include "asym/kw.h"
-#undef AI_SYM
-#define AI_SYM(g,i,n) case TK_##i: return "'"n"'";
 # include "asym/op.h"
-#undef AI_SYM
-		case TK_EOF: return "<EOF>";
-		case TK_IDENT: return "<identifier>";
-		case TK_INTEGER: return "<integer>";
-		case TK_FLOAT: return "<float>";
-		case TK_STRING: return "<string>";
-		case TK_TSTRING: return "<tstring>";
-		default: unreachable();
-	}
+#undef STRDEF
+#undef STRDEF2
+	};
+
+	return &ai_str_interns[l_offs[tag]];
 }
 
 char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
@@ -358,7 +353,7 @@ static a_i32 l_scan_ident(Lexer* lex, Token* tk) {
     }
     GStr* str = l_to_str(lex);
     tk->_str = str;
-    return name_iskw(str) ? name_totk(str) : TK_IDENT;
+    return str_iskw(str) ? str_totk(str) : TK_IDENT;
 }
 
 static a_float l_10pow(a_i32 i) {
@@ -965,7 +960,7 @@ static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
 			tk->_str = l_to_str(lex);
 		}
 		else {
-			tk->_str = env_name(lex->_env, NAME__EMPTY);
+			tk->_str = env_int_str(lex->_env, STR_EMPTY);
 		}
 	}
 	else {
@@ -1042,7 +1037,7 @@ static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
 			return l_scan_multiline_interpolated_string_body(lex, tk);
 		}
 		else {
-			tk->_str = env_name(lex->_env, NAME__EMPTY);
+			tk->_str = env_int_str(lex->_env, STR_EMPTY);
 			return TK_STRING;
 		}
 	}

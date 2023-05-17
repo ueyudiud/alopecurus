@@ -101,10 +101,10 @@ static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
 	assume(len <= ISTR_MAX_LEN);
 
     Global* g = G(env);
-    IStrCache* istable = &g->_istr_cache;
+    IStrCache* cache = &g->_istr_cache;
 
     /* Try lookup string in intern table. */
-    for (IStr* str = istable->_table[hash & istable->_hmask]; str != null; str = str->_cache_next) {
+    for (IStr* str = cache->_table[hash & cache->_hmask]; str != null; str = str->_cache_next) {
         if (str->_hash == hash && likely(str->_len == len && memcmp(str->_data, src, len) == 0)) {
             /* Revive string object if it is dead. */
             if (unlikely(g_has_other_color(g, str))) {
@@ -114,14 +114,14 @@ static GStr* istr_get2(a_henv env, void const* src, a_usize len, a_hash hash) {
         }
     }
 
-    if (unlikely(istable->_len == istable->_hmask)) {
-		cache_grow(env, istable);
+    if (unlikely(cache->_len == cache->_hmask)) {
+		cache_grow(env, cache);
     }
 
 	/* String not found, create new string. */
 	IStr* self = ai_mem_alloc(env, sizeof_IStr(len));
 	istr_init(self, src, len, hash);
-	cache_emplace(istable, self);
+	cache_emplace(cache, self);
     ai_gc_register_object(env, self);
     return &self->_body;
 }
@@ -132,20 +132,6 @@ static GStr* hstr_new(a_henv env, void const* src, a_usize len, a_hash hash) {
 	self->_hash = hash;
     ai_gc_register_object(env, self);
     return self;
-}
-
-GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 tag) {
-    Global* g = G(env);
-    IStr* self = cast(IStr*, blk);
-    a_hash hash = ai_str_hashof(g->_seed, src, len);
-
-	g_set_gray(self);
-
-	istr_init(self, src, len, hash);
-	name_id_set(self, tag);
-
-	cache_emplace(&g->_istr_cache, self);
-	return &self->_body;
 }
 
 static GStr* istr_get(a_henv env, void const* src, a_usize len) {
@@ -207,21 +193,57 @@ a_bool ai_str_equals(GStr* self, GStr* other) {
     return self == other || (self->_hash == other->_hash && ai_str_requals(self, self->_data, self->_len));
 }
 
-void ai_str_boost(a_henv env) {
+void ai_str_boost(a_henv env, void* block) {
     Global* g = G(env);
     
     IStrCache* cache = &g->_istr_cache;
-	cache->_table = ai_mem_vnew(env, IStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
-	cache->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
-    memset(cache->_table, 0, sizeof(IStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
-    
-    g->_nomem_error = ai_str_newl(env, "out of memory.");
-    ai_gc_fix_object(env, g->_nomem_error);
+
+	run {
+		cache->_table = ai_mem_vnew(env, IStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+		cache->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
+		memset(cache->_table, 0, sizeof(IStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+	}
+
+	run {
+		g->_nomem_error = ai_str_newl(env, "out of memory.");
+		ai_gc_fix_object(env, g->_nomem_error);
+	};
+
+	run {
+		static a_u16 const l_str_disp[STR__COUNT + 1] = {
+			STR_POS_EMPTY, /* Intern empty string. */
+#define STRDEF(n) STR_POS_##n,
+# include "asym/kw.h"
+# include "asym/tm.h"
+# include "asym/pt.h"
+#undef STRDEF
+				STR_EPOS_PT__STUB2
+		};
+
+		for (a_u32 i = 0; i < STR__COUNT; ++i) {
+			a_u32 off = l_str_disp[i];
+			a_u32 len = l_str_disp[i + 1] - 1 - off;
+			char const* src = &ai_str_interns[off];
+
+			IStr* self = cast(IStr*, block);
+			a_hash hash = ai_str_hashof(g->_seed, src, len);
+
+			g_set_gray(self);
+
+			istr_init(self, src, len, hash);
+			str_id_set(self, i);
+
+			cache_emplace(cache, self);
+
+			g->_names[i] = &self->_body;
+			block += sizeof_IStr(len);
+		}
+	}
 }
 
 void ai_str_clean(Global* g) {
     IStrCache* cache = &g->_istr_cache;
-    assume(cache->_len == NAME__COUNT);
+    assume(cache->_len == STR__COUNT);
     ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 }
 
@@ -274,3 +296,15 @@ static VTable const hstr_vtable = {
 	}
 };
 
+char const ai_str_interns[] =
+#define STRDEF(n) "\0"#n
+#define STRDEF2(n,r) "\0"r
+# include "asym/kw.h"
+# include "asym/tm.h"
+# include "asym/pt.h"
+# include "asym/op.h"
+#undef STRDEF
+#undef STRDEF2
+;
+
+static_assert(sizeof(ai_str_interns) == STR_LEN);

@@ -13,16 +13,17 @@
 #endif
 
 intern a_hash ai_str_hashof(a_hash seed, void const* src, a_usize len);
-intern GStr* ai_str_intern(a_henv env, void* blk, char const* src, a_usize len, a_u32 tag);
 intern GStr* ai_str_new(a_henv env, void const* src, a_usize len);
 intern a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr);
 intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
 intern a_bool ai_str_requals(GStr* self, void const* dat, a_usize len);
 intern a_bool ai_str_equals(GStr* self, GStr* other);
-intern void ai_str_boost(a_henv env);
+intern void ai_str_boost(a_henv env, void* block);
 intern void ai_str_clean(Global* g);
 
 #define ai_str_newl(env,src) ai_str_new(env, ""src, sizeof(src) - sizeof(char))
+
+intern char const ai_str_interns[STR_LEN];
 
 #define ISTR_MAX_LEN 255
 

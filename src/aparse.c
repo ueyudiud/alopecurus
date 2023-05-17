@@ -3979,17 +3979,17 @@ static void l_scan_table_constructor(Parser* par, OutExpr e) {
 
 static void l_scan_atom(Parser* par, OutExpr e) {
 	switch (lex_peek(par)) {
-		case TK_NIL: {
+		case TK_nil: {
 			expr_const(e, EXPR_NIL, lex_line(par));
             lex_skip(par);
 			break;
 		}
-		case TK_FALSE: {
+		case TK_false: {
 			expr_const(e, EXPR_FALSE, lex_line(par));
             lex_skip(par);
 			break;
 		}
-		case TK_TRUE: {
+		case TK_true: {
 			expr_const(e, EXPR_TRUE, lex_line(par));
             lex_skip(par);
 			break;
@@ -4201,7 +4201,7 @@ static void l_scan_term_with_prefix(Parser* par, InoutExpr e) {
 			expr_unbox(par, e, line);
 			break;
 		}
-		case TK_FN: {
+		case TK_fn: {
             lex_skip(par);
 			l_scan_function(par, e, null, line);
 			break;
@@ -4351,16 +4351,16 @@ static a_u32 l_scan_relation_op(Parser* par) {
 			return OP_EQ;
 		case TK_NE:
 			return OP_NE;
-		case TK_IS:
+		case TK_is:
 			return OP_IS;
-		case TK_IN:
+		case TK_in:
 			return OP_IN;
 		case TK_BANG:
 			switch (lex_forward(par)) {
-				case TK_IS:
+				case TK_is:
                     lex_skip(par);
 					return OP_IS_NOT;
-				case TK_IN:
+				case TK_in:
                     lex_skip(par);
 					return OP_NOT_IN;
 			}
@@ -4616,29 +4616,29 @@ static void l_scan_assign_or_call(Parser* par) {
 }
 
 static void l_scan_if_stat(Parser* par) {
-			lex_skip(par);
+	lex_skip(par);
 
-			lex_check_skip(par, TK_LBK);
-			a_u32 line = lex_line(par);
+	lex_check_skip(par, TK_LBK);
+	a_u32 line = lex_line(par);
 
-			Expr ep;
-			l_scan_expr(par, ep);
-			a_u32 label1 = expr_test(par, ep, line);
-			expr_discard(par, ep);
+	Expr ep;
+	l_scan_expr(par, ep);
+	a_u32 label1 = expr_test(par, ep, line);
+	expr_discard(par, ep);
 
-			lex_check_pair_right(par, TK_LBK, TK_RBK, line);
-			lex_skip(par);
+	lex_check_pair_right(par, TK_LBK, TK_RBK, line);
+	lex_skip(par);
 
-			l_scan_stat(par);
+	l_scan_stat(par);
 
-			if (lex_test_skip(par, TK_ELSE)) {
-				a_u32 label2 = l_lazy_jump(par, NO_LABEL, lex_line(par));
+	if (lex_test_skip(par, TK_else)) {
+		a_u32 label2 = l_lazy_jump(par, NO_LABEL, lex_line(par));
 
-				lex_sync(par);
-				l_mark_label(par, label1, lex_line(par));
-				l_scan_stat(par);
+		lex_sync(par);
+		l_mark_label(par, label1, lex_line(par));
+		l_scan_stat(par);
 
-				l_mark_label(par, label2, lex_line(par));
+		l_mark_label(par, label2, lex_line(par));
 	}
 	else {
 		l_mark_label(par, label1, lex_line(par));
@@ -4666,7 +4666,7 @@ static void l_scan_while_stat(Parser* par) {
 
 	l_mark_label(par, label2, lex_line(par));
 
-	if (lex_test_skip(par, TK_ELSE)) {
+	if (lex_test_skip(par, TK_else)) {
         lex_sync(par);
 		l_scan_stat(par);
 	}
@@ -4766,7 +4766,7 @@ branch_standard:
 			lex_skip(par);
 			break;
 		}
-		case TK_UNDERSCORE: {
+		case TK__: {
             lex_skip(par);
 			parent->_fcpx = true;
             pat->_kind = PAT_DROP;
@@ -4884,7 +4884,7 @@ static void l_scan_let_stat(Parser* par) {
     lex_skip(par);
 
 	switch (lex_peek(par)) {
-		case TK_FN: {
+		case TK_fn: {
 			Expr e1, e2;
             lex_skip(par);
 			GStr* name = lex_check_ident(par);
@@ -4894,7 +4894,7 @@ static void l_scan_let_stat(Parser* par) {
 			expr_assign(par, e1, e2, line);
 			break;
 		}
-        case TK_TRY: {
+        case TK_try: {
             Expr e1, e2;
             lex_skip(par);
             GStr* name = lex_check_ident(par);
@@ -4945,7 +4945,7 @@ static void l_scan_pub_stat(Parser* par) {
     lex_skip(par);
 
 	switch (lex_peek(par)) {
-		case TK_FN: {
+		case TK_fn: {
 			Expr e1, e2;
             lex_skip(par);
 			GStr* name = lex_check_ident(par);
@@ -4985,23 +4985,23 @@ static void l_scan_stat_pack(Parser* par) {
 static void l_scan_stat(Parser* par) {
 	assume(par->_scope->_top_ntr == par->_scope->_top_reg, "compute stack leaked.");
 	switch (lex_peek(par)) {
-		case TK_IF: {
+		case TK_if: {
 			l_scan_if_stat(par);
 			break;
 		}
-		case TK_RETURN: {
+		case TK_return: {
 			l_scan_return_stat(par);
 			break;
 		}
-		case TK_WHILE: {
+		case TK_while: {
 			l_scan_while_stat(par);
 			break;
 		}
-		case TK_LOOP: {
+		case TK_loop: {
 			l_scan_loop_stat(par);
 			break;
 		}
-		case TK_FN: {
+		case TK_fn: {
 			l_scan_fun_def_stat(par);
 			break;
 		}
@@ -5009,7 +5009,7 @@ static void l_scan_stat(Parser* par) {
 			l_scan_stat_pack(par);
 			break;
 		}
-		case TK_PUB: {
+		case TK_pub: {
 			l_scan_pub_stat(par);
 			break;
 		}
@@ -5030,31 +5030,31 @@ static void l_scan_stats(Parser* par) {
                 lex_skip(par);
 				break;
 			}
-			case TK_LET: {
+			case TK_let: {
 				l_scan_let_stat(par);
 				break;
 			}
-			case TK_RETURN: {
+			case TK_return: {
 				l_scan_return_stat(par);
 				break;
 			}
-			case TK_IF: {
+			case TK_if: {
 				l_scan_if_stat(par);
 				break;
 			}
-			case TK_WHILE: {
+			case TK_while: {
 				l_scan_while_stat(par);
 				break;
 			}
-			case TK_LOOP: {
+			case TK_loop: {
 				l_scan_loop_stat(par);
 				break;
 			}
-			case TK_FN: {
+			case TK_fn: {
 				l_scan_fun_def_stat(par);
 				break;
 			}
-			case TK_PUB: {
+			case TK_pub: {
 				l_scan_pub_stat(par);
 				break;
 			}

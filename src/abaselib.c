@@ -220,7 +220,7 @@ void aloopen_base(a_henv env) {
 	aloL_putfields(env, -1, bindings);
 
 	a_htype type = v_as_type(api_elem(env, -1));
-	ai_type_setis(env, type, env_name(env, NAME_TM_GET), v_of_obj(type));
+	ai_type_setis(env, type, env_int_str(env, STR___get__), v_of_obj(type));
 
 	GAUser* global = ai_auser_new(env, type);
 	v_set_obj(env, &G(env)->_global, global);

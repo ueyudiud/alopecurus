@@ -66,7 +66,7 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 		return ai_tuple_hash(env, v_as_tuple(v));
 	}
 	else {
-		Value vf = ai_obj_vlookftm(env, v, TM_HASH);
+		Value vf = ai_obj_vlookftm(env, v, TM___hash__);
 
 		if (v_is_nil(vf)) {
 			return v_trivial_hash_unchecked(v);
@@ -99,7 +99,7 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 		return ai_op_eq_float(v_as_num(v1), v_as_num(v2));
 	}
 
-	Value vf = ai_obj_vlookftm(env, v1, TM_EQ);
+	Value vf = ai_obj_vlookftm(env, v1, TM___eq__);
 
 	if (v_is_nil(vf)) {
 		return v_trivial_equals_unchecked(v1, v2);
@@ -141,8 +141,8 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
 		case T_AUSER:
 			return ai_auser_get(env, v_as_auser(v1), v2);
 		default: {
-			Value vf = ai_obj_vlookftm(env, v1, TM_GET);
-			if (v_is_nil(vf)) ai_err_bad_tm(env, TM_GET);
+			Value vf = ai_obj_vlookftm(env, v1, TM___get__);
+			if (v_is_nil(vf)) ai_err_bad_tm(env, TM___get__);
 			return ai_vm_meta_get(env, vf, v1, v2);
 		}
 	}
@@ -172,20 +172,20 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
 		ai_auser_set(env, v_as_auser(v1), v2, v3);
 	}
 	else {
-		Value vf = ai_obj_vlookftm(env, v1, TM_SET);
-		if (v_is_nil(vf)) ai_err_bad_tm(env, TM_SET);
+		Value vf = ai_obj_vlookftm(env, v1, TM___set__);
+		if (v_is_nil(vf)) ai_err_bad_tm(env, TM___set__);
 		ai_vm_meta_set(env, vf, v1, v2, v3);
 	}
 }
 
 static Value vm_meta_len(a_henv env, Value v) {
-	Value vf = ai_obj_vlookftm(env, v, TM_LEN);
+	Value vf = ai_obj_vlookftm(env, v, TM___len__);
 	if (v_is_nil(vf)) {
 		if (v_is_auser(v)) {
 			return v_of_int(v_as_auser(v)->_len);
 		}
 		else {
-			ai_err_bad_tm(env, TM_LEN);
+			ai_err_bad_tm(env, TM___len__);
 		}
 	}
 	else {
@@ -265,17 +265,17 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 			else {
 				switch (v_get_tag(v)) {
 					case T_NIL: {
-						cache = env_name(env, NAME_KW_NIL);
+						cache = env_int_str(env, STR_nil);
 						i += 1;
 						goto cached;
 					}
 					case T_FALSE: {
-						cache = env_name(env, NAME_KW_FALSE);
+						cache = env_int_str(env, STR_false);
 						i += 1;
 						goto cached;
 					}
 					case T_TRUE: {
-						cache = env_name(env, NAME_KW_TRUE);
+						cache = env_int_str(env, STR_true);
 						i += 1;
 						goto cached;
 					}
@@ -283,11 +283,11 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				}
 			}
 		}
-		return env_name(env, NAME__EMPTY); /* Empty string. */
+		return env_int_str(env, STR_EMPTY); /* Empty string. */
 	}
 
 	run cached: {
-		Value const str_empty = v_of_obj(env_name(env, NAME__EMPTY));
+		Value const str_empty = v_of_obj(env_int_str(env, STR_EMPTY));
 		while (i < n) {
 			v = base[i++];
 			if (!v_trivial_equals(v, str_empty))
@@ -344,7 +344,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 					case T_CUSER:
 					case T_AUSER:
 					case T_TYPE: {
-						Value vf = ai_obj_vlooktm(env, v, TM_STR);
+						Value vf = ai_obj_vlooktm(env, v, TM___str__);
 						if (v_is_nil(vf)) {
 							ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
 						}
@@ -495,9 +495,9 @@ tail_call:
     run { /* Check for function. */
         Value vf = R[0];
         while (unlikely(!v_is_func(vf))) {
-            vf = ai_obj_vlooktm(env, vf, TM_CALL);
+            vf = ai_obj_vlooktm(env, vf, TM___call__);
             if (v_is_nil(vf)) {
-                ai_err_bad_tm(env, TM_CALL);
+                ai_err_bad_tm(env, TM___call__);
             }
 
             for (Value* p = env->_stack._top; p > R; --p) {
@@ -892,7 +892,7 @@ tail_call:
                     v_set_float(&R[a], val);
                 }
                 else {
-                    Value vt = vm_meta_unr(env, vb, TM_NEG);
+                    Value vt = vm_meta_unr(env, vb, TM___neg__);
                     reload_stack();
                     v_set(env, &R[a], vt);
                 }
@@ -908,7 +908,7 @@ tail_call:
                     v_set_int(&R[a], val);
                 }
                 else {
-                    Value vt = vm_meta_unr(env, vb, TM_BIT_NOT);
+                    Value vt = vm_meta_unr(env, vb, TM___bnot__);
                     reload_stack();
                     v_set(env, &R[a], vt);
                 }
@@ -1149,7 +1149,7 @@ tail_call:
                             z = ai_op_cmp_float(v_as_num(va), v_as_num(vb), OP_LT);
                         }
                         else {
-                            z = vm_meta_cmp(env, va, vb, TM_LT);
+                            z = vm_meta_cmp(env, va, vb, TM___lt__);
                         }
 
                         goto vm_test;
@@ -1168,7 +1168,7 @@ tail_call:
                             z = ai_op_cmp_float(v_as_num(va), v_as_num(vb), OP_LE);
                         }
                         else {
-                            z = vm_meta_cmp(env, va, vb, TM_LE);
+                            z = vm_meta_cmp(env, va, vb, TM___le__);
                         }
 
                         goto vm_test;
@@ -1204,7 +1204,7 @@ tail_call:
                             z = ai_op_cmp_float(v_as_float(va), b, OP_LT);
                         }
                         else {
-                            z = vm_meta_cmp(env, va, v_of_int(b), TM_LT);
+                            z = vm_meta_cmp(env, va, v_of_int(b), TM___lt__);
                         }
 
                         goto vm_test;
@@ -1222,7 +1222,7 @@ tail_call:
                             z = ai_op_cmp_float(v_as_float(va), b, OP_LE);
                         }
                         else {
-                            z = vm_meta_cmp(env, va, v_of_int(b), TM_LE);
+                            z = vm_meta_cmp(env, va, v_of_int(b), TM___le__);
                         }
 
                         goto vm_test;
@@ -1240,7 +1240,7 @@ tail_call:
                             z = ai_op_cmp_float(v_as_float(va), b, OP_GT);
                         }
                         else {
-                            z = vm_meta_cmp(env, v_of_int(b), va, TM_LT); //TODO
+                            z = vm_meta_cmp(env, v_of_int(b), va, TM___lt__); //TODO
                         }
 
                         goto vm_test;
@@ -1258,7 +1258,7 @@ tail_call:
                             z = ai_op_cmp_float(v_as_float(va), b, OP_GE);
                         }
                         else {
-                            z = vm_meta_cmp(env, v_of_int(b), va, TM_LE); //TODO
+                            z = vm_meta_cmp(env, v_of_int(b), va, TM___le__); //TODO
                         }
 
                         goto vm_test;

@@ -9,7 +9,7 @@
 #include <math.h>
 
 #include "adef.h"
-#include "aname.h"
+#include "astrs.h"
 #include "actx.h"
 
 typedef struct GObj GObj;
@@ -240,7 +240,7 @@ typedef struct { a_usize _; } ObjHeadMark[0];
 typedef VTable const* a_vptr;
 typedef void const* a_vslot;
 
-#define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; a_gcnext _gnext; a_trmark _tnext; a_vptr _vptr
+#define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; a_vptr _vptr; a_gcnext _gnext; a_trmark _tnext
 
 struct GObj {
 	GOBJ_STRUCT_HEADER;
@@ -547,7 +547,7 @@ union MST {
 #define g_vcheck(p,f) ({ \
 	a_vptr _v2 = (p)->_vptr; \
 	a_vslot _f2 = _v2->_vfps[vfp_loc(f)]; \
-	assume(_f2 != null, "method '@%zu:"#f"' is null.", (_v2)->_iname); \
+	assume(_f2 != null, "method '%s."#f"' is null.", (_v2)->_sname); \
 	cast(typeof(cast(union MST*, null)->f), _f2); \
 })
 
@@ -731,7 +731,7 @@ struct Global {
 	a_u8 _white_color;
 	a_u8 _gcstep;
 	volatile atomic_uint_fast8_t _hookm;
-	GStr* _names[NAME__COUNT];
+	GStr* _names[STR__COUNT];
 	struct {
 		GType _nil;
 		GType _bool;
@@ -771,7 +771,7 @@ always_inline a_usize gbl_mem_total(Global* g) {
 	return g->_mem_base + cast(a_usize, g->_mem_debt);
 }
 
-always_inline GStr* env_name(a_henv env, a_u32 tag) {
+always_inline GStr* env_int_str(a_henv env, a_u32 tag) {
 	return G(env)->_names[tag - 1];
 }
 
@@ -854,9 +854,5 @@ always_inline char const* v_nameof(a_henv env, Value v) {
 		return g_nameof(env, v_as_obj(v));
 	}
 }
-
-intern char const ai_obj_names[NAME_LEN];
-
-intern void ai_obj_boost(a_henv env, void* blk);
 
 #endif /* aobj_h_ */

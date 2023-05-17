@@ -113,14 +113,14 @@ static void propagate_once(Global* g, a_trmark* list) {
 	really_mark_object(g, obj);
 }
 
-static a_bool sweep_once(Global* g) {
+static a_bool sweep_once(Global* g, a_usize white) {
 	GObj* obj = strip_gc(g->_gc_sweep);
 	if (g_has_other_color(g, obj)) {
 		drop_object(g, obj);
 		return true;
 	}
 	else {
-		obj->_tnext = white_color(g);
+		obj->_tnext |= white;
 		return false;
 	}
 }
@@ -132,7 +132,8 @@ static void close_once(Global* g) {
 }
 
 static a_bool sweep_till_alive(Global* g) {
-	while (*g->_gc_sweep != null && !sweep_once(g));
+	a_usize color = white_color(g);
+	while (*g->_gc_sweep != null && !sweep_once(g, color));
 	return *g->_gc_sweep != null;
 }
 
@@ -146,7 +147,7 @@ static a_bool propagate_work(Global* g, a_trmark* list) {
 
 static a_bool sweep_work(Global* g) {
 	while (*g->_gc_sweep != null) {
-		if (sweep_once(g)) {
+		if (sweep_once(g, white_color(g))) {
 			g->_mem_work -= ALOI_SWEEP_COST;
 			if (g->_mem_work < 0)
 				return false;
@@ -172,8 +173,9 @@ static void propagate_all(Global* g, a_trmark* list) {
 }
 
 static void sweep_all(Global* g) {
+	a_usize color = white_color(g);
 	while (*g->_gc_sweep != null) {
-		sweep_once(g);
+		sweep_once(g, color);
 	}
 }
 

@@ -46,7 +46,7 @@ GType* ai_type_alloc(a_henv env, a_usize len, a_vptr proto) {
 void ai_type_init(a_henv env, GType* self, a_tag tag, a_u32 nid) {
 	self->_vptr = &type_vtable;
 	self->_tag = tag;
-	self->_name = nid != 0 ? env_name(env, nid) : null;
+	self->_name = nid != 0 ? env_int_str(env, nid) : null;
 }
 
 GType* ai_atype_new(a_henv env) {
@@ -207,8 +207,8 @@ void ai_type_setis(a_henv env, GType* self, GStr* key, Value value) {
 		ai_type_hint(env, self, 1);
 		type_emplace(env, self, key, value, self->_len);
 		self->_len += 1;
-		if (name_istm(key)) {
-			a_enum tm = name_totm(key);
+		if (str_istm(key)) {
+			a_enum tm = str_totm(key);
 			if (tm <= TM__FAST_MAX) {
 				self->_flags |= TYPE_FLAG_FAST_TM(tm);
 			}
@@ -366,6 +366,23 @@ static void type_cache_drop(Global* g, TypeCache* cache) {
 	if (cache->_table != null) {
 		ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 	}
+}
+
+void ai_type_boost(a_henv env) {
+	Global* g = G(env);
+
+	ai_type_init(env, &g->_types._nil, ALO_TNIL, STR_nil);
+	ai_type_init(env, &g->_types._bool, ALO_TBOOL, STR_bool);
+	ai_type_init(env, &g->_types._int, ALO_TINT, STR_int);
+	ai_type_init(env, &g->_types._float, ALO_TFLOAT, STR_float);
+	ai_type_init(env, &g->_types._ptr, ALO_TPTR, STR_ptr);
+	ai_type_init(env, &g->_types._str, ALO_TSTR, STR_str);
+	ai_type_init(env, &g->_types._tuple, ALO_TTUPLE, STR_tuple);
+	ai_type_init(env, &g->_types._list, ALO_TLIST, STR_list);
+	ai_type_init(env, &g->_types._table, ALO_TTABLE, STR_table);
+	ai_type_init(env, &g->_types._route, ALO_TROUTE, STR_route);
+	ai_type_init(env, &g->_types._func, ALO_TFUNC, STR_func);
+	ai_type_init(env, &g->_types._type, ALO_TTYPE, STR_type);
 }
 
 void ai_type_clean(Global* g) {

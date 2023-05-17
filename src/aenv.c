@@ -174,17 +174,17 @@ nomem1:
 
 static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env);
-	ai_str_boost(env);
-	ai_obj_boost(env, m->_reserved);
+	ai_str_boost(env, m->_reserved);
+	ai_type_boost(env);
 }
 
 static a_usize sizeof_MRoute() {
 	a_usize size = sizeof(MRoute) + sizeof_IStr(0)
-#define AI_SYM(g,i,n) + sizeof_IStr(sizeof(n) - 1)
+#define STRDEF(n) + sizeof_IStr(sizeof(#n) - 1)
 # include "asym/kw.h"
 # include "asym/tm.h"
 # include "asym/pt.h"
-#undef AI_SYM
+#undef STRDEF
 	;
 	return size;
 }

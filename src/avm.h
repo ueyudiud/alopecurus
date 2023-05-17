@@ -18,8 +18,6 @@ intern void ai_vm_call(a_henv env, Value* base, a_i32 nret);
 intern Value ai_vm_meta_get(a_henv env, Value vf, Value v1, Value v2);
 intern void ai_vm_meta_set(a_henv env, Value vf, Value v1, Value v2, Value v3);
 
-#define RFLAGS_META_CALL (new(RFlags) { ._count = 0 })
-
 always_inline Value* vm_push_args(a_henv env, Value const* src, a_usize len) {
 	Value* dst = env->_stack._top;
 	v_cpy_all(env, dst, src, len);

@@ -17,7 +17,7 @@
 #include "atable.h"
 #include "afun.h"
 #include "abuf.h"
-#include "aname.h"
+#include "astrs.h"
 #include "aenv.h"
 #include "actx.h"
 #include "amem.h"

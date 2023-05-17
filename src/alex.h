@@ -32,19 +32,17 @@ intern a_i32 ai_lex_peek(Lexer* lex);
 enum {
     TK__NONE,
 
-#define AI_SYM(g,i,n) TK_##i,
+#define STRDEF(n) TK_##n,
+#define STRDEF2(n,r) TK_##n,
 # include "asym/kw.h"
 # include "asym/op.h"
-#undef AI_SYM
-	TK_EOF,
-	TK_IDENT,
-	TK_INTEGER,
-	TK_FLOAT,
-	TK_STRING,
-	TK_TSTRING,
+#undef STRDEF
+#undef STRDEF2
 
     TK__MAX
 };
+
+static_assert(cast(a_u32, TK_if) == cast(a_u32, STR_if));
 
 enum {
     CHANNEL_NORMAL = 0x0,
