@@ -32,6 +32,9 @@ intern a_i32 ai_lex_peek(Lexer* lex);
 enum {
     TK__NONE,
 
+    TK__FIRST,
+    TK__STUB = TK__FIRST - 1,
+
 #define STRDEF(n) TK_##n,
 #define STRDEF2(n,r) TK_##n,
 # include "asym/kw.h"
