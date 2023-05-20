@@ -133,34 +133,34 @@ static a_msg code2msg(DWORD code) {
 static void route_recover(void* rctx, PCONTEXT context, a_bool recover_stack) {
     a_usize frame = cast(a_usize, rctx);
 
-    context->Xmm6 = *ptr_of(M128A, frame - 0x078);
-    context->Xmm7 = *ptr_of(M128A, frame - 0x088);
-    context->Xmm8 = *ptr_of(M128A, frame - 0x098);
-    context->Xmm9 = *ptr_of(M128A, frame - 0x0A8);
-    context->Xmm10 = *ptr_of(M128A, frame - 0x0B8);
-    context->Xmm11 = *ptr_of(M128A, frame - 0x0C8);
-    context->Xmm12 = *ptr_of(M128A, frame - 0x0D8);
-    context->Xmm13 = *ptr_of(M128A, frame - 0x0E8);
-    context->Xmm14 = *ptr_of(M128A, frame - 0x0F8);
-    context->Xmm15 = *ptr_of(M128A, frame - 0x108);
-    context->Rbp = *ptr_of(DWORD64, frame - 0x028);
+    context->Xmm6 = ref_of(M128A, frame - 0x078);
+    context->Xmm7 = ref_of(M128A, frame - 0x088);
+    context->Xmm8 = ref_of(M128A, frame - 0x098);
+    context->Xmm9 = ref_of(M128A, frame - 0x0A8);
+    context->Xmm10 = ref_of(M128A, frame - 0x0B8);
+    context->Xmm11 = ref_of(M128A, frame - 0x0C8);
+    context->Xmm12 = ref_of(M128A, frame - 0x0D8);
+    context->Xmm13 = ref_of(M128A, frame - 0x0E8);
+    context->Xmm14 = ref_of(M128A, frame - 0x0F8);
+    context->Xmm15 = ref_of(M128A, frame - 0x108);
+    context->Rbp = ref_of(DWORD64, frame - 0x028);
     context->Rsp = frame + 0x008;
-    context->Rbx = *ptr_of(DWORD64, frame - 0x030);
-    context->Rsi = *ptr_of(DWORD64, frame - 0x038);
-    context->Rdi = *ptr_of(DWORD64, frame - 0x040);
-    context->R12 = *ptr_of(DWORD64, frame - 0x048);
-    context->R13 = *ptr_of(DWORD64, frame - 0x050);
-    context->R14 = *ptr_of(DWORD64, frame - 0x058);
-    context->R15 = *ptr_of(DWORD64, frame - 0x060);
-    context->Rip = *ptr_of(DWORD64, frame);
-    context->MxCsr = *ptr_of(DWORD, frame - 0x068);
-    context->FltSave.ControlWord = *ptr_of(WORD, frame - 0x06C);
+    context->Rbx = ref_of(DWORD64, frame - 0x030);
+    context->Rsi = ref_of(DWORD64, frame - 0x038);
+    context->Rdi = ref_of(DWORD64, frame - 0x040);
+    context->R12 = ref_of(DWORD64, frame - 0x048);
+    context->R13 = ref_of(DWORD64, frame - 0x050);
+    context->R14 = ref_of(DWORD64, frame - 0x058);
+    context->R15 = ref_of(DWORD64, frame - 0x060);
+    context->Rip = ref_of(DWORD64, frame);
+    context->MxCsr = ref_of(DWORD, frame - 0x068);
+    context->FltSave.ControlWord = ref_of(WORD, frame - 0x06C);
 
     if (recover_stack) {
         ext(PTEB) teb = NtCurrentTeb();
-        teb->NtTib.StackBase = *ptr_of(PVOID, frame - 0x020);
-        teb->NtTib.StackLimit = *ptr_of(PVOID, frame - 0x018);
-        teb->DeallocationStack = *ptr_of(PVOID, frame - 0x010);
+        teb->NtTib.StackBase = ref_of(PVOID, frame - 0x020);
+        teb->NtTib.StackLimit = ref_of(PVOID, frame - 0x018);
+        teb->DeallocationStack = ref_of(PVOID, frame - 0x010);
     }
 }
 
@@ -296,7 +296,7 @@ static void route_unwind(a_henv env) {
 
 		if (RuntimeFunction == null) {
 			/* Unwinding leaf node. */
-			Context.Rip = *ptr_of(DWORD64, Context.Rsp);
+			Context.Rip = ref_of(DWORD64, Context.Rsp);
 			Context.Rsp += sizeof(DWORD64);
 		}
 		else {
