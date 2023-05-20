@@ -16,7 +16,6 @@
 #include "aerr.h"
 #include "avm.h"
 #include "aparse.h"
-#include "adump.h"
 
 #include "aapi.h"
 
@@ -688,12 +687,6 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 		ai_env_pop_error(env, api_incr_stack(env));
 	}
 	return msg;
-}
-
-void alo_dump(a_henv env, a_isize id, a_flags options) {
-	Value const* v = api_rdslot(env, id);
-	api_check(v_is_func(*v), "only function can be dumped.");
-	ai_dump_print(env, v_as_func(*v), options);
 }
 
 char const ai_api_tagname[][8] = {

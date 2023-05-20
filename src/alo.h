@@ -226,13 +226,6 @@ ALO_EXPORT void (alo_fullgc)(a_henv env);
 ALO_EXPORT a_msg (alo_compile)(a_henv env, a_ifun fun, void* ctx, a_isize id_env,
 							   a_isize id_name, a_isize id_file, a_flags options);
 
-#define ALO_DUMP_OPT_NOTHING 0x0
-#define ALO_DUMP_OPT_CONST_POOL 0x1
-#define ALO_DUMP_OPT_LOCAL 0x2
-#define ALO_DUMP_OPT_LINE 0x4
-
-ALO_EXPORT void (alo_dump)(a_henv env, a_isize id, a_flags options);
-
 typedef struct {
 	unsigned char kind;
 	char const* file;
