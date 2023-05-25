@@ -1677,6 +1677,7 @@ static void expr_phi(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line l
 	else if (e1->_fucf) {
 		assume(label == NO_LABEL);
 		expr_copy(e1, e2);
+		return;
 	}
 	switch (e1->_tag) {
 		case EXPR_DYN_OR_NIL: {
@@ -1726,40 +1727,41 @@ static void expr_phi(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line l
 }
 
 static void expr_or_nil(Parser* par, InoutExpr e, a_u32* plabel, a_line line) {
-	a_u32 kind = expr_test_not_nil(par, e, plabel, line);
-	e->_fucf = unlikely(kind == EXPR_RESIDUAL_FALSE);
+	expr_test_not_nil(par, e, plabel, line);
 }
 
 static void expr_or_else(Parser* par, InoutExpr e, a_u32* plabel, a_line line) {
 	a_u32 label = *plabel;
-	switch (e->_tag) {
-		case EXPR_REG_OR_NIL: {
-			if (e->_fsym) {
-				e->_tag = EXPR_REG;
-				a_u32 label2 = e->_d2;
+	if (!e->_fucf) {
+		switch (e->_tag) {
+			case EXPR_REG_OR_NIL: {
+				if (e->_fsym) {
+					e->_tag = EXPR_REG;
+					a_u32 label2 = e->_d2;
+					expr_to_dyn(par, e);
+					e->_tag = EXPR_DYN_OR_NIL;
+					e->_d2 = label2;
+				}
+				else if (e->_fval) {
+					stack_free(par, e->_d1);
+				}
+				break;
+			}
+			case EXPR_REG: {
+				if (e->_fsym) {
+					expr_to_dyn(par, e);
+				}
+				else if (e->_fval) {
+					/* Free stack for another branch used. */
+					/* The ownership will still keep. */
+					stack_free(par, e->_d1);
+				}
+				break;
+			}
+			default: {
 				expr_to_dyn(par, e);
-				e->_tag = EXPR_DYN_OR_NIL;
-				e->_d2 = label2;
+				break;
 			}
-			else if (e->_fval) {
-				stack_free(par, e->_d1);
-			}
-			break;
-		}
-		case EXPR_REG: {
-			if (e->_fsym) {
-				expr_to_dyn(par, e);
-			}
-			else if (e->_fval) {
-				/* Free stack for another branch used. */
-				/* The ownership will still keep. */
-				stack_free(par, e->_d1);
-			}
-			break;
-		}
-		default: {
-			expr_to_dyn(par, e);
-			break;
 		}
 	}
 	*plabel = l_lazy_jump(par, label, line);
@@ -3491,7 +3493,14 @@ static a_enum expr_test_true(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 		case EXPR_NIL:
 		case EXPR_FALSE: {
 			*plabel = l_lazy_jump(par, *plabel, line);
+			e->_fucf = true;
 			return EXPR_RESIDUAL_FALSE;
+		}
+		case EXPR_RESIDUAL_TRUE: {
+			l_mark_label(par, e->_d2, line);
+			e->_tag = EXPR_TRUE;
+			e->_fucf = false;
+			return EXPR_TRUE;
 		}
 		case EXPR_TRUE_OR_FALSE: {
 			l_merge_branch(par, plabel, e->_d2, line);
@@ -3532,7 +3541,14 @@ static a_enum expr_test_false(Parser* par, InExpr e, a_u32* plabel, a_u32 line) 
 		case EXPR_STR:
 		case EXPR_TRUE: {
 			*plabel = l_lazy_jump(par, *plabel, line);
+			e->_fucf = true;
 			return EXPR_RESIDUAL_TRUE;
+		}
+		case EXPR_RESIDUAL_FALSE: {
+			l_mark_label(par, e->_d2, line);
+			e->_tag = EXPR_FALSE;
+			e->_fucf = false;
+			return EXPR_FALSE;
 		}
 		case EXPR_FALSE_OR_TRUE: {
 			l_merge_branch(par, plabel, e->_d2, line);
@@ -3615,6 +3631,7 @@ static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line
 		}
 		case EXPR_NIL: {
 			*plabel = l_lazy_jump(par, *plabel, line);
+			e->_fucf = true;
 			return EXPR_RESIDUAL_FALSE;
 		}
 		case EXPR_REG_OR_NIL: {
