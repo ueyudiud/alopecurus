@@ -1138,9 +1138,6 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
             case '/': {
                 return TK_LSLASH;
             }
-			case '\\': {
-				return TK_RSLASH;
-			}
             case '%': {
                 return TK_PERCENT;
             }
@@ -1190,14 +1187,20 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
                 return TK_BAR;
             }
             case '?': {
-				if (l_test_skip(lex, ':')) {
-					return TK_ELVIS;
-				}
-				else if (l_test_skip(lex, '.')) {
+				if (l_test_skip(lex, '.')) {
 					return TK_QDOT;
+				}
+				else if (l_test_skip(lex, ':')) {
+					return TK_ELVIS;
 				}
 				else if (l_test_skip(lex, '?')) {
 					return TK_BQUESTION;
+				}
+				else if (l_test_skip(lex, '-')) {
+					if (l_test_skip(lex, '>')) {
+						return TK_QARROW;
+					}
+					l_unwind(lex, '-');
 				}
                 return TK_QUESTION;
             }

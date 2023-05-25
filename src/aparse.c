@@ -4073,7 +4073,7 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 				expr_index_str(par, e, name, line2);
 				break;
 			}
-			case TK_ELVIS: {
+			case TK_QARROW: {
 				a_line line2 = lex_line(par);
                 lex_skip(par);
 				expr_or_nil(par, e, &label,  line2);
@@ -4103,7 +4103,7 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 				expr_index_str(par, e, name, line2);
 				break;
 			}
-			case TK_COLON: {
+			case TK_ARROW: {
 				a_line line2 = lex_line(par);
                 lex_skip(par);
 
@@ -4451,12 +4451,25 @@ static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
 
 			lex_skip(par);
 
-			if (!lex_test_skip(par, TK_RSLASH)) {
-				expr_discard(par, e);
-				l_scan_ternary_expr(par, e);
+			expr_discard(par, e);
+			l_scan_ternary_expr(par, e);
 
-				lex_check_pair_right(par, TK_QUESTION, TK_RSLASH, line);
-			}
+			lex_check_pair_right(par, TK_QUESTION, TK_COLON, line);
+
+			a_u32 label2 = NO_LABEL;
+			expr_or_else(par, e, &label2, line);
+
+			Expr e2;
+			l_mark_label(par, label1, line);
+			l_scan_ternary_expr(par, e2);
+			expr_phi(par, e, e2, label2, line);
+			break;
+		}
+		case TK_ELVIS: {
+			a_line line = lex_line(par);
+			a_u32 label1 = expr_test(par, e, line);
+
+			lex_skip(par);
 
 			a_u32 label2 = NO_LABEL;
 			expr_or_else(par, e, &label2, line);
@@ -4894,7 +4907,7 @@ static void l_scan_let_stat(Parser* par) {
 			expr_assign(par, e1, e2, line);
 			break;
 		}
-        case TK_try: {
+        case TK_use: {
             Expr e1, e2;
             lex_skip(par);
             GStr* name = lex_check_ident(par);

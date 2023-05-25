@@ -210,20 +210,18 @@ void ai_str_boost(a_henv env, void* block) {
 	};
 
 	run {
-		static a_u16 const l_str_disp[STR__COUNT + 1] = {
-			STR_POS_EMPTY, /* Intern empty string. */
-#define STRDEF(n) STR_POS_##n,
+		static a_u8 const l_str_len[STR__COUNT] = {
+			0, /* Intern empty string. */
+#define STRDEF(n) sizeof(#n)-1,
 # include "asym/kw.h"
 # include "asym/tm.h"
 # include "asym/pt.h"
 #undef STRDEF
-				STR_EPOS_PT__STUB2
 		};
 
+		char const* src = ai_str_interns;
 		for (a_u32 i = 0; i < STR__COUNT; ++i) {
-			a_u32 off = l_str_disp[i];
-			a_u32 len = l_str_disp[i + 1] - 1 - off;
-			char const* src = &ai_str_interns[off];
+			a_u32 len = l_str_len[i];
 
 			IStr* self = cast(IStr*, block);
 			a_hash hash = ai_str_hashof(g->_seed, src, len);
@@ -237,6 +235,7 @@ void ai_str_boost(a_henv env, void* block) {
 
 			g->_names[i] = &self->_body;
 			block += sizeof_IStr(len);
+			src += len + 1;
 		}
 	}
 }

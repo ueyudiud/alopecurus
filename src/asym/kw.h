@@ -32,6 +32,7 @@ STRDEF(pub     )
 STRDEF(return  )
 STRDEF(true    )
 STRDEF(try     )
+STRDEF(use     )
 STRDEF(while   )
 STRDEF(_       )
 
