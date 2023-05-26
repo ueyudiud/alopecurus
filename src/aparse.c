@@ -411,7 +411,7 @@ struct Sym {
 };
 
 #define SCOPE_STRUCT_HEAD \
-    Scope* _up;           \
+    Scope* _up;              \
 	a_u8 _bot_reg;           \
 	a_u8 _top_ntr; /* Top of non-temporary section. */ \
 	a_u8 _bot_fur; /* Bottom of fragmented section. */ \
@@ -936,7 +936,7 @@ static void stack_free_succ(Parser* par, a_u32 reg) {
  *@param par the parser.
  *@param reg the register to store.
  */
-static void l_store(Parser* par, a_u32 reg) {
+static void stack_store(Parser* par, a_u32 reg) {
 	Scope* scope = par->_scope;
 	assume(reg >= scope->_bot_fur && reg < scope->_top_reg, "cannot store register in place.");
 	scope->_top_ntr = max(reg + 1, scope->_top_ntr);
@@ -997,7 +997,7 @@ static void l_capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo
 	}
 }
 
-static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
+static a_u32 l_lookup_capture_internal(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
 	/* Find in captured values. */
 	for (a_u32 i = 0; i < scope->_caps._len; ++i) {
 		RichCapInfo* info = &scope->_caps._ptr[i];
@@ -1016,13 +1016,13 @@ static a_u32 l_lookup_capture(Parser* par, FnScope* scope, Sym* sym, a_u32 depth
 		l_capture_locally(par, scope, sym, &info);
 	}
 	else { /* Capture recursively. */
-		info._src_index = l_lookup_capture(par, scope->_fn_up, sym,depth - 1);
+		info._src_index = l_lookup_capture_internal(par, scope->_fn_up, sym,depth - 1);
 	}
 	return at_buf_put(par->_env, scope->_caps, info, "capture");
 }
 
-static a_u32 l_capture(Parser* par, Sym* sym) {
-	return l_lookup_capture(par, par->_fnscope, sym, par->_scope_depth);
+static a_u32 l_lookup_capture(Parser* par, Sym* sym) {
+	return l_lookup_capture_internal(par, par->_fnscope, sym, par->_scope_depth);
 }
 
 static void expr_env(Parser* par, OutExpr e) {
@@ -1060,7 +1060,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 			}
 			else {
 				expr_init(e, EXPR_CAP,
-					._d1 = l_capture(par, sym),
+					._d1 = l_lookup_capture(par, sym),
 					._d2 = id,
 					._fsym = true
 				);
@@ -1069,7 +1069,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 		}
 		case SYM_CAPTURE: {
 			expr_init(e, EXPR_CAP,
-				._d1 = l_capture(par, sym),
+				._d1 = l_lookup_capture(par, sym),
 				._d2 = id,
 				._fsym = true
 			);
@@ -2597,7 +2597,7 @@ static a_u32 locals_push(Parser* par, LocalInfo info) {
 }
 
 static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, SymMods mods) {
-	l_store(par, reg);
+	stack_store(par, reg);
 
 	a_u32 index = locals_push(par, new(LocalInfo) {
 		._begin_label = begin_label - par->_fnscope->_begin_label,
