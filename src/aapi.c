@@ -338,6 +338,7 @@ char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 }
 
 char const* alo_pushntstr(a_henv env, char const* src) {
+	api_check(src != null, "string is null.");
 	return alo_pushstr(env, src, strlen(src));
 }
 

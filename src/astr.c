@@ -144,16 +144,16 @@ GStr* ai_str_new(a_henv env, void const* src, a_usize len) {
 	return likely(len <= ISTR_MAX_LEN) ? istr_get2(env, src, len, hash) : hstr_new(env, src, len, hash);
 }
 
-a_msg ai_str_load(a_henv env, ZIn* in, a_usize len, GStr** pstr) {
-	if (len <= ISTR_MAX_LEN) {
-		char buf[ISTR_MAX_LEN + 1];
-		try(ai_io_iget(in, buf, len));
+a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) {
+	char buf[ISTR_MAX_LEN + 1];
+	if (likely(len <= ISTR_MAX_LEN)) {
+		try((*fun)(ctx, buf, len));
 		*pstr = istr_get(env, buf, len);
 		return ALO_SOK;
 	}
 	else {
 		GStr* self = hstr_alloc(env, len);
-		a_msg msg = ai_io_iget(in, self->_data, len);
+		a_msg msg = (*fun)(ctx, self->_data, len);
 		if (unlikely(msg != ALO_SOK)) {
 			ai_mem_dealloc(G(env), self, sizeof_HStr(len));
 			return msg;

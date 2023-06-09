@@ -37,6 +37,8 @@ struct InCtx {
     _v << 7 | _b; \
 })
 
+#define l_gets(ic,l) ({ GStr* _v; try(ai_str_load((ic)->_env, cast(a_sbfun, ai_io_iget), l, &(ic)->_in, &_v)); _v; })
+
 static a_msg l_load_const(InCtx* ic, Value* v) {
     a_u8 tag;
     switch (tag = l_get(ic, a_u8)) {
@@ -64,14 +66,12 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
         }
         case LVTAG_LSTR: {
             a_u32 len = l_getvi(ic, a_u32) + LVLSTR_LEN_BIAS;
-            GStr* val;
-            try(ai_str_load(ic->_env, &ic->_in, len, &val));
+            GStr* val = l_gets(ic, len);
             v_set_obj(ic->_in._env, v, val);
             break;
         }
         default: { /* For short string */
-            GStr* val;
-			try(ai_str_load(ic->_env, &ic->_in, tag, &val));
+            GStr* val = l_gets(ic, tag);
             v_set_obj(ic->_in._env, v, val);
             break;
         }
