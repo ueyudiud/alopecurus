@@ -137,16 +137,15 @@ char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
-a_u32 aloL_fileresult(a_henv env, a_bool stat, char const* fname) {
-	typeof(errno) err = errno;
+a_u32 aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
 	if (stat) {
 		alo_pushbool(env, true);
 		return 1;
 	}
 	else {
 		aloL_pushfail(env);
-		if (fname != null) {
-			alo_pushfstr(env, "%s: %s", fname, strerror(err));
+		if (what != null) {
+			alo_pushfstr(env, "%s: %s", what, strerror(err));
 		}
 		else {
 			alo_pushntstr(env, strerror(err));
@@ -169,10 +168,11 @@ a_u32 aloL_fileresult(a_henv env, a_bool stat, char const* fname) {
 
 #endif
 
-a_u32 aloL_execresult(a_henv env, a_i32 stat) {
+a_u32 aloL_resulte(a_henv env, a_i32 stat) {
 	char const* what = "exit";
-	if (stat != 0 && errno != 0) {
-		return aloL_fileresult(env, false, null);
+	errno_t err = errno;
+	if (stat != 0 && err != 0) {
+		return aloL_resultcx(env, false, err, null);
 	}
 	else {
 		l_inspect_result(stat);

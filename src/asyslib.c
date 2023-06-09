@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "agc.h"
 #include "avm.h"
 #include "aapi.h"
 
@@ -44,7 +45,7 @@ static a_u32 sys_command(a_henv env) {
 	errno = 0;
 	int stat = system(cmd);
 	if (cmd != null) {
-		return aloL_execresult(env, stat);
+		return aloL_resulte(env, stat);
 	}
 	else {
 		alo_pushbool(env, stat);
@@ -52,10 +53,23 @@ static a_u32 sys_command(a_henv env) {
 	}
 }
 
+static a_u32 sys_getenv(a_henv env) {
+	char const* key = aloL_checkstr(env, 0);
+	char const* val = getenv(key);
+	if (val != null) {
+		alo_pushntstr(env, val);
+	}
+	else {
+		alo_pushnil(env);
+	}
+	return 1;
+}
+
 void aloopen_sys(a_henv env) {
 	static aloL_Entry const bindings[] = {
 		{ "command", sys_command },
-		{ "exit", sys_exit }
+		{ "exit", sys_exit },
+		{ "getenv", sys_getenv }
 	};
 
 	alo_newtype(env, ALO_LIB_SYS_NAME, ALO_NEWTYPE_FLAG_STATIC);

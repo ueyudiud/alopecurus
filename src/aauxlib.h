@@ -26,9 +26,10 @@ ALO_EXPORT char const* (aloL_optlstr)(a_henv env, a_usize id, a_usize* plen);
 #define aloL_optint(env,id,dfl) ({ a_int _v; aloL_optint_(env, id, &_v) ? _v : (dfl); })
 #define aloL_optnum(env,id,dfl) ({ a_float _v; aloL_optnum_(env, id, &_v) ? _v : (dfl); })
 
-ALO_EXPORT a_u32 (aloL_fileresult)(a_henv env, a_bool stat, char const* fname);
-ALO_EXPORT a_u32 (aloL_execresult)(a_henv env, a_i32 stat);
+ALO_EXPORT a_u32 (aloL_resultcx)(a_henv env, a_bool stat, errno_t err, char const* what);
+ALO_EXPORT a_u32 (aloL_resulte)(a_henv env, a_i32 stat);
 
+#define aloL_resultc(env,stat,what) aloL_resultcx(env, stat, errno, what)
 #define aloL_pushfail(env) alo_pushnil(env)
 
 ALO_EXPORT a_msg (aloL_compiles)(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options);
