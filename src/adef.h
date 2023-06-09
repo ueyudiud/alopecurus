@@ -132,6 +132,12 @@ typedef a_u32 a_insn;
 #define zero(t) ((t) {0})
 
 #if __STDC_VERSION__ >= 201112L
+# define ALO_C11 M_true
+#else
+# define ALO_C11 M_false
+#endif
+
+#if ALO_C11
 # ifndef static_assert
 #  define static_assert(e) _Static_assert(e, "assert failed.")
 # endif
