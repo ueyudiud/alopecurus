@@ -285,46 +285,50 @@ static void table_remove(a_henv env, GTable* self, HNode* node) {
 	self->_len -= 1;
 }
 
+static a_bool titer_hfirst(GTable* self, HNode** pnode, a_hash hash) {
+	if (unlikely(self->_len == 0)) return false;
+	
+	HNode* node = table_hfirst(self, hash);
+	if (!hnode_is_hhead(self,node)) return false;
+
+	*pnode = node;
+	return true;
+}
+
+static a_bool titer_hnext(GTable* self, HNode** pnode) {
+	HNode* node = *pnode;
+	if (is_nil(node->_hnext)) return false;
+	*pnode = &self->_ptr[unwrap(node->_hnext)];
+	return true;
+}
+
+#define table_for_hash(v,t,h) for (a_bool _has_next = titer_hfirst(t, &v, h); _has_next; _has_next = titer_hnext(t, &v))
+
 static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value key) {
-	if (self->_len > 0) {
-		HNode* node = table_hfirst(self, hash);
-		if (!hnode_is_empty(node)) {
-			do {
-				if (v_trivial_equals(key, node->_key)) {
-					return &node->_value;
-				}
-			}
-			while (!is_nil(node->_hnext) && (node = &self->_ptr[unwrap(node->_hnext)], true));
+	HNode* node;
+	table_for_hash(node, self, hash) {
+		if (v_trivial_equals(key, node->_key)) {
+			return &node->_value;
 		}
 	}
 	return null;
 }
 
 static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* key) {
-	if (self->_len > 0) {
-		HNode* node = table_hfirst(self, hash);
-		if (!hnode_is_empty(node)) {
-			do {
-				if (v_is_str(node->_key) && ai_str_requals(v_as_str(node->_key), key->_ptr, key->_len)) {
-					return &node->_value;
-				}
-			}
-			while (!is_nil(node->_hnext) && (node = &self->_ptr[unwrap(node->_hnext)], true));
+	HNode* node;
+	table_for_hash(node, self, hash) {
+		if (v_is_str(node->_key) && ai_str_requals(v_as_str(node->_key), key->_ptr, key->_len)) {
+			return &node->_value;
 		}
 	}
 	return null;
 }
 
 static Value* table_find_any(unused a_henv env, GTable* self, a_hash hash, Value key) {
-	if (self->_len > 0) {
-		HNode* node = table_hfirst(self, hash);
-		if (!hnode_is_empty(node)) {
-			do {
-				if (ai_vm_equals(env, key, node->_key)) {
-					return &node->_value;
-				}
-			}
-			while (!is_nil(node->_hnext) && (node = &self->_ptr[unwrap(node->_hnext)], true));
+	HNode* node;
+	table_for_hash(node, self, hash) {
+		if (ai_vm_equals(env, key, node->_key)) {
+			return &node->_value;
 		}
 	}
 	return null;
