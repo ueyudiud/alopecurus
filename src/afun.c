@@ -326,7 +326,7 @@ static void afun_drop(Global* g, GFun* self) {
 
 static void cfun_mark(Global* g, GFun* self) {
 	a_u32 len = self->_len;
-	for (a_u32 i = 0; i < len - 1; ++i) {
+	for (a_u32 i = 0; i < len; ++i) {
 		ai_gc_trace_mark_val(g, self->_vals[i]);
 	}
 	ai_gc_trace_work(g, fun_size(len));

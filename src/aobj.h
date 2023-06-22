@@ -76,6 +76,8 @@ typedef struct ByteBuf ByteBuf;
 
 typedef struct { a_u64 _; } Value;
 
+static_assert(sizeof(Value) == 8);
+
 always_inline void v_check_alive(a_henv env, Value v);
 
 #define V_TAG_MASK (~u64c(0) << 47)
@@ -432,20 +434,14 @@ typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
 typedef struct ProtoDesc ProtoDesc;
 
-#define GPROTO_STRUCT_HEADER \
-	GOBJ_STRUCT_HEADER;         \
-	a_u32 _size;                \
-	a_u16 _flags;               \
-	a_u8 _nstack;               \
-	a_u8 _nparam;               \
-	Value* _consts;             \
-	a_insn* _code
+#define GFUN_STRUCT_HEADER \
+	GOBJ_STRUCT_HEADER; \
+	a_u32 _len; \
+	a_u16 _flags; \
+	a_u16 _fname /* Function name. */
 
 struct GFun {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_u16 _flags;
-	a_u16 _fname; /* Function name. */
+	GFUN_STRUCT_HEADER;
 	union {
 		a_cfun _fptr;
 		GProto* _proto;
@@ -455,6 +451,15 @@ struct GFun {
 		Value _vals[0];
 	};
 };
+
+#define GPROTO_STRUCT_HEADER \
+	GOBJ_STRUCT_HEADER;         \
+	a_u32 _size;                \
+	a_u16 _flags;               \
+	a_u8 _nstack;               \
+	a_u8 _nparam;               \
+	Value* _consts;             \
+	a_insn* _code
 
 struct GProto {
 	GPROTO_STRUCT_HEADER;

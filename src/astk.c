@@ -1,8 +1,5 @@
-/*
- * astk.c
- *
- *  Created on: 2023/2/26
- *      Author: ueyudiud
+/**
+ *@file astk.c
  */
 
 #define astk_c_
