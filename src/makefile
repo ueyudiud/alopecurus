@@ -34,8 +34,9 @@ CP= cp -f $(1) $(2)
 # Linux, Darwin
 ##############################################################
 
-ifeq ($(OS),Windows_NT)
+ifeq (Windows,$(findstring Windows,$(OS)))
 	HOST_OS= Windows
+	SHELL= cmd
 	RM= del /f $(1)
 	MD= if not exist $(1) mkdir $(1)
 	CP= copy /Y $(1) $(2)
