@@ -187,7 +187,14 @@ ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsa
 ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
-ALO_EXPORT a_bool (alo_canyield)(a_henv env);
+
+#define ALO_FATTR_YIELD 0x0001
+#define ALO_FATTR_ASYNC 0x0002
+
+ALO_EXPORT a_bool (alo_fattrz)(a_henv env, a_enum n);
+
+#define alo_canyield(env) alo_fattrz(env, ALO_FATTR_YIELD)
+#define alo_isasync(env) alo_fattrz(env, ALO_FATTR_ASYNC)
 
 ALO_EXPORT a_tag (alo_tagof)(a_henv env, a_isize id);
 ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_isize id);

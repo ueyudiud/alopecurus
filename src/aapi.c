@@ -551,8 +551,13 @@ void alo_yield(a_henv env) {
 	ai_env_yield(env);
 }
 
-a_bool alo_canyield(a_henv env) {
-	return true; //TODO
+a_bool alo_fattrz(a_henv env, a_enum n) {
+	switch (n) {
+		case ALO_FATTR_YIELD:
+			return true;
+		default:
+			return false;
+	}
 }
 
 a_tag alo_tagof(a_henv env, a_isize id) {
