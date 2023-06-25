@@ -43,7 +43,7 @@ a_msg alo_init(void) {
  *@param pi the pointer to store result.
  *@return true if attribute name is valid and false for otherwise.
  */
-a_bool alo_attri(unused a_henv env, a_enum n, a_int* pi) {
+a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
 	switch (n) {
 		case ALO_ATTR_VERSION:
 			*pi = ALO_VERSION_NUMBER;

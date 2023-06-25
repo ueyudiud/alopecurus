@@ -149,7 +149,7 @@ ALO_EXPORT void (alo_sethook)(a_henv env, a_hfun kf, a_hctx kc, a_flags mask);
 #define ALO_ATTR_VERSION 0x0001
 #define ALO_ATTR_VARIANT 0x0002
 
-ALO_EXPORT a_bool (alo_attri)(a_henv env, a_enum n, a_int* pi);
+ALO_EXPORT a_bool (alo_attri)(a_henv env, a_enum n, a_i32* pi);
 
 ALO_EXPORT a_usize (alo_stacksize)(a_henv env);
 ALO_EXPORT a_bool (alo_ensure)(a_henv env, a_usize n);
