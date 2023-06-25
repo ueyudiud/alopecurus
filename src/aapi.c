@@ -10,6 +10,7 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
+#include "auser.h"
 #include "atype.h"
 #include "actx.h"
 #include "agc.h"
@@ -98,6 +99,12 @@ a_usize alo_stacksize(a_henv env) {
 	return env->_stack._top - ai_stk_bot(env);
 }
 
+/**
+ ** Reserve enough slots of stack to carry values.
+ *@param env the runtime environment.
+ *@param n the number of reserved slots.
+ *@return true if reserved success and false for otherwise.
+ */
 a_bool alo_ensure(a_henv env, a_usize n) {
 	Value* const expect = env->_stack._top + n;
 	Value* const limit = env->_stack._limit;
@@ -115,6 +122,13 @@ a_bool alo_ensure(a_henv env, a_usize n) {
 	return false;
 }
 
+/**
+ ** Truncate or pad stack to specific size.
+ ** If new stack size is more than old stack size,
+ ** the grown slots will be filled with nil values.
+ *@param env the runtime environment.
+ *@param n the stack index of top, only valid stack index is available.
+ */
 void alo_settop(a_henv env, a_isize n) {
 	Value* old_top = env->_stack._top;
 	Value* new_top = n >= 0 ? ai_stk_bot(env) + n : old_top + n;
@@ -478,10 +492,48 @@ a_tag alo_rawgeti(a_henv env, a_isize id, a_int key) {
 		case T_AUSER: {
 			return ALO_TEMPTY;
 		}
-		default:
+		default: {
 			api_panic("bad value for 'geti' operation.");
+		}
 	}
 
+	v_set(env, api_incr_stack(env), v);
+	return tag_of(env, v);
+}
+
+a_tag alo_rawget(a_henv env, a_isize id) {
+	api_check_elem(env, 1);
+
+	Value v = api_elem(env, id);
+	Value vk = api_decr_stack(env);
+
+	switch (v_get_tag(v)) {
+		case T_TUPLE: {
+			GTuple* value = v_as_tuple(v);
+			v = ai_tuple_get(env, value, vk);
+			break;
+		}
+		case T_LIST: {
+			GList* value = v_as_list(v);
+			v = ai_list_get(env, value, vk);
+			break;
+		}
+		case T_TABLE: {
+			GTable* value = v_as_table(v);
+			v = ai_table_get(env, value, vk);
+			break;
+		}
+		case T_AUSER: {
+			GAUser* value = v_as_auser(v);
+			v = ai_auser_get(env, value, vk);
+			break;
+		}
+		default: {
+			api_panic("bad value for 'get' operation.");
+		}
+	}
+
+	v_set(env, api_incr_stack(env), v);
 	return tag_of(env, v);
 }
 
