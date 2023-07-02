@@ -14,7 +14,7 @@
 #include "auser.h"
 
 GAUser* ai_auser_new(a_henv env, GType* type) {
-	assume(type->_opt_vtbl->_mask == v_masked_tag(T_AUSER), "not type for auser.");
+	assume(type->_opt_vtbl->_tag == v_masked_tag(T_AUSER), "not type for auser.");
 	GTable* self = ai_table_new(env);
 	self->_vptr = type->_opt_vtbl; /* Set type. */
 	return self;
@@ -59,17 +59,15 @@ static void tuser_mark(Global* g, GTable* self) {
 	GType* type = ptr_disp(GType, g, self->_vptr->_iname);
 	ai_gc_trace_mark(g, type);
 	ai_table_mark(g, self);
+	ai_gc_trace_work(g, sizeof(GType) - sizeof(GTable));
 }
 
-VTable const ai_auser_vtable = {
-	._mask = V_MASKED_TAG(T_AUSER),
-	._base_size = sizeof(GTable),
-	._elem_size = 0,
+VImpl const ai_auser_vtable = {
+	._tag = V_MASKED_TAG(T_AUSER),
 	._sname = "obj",
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
 		vfp_def(drop, ai_table_drop),
-		vfp_def(mark, tuser_mark),
-		vfp_def(close, null)
+		vfp_def(mark, tuser_mark)
 	}
 };

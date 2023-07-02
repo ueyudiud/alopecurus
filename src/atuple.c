@@ -12,7 +12,7 @@
 
 #include "atuple.h"
 
-static VTable const tuple_vtable;
+static VImpl const tuple_vtable;
 
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
     GTuple* self = ai_mem_alloc(env, sizeof_GTuple(len));
@@ -60,15 +60,16 @@ a_hash ai_tuple_hash(a_henv env, GTuple* self) {
 	return self->_hash;
 }
 
+static void tuple_drop(Global* g, GTuple* self) {
+    ai_mem_dealloc(g, self, sizeof_GTuple(self->_len));
+}
+
 static void tuple_mark(Global* g, GTuple* self) {
     a_u32 len = self->_len;
     for (a_u32 i = 0; i < len; ++i) {
 		ai_gc_trace_mark_val(g, self->_body[i]);
     }
-}
-
-static void tuple_drop(Global* g, GTuple* self) {
-    ai_mem_dealloc(g, self, sizeof_GTuple(self->_len));
+	ai_gc_trace_work(g, sizeof_GTuple(self->_len));
 }
 
 Value ai_tuple_get(a_henv env, GTuple* self, Value key) {
@@ -86,15 +87,13 @@ Value ai_tuple_geti(a_henv env, GTuple* self, a_int key) {
 	return *value;
 }
 
-static VTable const tuple_vtable = {
-	._mask = V_MASKED_TAG(T_TUPLE),
+static VImpl const tuple_vtable = {
+	._tag = V_MASKED_TAG(T_TUPLE),
 	._iname = env_type_iname(_tuple),
 	._sname = "tuple",
-	._base_size = sizeof(GTuple),
-	._elem_size = sizeof(Value),
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
+		vfp_def(drop, tuple_drop),
 		vfp_def(mark, tuple_mark),
-		vfp_def(drop, tuple_drop)
 	}
 };

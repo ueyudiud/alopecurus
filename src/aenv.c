@@ -37,7 +37,7 @@ static a_bool route_is_active(a_henv env) {
 	return G(env)->_active == env;
 }
 
-static VTable const route_vtable;
+static VImpl const route_vtable;
 
 static void route_new(GRoute* self, Global* g) {
 	*self = new(GRoute) {
@@ -102,11 +102,12 @@ static void route_mark_stack(Global* g, GRoute* self) {
 }
 
 static void route_mark(Global* g, GRoute* self) {
+	ai_gc_trace_work(g, sizeof(GRoute));
+
 	route_mark_stack(g, self);
 	if (self->_from != null) {
 		ai_gc_trace_mark(g, self->_from);
 	}
-	ai_gc_trace_work(g, sizeof(GRoute));
 
 	join_trace(&g->_tr_regray, self);
 }
@@ -118,16 +119,14 @@ static void route_drop(Global* g, GRoute* self) {
 	ai_mem_dealloc(g, self, sizeof(GRoute));
 }
 
-static VTable const route_vtable = {
-	._mask = V_MASKED_TAG(T_CUSER),
+static VImpl const route_vtable = {
+	._tag = V_MASKED_TAG(T_CUSER),
 	._iname = env_type_iname(_route),
 	._sname = "route",
-	._base_size = sizeof(GRoute),
-	._elem_size = 0,
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
 		vfp_def(drop, route_drop),
-		vfp_def(mark, route_mark)
+		vfp_def(mark, route_mark),
 	}
 };
 

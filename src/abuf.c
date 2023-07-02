@@ -12,7 +12,7 @@
 
 #include "abuf.h"
 
-static VTable const buf_vtable;
+static VImpl const buf_vtable;
 
 a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...) {
 	va_list varg;
@@ -72,11 +72,9 @@ static void buf_drop(Global* g, a_hobj raw_self) {
 	ai_mem_dealloc(g, self, sizeof(GBuf));
 }
 
-static VTable const buf_vtable = {
-	._mask = V_MASKED_TAG(T_CUSER),
-	._base_size = sizeof(GBuf),
-	._elem_size = 0,
-	._vfps = (a_vslot[]) {
+static VImpl const buf_vtable = {
+	._tag = V_MASKED_TAG(T_CUSER),
+	._vfps = {
 		vfp_def(drop, buf_drop),
 		vfp_def(mark, buf_mark)
 	}

@@ -71,11 +71,6 @@ void ai_gc_fix_object_(a_henv env, a_hobj obj) {
 	join_gc(&g->_gc_fixed, obj);
 }
 
-static void really_trace_work(Global* g, a_hobj obj) {
-	a_vptr vptr = obj->_vptr;
-	ai_gc_trace_work(g, vptr->_base_size + vptr->_elem_size * obj->_len);
-}
-
 static void really_mark_object(Global* g, a_hobj obj) {
 	/* Color object to black. */
 	g_set_black(obj);
@@ -87,13 +82,10 @@ void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 	/* Tested in inline function. */
 	assume(g_has_white_color(g, obj));
 	/* Mark object lazily or greedily. */
-	VTable const* vptr = obj->_vptr;
+	VImpl const* vptr = obj->_vptr;
 	if (vtable_has_flag(vptr, VTABLE_FLAG_GREEDY_MARK)) {
 		g_set_gray(obj); /* Mark object to gray before propagation. */
-		really_trace_work(g, obj);
-		if (vptr->_vfps[vfp_loc(mark)] != null) {
-			really_mark_object(g, obj);
-		}
+		really_mark_object(g, obj);
 		/* Else keep object as gray since it has no mark function to remark. */
 	}
 	else {
@@ -109,7 +101,6 @@ static void drop_object(Global* g, a_hobj obj) {
 
 static void propagate_once(Global* g, a_trmark* list) {
 	a_hobj obj = strip_trace(list);
-	really_trace_work(g, obj);
 	really_mark_object(g, obj);
 }
 

@@ -12,9 +12,9 @@
 
 #include "afun.h"
 
-static VTable const afun_vtable;
-static VTable const cfun_vtable;
-static VTable const proto_vtable;
+static VImpl const afun_vtable;
+static VImpl const cfun_vtable;
+static VImpl const proto_vtable;
 
 static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
@@ -308,6 +308,13 @@ void ai_cap_clean(Global* g) {
 	}
 }
 
+static void afun_drop(Global* g, GFun* self) {
+	for (a_u32 i = 0; i < self->_len; ++i) {
+		cap_release(g, self->_caps[i]);
+	}
+	ai_mem_dealloc(g, self, fun_size(self->_len));
+}
+
 static void afun_mark(Global* g, GFun* self) {
 	ai_gc_trace_mark(g, self->_proto);
 	a_u32 len = self->_len;
@@ -317,10 +324,7 @@ static void afun_mark(Global* g, GFun* self) {
 	ai_gc_trace_work(g, fun_size(self->_len));
 }
 
-static void afun_drop(Global* g, GFun* self) {
-	for (a_u32 i = 0; i < self->_len; ++i) {
-		cap_release(g, self->_caps[i]);
-	}
+static void cfun_drop(Global* g, GFun* self) {
 	ai_mem_dealloc(g, self, fun_size(self->_len));
 }
 
@@ -332,8 +336,8 @@ static void cfun_mark(Global* g, GFun* self) {
 	ai_gc_trace_work(g, fun_size(len));
 }
 
-static void cfun_drop(Global* g, GFun* self) {
-	ai_mem_dealloc(g, self, fun_size(self->_len));
+void ai_proto_drop(Global* g, GProto* self) {
+	ai_mem_dealloc(g, self, self->_size);
 }
 
 static void proto_mark(Global* g, GProto* self) {
@@ -355,42 +359,32 @@ static void proto_mark(Global* g, GProto* self) {
 	ai_gc_trace_work(g, self->_size);
 }
 
-void ai_proto_drop(Global* g, GProto* self) {
-	ai_mem_dealloc(g, self, self->_size);
-}
-
-static VTable const afun_vtable = {
-	._mask = V_MASKED_TAG(T_FUNC),
+static VImpl const afun_vtable = {
+	._tag = V_MASKED_TAG(T_FUNC),
 	._iname = env_type_iname(_func),
 	._sname = "func",
-	._base_size = sizeof(GFun),
-	._elem_size = sizeof(RcCap*),
-	._vfps = (a_vslot[]) {
+	._vfps = {
 		vfp_def(drop, afun_drop),
-		vfp_def(mark, afun_mark)
+		vfp_def(mark, afun_mark),
 	}
 };
 
-static VTable const cfun_vtable = {
-	._mask = V_MASKED_TAG(T_FUNC),
+static VImpl const cfun_vtable = {
+	._tag = V_MASKED_TAG(T_FUNC),
 	._iname = env_type_iname(_func),
 	._sname = "func",
-	._base_size = sizeof(GFun),
-	._elem_size = sizeof(Value),
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
 		vfp_def(drop, cfun_drop),
-		vfp_def(mark, cfun_mark)
+		vfp_def(mark, cfun_mark),
 	}
 };
 
-static VTable const proto_vtable = {
-	._mask = V_MASKED_TAG(T_CUSER),
-	._base_size = 0,
-	._elem_size = 1,
+static VImpl const proto_vtable = {
+	._tag = V_MASKED_TAG(T_CUSER),
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
 		vfp_def(drop, ai_proto_drop),
-		vfp_def(mark, proto_mark)
+		vfp_def(mark, proto_mark),
 	}
 };

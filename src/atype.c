@@ -17,14 +17,14 @@
 
 #include "atype.h"
 
-static VTable const type_vtable;
+static VImpl const type_vtable;
 
 static a_usize sizeof_GType(a_usize extra) {
 	return sizeof(GType) + extra;
 }
 
 GType* ai_type_alloc(a_henv env, a_usize len, a_vptr proto) {
-	a_usize size = sizeof_GType(proto != null || len > 0 ? sizeof(VTable) + sizeof(a_vslot) * len : 0);
+	a_usize size = sizeof_GType(proto != null || len > 0 ? sizeof(VImpl) + sizeof(a_vslot) * len : 0);
 
 	GType* self = ai_mem_alloc(env, size);
 	memclr(self, size);
@@ -33,8 +33,8 @@ GType* ai_type_alloc(a_henv env, a_usize len, a_vptr proto) {
 	self->_size = size;
 
 	if (proto != null) {
-		VTable* vtbl = self->_opt_vtbl;
-		memcpy(vtbl, proto, sizeof(VTable) + sizeof(a_vslot) * len);
+		VImpl* vtbl = self->_opt_vtbl;
+		memcpy(vtbl, proto, sizeof(VImpl) + sizeof(a_vslot) * len);
 		vtbl->_iname = ptr_diff(self, G(env));
 	}
 
@@ -265,6 +265,7 @@ static void type_mark(Global* g, a_hobj raw_self) {
 		}
 		ai_gc_trace_work(g, (sizeof(TDNode) + sizeof(Value)) * (self->_hmask + 1));
 	}
+	ai_gc_trace_work(g, self->_len);
 }
 
 static GType* cache_get(TypeCache* cache, GStr* name) {
@@ -389,14 +390,12 @@ void ai_type_clean(Global* g) {
 	type_cache_drop(g, &g->_type_cache);
 }
 
-static VTable const type_vtable = {
-	._mask = V_MASKED_TAG(T_TYPE),
+static VImpl const type_vtable = {
+	._tag = V_MASKED_TAG(T_TYPE),
 	._iname = env_type_iname(_type),
 	._sname = "type",
-	._base_size = 0,
-	._elem_size = 1,
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
 		vfp_def(drop, type_drop),
 		vfp_def(mark, type_mark)
 	}

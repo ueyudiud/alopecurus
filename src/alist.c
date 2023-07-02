@@ -12,7 +12,7 @@
 
 #include "alist.h"
 
-static VTable const list_vtable;
+static VImpl const list_vtable;
 
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, sizeof(GList));
@@ -77,7 +77,7 @@ static void list_mark(Global* g, GList* self) {
     for (a_usize i = 0; i < len; ++i) {
 		ai_gc_trace_mark_val(g, self->_ptr[i]);
     }
-	ai_gc_trace_work(g, sizeof(Value) * self->_cap);
+	ai_gc_trace_work(g, sizeof(GList) + sizeof(Value) * self->_cap);
 }
 
 static void list_drop(Global* g, GList* self) {
@@ -113,15 +113,13 @@ void ai_list_seti(a_henv env, GList* self, a_int index, Value value) {
 	ai_gc_barrier_forward_val(env, self, value);
 }
 
-static VTable const list_vtable = {
-	._mask = V_MASKED_TAG(T_LIST),
+static VImpl const list_vtable = {
+	._tag = V_MASKED_TAG(T_LIST),
 	._iname = env_type_iname(_list),
 	._sname = "list",
-	._base_size = sizeof(GList),
-	._elem_size = 0,
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
+		vfp_def(drop, list_drop),
 		vfp_def(mark, list_mark),
-		vfp_def(drop, list_drop)
 	}
 };

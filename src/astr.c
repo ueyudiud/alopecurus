@@ -16,8 +16,8 @@
 
 #include "astr.h"
 
-static VTable const istr_vtable;
-static VTable const hstr_vtable;
+static VImpl const istr_vtable;
+static VImpl const hstr_vtable;
 
 /**
  ** Compute hash code for string, use FNV-1 like algorithm.
@@ -261,37 +261,44 @@ static void cache_remove(IStrCache* cache, IStr* str) {
 	cache->_len -= 1;
 }
 
+static void istr_mark(Global* g, a_hobj raw_self) {
+	IStr* self = g_cast(IStr, raw_self);
+	ai_gc_trace_work(g, sizeof_IStr(self->_len));
+}
+
 static void istr_drop(Global* g, a_hobj raw_self) {
 	IStr* self = g_cast(IStr, raw_self);
 	cache_remove(&g->_istr_cache, self);
 	ai_mem_dealloc(g, self, sizeof_IStr(self->_body._len));
 }
 
+static void hstr_mark(Global* g, GStr* self) {
+	ai_gc_trace_work(g, sizeof_HStr(self->_len));
+}
+
 static void hstr_drop(Global* g, GStr* self) {
     ai_mem_dealloc(g, self, sizeof_HStr(self->_len));
 }
 
-static VTable const istr_vtable = {
-	._mask = V_MASKED_TAG(T_ISTR),
+static VImpl const istr_vtable = {
+	._tag = V_MASKED_TAG(T_ISTR),
 	._iname = env_type_iname(_str),
 	._sname = "str",
-	._base_size = sizeof(IStr),
-	._elem_size = sizeof(a_byte),
 	._flags = VTABLE_FLAG_GREEDY_MARK,
-	._vfps = (a_vslot[]) {
-		vfp_def(drop, istr_drop)
+	._vfps = {
+		vfp_def(drop, istr_drop),
+		vfp_def(mark, istr_mark),
 	}
 };
 
-static VTable const hstr_vtable = {
-	._mask = V_MASKED_TAG(T_HSTR),
+static VImpl const hstr_vtable = {
+	._tag = V_MASKED_TAG(T_HSTR),
 	._iname = env_type_iname(_str),
 	._sname = "str",
-	._base_size = sizeof(GStr),
-	._elem_size = sizeof(a_byte),
 	._flags = VTABLE_FLAG_GREEDY_MARK,
-	._vfps = (a_vslot[]) {
-		vfp_def(drop, hstr_drop)
+	._vfps = {
+		vfp_def(drop, hstr_drop),
+		vfp_def(mark, hstr_mark),
 	}
 };
 

@@ -41,7 +41,7 @@ static_assert(sizeof(HNode) - offsetof(HNode, _hash) == offsetof(HBucket, _nodes
 # define ALOI_TABLE_LOAD_FACTOR 0.75
 #endif
 
-static VTable const table_vtable;
+static VImpl const table_vtable;
 
 static a_usize bucket_size(a_usize cap) {
 	return sizeof(HBucket) + sizeof(HNode) * cap;
@@ -486,17 +486,16 @@ void ai_table_mark(Global* g, GTable* self) {
 		}
 		ai_gc_trace_work(g, bucket_size(bucket->_hmask + 1));
 	}
+	ai_gc_trace_work(g, sizeof(GTable));
 }
 
-static VTable const table_vtable = {
-	._mask = V_MASKED_TAG(T_TABLE),
+static VImpl const table_vtable = {
+	._tag = V_MASKED_TAG(T_TABLE),
 	._iname = env_type_iname(_table),
 	._sname = "table",
-	._base_size = sizeof(GTable),
-	._elem_size = 0,
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = (a_vslot[]) {
+	._vfps = {
 		vfp_def(drop, ai_table_drop),
-		vfp_def(mark, ai_table_mark)
+		vfp_def(mark, ai_table_mark),
 	}
 };

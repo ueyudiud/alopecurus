@@ -34,7 +34,7 @@ typedef a_usize a_trmark;
 typedef a_hobj a_gcnext;
 typedef a_gcnext a_gclist;
 
-typedef struct VTable VTable;
+typedef struct VImpl VImpl;
 typedef struct IStr IStr;
 typedef struct alo_Alloc Alloc;
 typedef struct RcCap RcCap;
@@ -239,7 +239,7 @@ always_inline void v_set_ptr(Value* d, void* v) {
  *=========================================================*/
 
 typedef struct { a_usize _; } ObjHeadMark[0];
-typedef VTable const* a_vptr;
+typedef VImpl const* a_vptr;
 typedef void const* a_vslot;
 
 #define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; a_vptr _vptr; a_gcnext _gnext; a_trmark _tnext
@@ -253,14 +253,9 @@ struct GObj {
  ** The virtual table for type, used to dispatch internal methods.
  ** Primitive types do not have virtual table.
  */
-struct VTable {
+struct VImpl {
 	/* The masked tag to the value from the pointer. */
-	a_u64 _mask;
-	/* The size and alignment information of object. */
-	a_u16 _base_size;
-	a_u8 _elem_size;
-	/* The tag of layout. */
-	a_u8 _tag;
+	a_u64 _tag;
 	/* The properties of type. */
 	a_u32 _flags;
 	/* The unique indexed name of the type, equals to the displacement between type object and global. */
@@ -268,7 +263,7 @@ struct VTable {
 	/* The string name of the type. */
 	char const* _sname;
 	/* The virtual function pointers. */
-	a_vslot const* _vfps;
+	a_vslot _vfps[];
 };
 
 #define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
@@ -279,7 +274,7 @@ always_inline GObj* v_as_obj(Value v) {
 }
 
 always_inline Value v_of_obj(a_hobj v) {
-	return v_new(v->_vptr->_mask | addr_of(v));
+	return v_new(v->_vptr->_tag | addr_of(v));
 }
 
 #define v_of_obj(v) v_of_obj(gobj_cast(v))
@@ -318,7 +313,7 @@ static_assert(offsetof(GObj, _len) == offsetof(GStr, _len));
 
 #define v_is_istr(v) v_is(v, T_ISTR)
 
-#define g_is_istr(p) ((p)->_vptr->_mask == V_MASKED_TAG(T_ISTR))
+#define g_is_istr(p) ((p)->_vptr->_tag == V_MASKED_TAG(T_ISTR))
 
 #define v_is_hstr(v) v_is(v, T_HSTR)
 
@@ -592,7 +587,7 @@ struct alo_Type {
 
 	GType* _next; /* Used for linked list in loader. */
 
-	VTable _opt_vtbl[0];
+	VImpl _opt_vtbl[0];
 };
 
 struct TypeCache {

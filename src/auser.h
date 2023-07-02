@@ -7,7 +7,7 @@
 
 #include "aobj.h"
 
-intern VTable const ai_auser_vtable;
+intern VImpl const ai_auser_vtable;
 
 intern GAUser* ai_auser_new(a_henv env, GType* type);
 intern Value ai_auser_get(a_henv env, GAUser* self, Value key);
