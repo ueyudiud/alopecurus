@@ -248,132 +248,77 @@ static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
 }
 
 static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
-	a_usize i = 0;
-	GStr* cache = null;
-	Value v;
+	GBuf* buf = ai_buf_new(env);
+	vm_push_args(env, v_of_obj(buf));
 
-	run {
-		while (i < n) {
-			v = base[i++];
-			if (likely(v_is_str(v))) {
-				GStr* val = v_as_str(v);
-				if (val->_len > 0) {
-					cache = val;
-					goto cached;
+	for (a_usize i = 0; i < n; ++i) {
+	    Value v = base[i];
+		if (likely(v_is_str(v))) {
+			GStr* val = v_as_str(v);
+			at_buf_putls(env, buf, val->_data, val->_len);
+		}
+		else {
+			switch (v_get_tag(v)) {
+				case T_NIL: {
+					at_buf_puts(env, buf, "nil");
+					break;
 				}
-			}
-			else {
-				switch (v_get_tag(v)) {
-					case T_NIL: {
-						cache = env_int_str(env, STR_nil);
-						i += 1;
-						goto cached;
-					}
-					case T_FALSE: {
-						cache = env_int_str(env, STR_false);
-						i += 1;
-						goto cached;
-					}
-					case T_TRUE: {
-						cache = env_int_str(env, STR_true);
-						i += 1;
-						goto cached;
-					}
-					default: goto buffered;
+				case T_FALSE: {
+					at_buf_puts(env, buf, "false");
+					break;
 				}
-			}
-		}
-		return env_int_str(env, STR_EMPTY); /* Empty string. */
-	}
-
-	run cached: {
-		Value const str_empty = v_of_obj(env_int_str(env, STR_EMPTY));
-		while (i < n) {
-			v = base[i++];
-			if (!v_trivial_equals(v, str_empty))
-				goto buffered;
-		}
-		return cache;
-	}
-
-	run buffered: { /* Cannot build string trivially, try to compute string size and create buffer. */
-		GBuf* buf = ai_buf_new(env);
-		vm_push_args(env, v_of_obj(buf));
-
-		if (cache != null) {
-			at_buf_putls(env, buf, cache->_data, cache->_len);
-		}
-
-		loop {
-			if (likely(v_is_str(v))) {
-				GStr* val = v_as_str(v);
-				at_buf_putls(env, buf, val->_data, val->_len);
-			}
-			else {
-				switch (v_get_tag(v)) {
-					case T_NIL: {
-						at_buf_puts(env, buf, "nil");
-						break;
-					}
-					case T_FALSE: {
-						at_buf_puts(env, buf, "false");
-						break;
-					}
-					case T_TRUE: {
-						at_buf_puts(env, buf, "true");
-						break;
-					}
-					case T_INT: {
-						at_fmt_puti(env, buf, v_as_int(v));
-						break;
-					}
-					case T_PTR: {
-						at_fmt_putp(env, buf, v_as_ptr(v));
-						break;
-					}
-					case T_HSTR:
-					case T_ISTR: {
-							GStr* str = v_as_str(v);
-							at_buf_putls(env, buf, str->_data, str->_len);
-							break;
-						}
-					case T_TUPLE:
-					case T_LIST:
-					case T_TABLE:
-					case T_FUNC:
-					case T_CUSER:
-					case T_AUSER:
-					case T_TYPE: {
-						Value vf = ai_obj_vlooktm(env, v, TM___str__);
-						if (v_is_nil(vf)) {
-							ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
-						}
-						Value* args = vm_push_args(env, vf, v);
-						StkPtr bptr = val2stk(env, base);
-						Value vs = vm_call_meta(env, args);
-						base = stk2val(env, bptr);
-						if (!v_is_str(vs)) {
-							ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
-						}
+				case T_TRUE: {
+					at_buf_puts(env, buf, "true");
+					break;
+				}
+				case T_INT: {
+					at_fmt_puti(env, buf, v_as_int(v));
+					break;
+				}
+				case T_PTR: {
+					at_fmt_putp(env, buf, v_as_ptr(v));
+					break;
+				}
+				case T_HSTR:
+				case T_ISTR: {
 						GStr* str = v_as_str(v);
 						at_buf_putls(env, buf, str->_data, str->_len);
 						break;
 					}
-					default: {
-						at_fmt_putf(env, buf, v_as_float(v));
-						break;
+				case T_TUPLE:
+				case T_LIST:
+				case T_TABLE:
+				case T_FUNC:
+				case T_CUSER:
+				case T_AUSER:
+				case T_TYPE: {
+					Value vf = ai_obj_vlooktm(env, v, TM___str__);
+					if (v_is_nil(vf)) {
+						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
 					}
+					Value* args = vm_push_args(env, vf, v);
+					StkPtr bptr = val2stk(env, base);
+					Value vs = vm_call_meta(env, args);
+					base = stk2val(env, bptr);
+					if (!v_is_str(vs)) {
+						ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
+					}
+					GStr* str = v_as_str(v);
+					at_buf_putls(env, buf, str->_data, str->_len);
+					break;
+				}
+				default: {
+					at_fmt_putf(env, buf, v_as_float(v));
+					break;
 				}
 			}
-			if (i == n) break;
-			v = base[i++];
 		}
-
-		GStr* result = at_buf_tostr(env, buf);
-		at_buf_deinit(G(env), *buf);
-
-		return result;
 	}
+
+	GStr* result = at_buf_tostr(env, buf);
+	at_buf_deinit(G(env), *buf);
+
+	return result;
 }
 
 static void v_mov_all_with_nil(a_henv env, Value* dst, a_usize dst_len, Value const* src, a_usize src_len) {

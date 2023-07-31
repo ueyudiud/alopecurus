@@ -34,17 +34,15 @@ enum {
 
 enum {
 	STR_POS_EMPTY,
-#define EPILOGUE(g) STR_EPOS_##g, STR_EPOS_##g##__STUB2 = STR_EPOS_##g - 1,
 #define STRDEF(n) STR_POS_##n, STR_EPOS_##n = STR_POS_##n + sizeof(#n) - 1,
 #define STRDEF2(n,r) STR_POS_##n, STR_EPOS_##n = STR_POS_##n + sizeof(r) - 1,
 # include "asym/kw.h"
 # include "asym/tm.h"
 # include "asym/pt.h"
 # include "asym/op.h"
-#undef EPILOGUE
 #undef STRDEF
 #undef STRDEF2
-	STR_LEN,
+	STR__TOTAL_LEN,
 
 	STR_POS__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
 };

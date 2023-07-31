@@ -25,7 +25,7 @@ intern void ai_str_clean(Global* g);
 
 #define ai_str_newl(env,src) ai_str_new(env, ""src, sizeof(src) - sizeof(char))
 
-intern char const ai_str_interns[STR_LEN];
+intern char const ai_str_interns[STR__TOTAL_LEN];
 
 #define ISTR_MAX_LEN 255
 

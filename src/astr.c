@@ -313,4 +313,4 @@ char const ai_str_interns[] =
 #undef STRDEF2
 ;
 
-static_assert(sizeof(ai_str_interns) == STR_LEN);
+static_assert(sizeof(ai_str_interns) == STR__TOTAL_LEN);
