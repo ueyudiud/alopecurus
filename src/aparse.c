@@ -3409,6 +3409,7 @@ static void exprs_fix(Parser* par, InoutExpr e) {
 static void exprs_to_top_tmps(Parser* par, InoutExpr e) {
 	switch (e->_tag) {
 		case EXPR_UNIT: {
+			e->_tag = EXPR_NTMP;
 			e->_d1 = par->_scope->_top_reg;
 			break;
 		}
@@ -3682,11 +3683,15 @@ static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line) {
 
 /*=========================================================*/
 
-#define lex_line(par) (lex(par)->_current._line)
-#define lex_token(par) (&lex(par)->_current)
+#define lex_line(par) (lex(par)->_ahead[0]._line)
+#define lex_token(par) (&lex(par)->_ahead[0])
 
 static a_i32 lex_peek(Parser* par) {
 	return ai_lex_peek(lex(par));
+}
+
+static a_i32 lex_peek2(Parser* par, a_u32 line) {
+	return ai_lex_peek2(lex(par), line);
 }
 
 static void lex_sync(Parser* par) {
@@ -3747,13 +3752,13 @@ static GStr* lex_check_ident(Parser* par) {
 static a_none lex_error_bracket(Parser* par, a_i32 ltk, a_i32 rtk, a_line line) {
 	if (lex_line(par) == line) {
 		lex_error_got(par, "%s expected to match %s",
-                      ai_lex_tagname(ltk),
-                      ai_lex_tagname(rtk));
+                      ai_lex_tagname(rtk),
+                      ai_lex_tagname(ltk));
 	}
 	else {
 		lex_error_got(par, "%s expected to match %s at line %u",
-                      ai_lex_tagname(ltk),
                       ai_lex_tagname(rtk),
+                      ai_lex_tagname(ltk),
                       line);
 	}
 }
@@ -3785,48 +3790,32 @@ static void l_scan_stat(Parser* par);
 static void l_scan_stats(Parser* par);
 
 static void l_scan_tstring(Parser* par, OutExpr e) {
-	LexScope scope;
-	a_bool stop = false;
-
 	ConExpr ce = {};
-	expr_str(e, lex_token(par)->_str, lex_line(par));
-	expr_concat(par, &ce, e, lex_line(par));
-    lex_skip(par);
+	a_u32 line = lex_line(par);
+	lex_skip(par);
 
-	while (!stop) {
-		a_u32 line = lex_line(par);
-		switch (lex_peek(par)) {
-			case TK_TSTRING: {
-				expr_str(e, lex_token(par)->_str, line);
-                lex_skip(par);
-				break;
-			}
+	loop {
+		a_u32 line2 = lex_line(par);
+		switch (lex_peek2(par, line)) {
 			case TK_STRING: {
-				expr_str(e, lex_token(par)->_str, line);
+				expr_str(e, lex_token(par)->_str, line2);
                 lex_skip(par);
-				stop = true;
 				break;
 			}
-			case TK_LBR: {
+			case TK_TSESCAPE: {
                 lex_skip(par);
-				ai_lex_push_scope(&par->_lex, &scope);
-
-				expr_unit(e);
-				l_scan_expr(par, e);
-
-				ai_lex_pop_scope(&par->_lex);
-                lex_check_pair_right(par, TK_LBR, TK_RBR, line);
-				break;
-			}
-			default: {
                 l_scan_atom(par, e);
 				break;
 			}
+			case TK_TSEND: {
+                lex_skip(par);
+				expr_concat_end(par, &ce, e, lex_line(par));
+				return;
+			}
+			default: unreachable();
 		}
-		expr_concat(par, &ce, e, line);
+		expr_concat(par, &ce, e, line2);
 	}
-
-	expr_concat_end(par, &ce, e, lex_line(par));
 }
 
 static void l_scan_fun_args(Parser* par, a_i32 ltk, a_i32 rtk) {
@@ -4026,7 +4015,7 @@ static void l_scan_atom(Parser* par, OutExpr e) {
             lex_skip(par);
 			break;
 		}
-		case TK_TSTRING: {
+		case TK_TSBEGIN: {
 			l_scan_tstring(par, e);
 			break;
 		}

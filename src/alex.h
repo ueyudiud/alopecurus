@@ -13,7 +13,6 @@ typedef a_u32 a_line;
 
 typedef struct Lexer Lexer;
 typedef struct Token Token;
-typedef struct LexScope LexScope;
 
 #define MAX_TOKEN_STR_BUF_SIZE 31
 
@@ -26,6 +25,7 @@ intern char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf);
 intern GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len);
 intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
+intern a_i32 ai_lex_peek2(Lexer* lex, a_u32 line);
 
 #define ai_lex_error(lex,fmt,args...) ai_par_error(cast(Parser*, lex), fmt, (lex)->_line, ##args)
 
@@ -47,22 +47,12 @@ enum {
 
 static_assert(cast(a_u32, TK_if) == cast(a_u32, STR_if));
 
-enum {
-    CHANNEL_NORMAL = 0x0,
-    CHANNEL_ISTR_ESCAPE = 0x2,
-    CHANNEL_ISTR_BODY = 0x3,
-    CHANNEL_MISTR_ESCAPE = 0x4,
-    CHANNEL_MISTR_BODY = 0x5
-};
-
-static_assert((CHANNEL_ISTR_BODY ^ 1) == CHANNEL_ISTR_ESCAPE);
-static_assert((CHANNEL_MISTR_BODY ^ 1) == CHANNEL_MISTR_ESCAPE);
-
 struct Token {
     a_i32 _tag;
     a_line _line;
     union {
         a_int _int;
+        a_uint _uint;
         a_float _float;
         GStr* _str;
     };
@@ -83,15 +73,6 @@ typedef struct {
 	a_x32 _hfree;
 } LexStrs;
 
-struct LexScope {
-    LexScope* _up;
-    a_u32 _last_channel;
-    a_u32 _begin_line;
-    union {
-        a_u32 _indent; /* For multiline string. */
-    };
-};
-
 struct Lexer {
 	union {
 		ZIn _in;
@@ -99,23 +80,9 @@ struct Lexer {
 	};
     ByteBuf _buf;
     a_line _line;
-    a_i32 _ch; /* Next character. */
-    a_u32 _channel;
-    Token _current;
-	Token _forward;
+    a_i16 _char; /* Next character. */
+    Token _ahead[2];
     LexStrs _strs;
-    LexScope* _scope;
-    LexScope _scope0;
 };
-
-always_inline void ai_lex_push_scope(Lexer* lex, LexScope* scope) {
-    scope->_up = lex->_scope;
-    lex->_scope = scope;
-}
-
-always_inline void ai_lex_pop_scope(Lexer* lex) {
-    lex->_scope = lex->_scope->_up;
-	lex->_channel = lex->_scope->_last_channel;
-}
 
 #endif /* alex_h_ */

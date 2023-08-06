@@ -20,15 +20,9 @@ static a_none l_foreign_error(Lexer* lex) {
 	ai_err_raise(lex->_env, ALO_EIO, v_of_int(lex->_in._err));
 }
 
-always_inline void l_switch_scope(Lexer* lex, a_u32 channel) {
-	lex->_scope->_last_channel = lex->_channel;
-	lex->_scope->_begin_line = lex->_line;
-	lex->_channel = channel;
-}
-
 always_inline a_i32 l_poll(Lexer* lex) {
-    a_i32 ch = lex->_ch;
-    lex->_ch = ai_io_igetc(&lex->_in);
+    a_i32 ch = lex->_char;
+    lex->_char = ai_io_igetc(&lex->_in);
     return ch;
 }
 
@@ -36,10 +30,10 @@ static void l_unwind(Lexer* lex, a_i32 ch) {
     assume(ch >= 0);
     lex->_in._ptr -= 1;
     lex->_in._len += 1;
-    lex->_ch = ch;
+    lex->_char = ch;
 }
 
-#define l_peek(lex) ((lex)->_ch)
+#define l_peek(lex) ((lex)->_char)
 
 static a_i32 l_poll_checked(Lexer* lex) {
 	a_i32 ch = l_poll(lex);
@@ -81,7 +75,7 @@ static a_i32 c_ddigit(a_i32 ch) {
 	}
 }
 
-static a_i32 c_hdigit(a_i32 ch) {
+static a_i32 c_xdigit(a_i32 ch) {
     switch (ch) {
         case '0' ... '9': return ch - '0';
         case 'a' ... 'f': return ch - 'a' + 10;
@@ -237,13 +231,7 @@ static GStr* l_to_str(Lexer* lex) {
 void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 	ai_io_iinit(env, fun, ctx, &lex->_in);
     lex->_line = 1;
-    lex->_current = new(Token) {};
-	lex->_channel = CHANNEL_NORMAL;
-	lex->_scope = &lex->_scope0;
-	lex->_scope0 = new(LexScope) {
-		._up = null
-	};
-
+	
 	strs_alloc_array(env, &lex->_strs, STRS_INIT_CAP);
 	lex->_strs._len = 0;
 
@@ -257,8 +245,8 @@ void ai_lex_close(Lexer* lex) {
 
 char const* ai_lex_tagname(a_i32 tag) {
 	static a_u16 const l_offs[] = {
-#define STRDEF(n) STR_POS_##n,
-#define STRDEF2(n,r) STR_POS_##n,
+#define STRDEF(n) [TK_##n] = STR_POS_##n,
+#define STRDEF2(n,r) [TK_##n] = STR_POS_##n,
 # include "asym/kw.h"
 # include "asym/op.h"
 #undef STRDEF
@@ -459,7 +447,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
             }
             case 'x': case 'X': {
 				l_skip(lex);
-                scan_digits(c_hdigit) {
+                scan_digits(c_xdigit) {
 					a_u32 t;
 					if (unlikely(checked_mul_u32(i, 16, &t))) {
 						n = cast(a_u64, i) * 16 + j;
@@ -472,7 +460,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 if (l_test_skip(lex, '.')) {
                     n = cast(a_u64, cast(a_i64, i));
                     ch = l_peek(lex);
-                    j = c_hdigit(ch);
+                    j = c_xdigit(ch);
                     if (j >= 0) goto float_hex_frag;
                     l_unwind(lex, '.');
                 }
@@ -506,7 +494,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 goto float_hex_exp;
 
             float_hex_ignore_int:
-                scan_digits(c_hdigit) {
+                scan_digits(c_xdigit) {
 					eb += 1;
 				}
 
@@ -514,12 +502,12 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 if (unlikely(!l_test_skip(lex, '.')))
                     goto error_overflow;
                 ch = l_poll(lex);
-                if (unlikely(c_hdigit(ch) < 0))
+                if (unlikely(c_xdigit(ch) < 0))
                     goto error_overflow;
             
             float_hex_ignore_frag:
 				/* Ignore digits. */
-                scan_digits(c_hdigit);
+                scan_digits(c_xdigit);
 
             float_hex_exp:
                 check_end_sep();
@@ -736,133 +724,173 @@ error_no_gap:
 #undef scan_digits
 }
 
-static a_i32 l_scan_edigit(Lexer* lex) {
-    a_i32 i = c_hdigit(l_poll_checked(lex));
+static a_i32 l_scan_xdigit(Lexer* lex) {
+    a_i32 i = c_xdigit(l_poll_checked(lex));
     if (i < 0) ai_lex_error(lex, "bad escape character.");
     return i;
 }
 
-static void l_scan_echar(Lexer* lex) {
-    a_i32 ch = l_poll_checked(lex);
-	if (ch == '\\') {
-		switch (l_poll_checked(lex)) {
-			case 'b': {
-				l_bput(lex, '\b');
-				break;
-			}
-			case 'f': {
-				l_bput(lex, '\f');
-				break;
-			}
-			case 'n' : {
-				l_bput(lex, '\n');
-				break;
-			}
-			case 'r' : {
-				l_bput(lex, '\r');
-				break;
-			}
-			case 't' : {
-				l_bput(lex, '\t');
-				break;
-			}
-			case 'v' : {
-				l_bput(lex, '\v');
-				break;
-			}
-			case '\\': {
-				l_bput(lex, '\\');
-				break;
-			}
-			case '\'': {
-				l_bput(lex, '\'');
-				break;
-			}
-			case '\"': {
-				l_bput(lex, '\"');
-				break;
-			}
-			case '`' : {
-				l_bput(lex, '`');
-				break;
-			}
-			case '$' : {
-				l_bput(lex, '$');
-				break;
-			}
-			case '0' : {
-				l_bput(lex, '\0');
-				break;
-			}
-			case 'x': {
-				a_i32 a = l_scan_edigit(lex);
-				a_i32 b = l_scan_edigit(lex);
-				l_bput(lex, a << 4 | b);
-				break;
-			}
-			case 'u': {
-				a_i32 a = l_scan_edigit(lex);
-				a_i32 b = l_scan_edigit(lex);
-				a_i32 c = l_scan_edigit(lex);
-				a_i32 d = l_scan_edigit(lex);
-				ch = a << 12 | b << 8 | c << 4 | d;
-				if (ch > 0xfff) {
-					l_bput(lex, 0xe0 | ch >> 12);
-					l_bput(lex, 0x80 | (ch >> 6 & 0x3f));
-					l_bput(lex, 0x80 | (ch & 0x3f));
-				}
-				else if (ch > 0x7f) {
-					l_bput(lex, 0xc0 | ch >> 6);
-					l_bput(lex, 0x80 | (ch & 0x3f));
-				}
-				else {
-					l_bput(lex, ch);
-				}
-				break;
-			}
-			case '\r': {
-				l_test_skip(lex, '\n');
-				fallthrough;
-			}
-			case '\n': {
-				lex->_line += 1;
-				break;
-			}
-			default: ai_lex_error(lex, "bad escape character.");
-		}
+static a_none l_error_unclosed(Lexer* lex, a_u32 line) {
+	if (lex->_line == line) {
+		ai_lex_error(lex, "unclosed string.");
 	}
 	else {
-		l_bput(lex, ch);
+		ai_lex_error(lex, "unclosed string. (from line %u)", line);
 	}
 }
 
-#ifndef ALOI_HTAB_IDENT
-# define ALOI_HTAB_IDENT 4
-#endif
-
-static a_bool l_scan_triple_quotes(Lexer* lex, a_i32 quote) {
-	if (l_test_skip(lex, quote)) {
-		if (l_test_skip(lex, quote)) {
-			if (likely(l_test_skip(lex, quote))) {
-				return true;
-			}
-			l_bput(lex, quote);
+static void l_scan_sqchr(Lexer* lex, a_u32 line) {
+	a_i32 ch = l_poll_checked(lex);
+	switch (ch) {
+		case '\r': {
+			l_test_skip(lex, '\n');
+			fallthrough;
 		}
-		l_bput(lex, quote);
+		case '\n': {
+			lex->_line += 1;
+			break;
+		}
+		case ALO_ESTMUF: {
+			l_error_unclosed(lex, line);
+			break;
+		}
+		default: {
+			l_bput(lex, ch);
+			break;
+		}
 	}
-	return false;
 }
 
-static a_none l_error_unclosed(Lexer* lex, a_u32 line) {
-	ai_lex_error(lex, "unclosed string. (from line %u)", line);
+static a_i32 l_scan_sqstr(Lexer* lex, Token* tk) {
+	a_u32 line = lex->_line;
+	while (!l_test_skip(lex, '\'')) {
+		l_scan_sqchr(lex, line);
+	}
+	tk->_str = l_to_str(lex);
+	return TK_STRING;
 }
 
-#define S_OK i32c(0)
-#define S_LINE i32c(1)
-#define S_TEXT i32c(3)
+static a_bool l_test_tesc_head(Lexer* lex) {
+	a_i32 ch = l_peek(lex);
+	switch (ch) {
+		case '(':
+		case '[':
+		case '{':
+		case 'a' ... 'z':
+		case 'A' ... 'Z':
+		case '_': 
+			return true;
+		default:
+			return false;
+	}
+}
 
-static a_i32 l_scan_multi_echar(Lexer* lex, a_i32 quote, a_u32 line) {
-	switch (l_poll(lex)) {
+static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
+    a_i32 ch = l_poll_checked(lex);
+	switch (ch) {
+		case ALO_ESTMUF: {
+			l_error_unclosed(lex, line);
+		}
+		case '\\': {
+			switch (ch = l_poll_checked(lex)) {
+				case 'b': {
+					l_bput(lex, '\b');
+					break;
+				}
+				case 'f': {
+					l_bput(lex, '\f');
+					break;
+				}
+				case 'n' : {
+					l_bput(lex, '\n');
+					break;
+				}
+				case 'r' : {
+					l_bput(lex, '\r');
+					break;
+				}
+				case 't' : {
+					l_bput(lex, '\t');
+					break;
+				}
+				case 'v' : {
+					l_bput(lex, '\v');
+					break;
+				}
+				case '$' : {
+					l_bput(lex, '$');
+					break;
+				}
+				case '\\': {
+					l_bput(lex, '\\');
+					break;
+				}
+				case '\'': {
+					l_bput(lex, '\'');
+					break;
+				}
+				case '\"': {
+					l_bput(lex, '\"');
+					break;
+				}
+				case '`' : {
+					l_bput(lex, '`');
+					break;
+				}
+				case '0' : {
+					l_bput(lex, '\0');
+					break;
+				}
+				case 'x': {
+					a_i32 a = l_scan_xdigit(lex);
+					a_i32 b = l_scan_xdigit(lex);
+					l_bput(lex, a << 4 | b);
+					break;
+				}
+				case 'u': {
+					a_i32 a = l_scan_xdigit(lex);
+					a_i32 b = l_scan_xdigit(lex);
+					a_i32 c = l_scan_xdigit(lex);
+					a_i32 d = l_scan_xdigit(lex);
+					ch = a << 12 | b << 8 | c << 4 | d;
+					if (ch > 0xfff) {
+						l_bput(lex, 0xe0 | ch >> 12);
+						l_bput(lex, 0x80 | (ch >> 6 & 0x3f));
+						l_bput(lex, 0x80 | (ch & 0x3f));
+					}
+					else if (ch > 0x7f) {
+						l_bput(lex, 0xc0 | ch >> 6);
+						l_bput(lex, 0x80 | (ch & 0x3f));
+					}
+					else {
+						l_bput(lex, ch);
+					}
+					break;
+				}
+				case '\r': {
+					l_test_skip(lex, '\n');
+					fallthrough;
+				}
+				case '\n': {
+					lex->_line += 1;
+					break;
+				}
+				default: ai_lex_error(lex, "bad escape character '\\%c'.", ch);
+			}
+			break;
+		}
+		case '$': {
+			if (l_test_tesc_head(lex)) {
+				if (lex->_buf._len == 0) {
+					return TK_TSESCAPE;
+				}
+				tk->_str = l_to_str(lex);
+				lex->_ahead[1]._tag = TK_TSESCAPE;
+				return TK_STRING;
+			}
+			l_bput(lex, '$');
+			break;
+		}
 		case '\r': {
 			l_test_skip(lex, '\n');
 			fallthrough;
@@ -870,184 +898,32 @@ static a_i32 l_scan_multi_echar(Lexer* lex, a_i32 quote, a_u32 line) {
 		case '\n': {
 			lex->_line += 1;
 			l_bput(lex, '\n');
-			return S_LINE;
+			break;
 		}
-		case ALO_ESTMUF:
-			l_error_unclosed(lex, line);
+		case '\"': {
+			if (lex->_buf._len == 0)
+				return TK_TSEND;
+
+			tk->_str = l_to_str(lex);
+			lex->_ahead[1]._tag = TK_TSEND;
+			return TK_STRING;
+		}
 		default: {
-			if (l_scan_triple_quotes(lex, quote))
-				return S_TEXT;
-			l_scan_echar(lex);
+			l_bput(lex, ch);
 			break;
 		}
 	}
-	return S_OK;
+	return TK__NONE;
 }
 
-static a_i32 l_scan_string_indent(Lexer* lex) {
-	a_i32 ident = 0;
+static a_i32 l_scan_dqstr(Lexer* lex, Token* tk, a_u32 line) {
 	loop {
-		switch (l_peek_checked(lex)) {
-			case ' ': {
-				ident += 1;
-				break;
-			}
-			case '\t': {
-				ident += ALOI_HTAB_IDENT;
-				break;
-			}
-			default: {
-				return ident;
-			}
-		}
+		try(l_scan_dqchr(lex, tk, line));
 	}
 }
 
-static a_bool l_skip_string_indent(Lexer* lex, a_u32 indent, a_i32 quote) {
-	loop {
-		switch (l_poll(lex)) {
-			case ' ': {
-				indent -= 1;
-				if (indent == 0) return false;
-				break;
-			}
-			case '\t': {
-				if (checked_sub_u32(indent, ALOI_HTAB_IDENT, &indent)) {
-					if (unlikely(indent != 0))
-						goto error_bad_indent;
-					return false;
-				}
-				break;
-			}
-			case '\r': {
-				l_test_skip(lex, '\n');
-				fallthrough;
-			}
-			case '\n': {
-				lex->_line += 1;
-				l_bput(lex, '\n');
-				return false;
-			}
-			default: {
-				if (l_test_skip(lex, quote) && l_test_skip(lex, quote) && l_test_skip(lex, quote))
-					return true;
-				goto error_bad_indent;
-			}
-		}
-	}
-
-error_bad_indent:
-	ai_lex_error(lex, "bad indentation for multi-line string.");
-}
-
-static a_i32 l_scan_single_quoted_string(Lexer* lex, Token* tk) {
-	a_u32 line = lex->_line;
-	if (l_test_skip(lex, '\'')) {
-		if (l_test_skip(lex, '\'')) {
-			/* Multiline string. */
-			if (l_test_skip(lex, '\n')) {
-				a_i32 indent = l_scan_string_indent(lex);
-				try(indent);
-				while (!l_skip_string_indent(lex, indent, '\'')) {
-					a_i32 msg;
-					while (!((msg = l_scan_multi_echar(lex, '\'', line)) & S_LINE));
-					if (msg & S_TEXT) break;
-				}
-			}
-			else {
-				while (!(l_scan_multi_echar(lex, '\'', line) & S_TEXT));
-			}
-			tk->_str = l_to_str(lex);
-		}
-		else {
-			tk->_str = env_int_str(lex->_env, STR_EMPTY);
-		}
-	}
-	else {
-		while (!l_test_skip(lex, '\'')) {
-			switch (l_peek_checked(lex)) {
-				case ALO_ESTMUF:
-				case '\r':
-				case '\n':
-					ai_lex_error(lex, "unclosed string.");
-				default: {
-					l_scan_echar(lex);
-					break;
-				}
-			}
-		}
-		tk->_str = l_to_str(lex);
-	}
-	return TK_STRING;
-}
-
-static a_i32 l_scan_interpolated_string_escape(Lexer* lex, Token* tk);
-
-static a_i32 l_scan_interpolated_string_body(Lexer* lex, Token* tk) {
-	while (!l_test_skip(lex, '\"')) {
-		switch (l_peek_checked(lex)) {
-			case ALO_ESTMUF:
-			case '\r':
-			case '\n':
-				ai_lex_error(lex, "unclosed string.");
-			case '$': {
-				tk->_str = l_to_str(lex);
-				lex->_channel = CHANNEL_ISTR_ESCAPE;
-				l_skip(lex);
-				return TK_TSTRING;
-			}
-			default: {
-				l_scan_echar(lex);
-				break;
-			}
-		}
-	}
-	tk->_str = l_to_str(lex);
-	lex->_channel = CHANNEL_NORMAL;
-	return TK_STRING;
-}
-
-static a_i32 l_scan_multiline_interpolated_string_body(Lexer* lex, Token* tk) {
-	/* Multiline string. */
-	a_u32 indent = lex->_scope->_indent;
-	if (indent > 0) {
-		while (!l_skip_string_indent(lex, indent, '\"')) {
-			a_i32 msg;
-			while (!((msg = l_scan_multi_echar(lex, '\"', lex->_scope->_begin_line)) & S_LINE));
-			if (msg & S_TEXT) break;
-		}
-	}
-	else {
-		while (!(l_scan_multi_echar(lex, '\"', lex->_scope->_begin_line) & S_TEXT));
-	}
-	tk->_str = l_to_str(lex);
-	lex->_channel = CHANNEL_NORMAL;
-	return TK_STRING;
-}
-
-static a_i32 l_scan_double_quoted_string(Lexer* lex, Token* tk) {
-	if (l_test_skip(lex, '\"')) {
-		if (l_test_skip(lex, '\"')) {
-			l_switch_scope(lex, CHANNEL_MISTR_BODY);
-			if (l_test_skip(lex, '\n')) {
-				a_i32 n = l_scan_string_indent(lex);
-				try(n);
-				lex->_scope->_indent = n;
-			}
-			return l_scan_multiline_interpolated_string_body(lex, tk);
-		}
-		else {
-			tk->_str = env_int_str(lex->_env, STR_EMPTY);
-			return TK_STRING;
-		}
-	}
-	else {
-		l_switch_scope(lex, CHANNEL_ISTR_BODY);
-		return l_scan_interpolated_string_body(lex, tk);
-	}
-}
-
-static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
+static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
+	tk->_line = lex->_line;
     loop {
         a_i32 ch;
         switch (ch = l_poll_checked(lex)) {
@@ -1214,10 +1090,10 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
                 return l_scan_number(lex, tk, 0, ch);
             }
             case '\'': {
-                return l_scan_single_quoted_string(lex, tk);
+                return l_scan_sqstr(lex, tk);
             }
 			case '\"': {
-				return l_scan_double_quoted_string(lex, tk);
+				return TK_TSBEGIN;
 			}
             default: {
 				ai_lex_error(lex, "invalid character, got '%c'", ch);
@@ -1226,72 +1102,46 @@ static a_i32 l_scan_normal(Lexer* lex, Token* tk) {
     }
 }
 
-static a_i32 l_scan_interpolated_string_escape(Lexer* lex, Token* tk) {
-	a_i32 ch = l_poll_checked(lex);
-	a_u32 channel = lex->_channel ^ 0x1; /* Load body channel. */
-	switch (ch) {
-		case '{': {
-			lex->_channel = channel;
-			l_switch_scope(lex, CHANNEL_NORMAL);
-			return TK_LBR;
-		}
-		case 'a' ... 'z':
-		case 'A' ... 'Z':
-		case '_': {
-			l_bput(lex, ch);
-			a_i32 t = l_scan_ident(lex, tk);
-			lex->_channel = channel;
-			return t;
-		}
-		case ALO_ESTMUF:
-			return TK_EOF;
-		default:
-			ai_lex_error(lex, "bad escape string character.");
-	}
-}
-
 static void l_scan(Lexer* lex, Token* tk) {
 	tk->_line = lex->_line; /* Initialize line number. */
-	if (likely(lex->_channel == CHANNEL_NORMAL)) { /* Fast path of scanner. */
-		tk->_tag = l_scan_normal(lex, tk);
-	}
-	else {
-		switch (lex->_channel) { /* Slow path of scanner. */
-			case CHANNEL_ISTR_ESCAPE:
-			case CHANNEL_MISTR_ESCAPE: {
-				tk->_tag = l_scan_interpolated_string_escape(lex, tk);
-				break;
-			}
-			case CHANNEL_ISTR_BODY: {
-				tk->_tag = l_scan_interpolated_string_body(lex, tk);
-				break;
-			}
-			case CHANNEL_MISTR_BODY: {
-				tk->_tag = l_scan_multiline_interpolated_string_body(lex, tk);
-				break;
-			}
-			default: unreachable();
-		}
-	}
+	tk->_tag = l_scan_plain(lex, tk);
+}
+
+static void l_scan2(Lexer* lex, Token* tk, a_u32 line) {
+	tk->_line = lex->_line;
+	tk->_tag = l_scan_dqstr(lex, tk, line);
 }
 
 a_i32 ai_lex_forward(Lexer* lex) {
-	assume(lex->_current._tag != TK__NONE, "cannot call forward() before poll current token.");
-	if (lex->_forward._tag == TK__NONE) {
-		l_scan(lex, &lex->_forward);
+	assume(lex->_ahead[0]._tag != TK__NONE, "cannot call forward() before poll current token.");
+	if (lex->_ahead[1]._tag == TK__NONE) {
+		l_scan_plain(lex, &lex->_ahead[1]);
 	}
-	return lex->_forward._tag;
+	return lex->_ahead[1]._tag;
 }
 
 a_i32 ai_lex_peek(Lexer* lex) {
-    if (lex->_current._tag == TK__NONE) {
-		if (lex->_forward._tag != TK__NONE) {
-			lex->_current = lex->_forward;
-			lex->_forward._tag = TK__NONE;
+    if (lex->_ahead[0]._tag == TK__NONE) {
+		if (lex->_ahead[1]._tag != TK__NONE) {
+			lex->_ahead[0] = lex->_ahead[1];
+			lex->_ahead[1]._tag = TK__NONE;
 		}
 		else {
-			l_scan(lex, &lex->_current);
+			l_scan(lex, &lex->_ahead[0]);
 		}
     }
-    return lex->_current._tag;
+    return lex->_ahead[0]._tag;
+}
+
+a_i32 ai_lex_peek2(Lexer* lex, a_u32 line) {
+    if (lex->_ahead[0]._tag == TK__NONE) {
+		if (lex->_ahead[1]._tag != TK__NONE) {
+			lex->_ahead[0] = lex->_ahead[1];
+			lex->_ahead[1]._tag = TK__NONE;
+		}
+		else {
+			l_scan2(lex, &lex->_ahead[0], line);
+		}
+    }
+    return lex->_ahead[0]._tag;
 }

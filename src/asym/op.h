@@ -57,7 +57,10 @@ STRDEF2(IDENT    , "<ident>"      )
 STRDEF2(INTEGER  , "<integer>"    )
 STRDEF2(FLOAT    , "<float>"      )
 STRDEF2(STRING   , "<string>"     )
-STRDEF2(TSTRING  , "<tstring>"    )
+/* For template string. */
+STRDEF2(TSBEGIN  , "<string>"     )
+STRDEF2(TSESCAPE , "'$'"          )
+STRDEF2(TSEND    , "<string>"     )
 STRDEF2(EOF      , "<eof>"        )
 
 #ifdef EPILOGUE
