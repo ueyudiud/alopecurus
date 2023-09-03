@@ -209,7 +209,7 @@ again:
 		ALO_STACK_INDEX_GLOBAL,
 		0,
 		1,
-		ALO_COMP_OPT_ALOC1 | (*peval ? ALO_COMP_OPT_EVAL : 0));
+		ALO_COMP_OPT_LOSSEN | (*peval ? ALO_COMP_OPT_EVAL : 0));
 
 	switch (msg) {
 		case ALO_SOK: {

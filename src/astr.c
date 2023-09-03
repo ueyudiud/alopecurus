@@ -302,7 +302,7 @@ static VImpl const hstr_vtable = {
 	}
 };
 
-char const ai_str_interns[] =
+char const ai_str_interns[] = {
 #define STRDEF(n) "\0"#n
 #define STRDEF2(n,r) "\0"r
 # include "asym/kw.h"
@@ -311,6 +311,6 @@ char const ai_str_interns[] =
 # include "asym/op.h"
 #undef STRDEF
 #undef STRDEF2
-;
+};
 
 static_assert(sizeof(ai_str_interns) == STR__TOTAL_LEN);

@@ -987,13 +987,13 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
                 return TK_DOT;
             }
             case ':': {
-                if (l_test_skip(lex, ':')) {
-                    return TK_BCOLON;
-                }
                 return TK_COLON;
             }
             case '+': {
-                if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
+                if (l_test_skip(lex, '+')) {
+					return TK_BPLUS;
+				}
+				else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
                     return l_scan_number(lex, tk, 1, l_poll(lex));
                 }
                 return TK_PLUS;

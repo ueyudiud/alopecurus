@@ -20,7 +20,7 @@
 #define M_str0(a) #a
 #define M_str(a) M_str0(a)
 
-#define ALO_COMP_OPT_ALOC1 0x1000000
+#define ALO_COMP_OPT_LOSSEN 0x1000000
 #define ALO_COMP_OPT_EVAL 0x2000000
 
 /**

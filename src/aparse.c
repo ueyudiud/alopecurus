@@ -76,7 +76,7 @@ a_none ai_par_report(Parser* par, char const* fmt, ...) {
 
 typedef struct ExprDesc ExprDesc;
 typedef struct ConExpr ConExpr;
-typedef struct LetStat LetStat;
+typedef struct PatInfo PatInfo;
 
 typedef ExprDesc* restrict InExpr;
 typedef ExprDesc* restrict OutExpr;
@@ -262,12 +262,30 @@ enum ExprTag {
 };
 
 enum PatKind {
-    PAT_DROP,
-    PAT_BIND,
-    PAT_ROOT,
-    PAT_TUPLE,
-    PAT_LIST,
-    PAT_TABLE
+	/**
+	 ** Discard pattern:
+	 ** The accepted value will be discarded.
+	 */
+	PAT_DROP,
+	/**
+	 ** Variable pattern:
+	 ** The accepted value will be bind to a new variable.
+	 */
+	PAT_VAR,
+	/**
+	 ** Pin pattern:
+	 ** The accepted value will be pin at a allocated register.
+	 */
+	PAT_PIN,
+	/**
+	 ** The variable length pattern:
+	 ** Will accept multiple values. Those values will bind to child patterns.
+	 ** This pattern cannot be a non-root pattern.
+	 */
+	PAT_VARG,
+	PAT_TUPLE,
+	PAT_LIST,
+	PAT_TABLE,
 };
 
 static_assert(EXPR_DYN + 1 == EXPR_VDYN);
@@ -370,8 +388,10 @@ struct Pat {
 	a_u8 _index; /* Index in enclosed pattern. */
 };
 
-struct LetStat {
+struct PatInfo {
 	Pat _root;
+	void (*_con)(Parser*, Pat*, a_usize);
+	a_usize _ctx;
 };
 
 enum SymKind {
@@ -402,21 +422,24 @@ typedef union {
     };
 } SymMods;
 
+/**
+ ** Storage compile-time metadata of named symbol in chunk.
+ */
 struct Sym {
-	a_u8 _tag;
-	a_u8 _scope;
-    SymMods _mods;
-	a_u32 _index;
-	GStr* _name;
+	a_u8 _tag; /* The tag of symbol kind. */
+	a_u8 _scope; /* The scope of symbol belongs to. */
+    SymMods _mods; /* The modifiers of symbol. */
+	a_u32 _index; /* Variant uses for different symbol tag. */
+	GStr* _name; /* The symbol name. */
 };
 
 #define SCOPE_STRUCT_HEAD \
     Scope* _up;              \
-	a_u8 _bot_reg;           \
+	a_u8 _bot_reg; /* The bottom of scope. */ \
 	a_u8 _top_ntr; /* Top of non-temporary section. */ \
 	a_u8 _bot_fur; /* Bottom of fragmented section. */ \
 	a_u8 _num_fur; /* Number of temporary register in fragmented section. */ \
-	a_u8 _top_reg;           \
+	a_u8 _top_reg; /* The top of scope. */  \
 	a_line _begin_line;      \
 	a_u32 _begin_label;      \
 	a_u32 _end_label;        \
@@ -1336,6 +1359,23 @@ static void expr_len(Parser* par, InoutExpr e, a_line line) {
     expr_drop(par, e);
 
     l_emit_idb(par, BC_LEN, e, e->_d1, line);
+}
+
+static void expr_iter(Parser* par, InoutExpr e, a_line line) {
+	Scope* scope = par->_scope;
+
+	expr_to_reg(par, e);
+	expr_drop(par, e);
+
+	a_u32 reg1 = e->_d1;
+
+	assume(scope->_top_ntr == scope->_top_reg);
+
+	a_u32 reg2 = stack_alloc_succ(par, 3, line);
+	expr_init(e, EXPR_NTMP, ._d1 = reg2, ._fval = true);
+	l_emit_iab(par, BC_ITER, reg2, reg1, line);
+
+	scope->_top_ntr = scope->_top_reg;
 }
 
 static void expr_binary_left(Parser* par, InoutExpr e, a_enum op, a_line line) {
@@ -2398,7 +2438,7 @@ assign:
 			if (e1->_fsym) {
 				sym_check_writable(par, e1, line);
 			}
-			else {
+			else if (!(par->_options & ALO_COMP_OPT_LOSSEN)) {
 				GStr* name = v_as_str(const_at(par, e1->_d2));
 				ai_par_error(par, "cannot assign to anonymous variable '%s'", e1->_line, str2ntstr(name));
 			}
@@ -2592,19 +2632,17 @@ static void l_emit_section(Parser* par, InoutExpr e, SecHead const* restrict sec
     }
 }
 
-static a_u32 locals_push(Parser* par, LocalInfo info) {
-	return at_buf_put(par->_env, par->_locals, info, "local variable");
-}
-
 static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, SymMods mods) {
-	stack_store(par, reg);
-
-	a_u32 index = locals_push(par, new(LocalInfo) {
+	LocalInfo info = {
 		._begin_label = begin_label - par->_fnscope->_begin_label,
-		._end_label = NO_LABEL,
+		._end_label = NO_LABEL, /* Not determinted yet. */
 		._name = name,
-		._reg = reg,
-	});
+		._reg = reg
+	};
+
+	a_u32 index = at_buf_put(par->_env, par->_locals, info, "local variable");
+
+	stack_store(par, reg);
 
 	return syms_push(par, new(Sym) {
 		._tag = SYM_LOCAL,
@@ -2615,31 +2653,35 @@ static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, Sy
 	});
 }
 
-static void let_load_nils(Parser* par, LetStat* s, a_line line) {
+static void let_bind_nils(Parser* par, Pat* p, a_line line) {
 	Scope* scope = par->_scope;
 
+	assume(p->_kind == PAT_VARG);
+
 	/* If all node is bind. */
-	if (s->_root._child == null)
+	if (p->_child == null)
 		return;
 
-	if (s->_root._fcpx) {
+	if (p->_fcpx) {
 		ai_par_error(par, "nil binding is only available for plain pattern.", line);
 	}
 
 	assume(scope->_top_ntr == scope->_top_reg);
-	a_u32 num = s->_root._nchild - s->_root._child->_index;
+	a_u32 num = p->_nchild - p->_child->_index;
 	a_u32 reg = stack_alloc_succ(par, num, line);
 	a_u32 label = l_emit_kn(par, reg, num, line);
-	for (Pat* pat = s->_root._child; pat != null; pat = pat->_sibling) {
+	for (Pat* pat = p->_child; pat != null; pat = pat->_sibling) {
         local_new(par, pat->_name, reg++, label, new(SymMods) {});
 	}
 
 	scope->_top_ntr = scope->_top_reg;
 }
 
-static void let_real_bind(Parser* par, LetStat* s, Pat* pat, InExpr e, a_u32 base) {
+static void let_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
     a_u32 reg = base + pat->_abs_bot + pat->_tmp_pos;
     if (pat->_expr->_tag != EXPR_UNIT && pat->_expr->_tag != EXPR_NIL) {
+		assume(pat->_kind != PAT_VARG);
+
 		a_u32 label = NO_LABEL;
         expr_test_nil(par, e, &label, pat->_line);
 
@@ -2652,10 +2694,25 @@ static void let_real_bind(Parser* par, LetStat* s, Pat* pat, InExpr e, a_u32 bas
         l_mark_label(par, label, pat->_line);
     }
 	switch (pat->_kind) {
+		case PAT_VARG: {
+			a_u32 line = pat->_expr->_line;
+			a_u32 num = pat->_nchild;
+			exprs_take(par, e, num /* TODO: variable length arguments? */, pat->_line);
+			for (Pat* child = pat->_child; child != null; child = child->_sibling) {
+				Expr e2;
+				expr_val(e2, reg++, line);
+                let_bind_with(par, child, e2, base);
+			}
+			break;
+		}
 		case PAT_DROP: {
 			break;
 		}
-		case PAT_BIND: {
+		case PAT_PIN: {
+			expr_pin_reg(par, e, pat->_tmp_pos);
+			break;
+		}
+		case PAT_VAR: {
             expr_pin_reg(par, e, reg);
             local_new(par, pat->_name, reg, par->_head_label, new(SymMods) {});
 			break;
@@ -2663,36 +2720,43 @@ static void let_real_bind(Parser* par, LetStat* s, Pat* pat, InExpr e, a_u32 bas
 		case PAT_TUPLE: {
 			a_u32 line = pat->_expr->_line;
 			a_u32 num = pat->_nchild;
-			l_emit_iabc(par, BC_UNBOX, reg, e->_d1, num, line);
+			l_emit_iabc(par, BC_UNBOX, reg, e->_d1, num /* TODO: variable length arguments? */, line);
 			for (Pat* child = pat->_child; child != null; child = child->_sibling) {
 				Expr e2;
 				expr_val(e2, reg++, line);
-                let_real_bind(par, s, child, e2, base);
+                let_bind_with(par, child, e2, base);
 			}
 			break;
 		}
-		default: {
-			unreachable();
-		}
+		default: unreachable();
 	}
 }
 
-static void let_compute(unused Parser* par, Pat* const pat_root) {
+/**
+ ** Compute relative slot indices of deconstructed values to be placed.
+ *@param pat_root the deconstruction pattern.
+ */
+static void let_compute(Pat* const pat_root) {
 	Pat* pat = pat_root;
 	a_u32 abs_top = 0;
 	loop {
         pat->_abs_bot = abs_top;
         pat->_tmp_pos = 0;
 		switch (pat->_kind) {
-			case PAT_BIND: {
+			case PAT_VAR: {
                 pat->_tmp_top = 1;
 				abs_top += 1;
+				break;
+			}
+			case PAT_PIN: {
+				pat->_tmp_top = 1;
 				break;
 			}
 			case PAT_DROP: {
                 pat->_tmp_top = 1;
 				break;
 			}
+			case PAT_VARG:
 			case PAT_TUPLE: {
                 pat->_tmp_top = 0;
 				if (pat->_child != null) {
@@ -2729,22 +2793,42 @@ static void let_compute(unused Parser* par, Pat* const pat_root) {
 	}
 }
 
-static a_bool let_bind(Parser* par, LetStat* s, InExpr e) {
-	Pat* pat = s->_root._child;
-
+static void let_bind(Parser* par, Pat* pat, InExpr e) {
 	assume(pat != null, "bind to nothing.");
 
-    let_compute(par, pat);
+    let_compute(pat);
 
     expr_to_reg(par, e);
     expr_drop(par, e);
 
     a_u32 reg = stack_alloc_succ(par, pat->_tmp_top, e->_line);
-    let_real_bind(par, s, pat, e, reg);
+    let_bind_with(par, pat, e, reg);
+}
 
-    pat = pat->_sibling;
-	s->_root._child = pat;
-	return pat != null;
+typedef struct {
+	a_u32 _label;
+	a_line _line;
+} ForStat;
+
+static void for_bind(Parser* par, Pat* pat, a_usize ctx) {
+	ForStat* restrict stat = ptr_of(ForStat, ctx);
+
+	assume(pat != null, "bind to nothing.");
+
+	a_u32 reg_itr = par->_scope->_top_reg - 3; /* The index of iterator register. */
+
+	/* Insert iterator key into pattern. */
+	Pat pat_key = { ._parent = pat, ._sibling = pat->_child, ._kind = PAT_DROP, ._tmp_pos = reg_itr + 2, ._line = stat->_line };
+	pat->_child = &pat_key;
+
+	let_compute(pat);
+
+	a_u32 label = l_emit_branch(par, bc_make_iabc(BC_FORG, R_DYN, reg_itr, N_DYN), NO_LABEL, stat->_line);
+	stat->_label = label;
+
+	Expr e;
+	expr_init(e, EXPR_VDYN, ._d1 = label - 1, ._fupk = true);
+	let_bind_with(par, pat, e, reg_itr + 3);
 }
 
 static void local_bind(Parser* par, OutExpr e, GStr* name, a_line line) {
@@ -2860,7 +2944,7 @@ static void scope_leave_with(Parser* par, a_line line, InoutExpr e) {
 
 		a_u32 reg = stack_alloc(par, line);
 		assume(reg == e->_d1);
-		e->_fval = true;
+		e->_fval = true; /* Recover drop marker. */
 	}
 	else {
         expr_to_dyn(par, e);
@@ -4397,7 +4481,7 @@ static void l_scan_concatenate_expr(Parser* par, InoutExpr e);
 
 static void l_scan_concatenate_tail(Parser* par, InoutExpr e) {
 	a_line line1 = lex_line(par);
-	if (lex_test_skip(par, TK_TILDE)) {
+	if (lex_test_skip(par, TK_BDOT)) {
 		ConExpr ce = { };
 		expr_concat(par, &ce, e, line1);
 		do {
@@ -4405,7 +4489,7 @@ static void l_scan_concatenate_tail(Parser* par, InoutExpr e) {
 			l_scan_relation_expr(par, e);
 			expr_concat(par, &ce, e, line2);
 		}
-		while (lex_test_skip(par, TK_TILDE));
+		while (lex_test_skip(par, TK_BDOT));
 		expr_concat_end(par, &ce, e, line1);
 	}
 }
@@ -4715,51 +4799,8 @@ static void l_scan_return_stat(Parser* par) {
 	expr_return(par, e, line);
 }
 
-static void l_scan_let_rhs(Parser* par, LetStat* stat, a_u32 line) {
-	do {
-		Expr e;
-
-		l_scan_expr(par, e);
-        let_bind(par, stat, e);
-	}
-	while (lex_test_skip(par, TK_COMMA));
-
-    let_load_nils(par, stat, line);
-    stack_compact(par);
-}
-
-static a_none l_unmatched_pattern(Parser* par, Pat* node) {
-	switch (node->_kind) {
-		case PAT_ROOT:
-			lex_error_got(par, "malformed pattern");
-		case PAT_TUPLE:
-            lex_error_bracket(par, '(', ')', node->_expr->_line);
-		case PAT_LIST:
-            lex_error_bracket(par, '[', ']', node->_expr->_line);
-		case PAT_TABLE:
-            lex_error_bracket(par, '{', '}', node->_expr->_line);
-		default:
-			unreachable();
-	}
-}
-
-static void l_scan_pattern(Parser* par, LetStat* stat, Pat* parent, Pat** slot, a_u32 tag) {
-	enum {
-		GOTO_ROOT,
-		GOTO_TUPLE,
-		GOTO_LIST,
-		GOTO_TABLE
-	};
-
-	static_assert(GOTO_ROOT == 0);
-
-	static_assert(GOTO_TUPLE - GOTO_ROOT + PAT_ROOT == PAT_TUPLE);
-	static_assert(GOTO_LIST - GOTO_ROOT + PAT_ROOT == PAT_LIST);
-	static_assert(GOTO_TABLE - GOTO_ROOT + PAT_ROOT == PAT_TABLE);
-
-    Pat pat_desc = {
-		._sec_ref = NIL_SEC_REF
-	};
+static void l_scan_pattern_recursive(Parser* par, PatInfo* info, Pat* parent, Pat** slot, a_u32 tag) {
+    Pat pat_desc = { ._sec_ref = NIL_SEC_REF };
 
     Pat* pat = &pat_desc;
 
@@ -4769,17 +4810,16 @@ static void l_scan_pattern(Parser* par, LetStat* stat, Pat* parent, Pat** slot, 
 	*slot = pat;
 
 	switch (tag) {
-		case GOTO_ROOT:
-		case GOTO_TUPLE:
+		case PAT_VARG:
+		case PAT_TUPLE:
 			goto branch_standard;
-		default:
-			unreachable();
+		default: unreachable();
 	}
 
 branch_standard:
 	switch (lex_peek(par)) {
 		case TK_IDENT: {
-            pat->_kind = PAT_BIND;
+            pat->_kind = PAT_VAR;
             pat->_name = lex_ident(par);
             pat->_line = lex_line(par);
 			lex_skip(par);
@@ -4799,7 +4839,7 @@ branch_standard:
             pat->_line = lex_line(par);
             pat->_nchild = 0;
 			if (!lex_test_skip(par, TK_RBK)) {
-				return l_scan_pattern(par, stat, pat, &pat->_child, GOTO_TUPLE);
+				return l_scan_pattern_recursive(par, info, pat, &pat->_child, PAT_TUPLE);
 			}
 			break;
 		}
@@ -4810,7 +4850,7 @@ branch_standard:
             pat->_line = lex_line(par);
             pat->_nchild = 0;
 			if (!lex_test_skip(par, TK_RSQ)) {
-				return l_scan_pattern(par, stat, pat, &pat->_child, GOTO_LIST);
+				return l_scan_pattern_recursive(par, info, pat, &pat->_child, PAT_LIST);
 			}
 			break;
 		}
@@ -4821,12 +4861,11 @@ branch_standard:
             pat->_line = lex_line(par);
             pat->_nchild = 0;
 			if (!lex_test_skip(par, TK_RBR)) {
-				return l_scan_pattern(par, stat, pat, &pat->_child, GOTO_TABLE);
+				return l_scan_pattern_recursive(par, info, pat, &pat->_child, PAT_TABLE);
 			}
 			break;
 		}
-		default:
-			goto error;
+		default: goto error;
 	}
 
 	slot = &pat->_sibling;
@@ -4834,47 +4873,46 @@ branch_standard:
 		switch (lex_peek(par)) {
 			case TK_COMMA: {
                 lex_skip(par);
-				tag = parent->_kind - PAT_ROOT + GOTO_ROOT; /* Recover goto label. */
-				return l_scan_pattern(par, stat, parent, slot, tag);
+				tag = parent->_kind; /* Recover goto label. */
+				return l_scan_pattern_recursive(par, info, parent, slot, tag);
 			}
 			case TK_RBK: {
 				if (parent->_kind != PAT_TUPLE) {
-					if (parent->_kind == PAT_ROOT)
+					if (parent->_kind == PAT_VARG)
 						goto load_nils;
-					l_unmatched_pattern(par, parent);
+					goto error_unexpected;
 				}
                 lex_skip(par);
 				break;
 			}
 			case TK_RSQ: {
 				if (parent->_kind != PAT_LIST) {
-					if (parent->_kind == PAT_ROOT)
+					if (parent->_kind == PAT_VARG)
 						goto load_nils;
-					l_unmatched_pattern(par, parent);
+					goto error_unexpected;
 				}
                 lex_skip(par);
 				break;
 			}
 			case TK_RBR: {
 				if (parent->_kind != PAT_TABLE) {
-					if (parent->_kind == PAT_ROOT)
+					if (parent->_kind == PAT_VARG)
 						goto load_nils;
-					l_unmatched_pattern(par, parent);
+					goto error_unexpected;
 				}
                 lex_skip(par);
 				break;
 			}
 			case TK_ASSIGN: {
                 lex_skip(par);
-				if (parent->_kind == PAT_ROOT) {
-					return l_scan_let_rhs(par, stat, lex_line(par));
+				if (parent->_kind == PAT_VARG) {
+					return (*info->_con)(par, &info->_root, info->_ctx);
 				}
 				else if (pat->_fdfl) {
 					goto error;
 				}
 				else {
 					SecRec rec;
-
 					sec_start(par, rec);
 					l_scan_expr(par, pat->_expr);
 					pat->_sec_ref = sec_record(par, rec);
@@ -4884,7 +4922,7 @@ branch_standard:
 			}
 			default:
 			load_nils: {
-				return let_load_nils(par, stat, lex_line(par));
+				return (*info->_con)(par, &info->_root, info->_ctx);
 			}
 		}
 
@@ -4896,6 +4934,92 @@ branch_standard:
 
 error:
 	lex_error_got(par, "malformed pattern");
+
+error_unexpected:
+	switch (parent->_kind) {
+		case PAT_VARG:
+			lex_error_got(par, "malformed pattern");
+		case PAT_TUPLE:
+            lex_error_bracket(par, '(', ')', parent->_expr->_line);
+		case PAT_LIST:
+            lex_error_bracket(par, '[', ']', parent->_expr->_line);
+		case PAT_TABLE:
+            lex_error_bracket(par, '{', '}', parent->_expr->_line);
+		default:
+			unreachable();
+	}
+}
+
+static void l_scan_pattern(Parser* par, void (*con)(Parser*, Pat*, a_usize), a_usize ctx) {
+	PatInfo info = {
+		._root = { ._kind = PAT_VARG, ._sec_ref = NIL_SEC_REF },
+		._con = con,
+		._ctx = ctx
+	};
+	l_scan_pattern_recursive(par, &info, &info._root, &info._root._child, PAT_VARG);
+}
+
+static void l_scan_for_stat(Parser* par) {
+	Scope scope = {};
+	ForStat stat;
+
+	Expr e;
+	lex_skip(par);
+
+	a_u32 line = lex_line(par);
+	scope_enter(par, &scope, line);
+	stat._line = line;
+	
+	lex_check_skip(par, TK_LBK);
+	l_scan_expr(par, e);
+	lex_check_pair_right(par, TK_LBK, TK_RBK, line);
+	expr_iter(par, e, line);
+
+	a_u32 label = l_mark_label(par, NO_LABEL, line);
+
+	a_u32 line2 = lex_line(par);
+	lex_check_skip(par, TK_BAR);
+	l_scan_pattern(par, for_bind, addr_of(&stat));
+	lex_check_pair_right(par, TK_BAR, TK_BAR, line2);
+
+	l_scan_stat(par);
+	l_direct_jump(par, label, line);
+
+	l_mark_label(par, stat._label, line); /* TODO: use scoped label management. */
+	scope_pop(par, line);
+	
+	expr_drop(par, e);
+}
+
+static void l_scan_let_stat2(Parser* par, Pat* p, a_usize c) {
+	a_line line = cast(a_line, c);
+
+	if (lex_test_skip(par, '=')) {
+		Expr e;
+		Pat* pat = p->_child;
+
+		do {
+			l_scan_expr(par, e);
+    	    let_bind(par, pat, e);
+			
+			pat = pat->_sibling;
+		}
+		while (lex_test_skip(par, TK_COMMA) && pat != null);
+
+		if (pat == null) {
+			/* If no pattern remains, discard remainding expressions */
+			expr_discard(par, e);
+			
+			do {
+				l_scan_expr(par, e);
+				expr_discard(par, e);
+			}
+			while (lex_test_skip(par, TK_COMMA));
+		}
+	}
+
+    let_bind_nils(par, p, line);
+    stack_compact(par);
 }
 
 static void l_scan_let_stat(Parser* par) {
@@ -4928,13 +5052,7 @@ static void l_scan_let_stat(Parser* par) {
             break;
         }
 		default: {
-			LetStat stat = {
-				._root = {
-					._kind = PAT_ROOT,
-					._sec_ref = NIL_SEC_REF
-				}
-			};
-			l_scan_pattern(par, &stat, &stat._root, &stat._root._child, 0);
+			l_scan_pattern(par, l_scan_let_stat2, line);
 			break;
 		}
 	}
@@ -5016,6 +5134,10 @@ static void l_scan_stat(Parser* par) {
 			l_scan_while_stat(par);
 			break;
 		}
+		case TK_for: {
+			l_scan_for_stat(par);
+			break;
+		}
 		case TK_loop: {
 			l_scan_loop_stat(par);
 			break;
@@ -5063,6 +5185,10 @@ static void l_scan_stats(Parser* par) {
 			}
 			case TK_while: {
 				l_scan_while_stat(par);
+				break;
+			}
+			case TK_for: {
+				l_scan_for_stat(par);
 				break;
 			}
 			case TK_loop: {

@@ -214,6 +214,73 @@ static Value vm_len(a_henv env, Value v) {
 	}
 }
 
+static void vm_iter(a_henv env, Value* vs, Value v) {
+    switch (v_get_tag(v)) {
+        case T_TUPLE: {
+            v_set(env, &vs[0], v);
+            v_set_int(&vs[1], 0);
+            break;
+        }
+        case T_LIST: {
+            v_set(env, &vs[0], v);
+            v_set_int(&vs[1], 0);
+            break;
+        }
+        case T_TABLE: {
+            v_set(env, &vs[0], v);
+            v_set_int(&vs[1], 0);
+            break;
+        }
+        default: {
+            //TODO
+            panic("not implemented.");
+        }
+    }
+}
+
+static a_bool vm_next(a_henv env, Value* restrict vs) {
+    Value vc = vs[0];
+    Value vi = vs[1];
+    switch (v_get_tag(vc)) {
+        case T_TUPLE: {
+            GTuple* p = v_as_tuple(vc);
+            a_i32 i = v_as_int(vi);
+            if (i >= p->_len)
+                return false;
+            v_set_int(&vs[1], i + 1);
+            v_set_int(&vs[2], i);
+            v_set(env, &vs[3], p->_body[i]);
+            return true;
+        }
+        case T_LIST: {
+            GList* p = v_as_list(vc);
+            a_i32 i = v_as_int(vi);
+            if (i >= p->_len)
+                return false;
+            v_set_int(&vs[1], i + 1);
+            v_set_int(&vs[2], i);
+            v_set(env, &vs[3], p->_ptr[i]);
+            break;
+        }
+        case T_TABLE: {
+            GTable* p = v_as_table(vc);
+            a_i32 i = v_as_int(vi);
+            if (p->_len == 0 || unwrap_unsafe(p->_ptr->_link._prev) == i)
+                return false;
+            i = unwrap(p->_ptr[i]._link._next);
+            HNode* n = &p->_ptr[i];
+            v_set_int(&vs[1], i);
+            v_set(env, &vs[2], n->_key);
+            v_set(env, &vs[3], n->_value);
+            break;
+        }
+        default: {
+            //TODO
+            panic("not implemented.");
+        }
+    }
+}
+
 static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
 	Value vf = ai_obj_vlooktm(env, v1, tm);
 
@@ -679,6 +746,20 @@ tail_call:
                 v_set(env, &R[a], vt);
                 v_set(env, &R[a + 1], vb);
 
+                break;
+            }
+            case BC_ITER: {
+                loadB();
+
+                Value vb = R[b];
+
+                vm_iter(env, &R[a], vb);
+                break;
+            }
+            case BC_FORG: {
+                if (!vm_next(env, &R[a])) {
+                    pc += 1;
+                }
                 break;
             }
             case BC_GET: {
