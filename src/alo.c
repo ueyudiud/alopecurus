@@ -265,9 +265,6 @@ static a_msg l_pread_eval(a_henv env) {
 }
 
 static a_none l_run_repl(a_henv env) {
-	if (aloi_stdin_is_tty()) {
-		aloi_show(ALO_COPYRIGHT"\n");
-	}
 	loop {
 		a_msg msg = l_pread_eval(env);
 		l_print_result(env, msg);
@@ -275,22 +272,77 @@ static a_none l_run_repl(a_henv env) {
 	}
 }
 
-static void l_main(a_henv env) {
-	aloL_openlibs(env);
-	l_run_repl(env);
+#define OPT_EXECUTE u32c(1)
+#define OPT_VERSION u32c(2)
+#define OPT_HELP u32c(4)
+
+#define ALO_HELP \
+"Usage: alo [options]\n" \
+"\t-h print help information\n" \
+"\t-v print version only"
+
+static a_enum l_opts;
+
+static a_bool l_scan_opts(a_henv env, int argc, char const* const* argv) {
+	l_opts = OPT_EXECUTE;
+
+	for (int i = 1; i < argc; ++i) {
+		char const* arg = argv[i];
+		if (arg[0] == '-') {
+			switch (arg[1]) {
+				case 'v':
+					l_opts |= OPT_VERSION;
+					l_opts &= ~OPT_EXECUTE;
+					break;
+				case 'V':
+					l_opts |= OPT_VERSION;
+					break;
+				case 'h':
+					l_opts |= OPT_HELP;
+					break;
+				case '-':
+					printf("Unknown option '%s'", arg);
+					l_opts |= OPT_HELP;
+					return true;
+				case '\0':
+					printf("Incomplete option '-'");
+					l_opts |= OPT_HELP;
+					return true;
+				default:
+					printf("Unknown option '-%c'", arg[1]);
+					l_opts |= OPT_HELP;
+					return true;
+			}
+		}
+		else {
+			printf("Unexpected option");
+		}
+	}
+	return false;
 }
 
-int main(int argc, char const* argv[]) {
-	(void) argc;
-	(void) argv;
-	
+static void l_main(a_henv env) {
+	if ((l_opts & OPT_VERSION) || aloi_stdin_is_tty()) {
+		aloi_show(ALO_COPYRIGHT"\n");
+	}
+	if (l_opts & OPT_HELP) {
+		aloi_show(ALO_HELP);
+	}
+	if (l_opts & OPT_EXECUTE) {
+		aloL_openlibs(env);
+		l_run_repl(env);
+	}
+}
+
+int main(int argc, char const* const argv[]) {
 	if (l_open() != ALO_SOK) {
 		return EXIT_FAILURE; /* fatal error. */
 	}
 
 	a_henv env = aloL_create();
+	a_bool argerr = l_scan_opts(env, argc, argv);
 	l_main(env);
 	alo_destroy(env);
 	
-	return EXIT_SUCCESS;
+	return !argerr ? EXIT_SUCCESS : EXIT_FAILURE;
 }
