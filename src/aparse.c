@@ -1243,7 +1243,7 @@ static void branch_negate(Parser* par, a_u32* plabel, a_u32 label, a_line line) 
 static void branch_instantiate(Parser* par, InoutExpr e, a_u32 reg) {
 	assume(e->_tag == EXPR_TRUE_OR_FALSE || e->_tag == EXPR_FALSE_OR_TRUE);
 	assume(par->_head_label == e->_d2 + 1);
-	assume(insn_is_branch(par->_code[par->_head_label - 1]));
+	assume(insn_is_branch(par->_code[e->_d2 - 1]));
 
 	a_u32 label = l_next_jump(par, e->_d2);
 	if (label != NO_LABEL) {

@@ -1247,7 +1247,7 @@ tail_call:
                     case BC_BNEI: {
                         loadsBx();
 
-                        Value va = R[b];
+                        Value va = R[a];
 
                         if (v_is_int(va)) {
                             z = ai_op_cmp_int(v_as_int(va), b, OP_EQ);
