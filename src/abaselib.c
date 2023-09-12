@@ -213,16 +213,22 @@ void aloopen_base(a_henv env) {
         { "error", base_error },
 		{ "print", base_print },
 		{ "typeof", base_typeof },
-		{ "__get__", null }
+		{ "__get__", null },
+		{ "_G", null },
+		{ "_VER", null }
 	};
 
 	alo_newtype(env, ALO_LIB_BASE_NAME, 0);
 	aloL_putfields(env, -1, bindings);
 
 	a_htype type = v_as_type(api_elem(env, -1));
-	ai_type_setis(env, type, env_int_str(env, STR___get__), v_of_obj(type));
 
 	GAUser* global = ai_auser_new(env, type);
+
+	ai_type_setis(env, type, env_int_str(env, STR___get__), v_of_obj(type));
+	ai_type_setis(env, type, ai_str_newl(env, "_G"), v_of_obj(global));
+	ai_type_setis(env, type, ai_str_newl(env, "_VER"), v_of_int(ALO_VERSION_NUMBER));
+
 	v_set_obj(env, &G(env)->_global, global);
 
 	ai_gc_trigger(env);
