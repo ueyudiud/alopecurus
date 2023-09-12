@@ -21,6 +21,11 @@
 
 #include "avm.h"
 
+typedef struct {
+	Value const* _ptr;
+	a_usize _len;
+} ValueSlice;
+
 static void l_call_hook(a_henv env, a_msg msg, a_hfun fun, a_hctx ctx) {
 	/* Call hook function. */
 	(*fun)(env, msg, ctx);
@@ -214,69 +219,97 @@ static Value vm_len(a_henv env, Value v) {
 	}
 }
 
-static void vm_iter(a_henv env, Value* vs, Value v) {
+static void vm_iter(a_henv env, Value* restrict vs, Value v) {
     switch (v_get_tag(v)) {
         case T_TUPLE: {
             v_set(env, &vs[0], v);
-            v_set_int(&vs[1], 0);
+            v_set_int(&vs[2], 0);
             break;
         }
         case T_LIST: {
             v_set(env, &vs[0], v);
-            v_set_int(&vs[1], 0);
+            v_set_int(&vs[2], 0);
             break;
         }
         case T_TABLE: {
             v_set(env, &vs[0], v);
-            v_set_int(&vs[1], 0);
+            v_set_int(&vs[2], 0);
+            break;
+        }
+        case T_TYPE: {
+            v_set(env, &vs[0], v);
+            v_set_int(&vs[2], 0);
             break;
         }
         default: {
             //TODO
-            panic("not implemented.");
+            ai_err_bad_tm(env, TM___iter__);
         }
     }
 }
 
-static a_bool vm_next(a_henv env, Value* restrict vs) {
-    Value vc = vs[0];
-    Value vi = vs[1];
+static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
+    Value vc = vb[0];
+    Value* pi = &vb[2];
     switch (v_get_tag(vc)) {
         case T_TUPLE: {
             GTuple* p = v_as_tuple(vc);
-            a_i32 i = v_as_int(vi);
-            if (i >= p->_len)
-                return false;
-            v_set_int(&vs[1], i + 1);
-            v_set_int(&vs[2], i);
-            v_set(env, &vs[3], p->_body[i]);
-            return true;
+            a_u32 i = cast(a_u32, v_as_int(*pi));
+            if (cast(a_u32, i) >= p->_len)
+                return new(ValueSlice) { null };
+            
+            v_set_int(pi, i + 1);
+            env->_stack._top = vs;
+            Value* vd = vm_push_args(env, p->_body[i]);
+            return new(ValueSlice) { vd, 1 };
         }
         case T_LIST: {
             GList* p = v_as_list(vc);
-            a_i32 i = v_as_int(vi);
+            a_u32 i = cast(a_u32, v_as_int(*pi));
             if (i >= p->_len)
-                return false;
-            v_set_int(&vs[1], i + 1);
-            v_set_int(&vs[2], i);
-            v_set(env, &vs[3], p->_ptr[i]);
-            break;
+                return new(ValueSlice) { null };
+            
+            v_set_int(pi, i + 1);
+            env->_stack._top = vs;
+            Value* vd = vm_push_args(env, p->_ptr[i]);
+            return new(ValueSlice) { vd, 1 };
         }
         case T_TABLE: {
             GTable* p = v_as_table(vc);
-            a_i32 i = v_as_int(vi);
-            if (p->_len == 0 || unwrap_unsafe(p->_ptr->_link._prev) == i)
-                return false;
+            a_u32 i = cast(a_u32, v_as_int(*pi));
+            if (p->_len == 0 || unwrap_unsafe(p->_ptr->_link._prev) == cast(a_i32, i))
+                return new(ValueSlice) { };
+
             i = unwrap(p->_ptr[i]._link._next);
             HNode* n = &p->_ptr[i];
-            v_set_int(&vs[1], i);
-            v_set(env, &vs[2], n->_key);
-            v_set(env, &vs[3], n->_value);
-            break;
+
+            v_set_int(pi, i);
+            env->_stack._top = vs;
+            Value* vd = vm_push_args(env, n->_key, n->_value);
+            return new(ValueSlice) { vd, 2 };
+        }
+        case T_TYPE: {
+            GType* p = v_as_type(vc);
+            a_u32 i = cast(a_u32, v_as_int(*pi));
+            
+            TDNode* n;
+            loop {
+                if (i > p->_hmask)
+                    return new(ValueSlice) { };
+                i += 1;
+                n = &p->_ptr[i];
+                if (n->_key != null)
+                    break;
+            }
+
+            v_set_int(pi, i);
+            env->_stack._top = vs;
+            Value* vd = vm_push_args(env, v_of_obj(n->_key), p->_values[n->_index]);
+            return new(ValueSlice) { vd, 2 };
         }
         default: {
             //TODO
-            panic("not implemented.");
+            ai_err_bad_tm(env, TM___next__);
         }
     }
 }
@@ -348,10 +381,10 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				}
 				case T_HSTR:
 				case T_ISTR: {
-						GStr* str = v_as_str(v);
-						at_buf_putls(env, buf, str->_data, str->_len);
-						break;
-					}
+					GStr* str = v_as_str(v);
+					at_buf_putls(env, buf, str->_data, str->_len);
+					break;
+				}
 				case T_TUPLE:
 				case T_LIST:
 				case T_TABLE:
@@ -398,7 +431,7 @@ static void v_mov_all_with_nil(a_henv env, Value* dst, a_usize dst_len, Value co
 	}
 
 	while (i < dst_len) {
-		v_cpy(env, &dst[i], &src[i]);
+		v_set_nil(&dst[i]);
 		i += 1;
 	}
 }
@@ -416,11 +449,6 @@ static a_u32 vm_fetch_ex(a_insn const** pc) {
 	assume(bc_load_op(ip) == BC_EX, "not extra operand.");
 	return bc_load_ax(ip);
 }
-
-typedef struct {
-	Value const* _ptr;
-	a_usize _len;
-} ValueSlice;
 
 static ValueSlice vm_call_uncleared(a_henv env, Frame* frame);
 
@@ -757,7 +785,23 @@ tail_call:
                 break;
             }
             case BC_FORG: {
-                if (!vm_next(env, &R[a])) {
+                loadB();
+                loadC();
+
+                ValueSlice vs = vm_next(env, &R[a], &R[b]);
+                if (vs._ptr != null) {
+					v_mov_all_with_nil(env, &R[a], c, vs._ptr, vs._len);
+                    adjust_top();
+                    pc += 1;
+                }
+                break;
+            }
+            case BC_FORGV: {
+                loadB();
+
+                ValueSlice vs = vm_next(env, &R[a], &R[b]);
+                if (vs._ptr != null) {
+					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, vs._ptr, vs._len);
                     pc += 1;
                 }
                 break;

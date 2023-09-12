@@ -55,6 +55,7 @@ struct ProtoDesc {
 	a_u16 _nline;
 	a_u8 _ncap;
 	a_u8 _nstack;
+	a_u8 _nparam;
 	ProtoFlags _flags;
 };
 

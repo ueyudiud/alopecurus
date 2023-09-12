@@ -1115,7 +1115,7 @@ static void l_scan2(Lexer* lex, Token* tk, a_u32 line) {
 a_i32 ai_lex_forward(Lexer* lex) {
 	assume(lex->_ahead[0]._tag != TK__NONE, "cannot call forward() before poll current token.");
 	if (lex->_ahead[1]._tag == TK__NONE) {
-		l_scan_plain(lex, &lex->_ahead[1]);
+		l_scan(lex, &lex->_ahead[1]);
 	}
 	return lex->_ahead[1]._tag;
 }

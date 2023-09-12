@@ -772,7 +772,7 @@ always_inline a_usize gbl_mem_total(Global* g) {
 }
 
 always_inline GStr* env_int_str(a_henv env, a_u32 tag) {
-	return G(env)->_names[tag - 1];
+	return G(env)->_names[tag];
 }
 
 #define env_type(env,f) (&G(env)->_types.f)

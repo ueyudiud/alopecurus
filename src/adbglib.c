@@ -164,6 +164,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_BOR:
 			case BC_BXOR:
 			case BC_UNBOX:
+			case BC_LBOX:
 			case BC_LPUSH:
 			case BC_CALL:
 			case BC_CAT:

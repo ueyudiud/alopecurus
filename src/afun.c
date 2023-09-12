@@ -57,6 +57,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
     self->_ncap = desc->_ncap;
 	self->_nline = desc->_nline;
     self->_nstack = desc->_nstack;
+	self->_nparam = desc->_nparam;
 
 	a_usize addr = addr_of(self) + sizeof(GProto);
 

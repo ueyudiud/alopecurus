@@ -32,6 +32,8 @@ STRDEF(__bxor__ )
 STRDEF(__neg__  )
 STRDEF(__bnot__ )
 STRDEF(__call__ )
+STRDEF(__iter__ )
+STRDEF(__next__ )
 STRDEF(__str__  )
 
 #ifdef EPILOGUE

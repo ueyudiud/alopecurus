@@ -2002,15 +2002,17 @@ static void expr_box_list(Parser* par, InoutExpr e, a_line line) {
 			break;
 		}
 		case EXPR_NTMP: {
+			a_u32 n = par->_scope->_top_reg - e->_d1;
+
             expr_drop(par, e);
 
-            l_emit_idbc(par, BC_LBOX, e, e->_d1, par->_scope->_top_reg - e->_d1, line);
+            l_emit_idbc(par, BC_LBOX, e, e->_d1, n, line);
 			break;
 		}
 		case EXPR_NTMPC: {
-			a_u32 rem = par->_scope->_top_reg - e->_d1 - 1;
-			if (rem > 0) {
-				l_emit_iabc(par, BC_LPUSH, e->_d1, e->_d1 + 1, rem, line);
+			a_u32 n = par->_scope->_top_reg - e->_d1 - 1;
+			if (n > 0) {
+				l_emit_iabc(par, BC_LPUSH, e->_d1, e->_d1 + 1, n, line);
 				stack_free_succ(par, e->_d1 + 1);
 			}
 			expr_tmp(e, e->_d1, line);
@@ -2086,6 +2088,7 @@ static void exprs_take(Parser* par, InoutExpr e, a_u32 n, a_line line) {
 		assume(reg == bc_load_a(ip));
 	}
 	bc_store_c(ip, n);
+	e->_fval = true;
 }
 
 /**
@@ -2632,7 +2635,7 @@ static void l_emit_section(Parser* par, InoutExpr e, SecHead const* restrict sec
     }
 }
 
-static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, SymMods mods) {
+static a_u32 sym_local(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, SymMods mods) {
 	LocalInfo info = {
 		._begin_label = begin_label - par->_fnscope->_begin_label,
 		._end_label = NO_LABEL, /* Not determinted yet. */
@@ -2653,7 +2656,7 @@ static a_u32 local_new(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, Sy
 	});
 }
 
-static void let_bind_nils(Parser* par, Pat* p, a_line line) {
+static void pat_bind_nils(Parser* par, Pat* p, a_line line) {
 	Scope* scope = par->_scope;
 
 	assume(p->_kind == PAT_VARG);
@@ -2671,13 +2674,13 @@ static void let_bind_nils(Parser* par, Pat* p, a_line line) {
 	a_u32 reg = stack_alloc_succ(par, num, line);
 	a_u32 label = l_emit_kn(par, reg, num, line);
 	for (Pat* pat = p->_child; pat != null; pat = pat->_sibling) {
-        local_new(par, pat->_name, reg++, label, new(SymMods) {});
+        sym_local(par, pat->_name, reg++, label, new(SymMods) {});
 	}
 
 	scope->_top_ntr = scope->_top_reg;
 }
 
-static void let_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
+static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
     a_u32 reg = base + pat->_abs_bot + pat->_tmp_pos;
     if (pat->_expr->_tag != EXPR_UNIT && pat->_expr->_tag != EXPR_NIL) {
 		assume(pat->_kind != PAT_VARG);
@@ -2697,11 +2700,27 @@ static void let_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 		case PAT_VARG: {
 			a_u32 line = pat->_expr->_line;
 			a_u32 num = pat->_nchild;
-			exprs_take(par, e, num /* TODO: variable length arguments? */, pat->_line);
+
+			assume(e->_tag == EXPR_VCALL || e->_tag == EXPR_VDYN || e->_tag == EXPR_VNTMP, "not vararg expressions.");
+
+			if (e->_tag == EXPR_VNTMP) {
+				l_emit_iabc(par, BC_TRIM, reg, DMB, num, line);
+			}
+			else {
+				a_insn* ip = code_at(par, e->_d1);
+				if (e->_tag != EXPR_VCALL) {
+					bc_store_a(ip, reg);
+				}
+				else {
+					assume(reg == bc_load_a(ip)); //TODO
+				}
+				bc_store_c(ip, num);
+			}
+			
 			for (Pat* child = pat->_child; child != null; child = child->_sibling) {
 				Expr e2;
-				expr_val(e2, reg++, line);
-                let_bind_with(par, child, e2, base);
+				expr_val(e2, reg++, line); /* Discard ownership of value, drop them later. */
+                pat_bind_with(par, child, e2, base);
 			}
 			break;
 		}
@@ -2714,7 +2733,7 @@ static void let_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 		}
 		case PAT_VAR: {
             expr_pin_reg(par, e, reg);
-            local_new(par, pat->_name, reg, par->_head_label, new(SymMods) {});
+            sym_local(par, pat->_name, reg, par->_head_label, new(SymMods) {});
 			break;
 		}
 		case PAT_TUPLE: {
@@ -2724,7 +2743,7 @@ static void let_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 			for (Pat* child = pat->_child; child != null; child = child->_sibling) {
 				Expr e2;
 				expr_val(e2, reg++, line);
-                let_bind_with(par, child, e2, base);
+                pat_bind_with(par, child, e2, base);
 			}
 			break;
 		}
@@ -2735,8 +2754,9 @@ static void let_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 /**
  ** Compute relative slot indices of deconstructed values to be placed.
  *@param pat_root the deconstruction pattern.
+ *@return the number of stack used to store variable.
  */
-static void let_compute(Pat* const pat_root) {
+static a_u32 pat_compute(Pat* const pat_root) {
 	Pat* pat = pat_root;
 	a_u32 abs_top = 0;
 	loop {
@@ -2770,10 +2790,14 @@ static void let_compute(Pat* const pat_root) {
 			}
 		}
 
-		if (pat == pat_root)
-			return;
+		/* Try to leave structured patterns. */
+		loop {
+			if (pat == pat_root)
+				return abs_top;
 
-		while (pat->_sibling == null) {
+			if (pat->_sibling != null)
+				break;
+			
 			Pat* pat_up = pat->_parent;
 
 			a_u32 used = (pat->_abs_bot - pat_up->_abs_bot) + pat->_tmp_pos;
@@ -2781,10 +2805,6 @@ static void let_compute(Pat* const pat_root) {
             pat_up->_tmp_top = max(pat_up->_tmp_pos + pat_up->_nchild, (pat->_abs_bot - pat_up->_abs_bot) + pat->_tmp_top);
 
             pat = pat_up;
-
-			if (pat == pat_root) {
-				return;
-			}
 		}
 
 		Pat* pat_up = pat->_parent;
@@ -2793,16 +2813,41 @@ static void let_compute(Pat* const pat_root) {
 	}
 }
 
-static void let_bind(Parser* par, Pat* pat, InExpr e) {
+static void pat_bind(Parser* par, Pat* pat, InExpr e) {
 	assume(pat != null, "bind to nothing.");
 
-    let_compute(pat);
+    a_u32 abs_top = pat_compute(pat);
 
-    expr_to_reg(par, e);
-    expr_drop(par, e);
+    expr_drop(par, e); /* Drop ownership but keep expression. */
 
     a_u32 reg = stack_alloc_succ(par, pat->_tmp_top, e->_line);
-    let_bind_with(par, pat, e, reg);
+    pat_bind_with(par, pat, e, reg);
+	assume(par->_scope->_top_ntr - abs_top == par->_scope->_top_reg - pat->_tmp_top, "bind compute incorrect.");
+	stack_free_succ(par, par->_scope->_top_ntr);
+}
+
+static a_u32 for_bind_real(Parser* par, Pat* pat, a_line line) {
+	assume(pat != null, "bind to nothing.");
+
+	a_u32 reg_itr = par->_scope->_top_reg - 3; /* The index of iterator register. */
+
+	Expr e;
+	a_u32 label = l_emit_branch(par, bc_make_iabc(BC_FORG, R_DYN, reg_itr, N_DYN), NO_LABEL, line);
+	expr_init(e, EXPR_VDYN, ._d1 = label - 1, ._fupk = true);
+
+	pat_bind(par, pat, e);
+	return label;
+}
+
+static void param_bind(Parser* par, Pat* pat, a_usize ctx) {
+	a_line line = cast(a_line, ctx);
+	
+	Expr e;
+	expr_init(e, EXPR_VNTMP, ._d1 = 0, ._fupk = true);
+
+	pat_bind(par, pat, e);
+
+	par->_fnscope->_nparam = par->_scope->_top_ntr;
 }
 
 typedef struct {
@@ -2811,31 +2856,15 @@ typedef struct {
 } ForStat;
 
 static void for_bind(Parser* par, Pat* pat, a_usize ctx) {
-	ForStat* restrict stat = ptr_of(ForStat, ctx);
-
-	assume(pat != null, "bind to nothing.");
-
-	a_u32 reg_itr = par->_scope->_top_reg - 3; /* The index of iterator register. */
-
-	/* Insert iterator key into pattern. */
-	Pat pat_key = { ._parent = pat, ._sibling = pat->_child, ._kind = PAT_DROP, ._tmp_pos = reg_itr + 2, ._line = stat->_line };
-	pat->_child = &pat_key;
-
-	let_compute(pat);
-
-	a_u32 label = l_emit_branch(par, bc_make_iabc(BC_FORG, R_DYN, reg_itr, N_DYN), NO_LABEL, stat->_line);
-	stat->_label = label;
-
-	Expr e;
-	expr_init(e, EXPR_VDYN, ._d1 = label - 1, ._fupk = true);
-	let_bind_with(par, pat, e, reg_itr + 3);
+	ForStat* stat = ptr_of(ForStat, ctx);
+	stat->_label = for_bind_real(par, pat, stat->_line);
 }
 
 static void local_bind(Parser* par, OutExpr e, GStr* name, a_line line) {
 	Scope* scope = par->_scope;
 	assume(scope->_top_ntr == scope->_top_reg, "stack not balanced.");
 	a_u32 reg = stack_alloc(par, line);
-	a_u32 sym = local_new(par, name, reg, par->_head_label, new(SymMods) {});
+	a_u32 sym = sym_local(par, name, reg, par->_head_label, new(SymMods) {});
 	expr_init(e, EXPR_REG,
 		._d1 = reg,
 		._d2 = sym,
@@ -2860,19 +2889,6 @@ static void sym_export(Parser* par, OutExpr e, GStr* name, a_line line) {
 		._fsym = true,
 		._line = line
 	);
-}
-
-static void sym_param(Parser* par, GStr* name) {
-	FnScope* scope = par->_fnscope;
-	assume(&scope->_scope == par->_scope);
-	assume(scope->_top_ntr == scope->_top_reg);
-
-	a_u32 reg = stack_alloc(par, scope->_begin_line);
-    local_new(par, name, reg, scope->_begin_label, new(SymMods) {});
-	scope->_top_ntr = scope->_top_reg;
-
-	assume(reg == scope->_nparam);
-	scope->_nparam += 1;
 }
 
 /**
@@ -2998,6 +3014,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 		._nlocal = par->_locals._len - scope->_local_off,
 		._ncap = scope->_caps._len,
 		._nstack = scope->_max_reg,
+		._nparam = scope->_nparam,
 		._nline = par->_lines._len - scope->_line_off,
 		._flags = {
 			._fdebug = (par->_options & ALO_COMP_OPT_STRIP_DEBUG) == 0,
@@ -3047,6 +3064,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 			dst += 1;
 		}
 	}
+	
 	proto->_name = name;
 	if (desc._flags._fdebug) {
 		proto->_dbg_file = par->_file;
@@ -3870,6 +3888,7 @@ static void l_scan_atom(Parser* par, OutExpr e);
 static void l_scan_expr(Parser* par, OutExpr e);
 static void l_scan_expr_from_term(Parser* par, OutExpr e);
 static void l_scan_exprs(Parser* par, InoutExpr es, a_bool exists);
+static void l_scan_pattern(Parser* par, void (*con)(Parser*, Pat*, a_usize), a_usize ctx);
 static void l_scan_stat(Parser* par);
 static void l_scan_stats(Parser* par);
 
@@ -3902,31 +3921,15 @@ static void l_scan_tstring(Parser* par, OutExpr e) {
 	}
 }
 
-static void l_scan_fun_args(Parser* par, a_i32 ltk, a_i32 rtk) {
-    lex_check_skip(par, ltk);
-
-	a_u32 line2 = lex_line(par);
-	if (!lex_test_skip(par, rtk)) {
-		do {
-			GStr* name = lex_check_ident(par);
-			if (lex_test_skip(par, TK_TDOT)) {
-				//TODO
-				panic("unimplemented");
-				break;
-			}
-            sym_param(par, name);
-		}
-		while (lex_test_skip(par, TK_COMMA));
-        lex_check_pair_right(par, ltk, rtk, line2);
-	}
-}
-
 static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 	FnScope scope;
 
 	fnscope_prologue(par, &scope, line);
 
-	l_scan_fun_args(par, TK_LBK, TK_RBK);
+	a_line line1 = lex_line(par);
+	lex_check_skip(par, TK_LBK);
+	l_scan_pattern(par, param_bind, line1);
+	lex_check_pair_right(par, TK_LBK, TK_RBK, line1);
 
     lex_check_skip(par, TK_LBR);
 	line = lex_line(par);
@@ -3944,7 +3947,10 @@ static void l_scan_lambda(Parser* par, OutExpr e) {
 	fnscope_prologue(par, &scope, lex_line(par));
 
 	if (!lex_test_skip(par, TK_BBAR)) {
-		l_scan_fun_args(par, TK_BAR, TK_BAR);
+		a_line line = lex_line(par);
+		lex_check_skip(par, TK_BAR);
+		l_scan_pattern(par, param_bind, scope._begin_line);
+		lex_check_pair_right(par, TK_BAR, TK_BAR, line);
 	}
 
 	if (lex_test_skip(par, TK_LBR)) {
@@ -5000,7 +5006,7 @@ static void l_scan_let_stat2(Parser* par, Pat* p, a_usize c) {
 
 		do {
 			l_scan_expr(par, e);
-    	    let_bind(par, pat, e);
+    	    pat_bind(par, pat, e);
 			
 			pat = pat->_sibling;
 		}
@@ -5018,7 +5024,7 @@ static void l_scan_let_stat2(Parser* par, Pat* p, a_usize c) {
 		}
 	}
 
-    let_bind_nils(par, p, line);
+    pat_bind_nils(par, p, line);
     stack_compact(par);
 }
 
