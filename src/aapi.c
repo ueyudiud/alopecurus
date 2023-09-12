@@ -695,8 +695,8 @@ a_htype alo_typeof(a_henv env, a_isize id) {
 	return null;
 }
 
-char const* alo_typename(unused a_henv env, a_htype type) {
-	return type != null ? str2ntstr(type->_name) : "empty";
+char const* alo_typename(unused a_henv env, a_htype typ) {
+	return typ != null ? str2ntstr(typ->_name) : "empty";
 }
 
 a_htype alo_opentype(a_henv env, a_isize id) {
@@ -708,10 +708,10 @@ a_htype alo_opentype(a_henv env, a_isize id) {
 	return null;
 }
 
-void alo_closetype(unused a_henv env, a_htype type) {
-	if (type != null) {
-		api_check(type->_nref > 0, "type not referenced by API.");
-		type->_nref -= 1;
+void alo_closetype(unused a_henv env, a_htype typ) {
+	if (typ != null) {
+		api_check(typ->_nref > 0, "type not referenced by API.");
+		typ->_nref -= 1;
 	}
 }
 

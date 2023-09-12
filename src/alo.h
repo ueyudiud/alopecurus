@@ -210,10 +210,10 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 /* Type operations. */
 ALO_EXPORT void (alo_newtype)(a_henv env, char const* name, a_flags options);
 ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
-ALO_EXPORT char const* (alo_typename)(a_henv env, a_htype type);
+ALO_EXPORT char const* (alo_typename)(a_henv env, a_htype typ);
 ALO_EXPORT a_msg (alo_looktype)(a_henv env, char const* src, a_usize len);
 ALO_EXPORT a_htype (alo_opentype)(a_henv env, a_isize id);
-ALO_EXPORT void (alo_closetype)(a_henv env, a_htype hnd);
+ALO_EXPORT void (alo_closetype)(a_henv env, a_htype typ);
 
 /* Table operations. */
 ALO_EXPORT a_usize (alo_hnext)(a_henv env, a_isize id, a_ritr itr);
