@@ -12,7 +12,7 @@
 #include "atable.h"
 #include "afun.h"
 #include "auser.h"
-#include "atype.h"
+#include "amod.h"
 #include "afmt.h"
 #include "aenv.h"
 #include "agc.h"
@@ -93,9 +93,6 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 		else if (v_has_trivial_equals(v1)) {
 			return v_trivial_equals(v1, v2);
 		}
-		else if (likely(v_is_hstr(v1))) {
-			return ai_str_equals(v_as_str(v1), v_as_str(v2));
-		}
 		else if (likely(v_is_tuple(v1))) {
 			return ai_tuple_equals(env, v_as_tuple(v1), v_as_tuple(v2));
 		}
@@ -115,8 +112,8 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 }
 
 static Value vm_look(a_henv env, Value v, GStr* key) {
-	GType* type = v_typeof(env, v);
-	Value vf = ai_type_getis(env, type, key);
+	GMod* type = v_typeof(env, v);
+	Value vf = ai_mod_gets(env, type, key);
 	if (v_is_nil(vf)) {
 		ai_err_bad_look(env, v_nameof(env, v), key);
 	}
@@ -141,8 +138,8 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
 			return ai_list_get(env, v_as_list(v1), v2);
 		case T_TABLE:
 			return ai_table_get(env, v_as_table(v1), v2);
-		case T_TYPE:
-			return ai_type_get(env, v_as_type(v1), v2);
+		case T_MOD:
+			return ai_mod_get(env, v_as_mod(v1), v2);
 		case T_AUSER:
 			return ai_auser_get(env, v_as_auser(v1), v2);
 		default: {
@@ -170,8 +167,8 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
 	else if (v_is_table(v1)) {
 		ai_table_set(env, v_as_table(v1), v2, v3);
 	}
-	else if (v_is_type(v1)) {
-		ai_type_set(env, v_as_type(v1), v2, v3);
+	else if (v_is_mod(v1)) {
+		ai_mod_set(env, v_as_mod(v1), v2, v3);
 	}
 	else if (v_is_auser(v1)) {
 		ai_auser_set(env, v_as_auser(v1), v2, v3);
@@ -205,8 +202,7 @@ static Value vm_meta_len(a_henv env, Value v) {
 
 static Value vm_len(a_henv env, Value v) {
 	switch (v_get_tag(v)) {
-		case T_ISTR:
-		case T_HSTR:
+		case T_STR:
 			return v_of_int(v_as_str(v)->_len);
 		case T_TUPLE:
 			return v_of_int(v_as_tuple(v)->_len);
@@ -236,7 +232,7 @@ static void vm_iter(a_henv env, Value* restrict vs, Value v) {
             v_set_int(&vs[2], 0);
             break;
         }
-        case T_TYPE: {
+        case T_MOD: {
             v_set(env, &vs[0], v);
             v_set_int(&vs[2], 0);
             break;
@@ -260,7 +256,7 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             
             v_set_int(pi, i + 1);
             env->_stack._top = vs;
-            Value* vd = vm_push_args(env, p->_body[i]);
+            Value* vd = vm_push_args(env, p->_ptr[i]);
             return new(ValueSlice) { vd, 1 };
         }
         case T_LIST: {
@@ -288,8 +284,8 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             Value* vd = vm_push_args(env, n->_key, n->_value);
             return new(ValueSlice) { vd, 2 };
         }
-        case T_TYPE: {
-            GType* p = v_as_type(vc);
+        case T_MOD: {
+            GMod* p = v_as_mod(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             
             TDNode* n;
@@ -355,7 +351,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 	    Value v = base[i];
 		if (likely(v_is_str(v))) {
 			GStr* val = v_as_str(v);
-			at_buf_putls(env, buf, val->_data, val->_len);
+			at_buf_putls(env, buf, val->_ptr, val->_len);
 		}
 		else {
 			switch (v_get_tag(v)) {
@@ -379,10 +375,9 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 					at_fmt_putp(env, buf, v_as_ptr(v));
 					break;
 				}
-				case T_HSTR:
-				case T_ISTR: {
+				case T_STR: {
 					GStr* str = v_as_str(v);
-					at_buf_putls(env, buf, str->_data, str->_len);
+					at_buf_putls(env, buf, str->_ptr, str->_len);
 					break;
 				}
 				case T_TUPLE:
@@ -391,7 +386,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				case T_FUNC:
 				case T_CUSER:
 				case T_AUSER:
-				case T_TYPE: {
+				case T_MOD: {
 					Value vf = ai_obj_vlooktm(env, v, TM___str__);
 					if (v_is_nil(vf)) {
 						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
@@ -404,7 +399,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 						ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
 					}
 					GStr* str = v_as_str(v);
-					at_buf_putls(env, buf, str->_data, str->_len);
+					at_buf_putls(env, buf, str->_ptr, str->_len);
 					break;
 				}
 				default: {
@@ -1002,7 +997,7 @@ tail_call:
 
                 if (v_is_tuple(vb)) {
                     GTuple* val = v_as_tuple(vb);
-					v_mov_all_with_nil(env, &R[a], c, val->_body, val->_len);
+					v_mov_all_with_nil(env, &R[a], c, val->_ptr, val->_len);
                 }
                 else if (v_is_list(vb)) {
                     GList* val = v_as_list(vb);
@@ -1021,7 +1016,7 @@ tail_call:
                 if (v_is_tuple(vb)) {
                     GTuple* val = v_as_tuple(vb);
                     check_stack(&R[a] + val->_len);
-					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_body, val->_len);
+					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_ptr, val->_len);
                 }
                 else if (v_is_list(vb)) {
                     GList* val = v_as_list(vb);

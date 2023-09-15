@@ -10,7 +10,7 @@
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
-#include "atype.h"
+#include "amod.h"
 #include "actx.h"
 #include "amem.h"
 #include "agc.h"
@@ -174,12 +174,12 @@ nomem1:
 static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env);
 	ai_str_boost(env, m->_reserved);
-	ai_type_boost(env);
+	ai_mod_boost(env);
 }
 
 static a_usize sizeof_MRoute() {
-	a_usize size = sizeof(MRoute) + sizeof_IStr(0)
-#define STRDEF(n) + sizeof_IStr(sizeof(#n) - 1)
+	a_usize size = sizeof(MRoute) + sizeof_GStr(0)
+#define STRDEF(n) + sizeof_GStr(sizeof(#n) - 1)
 # include "asym/kw.h"
 # include "asym/tm.h"
 # include "asym/pt.h"
@@ -249,7 +249,7 @@ void alo_destroy(a_henv env) {
 	route_close(g, &mroute->_route);
 	ai_gc_clean(g);
 	ai_str_clean(g);
-	ai_type_clean(g);
+	ai_mod_clean(g);
 	ai_cap_clean(g);
 
 	assume(gbl_mem_total(g) == sizeof_MRoute(), "memory leak.");

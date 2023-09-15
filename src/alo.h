@@ -123,8 +123,8 @@ typedef a_u32 a_ritr[1];
 typedef struct alo_Alloc a_alloc;
 /* Environment handle. */
 typedef struct alo_Env* a_henv;
-/* Type handle. */
-typedef struct alo_Type* a_htype;
+/* Module handle. */
+typedef struct alo_Mod* a_hmod;
 
 struct alo_Alloc {
 	void* (*allocate)(void*, a_usize);
@@ -167,7 +167,7 @@ ALO_EXPORT char const* (alo_pushstr)(a_henv env, void const* src, a_usize len);
 ALO_EXPORT char const* (alo_pushntstr)(a_henv env, char const* src);
 ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);
 ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg);
-ALO_EXPORT void (alo_pushtype)(a_henv env, a_htype hnd);
+ALO_EXPORT void (alo_pushtype)(a_henv env, a_hmod hnd);
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_usize n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_isize id);
@@ -205,15 +205,15 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 
 #define alo_tostr(env,id) alo_tolstr(env, id, NULL)
 
-#define ALO_NEWTYPE_FLAG_STATIC 0x0001
+#define ALO_NEWMOD_FLAG_STATIC 0x0001
 
 /* Type operations. */
-ALO_EXPORT void (alo_newtype)(a_henv env, char const* name, a_flags options);
-ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
-ALO_EXPORT char const* (alo_typename)(a_henv env, a_htype typ);
-ALO_EXPORT a_msg (alo_looktype)(a_henv env, char const* src, a_usize len);
-ALO_EXPORT a_htype (alo_opentype)(a_henv env, a_isize id);
-ALO_EXPORT void (alo_closetype)(a_henv env, a_htype typ);
+ALO_EXPORT void (alo_newmod)(a_henv env, char const* name, a_flags flags);
+ALO_EXPORT a_hmod (alo_typeof)(a_henv env, a_isize id);
+ALO_EXPORT char const* (alo_modname)(a_henv env, a_hmod mod);
+ALO_EXPORT a_hmod (alo_loadmod)(a_henv env, char const* src, a_usize len);
+ALO_EXPORT a_hmod (alo_openmod)(a_henv env, a_isize id);
+ALO_EXPORT void (alo_closemod)(a_henv env, a_hmod mod);
 
 /* Table operations. */
 ALO_EXPORT a_usize (alo_hnext)(a_henv env, a_isize id, a_ritr itr);

@@ -554,8 +554,8 @@ static Value const_at(Parser* par, a_u32 index) {
 	return par->_consts._ptr[par->_fnscope->_const_off + index];
 }
 
-static a_bool const_is_istr(Parser* par, a_u32 index) {
-	return v_is_istr(const_at(par, index));
+static a_bool const_is_str(Parser* par, a_u32 index) {
+	return v_is_str(const_at(par, index));
 }
 
 #define INSN_NOP ((a_insn) 0)
@@ -2177,7 +2177,7 @@ static a_bool l_try_fold_append(Parser* par, QBuf* buf, InExpr e) {
 		}
 		case EXPR_STR: {
 			GStr* str = e->_s;
-			at_buf_putls(par->_env, buf, str->_data, str->_len);
+			at_buf_putls(par->_env, buf, str->_ptr, str->_len);
 			return true;
 		}
 		default: {
@@ -2421,7 +2421,7 @@ assign:
 		case EXPR_REFCK: {
             expr_to_reg(par, e2);
 
-			if (const_is_istr(par, e1->_d2)) {
+			if (const_is_str(par, e1->_d2)) {
                 l_emit_aby(par, BC_CSETS, e2->_d1, e1->_d1, e1->_d2, line);
 			}
 			else {
@@ -2822,7 +2822,7 @@ static void pat_bind(Parser* par, Pat* pat, InExpr e) {
 
     a_u32 reg = stack_alloc_succ(par, pat->_tmp_top, e->_line);
     pat_bind_with(par, pat, e, reg);
-	assume(par->_scope->_top_ntr - abs_top == par->_scope->_top_reg - pat->_tmp_top, "bind compute incorrect.");
+	assume(par->_scope->_top_ntr - abs_top == cast(a_u32, par->_scope->_top_reg - pat->_tmp_top), "bind compute incorrect.");
 	stack_free_succ(par, par->_scope->_top_ntr);
 }
 
@@ -2843,7 +2843,7 @@ static void param_bind(Parser* par, Pat* pat, a_usize ctx) {
 	a_line line = cast(a_line, ctx);
 	
 	Expr e;
-	expr_init(e, EXPR_VNTMP, ._d1 = 0, ._fupk = true);
+	expr_init(e, EXPR_VNTMP, ._d1 = 0, ._fupk = true, ._line = line);
 
 	pat_bind(par, pat, e);
 
@@ -3227,7 +3227,7 @@ bind:
 		}
 		case EXPR_REFK: {
             a_u32 k = e->_d2;
-			if (const_is_istr(par, k)) {
+			if (const_is_str(par, k)) {
 				return l_emit_aby(par, BC_GETS, reg, e->_d1, k, e->_line);
 			}
 			else {
@@ -3244,7 +3244,7 @@ bind:
 		}
 		case EXPR_REFCK: {
 			a_u32 k = e->_d2;
-			if (const_is_istr(par, k)) {
+			if (const_is_str(par, k)) {
 				return l_emit_aby(par, BC_CGETS, reg, e->_d1, k, e->_line);
 			}
 			else {

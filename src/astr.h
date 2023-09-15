@@ -14,7 +14,7 @@
 
 typedef a_msg (*a_sbfun)(void*, void*, a_usize);
 
-intern a_hash ai_str_hashof(a_hash seed, void const* src, a_usize len);
+intern a_hash ai_str_hashof(a_henv env, void const* src, a_usize len);
 intern GStr* ai_str_new(a_henv env, void const* src, a_usize len);
 intern a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr);
 intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
@@ -26,7 +26,5 @@ intern void ai_str_clean(Global* g);
 #define ai_str_newl(env,src) ai_str_new(env, ""src, sizeof(src) - sizeof(char))
 
 intern char const ai_str_interns[STR__TOTAL_LEN];
-
-#define ISTR_MAX_LEN 255
 
 #endif /* astr_h_ */

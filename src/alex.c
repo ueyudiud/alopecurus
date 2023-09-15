@@ -291,7 +291,7 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
 	a_henv env = lex->_env;
 	LexStrs* strs = &lex->_strs;
-	a_hash hash = ai_str_hashof(G(env)->_seed, src, len);
+	a_hash hash = ai_str_hashof(env, src, len);
 
 	StrNode* node = strs_hfirst(strs, hash);
 	if (node->_str != null && node == strs_hfirst(strs, node->_str->_hash)) {

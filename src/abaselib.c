@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "atuple.h"
-#include "atype.h"
+#include "amod.h"
 #include "auser.h"
 #include "agc.h"
 #include "aapi.h"
@@ -41,8 +41,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			aloi_show("%p", v_as_ptr(v));
 			break;
 		}
-		case T_HSTR:
-		case T_ISTR: {
+		case T_STR: {
 			GStr* val = v_as_str(v);
 			aloi_show("%s", str2ntstr(val));
 			break;
@@ -56,10 +55,10 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 				a_u32 n = min(val->_len, MAX_SHOW_LEN);
 				if (val->_len > 0) {
 					aloi_show("(");
-					l_show_impl(env, val->_body[0], depth + 1);
+					l_show_impl(env, val->_ptr[0], depth + 1);
 					for (a_u32 i = 1; i < n; ++i) {
 						aloi_show(", ");
-						l_show_impl(env, val->_body[i], depth + 1);
+						l_show_impl(env, val->_ptr[i], depth + 1);
 					}
 					if (val->_len > MAX_SHOW_LEN) {
 						aloi_show(", ...");
@@ -136,8 +135,8 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			aloi_show("<func:%p>", v_as_obj(v));
 			break;
 		}
-		case T_TYPE: {
-			aloi_show("<type:%s>", str2ntstr(v_as_type(v)->_name));
+		case T_MOD: {
+			aloi_show("<type:%s>", str2ntstr(v_as_mod(v)->_name));
 			break;
 		}
 		case T_AUSER:
@@ -218,16 +217,16 @@ void aloopen_base(a_henv env) {
 		{ "_VER", null }
 	};
 
-	alo_newtype(env, ALO_LIB_BASE_NAME, 0);
+	alo_newmod(env, ALO_LIB_BASE_NAME, 0);
 	aloL_putfields(env, -1, bindings);
 
-	a_htype type = v_as_type(api_elem(env, -1));
+	a_hmod type = v_as_mod(api_elem(env, -1));
 
 	GAUser* global = ai_auser_new(env, type);
 
-	ai_type_setis(env, type, env_int_str(env, STR___get__), v_of_obj(type));
-	ai_type_setis(env, type, ai_str_newl(env, "_G"), v_of_obj(global));
-	ai_type_setis(env, type, ai_str_newl(env, "_VER"), v_of_int(ALO_VERSION_NUMBER));
+	ai_mod_sets(env, type, env_int_str(env, STR___get__), v_of_obj(type));
+	ai_mod_sets(env, type, ai_str_newl(env, "_G"), v_of_obj(global));
+	ai_mod_sets(env, type, ai_str_newl(env, "_VER"), v_of_int(ALO_VERSION_NUMBER));
 
 	v_set_obj(env, &G(env)->_global, global);
 

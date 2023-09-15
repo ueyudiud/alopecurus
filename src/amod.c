@@ -1,8 +1,8 @@
 /**
- *@file atype.c
+ *@file amod.c
  */
 
-#define atype_c_
+#define amod_c_
 #define ALO_LIB
 
 #include <string.h>
@@ -15,21 +15,21 @@
 #include "avm.h"
 #include "aerr.h"
 
-#include "atype.h"
+#include "amod.h"
 
-static VImpl const type_vtable;
+static VImpl const mod_vtable;
 
-static a_usize sizeof_GType(a_usize extra) {
-	return sizeof(GType) + extra;
+static a_usize sizeof_GMod(a_usize extra) {
+	return sizeof(GMod) + extra;
 }
 
-GType* ai_type_alloc(a_henv env, a_usize len, a_vptr proto) {
-	a_usize size = sizeof_GType(proto != null || len > 0 ? sizeof(VImpl) + sizeof(a_vslot) * len : 0);
+GMod* ai_mod_alloc(a_henv env, a_usize len, a_vptr proto) {
+	a_usize size = sizeof_GMod(proto != null || len > 0 ? sizeof(VImpl) + sizeof(a_vslot) * len : 0);
 
-	GType* self = ai_mem_alloc(env, size);
+	GMod* self = ai_mem_alloc(env, size);
 	memclr(self, size);
 
-	self->_vptr = &type_vtable;
+	self->_vptr = &mod_vtable;
 	self->_size = size;
 
 	if (proto != null) {
@@ -43,19 +43,19 @@ GType* ai_type_alloc(a_henv env, a_usize len, a_vptr proto) {
 	return self;
 }
 
-void ai_type_init(a_henv env, GType* self, a_tag tag, a_u32 nid) {
-	self->_vptr = &type_vtable;
+void ai_mod_init(a_henv env, GMod* self, a_tag tag, a_u32 nid) {
+	self->_vptr = &mod_vtable;
 	self->_tag = tag;
 	self->_name = nid != 0 ? env_int_str(env, nid) : null;
 }
 
-GType* ai_atype_new(a_henv env) {
-	GType* self = ai_type_alloc(env, 3, &ai_auser_vtable); //TODO 3 is a magic number.
+GMod* ai_amod_new(a_henv env) {
+	GMod* self = ai_mod_alloc(env, 3, &ai_auser_vtable); //TODO 3 is a magic number.
 	self->_tag = ALO_TUSER;
 	return self;
 }
 
-static void type_alloc_array(a_henv env, GType* self, a_usize new_cap) {
+static void type_alloc_array(a_henv env, GMod* self, a_usize new_cap) {
 	void* block = ai_mem_alloc(env, (sizeof(TDNode) + sizeof(Value)) * new_cap);
 
 	self->_hmask = new_cap - 1;
@@ -65,16 +65,30 @@ static void type_alloc_array(a_henv env, GType* self, a_usize new_cap) {
 	memclr(block, sizeof(TDNode) * new_cap);
 }
 
-static TDNode* type_hfirst(GType* self, a_hash hash) {
+static TDNode* type_hfirst(GMod* self, a_hash hash) {
 	return &self->_ptr[(hash & self->_hmask) + 1];
 }
 
-static a_bool tdnode_is_head(GType* self, TDNode* node) {
+static a_bool tdnode_is_head(GMod* self, TDNode* node) {
 	return node->_key != null && node == type_hfirst(self, node->_key->_hash);
 }
 
-static Value* type_refis(unused a_henv env, GType* self, GStr* key) {
-	assume(g_is_istr(key), "not short string.");
+static Value* type_refls(a_henv env, GMod* self, a_lstr const* key) {
+	if (self->_len > 0) {
+		TDNode* node = type_hfirst(self, ai_str_hashof(env, key->_ptr, key->_len));
+		if (tdnode_is_head(self, node)) {
+			do {
+				if (ai_str_requals(node->_key, key->_ptr, key->_len)) {
+					return &self->_values[node->_index];
+				}
+			}
+			while (!is_nil(node->_hnext) && (node = &self->_ptr[unwrap(node->_hnext)], true));
+		}
+	}
+	return null;
+}
+
+static Value* type_refs(unused a_henv env, GMod* self, GStr* key) {
 	if (self->_len > 0) {
 		TDNode* node = type_hfirst(self, key->_hash);
 		if (tdnode_is_head(self, node)) {
@@ -89,7 +103,7 @@ static Value* type_refis(unused a_henv env, GType* self, GStr* key) {
 	return null;
 }
 
-static TDNode* type_find_free(GType* self, TDNode* node) {
+static TDNode* type_find_free(GMod* self, TDNode* node) {
 	a_u32 index_head = node - self->_ptr;
 	a_u32 index = index_head;
 	loop {
@@ -102,7 +116,7 @@ static TDNode* type_find_free(GType* self, TDNode* node) {
 	}
 }
 
-static TDNode* type_get_hprev(GType* self, TDNode* node) {
+static TDNode* type_get_hprev(GMod* self, TDNode* node) {
 	TDNode* nodep = type_hfirst(self, node->_key->_hash);
 	loop {
 		TDNode* noden  = &self->_ptr[unwrap(nodep->_hnext)];
@@ -113,7 +127,7 @@ static TDNode* type_get_hprev(GType* self, TDNode* node) {
 	return nodep;
 }
 
-static void type_emplace(a_henv env, GType* self, GStr* key, Value value, a_u32 index) {
+static void type_emplace(a_henv env, GMod* self, GStr* key, Value value, a_u32 index) {
 	TDNode* nodeh = type_hfirst(self, key->_hash);
 	if (tdnode_is_head(self, nodeh)) {
 		/* Insert into hash list. */
@@ -160,7 +174,7 @@ static void type_emplace(a_henv env, GType* self, GStr* key, Value value, a_u32 
 	v_set(env, &self->_values[index], value);
 }
 
-void ai_type_hint(a_henv env, GType* self, a_usize len) {
+void ai_mod_hint(a_henv env, GMod* self, a_usize len) {
 	a_usize old_cap = self->_ptr != null ? self->_hmask + 1 : 0;
 	a_usize expect = self->_len + len;
 	if (expect > old_cap) {
@@ -185,32 +199,48 @@ void ai_type_hint(a_henv env, GType* self, a_usize len) {
 	}
 }
 
-void ai_type_set(a_henv env, GType* self, Value key, Value value) {
+Value const* ai_mod_refls(a_henv env, GMod* self, char const* src, a_usize len) {
+	a_lstr str = { src, len };
+	return type_refls(env, self, &str);
+}
+
+Value ai_mod_get(a_henv env, GMod* self, Value key) {
 	if (!v_is_str(key)) {
 		ai_err_bad_get(env, "type", v_nameof(env, key));
 	}
-	else if (!v_is_istr(key)) {
-		ai_err_raisef(env, ALO_EINVAL, "type field name too long.");
-	}
 	else {
-		ai_type_setis(env, self, v_as_str(key), value);
+		return ai_mod_gets(env, self, v_as_str(key));
 	}
 }
 
-void ai_type_setis(a_henv env, GType* self, GStr* key, Value value) {
-	Value* pv = type_refis(env, self, key);
+Value ai_mod_gets(a_henv env, GMod* self, GStr* key) {
+	Value* pv = type_refs(env, self, key);
+	return pv != null ? *pv : v_of_nil();
+}
+
+void ai_mod_set(a_henv env, GMod* self, Value key, Value value) {
+	if (!v_is_str(key)) {
+		ai_err_bad_get(env, "type", v_nameof(env, key));
+	}
+	else {
+		ai_mod_sets(env, self, v_as_str(key), value);
+	}
+}
+
+void ai_mod_sets(a_henv env, GMod* self, GStr* key, Value value) {
+	Value* pv = type_refs(env, self, key);
 
 	if (pv != null) {
 		v_set(env, pv, value);
 	}
 	else {
-		ai_type_hint(env, self, 1);
+		ai_mod_hint(env, self, 1);
 		type_emplace(env, self, key, value, self->_len);
 		self->_len += 1;
 		if (str_istm(key)) {
 			a_enum tm = str_totm(key);
 			if (tm <= TM__FAST_MAX) {
-				self->_flags |= TYPE_FLAG_FAST_TM(tm);
+				self->_flags |= MOD_FLAG_FAST_TM(tm);
 			}
 		}
 
@@ -220,33 +250,16 @@ void ai_type_setis(a_henv env, GType* self, GStr* key, Value value) {
 	ai_gc_barrier_backward_val(env, self, value);
 }
 
-Value ai_type_get(a_henv env, GType* self, Value key) {
-	if (!v_is_str(key)) {
-		ai_err_bad_get(env, "type", v_nameof(env, key));
-	}
-	else if (!v_is_istr(key)) {
-		return v_of_nil();
-	}
-	else {
-		return ai_type_getis(env, self, v_as_str(key));
-	}
-}
-
-Value ai_type_getis(a_henv env, GType* self, GStr* key) {
-	Value* pv = type_refis(env, self, key);
-	return pv != null ? *pv : v_of_nil();
-}
-
-static void type_drop(Global* g, a_hobj raw_self) {
-	GType* self = g_cast(GType, raw_self);
+static void mod_drop(Global* g, a_hobj raw_self) {
+	GMod* self = g_cast(GMod, raw_self);
 	if (self->_ptr != null) {
 		ai_mem_dealloc(g, self->_ptr + 1, (sizeof(TDNode) + sizeof(Value)) * (self->_hmask + 1));
 	}
 	ai_mem_dealloc(g, self, self->_size);
 }
 
-static void type_mark(Global* g, a_hobj raw_self) {
-	GType* self = g_cast(GType, raw_self);
+static void mod_mark(Global* g, a_hobj raw_self) {
+	GMod* self = g_cast(GMod, raw_self);
 	if (self->_loader != null) {
 		ai_gc_trace_mark(g, self->_loader);
 	}
@@ -268,9 +281,9 @@ static void type_mark(Global* g, a_hobj raw_self) {
 	ai_gc_trace_work(g, self->_len);
 }
 
-static GType* cache_get(TypeCache* cache, GStr* name) {
+static GMod* cache_get(ModCache* cache, GStr* name) {
 	a_u32 index = name->_hash & cache->_hmask;
-	for (GType* mod = cache->_table[index]; mod != null; mod = mod->_next) {
+	for (GMod* mod = cache->_table[index]; mod != null; mod = mod->_next) {
 		if (ai_str_equals(name, mod->_name)) {
 			return mod;
 		}
@@ -278,18 +291,18 @@ static GType* cache_get(TypeCache* cache, GStr* name) {
 	return null;
 }
 
-static GType* loader_load(a_henv env, GLoader* loader, GStr* name, a_bool load) {
+static GMod* loader_load(a_henv env, GLoader* loader, GStr* name, a_bool load) {
 	if (loader == null) {
-		return cache_get(&G(env)->_type_cache, name);
+		return cache_get(&G(env)->_mod_cache, name);
 	}
 	else {
-		GType* type = cache_get(&loader->_body._cache, name);
+		GMod* type = cache_get(&loader->_body._cache, name);
 		if (type == null) {
 			type = loader_load(env, loader->_body._parent, name, load);
 			if (type == null && load) {
 				panic("TODO"); //TODO
 				if (type != null) {
-					ai_type_cache(env, loader, type);
+					ai_mod_cache(env, loader, type);
 				}
 			}
 		}
@@ -297,36 +310,36 @@ static GType* loader_load(a_henv env, GLoader* loader, GStr* name, a_bool load) 
 	}
 }
 
-GType* ai_type_load(a_henv env, GLoader* loader, GStr* name, a_bool load) {
+GMod* ai_mod_load(a_henv env, GLoader* loader, GStr* name, a_bool load) {
 	return loader_load(env, loader, name, load);
 }
 
-static void cache_put_in_place(TypeCache* cache, GType* mod) {
+static void cache_put_in_place(ModCache* cache, GMod* mod) {
 	a_u32 id = mod->_name->_hash & cache->_hmask;
-	GType** pmod = &cache->_table[id];
-	GType* mod2;
+	GMod** pmod = &cache->_table[id];
+	GMod* mod2;
 	while ((mod2 = *pmod) != null) {
 		pmod = &mod2->_next;
 	}
 	*pmod = mod;
 }
 
-static void cache_grow(a_henv env, TypeCache* cache) {
+static void cache_grow(a_henv env, ModCache* cache) {
 	a_usize old_cap = cache->_table != null ? cache->_hmask + 1 : 0;
-	GType** old_ptr = cache->_table;
+	GMod** old_ptr = cache->_table;
 
 	a_usize new_cap = max((cache->_hmask + 1) * 2, 4);
-	GType** new_ptr = ai_mem_vnew(env, GType*, new_cap);
+	GMod** new_ptr = ai_mem_vnew(env, GMod*, new_cap);
 
-	memclr(new_ptr, sizeof(GType*) * new_cap);
+	memclr(new_ptr, sizeof(GMod*) * new_cap);
 
 	cache->_table = new_ptr;
 	cache->_hmask = new_cap - 1;
 
 	for (a_usize i = 0; i < old_cap; ++i) {
-		GType* mod = old_ptr[i];
+		GMod* mod = old_ptr[i];
 		while (mod != null) {
-			GType* next = mod->_next;
+			GMod* next = mod->_next;
 			mod->_next = null;
 			cache_put_in_place(cache, mod);
 			mod = next;
@@ -336,7 +349,7 @@ static void cache_grow(a_henv env, TypeCache* cache) {
 	ai_mem_vdel(G(env), old_ptr, old_cap);
 }
 
-static void cache_put(a_henv env, TypeCache* cache, GType* mod) {
+static void cache_put(a_henv env, ModCache* cache, GMod* mod) {
 	if (cache->_len >= cache->_hmask) {
 		cache_grow(env, cache);
 	}
@@ -344,18 +357,18 @@ static void cache_put(a_henv env, TypeCache* cache, GType* mod) {
 	cache->_len += 1;
 }
 
-void ai_type_cache(a_henv env, GLoader* loader, GType* type) {
+void ai_mod_cache(a_henv env, GLoader* loader, GMod* type) {
 	assume(type->_nref == 0, "module already registered.");
-	TypeCache* cache = loader != null ? &loader->_body._cache : &G(env)->_type_cache;
+	ModCache* cache = loader != null ? &loader->_body._cache : &G(env)->_mod_cache;
 	cache_put(env, cache, type);
 	type->_loader = loader;
 	type->_nref += 1;
 }
 
-void ai_type_cache_mark(Global* g, TypeCache* cache) {
+void ai_mod_cache_mark(Global* g, ModCache* cache) {
 	for (a_u32 i = 0; i <= cache->_hmask; ++i) {
-		GType** pmod = &cache->_table[i];
-		GType* mod;
+		GMod** pmod = &cache->_table[i];
+		GMod* mod;
 		while ((mod = *pmod) != null) {
 			ai_gc_trace_mark(g, mod);
 			pmod = &mod->_next;
@@ -363,40 +376,40 @@ void ai_type_cache_mark(Global* g, TypeCache* cache) {
 	}
 }
 
-static void type_cache_drop(Global* g, TypeCache* cache) {
+static void type_cache_drop(Global* g, ModCache* cache) {
 	if (cache->_table != null) {
 		ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 	}
 }
 
-void ai_type_boost(a_henv env) {
+void ai_mod_boost(a_henv env) {
 	Global* g = G(env);
 
-	ai_type_init(env, &g->_types._nil, ALO_TNIL, STR_nil);
-	ai_type_init(env, &g->_types._bool, ALO_TBOOL, STR_bool);
-	ai_type_init(env, &g->_types._int, ALO_TINT, STR_int);
-	ai_type_init(env, &g->_types._float, ALO_TFLOAT, STR_float);
-	ai_type_init(env, &g->_types._ptr, ALO_TPTR, STR_ptr);
-	ai_type_init(env, &g->_types._str, ALO_TSTR, STR_str);
-	ai_type_init(env, &g->_types._tuple, ALO_TTUPLE, STR_tuple);
-	ai_type_init(env, &g->_types._list, ALO_TLIST, STR_list);
-	ai_type_init(env, &g->_types._table, ALO_TTABLE, STR_table);
-	ai_type_init(env, &g->_types._route, ALO_TROUTE, STR_route);
-	ai_type_init(env, &g->_types._func, ALO_TFUNC, STR_func);
-	ai_type_init(env, &g->_types._type, ALO_TTYPE, STR_type);
+	ai_mod_init(env, &g->_types._nil, ALO_TNIL, STR_nil);
+	ai_mod_init(env, &g->_types._bool, ALO_TBOOL, STR_bool);
+	ai_mod_init(env, &g->_types._int, ALO_TINT, STR_int);
+	ai_mod_init(env, &g->_types._float, ALO_TFLOAT, STR_float);
+	ai_mod_init(env, &g->_types._ptr, ALO_TPTR, STR_ptr);
+	ai_mod_init(env, &g->_types._str, ALO_TSTR, STR_str);
+	ai_mod_init(env, &g->_types._tuple, ALO_TTUPLE, STR_tuple);
+	ai_mod_init(env, &g->_types._list, ALO_TLIST, STR_list);
+	ai_mod_init(env, &g->_types._table, ALO_TTABLE, STR_table);
+	ai_mod_init(env, &g->_types._route, ALO_TROUTE, STR_route);
+	ai_mod_init(env, &g->_types._func, ALO_TFUNC, STR_func);
+	ai_mod_init(env, &g->_types._type, ALO_TTYPE, STR_type);
 }
 
-void ai_type_clean(Global* g) {
-	type_cache_drop(g, &g->_type_cache);
+void ai_mod_clean(Global* g) {
+	type_cache_drop(g, &g->_mod_cache);
 }
 
-static VImpl const type_vtable = {
-	._tag = V_MASKED_TAG(T_TYPE),
+static VImpl const mod_vtable = {
+	._tag = V_MASKED_TAG(T_MOD),
 	._iname = env_type_iname(_type),
-	._sname = "type",
+	._sname = "mod",
 	._flags = VTABLE_FLAG_NONE,
 	._vfps = {
-		vfp_def(drop, type_drop),
-		vfp_def(mark, type_mark)
+		vfp_def(drop, mod_drop),
+		vfp_def(mark, mod_mark)
 	}
 };

@@ -19,7 +19,7 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
 	self->_vptr = &tuple_vtable;
     self->_len = len;
 	self->_hash = 0;
-	v_cpy_all(env, self->_body, src, len);
+	v_cpy_all(env, self->_ptr, src, len);
     ai_gc_register_object(env, self);
     return self;
 }
@@ -36,14 +36,14 @@ Value const* ai_tuple_refi(unused a_henv env, GTuple* self, a_isize pos) {
             return null;
         }
     }
-    return &self->_body[pos];
+    return &self->_ptr[pos];
 }
 
 a_bool ai_tuple_equals(a_henv env, GTuple* self, GTuple* other) {
 	if (self->_len != other->_len)
 		return false;
 	for (a_u32 i = 0; i < self->_len; ++i) {
-		if (!ai_vm_equals(env, self->_body[i], other->_body[i]))
+		if (!ai_vm_equals(env, self->_ptr[i], other->_ptr[i]))
 			return false;
 	}
 	return true;
@@ -53,7 +53,7 @@ a_hash ai_tuple_hash(a_henv env, GTuple* self) {
 	if (self->_hash == 0) {
 		a_hash hash = G(env)->_seed;
 		for (a_u32 i = 0; i < self->_len; ++i) {
-			hash += hash * 31 + ai_vm_hash(env, self->_body[i]);
+			hash += hash * 31 + ai_vm_hash(env, self->_ptr[i]);
 		}
 		self->_hash = hash != 0 ? hash : 1;
 	}
@@ -67,7 +67,7 @@ static void tuple_drop(Global* g, GTuple* self) {
 static void tuple_mark(Global* g, GTuple* self) {
     a_u32 len = self->_len;
     for (a_u32 i = 0; i < len; ++i) {
-		ai_gc_trace_mark_val(g, self->_body[i]);
+		ai_gc_trace_mark_val(g, self->_ptr[i]);
     }
 	ai_gc_trace_work(g, sizeof_GTuple(self->_len));
 }

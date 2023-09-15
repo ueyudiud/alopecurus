@@ -18,7 +18,7 @@ typedef struct GTuple GTuple;
 typedef struct GList GList;
 typedef struct GTable GTable;
 typedef struct GFun GFun;
-typedef struct alo_Type GType;
+typedef struct alo_Mod GMod;
 typedef struct alo_Env GRoute;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
@@ -35,14 +35,13 @@ typedef a_hobj a_gcnext;
 typedef a_gcnext a_gclist;
 
 typedef struct VImpl VImpl;
-typedef struct IStr IStr;
 typedef struct alo_Alloc Alloc;
 typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Stack Stack;
 typedef struct Global Global;
 typedef struct Loader Loader;
-typedef struct TypeCache TypeCache;
+typedef struct ModCache ModCache;
 typedef struct ByteBuf ByteBuf;
 
 #define T_NIL u32c(0)
@@ -51,10 +50,9 @@ typedef struct ByteBuf ByteBuf;
 #define T_PTR u32c(3)
 #define T_LIST u32c(4)
 #define T_TABLE u32c(5)
-#define T_TYPE u32c(6)
+#define T_MOD u32c(6)
 #define T_FUNC u32c(7)
-#define T_ISTR u32c(8)
-#define T_HSTR u32c(9)
+#define T_STR u32c(8)
 #define T_TUPLE u32c(10)
 #define T_AUSER u32c(11)
 #define T_CUSER u32c(12)
@@ -63,9 +61,9 @@ typedef struct ByteBuf ByteBuf;
 
 #define T__MIN_OBJ T_LIST
 #define T__MAX_OBJ T_CUSER
-#define T__MIN_NEQ T_HSTR
+#define T__MIN_NEQ T_TUPLE
 #define T__MAX_NEQ T_CUSER
-#define T__MIN_NHH T_ISTR
+#define T__MIN_NHH T_TUPLE
 #define T__MAX_NHH T_CUSER
 #define T__MAX_FAST u32c(15)
 
@@ -293,43 +291,31 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 	GOBJ_STRUCT_HEADER;    \
 	a_u32 _len;            \
 	a_hash _hash;          \
-	a_byte _data[]
+	a_byte _ptr[]
 
 struct GStr {
-	GSTR_STRUCT_HEADER;
+	GStr* _snext;
+	GOBJ_STRUCT_HEADER;
+	a_u32 _len;
+	a_hash _hash;
+	a_byte _ptr[];
 };
 
-struct IStr {
-	IStr* _cache_next; /* Next node of overflow chain in intern table. */
-	union {
-		GStr _body;
-		struct {
-			GSTR_STRUCT_HEADER;
-		};
-	};
-};
+static_assert(offsetof(GObj, _len) == offsetof(GStr, _len) - offsetof(GStr, _obj_head_mark));
 
-static_assert(offsetof(GObj, _len) == offsetof(GStr, _len));
+#define g_is_str(p) ((p)->_vptr->_tag == V_MASKED_TAG(T_STR))
 
-#define v_is_istr(v) v_is(v, T_ISTR)
-
-#define g_is_istr(p) ((p)->_vptr->_tag == V_MASKED_TAG(T_ISTR))
-
-#define v_is_hstr(v) v_is(v, T_HSTR)
-
-#define v_is_str(v) v_is_in(v, T_ISTR, T_HSTR)
+#define v_is_str(v) v_is(v, T_STR)
 
 always_inline GStr* v_as_str(Value v) {
 	assume(v_is_str(v), "not string.");
 	return g_cast(GStr, v_as_obj(v));
 }
 
-#define sizeof_HStr(l) pad_to_raw(sizeof(GStr) + (l) + 1, sizeof(a_usize))
-
-#define sizeof_IStr(l) pad_to_raw(sizeof(IStr) + (l) + 1, sizeof(a_usize))
+#define sizeof_GStr(l) pad_to_raw(sizeof(GStr) + (l) + 1, sizeof(a_usize))
 
 always_inline char const* str2ntstr(GStr* self) {
-	return cast(char const*, self->_data);
+	return cast(char const*, self->_ptr);
 }
 
 /*=========================================================*
@@ -340,7 +326,7 @@ struct GTuple {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
 	a_hash _hash;
-	Value _body[0];
+	Value _ptr[0];
 };
 
 static_assert(offsetof(GObj, _len) == offsetof(GTuple, _len));
@@ -521,7 +507,7 @@ always_inline GAUser* v_as_auser(Value v) {
 #define v_is_user(v) v_is_in(v, T_AUSER, T_CUSER)
 
 /*=========================================================*
- * Type
+ * Module
  *=========================================================*/
 
 #define VTABLE_FLAG_NONE        u8c(0x00)
@@ -565,13 +551,13 @@ struct TDNode {
 };
 
 /**
- ** Type (or Module).
+ ** Module.
  */
-struct alo_Type {
+struct alo_Mod {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _size;
 
-	a_u32 _sig; /* Type methods signature, changed when the order of existed fields changed. */
+	a_u32 _sig; /* Module fields signature, changed when the order of existed fields changed. */
 	a_u32 _nref; /* Reference counter. */
 
 	a_u32 _len;
@@ -585,20 +571,20 @@ struct alo_Type {
 	TDNode* _ptr;
 	Value* _values;
 
-	GType* _next; /* Used for linked list in loader. */
+	GMod* _next; /* Used for linked list in loader. */
 
 	VImpl _opt_vtbl[0];
 };
 
-struct TypeCache {
-	GType** _table;
+struct ModCache {
+	GMod** _table;
 	a_u32 _hmask;
 	a_u32 _len;
 };
 
 struct Loader {
 	GLoader* _parent;
-	TypeCache _cache;
+	ModCache _cache;
 };
 
 struct GLoader {
@@ -606,18 +592,18 @@ struct GLoader {
 	Loader _body;
 };
 
-#define TYPE_FLAG_NONE u16c(0)
-#define TYPE_FLAG_FAST_TM(tm) (u16c(1) << (tm))
+#define MOD_FLAG_NONE u16c(0)
+#define MOD_FLAG_FAST_TM(tm) (u16c(1) << (tm))
 
-#define v_is_type(v) v_is(v, T_TYPE)
+#define v_is_mod(v) v_is(v, T_MOD)
 
-always_inline GType* v_as_type(Value v) {
-	assume(v_is_type(v), "not type.");
-	return g_cast(GType, v_as_obj(v));
+always_inline GMod* v_as_mod(Value v) {
+	assume(v_is_mod(v), "not module.");
+	return g_cast(GMod, v_as_obj(v));
 }
 
-#define type_has_flag(t,f) (((t)->_flags & (f)) != 0)
-#define type_has_method(t,tm) type_has_flag(t, TYPE_FLAG_FAST_TM(tm))
+#define mod_has_flag(t,f) (((t)->_flags & (f)) != 0)
+#define mod_has_method(t,tm) mod_has_flag(t, MOD_FLAG_FAST_TM(tm))
 
 /*=========================================================*
  * Route
@@ -690,10 +676,10 @@ static_assert(offsetof(GRoute, _stack._base) == 0x20);
  *=========================================================*/
 
 typedef struct {
-	IStr** _table;
+	GStr** _table;
 	a_usize _len;
 	a_usize _hmask; /* Hash code mask. */
-} IStrCache;
+} StrCache;
 
 typedef void (*a_fp_gexecpt)(a_henv env, void* ctx, a_msg msg);
 typedef void (*a_fp_gmark)(Global* g, void* ctx);
@@ -722,8 +708,8 @@ struct Global {
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
 	GStr* _nomem_error;
-	TypeCache _type_cache;
-	IStrCache _istr_cache;
+	ModCache _mod_cache;
+	StrCache _str_cache;
 	a_hash _seed;
 	a_u16 _gcpausemul;
 	a_u16 _gcstepmul;
@@ -733,18 +719,18 @@ struct Global {
 	volatile atomic_uint_fast8_t _hookm;
 	GStr* _names[STR__COUNT];
 	struct {
-		GType _nil;
-		GType _bool;
-		GType _int;
-		GType _ptr;
-		GType _str;
-		GType _tuple;
-		GType _list;
-		GType _table;
-		GType _func;
-		GType _type;
-		GType _route;
-		GType _float;
+		GMod _nil;
+		GMod _bool;
+		GMod _int;
+		GMod _ptr;
+		GMod _str;
+		GMod _tuple;
+		GMod _list;
+		GMod _table;
+		GMod _func;
+		GMod _type;
+		GMod _route;
+		GMod _float;
 	} _types;
 };
 
@@ -810,16 +796,16 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 
 intern char const ai_obj_type_names[][8];
 
-always_inline GType* g_typeof(a_henv env, a_hobj p) {
+always_inline GMod* g_typeof(a_henv env, a_hobj p) {
 	assume(env->_vptr->_iname != 0, "object does not have type.");
-	return ptr_disp(GType, G(env), p->_vptr->_iname);
+	return ptr_disp(GMod, G(env), p->_vptr->_iname);
 }
 
 always_inline char const* g_nameof(unused a_henv env, a_hobj p) {
 	return p->_vptr->_sname;
 }
 
-always_inline GType* v_typeof(a_henv env, Value v) {
+always_inline GMod* v_typeof(a_henv env, Value v) {
 	if (v_is_float(v)) {
 		return &G(env)->_types._float;
 	}

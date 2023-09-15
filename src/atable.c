@@ -338,34 +338,23 @@ Value const* ai_table_refi(a_henv env, GTable* self, a_int key) {
     return table_find_id(env, self, v_trivial_hash(v_of_int(key)), v_of_int(key));
 }
 
-Value const* ai_table_refs(a_henv env, GTable* self, a_lstr const* key) {
-    return table_find_str(env, self, ai_str_hashof(G(env)->_seed, key->_ptr, key->_len), key);
+Value const* ai_table_refls(a_henv env, GTable* self, a_lstr const* key) {
+    return table_find_str(env, self, ai_str_hashof(env, key->_ptr, key->_len), key);
 }
 
-Value const* ai_table_refis(a_henv env, GTable* self, GStr* key) {
+Value const* ai_table_refs(a_henv env, GTable* self, GStr* key) {
 	return table_find_id(env, self, key->_hash, v_of_obj(key));
 }
 
 Value* ai_table_ref(a_henv env, GTable* self, Value key, a_u32* restrict phash) {
-	if (likely(v_is_istr(key))) {
-		GStr* str = v_as_str(key);
-		*phash = str->_hash;
-		return table_find_id(env, self, str->_hash, key);
-	}
-	else if (likely(v_is_hstr(key))) {
-		GStr* str = v_as_str(key);
-		*phash = str->_hash;
-		a_lstr lstr = { ._ptr = str2ntstr(str), ._len = str->_len };
-		return table_find_str(env, self, str->_hash, &lstr);
+	if (likely(v_has_trivial_equals(key))) {
+		*phash = v_trivial_hash(key);
+		return table_find_id(env, self, *phash, key);
 	}
 	else if (unlikely(v_is_float(key))) {
 		if (unlikely(v_is_nan(key))) {
 			return null;
 		}
-		*phash = v_trivial_hash(key);
-		return table_find_id(env, self, *phash, key);
-	}
-	else if (likely(v_has_trivial_equals(key))) {
 		*phash = v_trivial_hash(key);
 		return table_find_id(env, self, *phash, key);
 	}
@@ -434,16 +423,15 @@ a_bool alo_hremove(a_henv env, a_isize id, a_ritr itr) {
 	return true;
 }
 
-Value ai_table_getis(a_henv env, GTable* self, GStr* key) {
-	assume(g_is_istr(key), "not short string.");
-	Value const* v = table_find_id(env, self, key->_hash, v_of_obj(key));
-	return v != null ? *v : v_of_nil();
-}
-
 Value ai_table_get(a_henv env, GTable* self, Value key) {
 	a_u32 hash;
 	Value const* value = ai_table_ref(env, self, key, &hash);
 	return value != null ? *value : v_of_nil();
+}
+
+Value ai_table_gets(a_henv env, GTable* self, GStr* key) {
+	Value const* v = table_find_id(env, self, key->_hash, v_of_obj(key));
+	return v != null ? *v : v_of_nil();
 }
 
 void ai_table_set(a_henv env, GTable* self, Value key, Value value) {

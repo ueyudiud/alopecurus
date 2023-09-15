@@ -14,7 +14,7 @@
 #include "astr.h"
 #include "atable.h"
 #include "afun.h"
-#include "atype.h"
+#include "amod.h"
 #include "aenv.h"
 #include "agc.h"
 #include "avm.h"
@@ -303,10 +303,9 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
     }
 
     switch (v_get_tag(*err)) {
-        case T_HSTR:
-        case T_ISTR: {
+        case T_STR: {
             GStr* str = v_as_str(*err);
-            try(ai_buf_nputls(env, buf, str->_data, str->_len));
+            try(ai_buf_nputls(env, buf, str->_ptr, str->_len));
             break;
         }
         case T_INT: {
@@ -372,11 +371,11 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 
 void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
-	api_check(v_is_type(v), "type expected.");
+	api_check(v_is_mod(v), "type expected.");
 
-	GType* type = v_as_type(v);
+	GMod* type = v_as_mod(v);
 
-	ai_type_hint(env, type, nb);
+	ai_mod_hint(env, type, nb);
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
 		assume(b->name != null);
@@ -389,7 +388,7 @@ void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 			value = v_of_obj(fun);
 		}
 
-		ai_type_setis(env, type, key, value);
+		ai_mod_sets(env, type, key, value);
 	}
 
 	ai_gc_trigger(env);
@@ -398,12 +397,12 @@ void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
 	api_check_slot(env, 1);
 
-	GType* type = ai_type_alloc(env, 0, null);
+	GMod* type = ai_mod_alloc(env, 0, null);
 	v_set_obj(env, api_incr_stack(env), type);
 
 	type->_name = ai_str_new(env, name, strlen(name));
 
-	ai_type_hint(env, type, nb);
+	ai_mod_hint(env, type, nb);
 
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
@@ -417,7 +416,7 @@ void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb
 			value = v_of_obj(fun);
 		}
 
-		ai_type_setis(env, type, key, value);
+		ai_mod_sets(env, type, key, value);
 	}
 
 	ai_gc_trigger(env);
@@ -430,8 +429,8 @@ typedef struct {
 
 static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
-	a_htype type = v_as_type(api_elem(env, -1));
-	ai_type_cache(env, null, type);
+	a_hmod type = v_as_mod(api_elem(env, -1));
+	ai_mod_cache(env, null, type);
 	ai_vm_set(env, G(env)->_global, v_of_obj(type->_name), v_of_obj(type));
 	api_decr_stack(env);
 }

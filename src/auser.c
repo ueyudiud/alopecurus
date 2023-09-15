@@ -6,14 +6,14 @@
 #define ALO_LIB
 
 #include "atable.h"
-#include "atype.h"
+#include "amod.h"
 #include "agc.h"
 #include "avm.h"
 #include "aerr.h"
 
 #include "auser.h"
 
-GAUser* ai_auser_new(a_henv env, GType* type) {
+GAUser* ai_auser_new(a_henv env, GMod* type) {
 	assume(type->_opt_vtbl->_tag == v_masked_tag(T_AUSER), "not type for auser.");
 	GTable* self = ai_table_new(env);
 	self->_vptr = type->_opt_vtbl; /* Set type. */
@@ -56,10 +56,10 @@ void ai_auser_set(a_henv env, GAUser* self, Value key, Value value) {
 }
 
 static void tuser_mark(Global* g, GTable* self) {
-	GType* type = ptr_disp(GType, g, self->_vptr->_iname);
+	GMod* type = ptr_disp(GMod, g, self->_vptr->_iname);
 	ai_gc_trace_mark(g, type);
 	ai_table_mark(g, self);
-	ai_gc_trace_work(g, sizeof(GType) - sizeof(GTable));
+	ai_gc_trace_work(g, sizeof(GMod) - sizeof(GTable));
 }
 
 VImpl const ai_auser_vtable = {

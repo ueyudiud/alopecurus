@@ -11,7 +11,7 @@
 #include "atable.h"
 #include "afun.h"
 #include "auser.h"
-#include "atype.h"
+#include "amod.h"
 #include "actx.h"
 #include "agc.h"
 #include "aerr.h"
@@ -371,7 +371,7 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 	return str2ntstr(val);
 }
 
-void alo_pushtype(a_henv env, a_htype hnd) {
+void alo_pushtype(a_henv env, a_hmod hnd) {
 	api_check(hnd->_nref > 0, "type not referenced by API.");
 	v_set_obj(env, api_incr_stack(env), hnd);
 }
@@ -382,6 +382,7 @@ void alo_pushroute(a_henv env) {
 
 void alo_xmove(a_henv src, a_henv dst, a_usize n) {
 	api_check(src != dst, "same environment.");
+	api_check(G(src) == G(dst), "not in same global context.");
 	api_check_elem(src, n);
 	api_check_slot(dst, n);
 	v_cpy_all(src, dst->_stack._top, src->_stack._top - n, n);
@@ -448,8 +449,8 @@ a_usize alo_rawlen(a_henv env, a_isize id) {
 			GTable* value = v_as_table(v);
 			return value->_len;
 		}
-		case T_TYPE: {
-			GType* value = v_as_type(v);
+		case T_MOD: {
+			GMod* value = v_as_mod(v);
 			return value->_len;
 		}
 		case T_AUSER: {
@@ -604,6 +605,7 @@ void alo_yield(a_henv env) {
 }
 
 a_bool alo_fattrz(a_henv env, a_enum n) {
+	quiet(env);
 	switch (n) {
 		case ALO_FATTR_YIELD:
 			return true;
@@ -666,52 +668,53 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	return str2ntstr(val);
 }
 
-static a_htype l_use_type(GType* type) {
+static a_hmod l_use_type(GMod* type) {
 	if (unlikely(type->_nref == UINT32_MAX))
 		return null;
 	type->_nref += 1;
 	return type;
 }
 
-void alo_newtype(a_henv env, char const* name, a_flags options) {
+a_hmod alo_typeof(a_henv env, a_isize id) {
+	Value const* pv = api_roslot(env, id);
+	if (pv != null) {
+		GMod* type = v_typeof(env, *pv);
+		return l_use_type(type);
+	}
+	return null;
+}
+
+void alo_newmod(a_henv env, char const* name, a_flags flags) {
 	api_check_slot(env, 1);
 
-	GType* type = options & ALO_NEWTYPE_FLAG_STATIC ? ai_type_alloc(env, 0, null) : ai_atype_new(env);
-	v_set_obj(env, api_incr_stack(env), type);
+	GMod* self = flags & ALO_NEWMOD_FLAG_STATIC ? ai_mod_alloc(env, 0, null) : ai_amod_new(env);
+	v_set_obj(env, api_incr_stack(env), self);
 
 	if (name != null) {
-		type->_name = ai_str_new(env, name, strlen(name));
+		self->_name = ai_str_new(env, name, strlen(name));
 	}
 
 	ai_gc_trigger(env);
 }
 
-a_htype alo_typeof(a_henv env, a_isize id) {
-	Value const* pv = api_roslot(env, id);
-	if (pv != null) {
-		GType* type = v_typeof(env, *pv);
-		return l_use_type(type);
-	}
-	return null;
+char const* alo_modname(unused a_henv env, a_hmod mod) {
+	api_check(mod != null, "module is null.");
+	return str2ntstr(mod->_name);
 }
 
-char const* alo_typename(unused a_henv env, a_htype typ) {
-	return typ != null ? str2ntstr(typ->_name) : "empty";
-}
-
-a_htype alo_opentype(a_henv env, a_isize id) {
+a_hmod alo_openmod(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
-	if (likely(v_is_type(v))) {
-		GType* type = v_as_type(v);
+	if (likely(v_is_mod(v))) {
+		GMod* type = v_as_mod(v);
 		return l_use_type(type);
 	}
 	return null;
 }
 
-void alo_closetype(unused a_henv env, a_htype typ) {
-	if (typ != null) {
-		api_check(typ->_nref > 0, "type not referenced by API.");
-		typ->_nref -= 1;
+void alo_closemod(unused a_henv env, a_hmod mod) {
+	if (mod != null) {
+		api_check(mod->_nref > 0, "type not referenced by API.");
+		mod->_nref -= 1;
 	}
 }
 

@@ -36,8 +36,7 @@ static void dump_const(Value v) {
 			aloi_show("%g", v_as_float(v));
 			break;
 		}
-		case T_HSTR:
-		case T_ISTR: {
+		case T_STR: {
 			GStr* str = v_as_str(v);
 			if (str->_len > 16) {
 				aloi_show("<%u bytes string>", str->_len);
@@ -335,6 +334,6 @@ void aloopen_debug(a_henv env) {
 		{ "dump", debug_dump }
 	};
 
-	alo_newtype(env, ALO_LIB_DEBUG_NAME, ALO_NEWTYPE_FLAG_STATIC);
+	alo_newmod(env, ALO_LIB_DEBUG_NAME, ALO_NEWMOD_FLAG_STATIC);
 	aloL_putfields(env, -1, bindings);
 }
