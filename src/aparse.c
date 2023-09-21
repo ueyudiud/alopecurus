@@ -3931,11 +3931,24 @@ static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 	l_scan_pattern(par, param_bind, line1);
 	lex_check_pair_right(par, TK_LBK, TK_RBK, line1);
 
-    lex_check_skip(par, TK_LBR);
+	lex_sync(par);
 	line = lex_line(par);
 
-	l_scan_stats(par);
-    lex_check_pair_right(par, TK_LBR, TK_RBR, line);
+	switch (lex_peek(par)) {
+		case TK_LBR: {
+			lex_skip(par);
+			l_scan_stats(par);
+    		lex_check_pair_right(par, TK_LBR, TK_RBR, line);
+			break;
+		}
+		case TK_ASSIGN: {
+			Expr e;
+			lex_skip(par);
+			l_scan_expr(par, e);
+			expr_return(par, e, line);
+			break;
+		}
+	}
 
 	GProto* meta = fnscope_epilogue(par, name, false, lex_line(par));
 	expr_func(par, e, meta);
@@ -5034,14 +5047,8 @@ static void l_scan_let_stat(Parser* par) {
 
 	switch (lex_peek(par)) {
 		case TK_fn: {
-			Expr e1, e2;
-            lex_skip(par);
-			GStr* name = lex_check_ident(par);
-            local_bind(par, e1, name, line);
-
-			l_scan_function(par, e2, name, line);
-			expr_assign(par, e1, e2, line);
-			break;
+			lex_skip(par);
+			goto scan_func;
 		}
         case TK_use: {
             Expr e1, e2;
@@ -5057,6 +5064,19 @@ static void l_scan_let_stat(Parser* par) {
             expr_tbc(par, e1, line);
             break;
         }
+		case TK_IDENT: {
+			if (lex_forward(par) == TK_LBK) {
+			scan_func:
+				Expr e1, e2;
+				GStr* name = lex_check_ident(par);
+    	        local_bind(par, e1, name, line);
+
+				l_scan_function(par, e2, name, line);
+				expr_assign(par, e1, e2, line);
+				break;
+			}
+			fallthrough;
+		}
 		default: {
 			l_scan_pattern(par, l_scan_let_stat2, line);
 			break;
@@ -5087,26 +5107,21 @@ static void l_scan_pub_stat(Parser* par) {
 	a_line line = lex_line(par);
     lex_skip(par);
 
-	switch (lex_peek(par)) {
-		case TK_fn: {
-			Expr e1, e2;
-            lex_skip(par);
-			GStr* name = lex_check_ident(par);
-            sym_export(par, e1, name, line);
-			l_scan_function(par, e2, name, line);
-			expr_assign(par, e1, e2, line);
-			break;
-		}
-		default: {
-			Expr e;
-			GStr* name = lex_check_ident(par);
-            sym_export(par, e, name, line);
-			if (lex_test_skip(par, TK_ASSIGN)) {
-				Expr e2 = {};
-				l_scan_expr(par, e2);
-				expr_assign(par, e, e2, line);
-			}
-			break;
+	if ((lex_peek(par) == TK_IDENT && lex_forward(par) == TK_LBK) || lex_test_skip(par, TK_fn)) {
+		Expr e1, e2;
+		GStr* name = lex_check_ident(par);
+        sym_export(par, e1, name, line);
+		l_scan_function(par, e2, name, line);
+		expr_assign(par, e1, e2, line);
+	}
+	else {
+		Expr e;
+		GStr* name = lex_check_ident(par);
+        sym_export(par, e, name, line);
+		if (lex_test_skip(par, TK_ASSIGN)) {
+			Expr e2 = {};
+			l_scan_expr(par, e2);
+			expr_assign(par, e, e2, line);
 		}
 	}
 }

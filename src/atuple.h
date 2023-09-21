@@ -15,5 +15,3 @@ intern a_hash ai_tuple_hash(a_henv env, GTuple* self);
 intern a_bool ai_tuple_equals(a_henv env, GTuple* self, GTuple* other);
 
 #endif /* atuple_h_ */
-
-
