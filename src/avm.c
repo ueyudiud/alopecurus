@@ -12,7 +12,7 @@
 #include "atable.h"
 #include "afun.h"
 #include "auser.h"
-#include "amod.h"
+#include "ameta.h"
 #include "afmt.h"
 #include "aenv.h"
 #include "agc.h"
@@ -58,8 +58,6 @@ static a_none l_div_0_err(a_henv env) {
 	ai_err_raisef(env, ALO_EINVAL, "attempt to divide by 0.");
 }
 
-static Value vm_call_meta(a_henv env, Value* base);
-
 a_hash ai_vm_hash(a_henv env, Value v) {
 	if (likely(v_has_trivial_hash(v))) {
 		return v_trivial_hash(v);
@@ -70,7 +68,10 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 	else if (likely(v_is_tuple(v))) {
 		return ai_tuple_hash(env, v_as_tuple(v));
 	}
-	else {
+	else if (unlikely(v_is_float(v))) {
+        return v_float_hash(v);
+    }
+    else {
 		Value vf = ai_obj_vlookftm(env, v, TM___hash__);
 
 		if (v_is_nil(vf)) {
@@ -79,7 +80,7 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 
 		Value* base = vm_push_args(env, vf, v);
 
-		Value vr = vm_call_meta(env, base);
+		Value vr = ai_vm_call_meta(env, base);
 		if (!v_is_int(vr)) ai_err_raisef(env, ALO_EINVAL, "result for '__hash__' should be int.");
 		return cast(a_hash, v_as_int(vr));
 	}
@@ -87,11 +88,11 @@ a_hash ai_vm_hash(a_henv env, Value v) {
 
 a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	if (v_get_tag(v1) == v_get_tag(v2)) {
-		if (v_is_float(v1)) {
-			return ai_op_eq_float(v_as_float(v1), v_as_float(v2));
-		}
-		else if (v_has_trivial_equals(v1)) {
+		if (likely(v_has_trivial_equals(v1))) {
 			return v_trivial_equals(v1, v2);
+		}
+		else if (v_is_float(v1)) {
+			return ai_op_eq_float(v_as_float(v1), v_as_float(v2));
 		}
 		else if (likely(v_is_tuple(v1))) {
 			return ai_tuple_equals(env, v_as_tuple(v1), v_as_tuple(v2));
@@ -108,26 +109,15 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	}
 
 	Value* base = vm_push_args(env, vf, v1, v2);
-	return v_to_bool(vm_call_meta(env, base));
+	return v_to_bool(ai_vm_call_meta(env, base));
 }
 
 static Value vm_look(a_henv env, Value v, GStr* key) {
-	GMod* type = v_typeof(env, v);
-	Value vf = ai_mod_gets(env, type, key);
-	if (v_is_nil(vf)) {
-		ai_err_bad_look(env, v_nameof(env, v), key);
-	}
-	return vf;
-}
+	GMeta* type = v_typeof(env, v);
+    if (type->_looker == null) {
 
-Value ai_vm_meta_get(a_henv env, Value vf, Value v1, Value v2) {
-	if (v_is_func(v1)) {
-		Value* base = vm_push_args(env, vf, v1, v2);
-		return vm_call_meta(env, base);
-	}
-	else {
-		return ai_vm_get(env, vf, v2);
-	}
+    }
+    return ai_vm_get(env, v_of_obj(type->_looker), v_of_obj(key));
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
@@ -138,66 +128,72 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
 			return ai_list_get(env, v_as_list(v1), v2);
 		case T_TABLE:
 			return ai_table_get(env, v_as_table(v1), v2);
-		case T_MOD:
-			return ai_mod_get(env, v_as_mod(v1), v2);
-		case T_AUSER:
-			return ai_auser_get(env, v_as_auser(v1), v2);
-		default: {
-			Value vf = ai_obj_vlookftm(env, v1, TM___get__);
-			if (v_is_nil(vf)) ai_err_bad_tm(env, TM___get__);
-			return ai_vm_meta_get(env, vf, v1, v2);
-		}
+		case T_META:
+			return ai_meta_get(env, v_as_meta(v1), v2);
+		case T_USER:
+            return v_vcall(env, v1, get, v2);
+        default:
+            ai_err_bad_tm(env, TM___get__);
 	}
 }
 
-void ai_vm_meta_set(a_henv env, Value vf, Value v1, Value v2, Value v3) {
-	if (v_is_func(v1)) {
-		Value* base = vm_push_args(env, vf, v1, v2, v3);
-		vm_call_meta(env, base);
-	}
-	else {
-		ai_vm_set(env, vf, v2, v3);
-	}
+a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
+    switch (v_get_tag(v1)) {
+        case T_TUPLE: {
+            return ai_tuple_uget(env, v_as_tuple(v1), v2, pv);
+        }
+        case T_LIST: {
+            return ai_list_uget(env, v_as_list(v1), v2, pv);
+        }
+        case T_TABLE: {
+            return ai_table_uget(env, v_as_table(v1), v2, pv);
+        }
+        case T_META: {
+            return ai_meta_uget(env, v_as_meta(v1), v2, pv);
+        }
+        case T_USER: {
+            GUser* p = v_as_user(v1);
+            a_vfp(uget) uget = g_vfetch(p, uget);
+            if (uget == null) return ALO_EBADOP;
+            return g_vcallp(env, p, uget, v2, pv);
+        }
+        default: {
+            return ALO_EBADOP;
+        }
+    }
 }
 
 void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
-	if (v_is_list(v1)) {
-		ai_list_set(env, v_as_list(v1), v2, v3);
-	}
-	else if (v_is_table(v1)) {
-		ai_table_set(env, v_as_table(v1), v2, v3);
-	}
-	else if (v_is_mod(v1)) {
-		ai_mod_set(env, v_as_mod(v1), v2, v3);
-	}
-	else if (v_is_auser(v1)) {
-		ai_auser_set(env, v_as_auser(v1), v2, v3);
-	}
-	else {
-		Value vf = ai_obj_vlookftm(env, v1, TM___set__);
-		if (v_is_nil(vf)) ai_err_bad_tm(env, TM___set__);
-		ai_vm_meta_set(env, vf, v1, v2, v3);
-	}
+    switch (v_get_tag(v1)) {
+        case T_LIST:
+            return ai_list_set(env, v_as_list(v1), v2, v3);
+        case T_TABLE:
+            return ai_table_set(env, v_as_table(v1), v2, v3);
+        case T_USER:
+            return v_vcall(env, v1, set, v2, v3);
+        default:
+            ai_err_bad_tm(env, TM___set__);
+    }
 }
 
-static Value vm_meta_len(a_henv env, Value v) {
-	Value vf = ai_obj_vlookftm(env, v, TM___len__);
-	if (v_is_nil(vf)) {
-		if (v_is_auser(v)) {
-			return v_of_int(v_as_auser(v)->_len);
+a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
+    switch (v_get_tag(v1)) {
+        case T_LIST: {
+            return ai_list_uset(env, v_as_list(v1), v2, v3);
+        }
+        case T_TABLE: {
+            return ai_table_uset(env, v_as_table(v1), v2, v3);
+        }
+		case T_USER: {
+			GUser* p = v_as_user(v1);
+			a_vfp(uset) uset = g_vfetch(p, uset);
+			if (uset == null) return ALO_EBADOP;
+			return g_vcallp(env, p, uset, v2, v3, pctx);
 		}
-		else {
-			ai_err_bad_tm(env, TM___len__);
-		}
-	}
-	else {
-		Value* base = vm_push_args(env, vf, v);
-		Value vr = vm_call_meta(env, base);
-		if (!v_is_int(vr)) {
-			ai_err_raisef(env, ALO_EINVAL, "result for '__len__' should be int.");
-		}
-		return vr;
-	}
+        default: {
+            return ALO_EBADOP;
+        }
+    }
 }
 
 static Value vm_len(a_henv env, Value v) {
@@ -210,12 +206,15 @@ static Value vm_len(a_henv env, Value v) {
 			return v_of_int(v_as_list(v)->_len);
 		case T_TABLE:
 			return v_of_int(v_as_table(v)->_len);
+        case T_USER:
+            return v_of_int(v_vcall(env, v, len));
 		default:
-			return vm_meta_len(env, v);
+			ai_err_bad_tm(env, TM___len__);
 	}
 }
 
 static void vm_iter(a_henv env, Value* restrict vs, Value v) {
+find:
     switch (v_get_tag(v)) {
         case T_TUPLE: {
             v_set(env, &vs[0], v);
@@ -232,10 +231,13 @@ static void vm_iter(a_henv env, Value* restrict vs, Value v) {
             v_set_int(&vs[2], 0);
             break;
         }
-        case T_MOD: {
-            v_set(env, &vs[0], v);
-            v_set_int(&vs[2], 0);
-            break;
+        case T_META: {
+            GMeta* p = v_as_meta(v);
+            if (p->_looker != null) {
+                v = v_of_obj(p);
+                goto find;
+            }
+            fallthrough;
         }
         default: {
             //TODO
@@ -277,30 +279,11 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
                 return new(ValueSlice) { };
 
             i = unwrap(p->_ptr[i]._link._next);
-            HNode* n = &p->_ptr[i];
+            TNode* n = &p->_ptr[i];
 
             v_set_int(pi, i);
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, n->_key, n->_value);
-            return new(ValueSlice) { vd, 2 };
-        }
-        case T_MOD: {
-            GMod* p = v_as_mod(vc);
-            a_u32 i = cast(a_u32, v_as_int(*pi));
-            
-            TDNode* n;
-            loop {
-                if (i > p->_hmask)
-                    return new(ValueSlice) { };
-                i += 1;
-                n = &p->_ptr[i];
-                if (n->_key != null)
-                    break;
-            }
-
-            v_set_int(pi, i);
-            env->_stack._top = vs;
-            Value* vd = vm_push_args(env, v_of_obj(n->_key), p->_values[n->_index]);
             return new(ValueSlice) { vd, 2 };
         }
         default: {
@@ -318,7 +301,7 @@ static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
 	}
 
 	Value* base = vm_push_args(env, vf, v1);
-	return vm_call_meta(env, base);
+	return ai_vm_call_meta(env, base);
 }
 
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
@@ -329,7 +312,7 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 	}
 
 	Value* base = vm_push_args(env, vf, v1, v2);
-	return vm_call_meta(env, base);
+	return ai_vm_call_meta(env, base);
 }
 
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
@@ -340,7 +323,7 @@ static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
 	}
 
 	Value* base = vm_push_args(env, vf, v1, v2);
-	return v_to_bool(vm_call_meta(env, base));
+	return v_to_bool(ai_vm_call_meta(env, base));
 }
 
 static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
@@ -384,16 +367,15 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				case T_LIST:
 				case T_TABLE:
 				case T_FUNC:
-				case T_CUSER:
-				case T_AUSER:
-				case T_MOD: {
+				case T_USER:
+				case T_META: {
 					Value vf = ai_obj_vlooktm(env, v, TM___str__);
 					if (v_is_nil(vf)) {
 						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
 					}
 					Value* args = vm_push_args(env, vf, v);
 					StkPtr bptr = val2stk(env, base);
-					Value vs = vm_call_meta(env, args);
+					Value vs = ai_vm_call_meta(env, args);
 					base = stk2val(env, bptr);
 					if (!v_is_str(vs)) {
 						ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
@@ -483,26 +465,6 @@ static void vm_call_vret(a_henv env, Value* base) {
 	env->_stack._top = base + slice._len;
 }
 
-static Value vm_call_meta(a_henv env, Value* base) {
-	Frame frame = {
-		._env = env,
-		._prev = env->_frame,
-		._stack_bot = val2stk(env, base),
-		._fmeta = true
-	};
-
-	ValueSlice slice = vm_call_uncleared(env, &frame);
-	env->_frame = frame._prev;
-
-	base = stk2val(env, frame._stack_bot) - 1;
-
-	ai_cap_close_above(env, base);
-
-	env->_stack._top = base;
-
-	return slice._len > 0 ? *slice._ptr : v_of_nil();
-}
-
 static ValueSlice vm_call_uncleared(a_henv env, Frame* frame) {
 	GFun* fun;
 	Value const* K;
@@ -553,8 +515,10 @@ tail_call:
 	if (fun->_flags & FUN_FLAG_NATIVE) {
 		check_stack(R + ALOI_INIT_CFRAME_STACKSIZE);
 
-		a_u32 n = (*fun->_fptr)(env);
-		api_check_elem(env, n);
+		a_msg n = (*fun->_fptr)(env);
+		if (unlikely(n < 0))
+            unreachable(); /* TODO when error raised. */
+        api_check_elem(env, n);
 		return new(ValueSlice) { env->_stack._top - n, n };
 	}
 	else {
@@ -1479,4 +1443,24 @@ void ai_vm_call(a_henv env, Value* base, a_i32 nret) {
 	else {
 		vm_call_vret(env, base);
 	}
+}
+
+Value ai_vm_call_meta(a_henv env, Value* base) {
+	Frame frame = {
+		._env = env,
+		._prev = env->_frame,
+		._stack_bot = val2stk(env, base),
+		._fmeta = true
+	};
+
+	ValueSlice slice = vm_call_uncleared(env, &frame);
+	env->_frame = frame._prev;
+
+	base = stk2val(env, frame._stack_bot) - 1;
+
+	ai_cap_close_above(env, base);
+
+	env->_stack._top = base;
+
+	return slice._len > 0 ? *slice._ptr : v_of_nil();
 }

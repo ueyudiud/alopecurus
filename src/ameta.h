@@ -1,0 +1,47 @@
+/**
+ *@file ameta.h
+ */
+
+#ifndef ameta_h_
+#define ameta_h_
+
+#include "aobj.h"
+
+intern GMeta* ai_meta_alloc(a_henv env, a_usize len, a_vtbl vtbl);
+intern GMeta* ai_ameta_new(a_henv env);
+
+intern GMeta* ai_meta_load(a_henv env, GLoader* loader, GStr* name, a_bool load);
+intern void ai_meta_cache(a_henv env, GLoader* loader, GMeta* meta);
+intern void ai_meta_cache_mark(Global* g, MetaCache* cache);
+intern void ai_meta_boost(a_henv env);
+intern void ai_meta_clean(Global* g);
+
+intern Value ai_meta_get(a_henv env, GMeta* self, Value key);
+intern a_msg ai_meta_uget(a_henv env, GMeta* self, Value key, Value* pval);
+intern a_msg ai_meta_uset(a_henv env, GMeta* self, Value key, Value val);
+
+always_inline Value ai_obj_vlooktm(a_henv env, Value v, a_enum tm) {
+	GMeta* type = v_typeof(env, v);
+	GStr* key = env_int_str(env, STR_TM__FIRST + tm);
+	return ai_meta_get(env, type, v_of_obj(key));
+}
+
+always_inline Value ai_obj_glookftm(a_henv env, a_hobj p, a_enum tm) {
+	assume(tm <= TM__FAST_MAX, "cannot fast lookup.");
+	GMeta* type = g_typeof(env, p);
+	if (!meta_has_tm(type, tm)) return v_of_nil();
+	GStr* key = env_int_str(env, STR_TM__FIRST + tm);
+    return ai_meta_get(env, type, v_of_obj(key));
+}
+
+#define ai_obj_glookftm(env,p,tm) ai_obj_glookftm(env, gobj_cast(p), tm)
+
+always_inline Value ai_obj_vlookftm(a_henv env, Value v, a_enum tm) {
+	assume(tm <= TM__FAST_MAX, "cannot fast lookup.");
+	GMeta* type = v_typeof(env, v);
+	if (!meta_has_tm(type, tm)) return v_of_nil();
+	GStr* key = env_int_str(env, STR_TM__FIRST + tm);
+    return ai_meta_get(env, type, v_of_obj(key));
+}
+
+#endif /* ameta_h_ */

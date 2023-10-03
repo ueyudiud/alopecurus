@@ -1,15 +1,15 @@
 aapi.o: aapi.c astr.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h aop.h \
  asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
- actx/x64.sysv.posix.h aio.h atuple.h alist.h atable.h afun.h auser.h \
- amod.h agc.h aerr.h avm.h aenv.h astk.h aparse.h alex.h abuf.h amem.h \
+ actx/x64.sysv.posix.h aio.h atuple.h alist.h atable.h agc.h afun.h \
+ auser.h ameta.h aerr.h avm.h aenv.h astk.h aparse.h alex.h abuf.h amem.h \
  aapi.h
 aauxlib.o: aauxlib.c abuf.h amem.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h \
- actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h aio.h atable.h afun.h \
- amod.h aenv.h astk.h agc.h avm.h adbg.h aapi.h alolib.h
+ actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h aio.h atable.h agc.h \
+ afun.h ameta.h aenv.h astk.h avm.h adbg.h aapi.h alolib.h
 abaselib.o: abaselib.c atuple.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h \
- actx/x64.w64.win.h actx/x64.sysv.posix.h amod.h auser.h agc.h aapi.h \
+ actx/x64.w64.win.h actx/x64.sysv.posix.h ameta.h auser.h agc.h aapi.h \
  aenv.h astr.h aio.h astk.h afun.h alolib.h abaselib.h
 abc.o: abc.c abc.h adef.h aarch.h alo.h aauxlib.h
 abuf.o: abuf.c agc.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h aop.h \
@@ -22,10 +22,13 @@ adbglib.o: adbglib.c abc.h adef.h aarch.h alo.h aauxlib.h afun.h aobj.h \
  astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h \
  actx/x64.w64.win.h actx/x64.sysv.posix.h agc.h aapi.h aenv.h astr.h \
  aio.h astk.h alolib.h abaselib.h adbglib.h
+adict.o: adict.c adict.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h \
+ aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
+ actx/x64.sysv.posix.h
 aenv.o: aenv.c abc.h adef.h aarch.h alo.h aauxlib.h astr.h aobj.h astrs.h \
  aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
- actx/x64.sysv.posix.h aio.h atuple.h alist.h atable.h amod.h amem.h \
- agc.h aerr.h aenv.h astk.h afun.h
+ actx/x64.sysv.posix.h aio.h atuple.h alist.h atable.h agc.h ameta.h \
+ amem.h aerr.h aenv.h astk.h afun.h
 aerr.o: aerr.c astr.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h aop.h \
  asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
  actx/x64.sysv.posix.h aio.h aenv.h astk.h afun.h agc.h avm.h aerr.h
@@ -38,7 +41,7 @@ afun.o: afun.c abc.h adef.h aarch.h alo.h aauxlib.h aenv.h astr.h aobj.h \
  agc.h
 agc.o: agc.c aenv.h astr.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h \
  aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
- actx/x64.sysv.posix.h aio.h astk.h afun.h amod.h amem.h agc.h
+ actx/x64.sysv.posix.h aio.h astk.h afun.h ameta.h amem.h agc.h
 aio.o: aio.c amem.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h aop.h \
  asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
  actx/x64.sysv.posix.h aio.h
@@ -57,13 +60,13 @@ amem.o: amem.c aenv.h astr.h aobj.h adef.h aarch.h alo.h aauxlib.h \
  astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h \
  actx/x64.w64.win.h actx/x64.sysv.posix.h aio.h astk.h afun.h agc.h \
  aerr.h amem.h
-amod.o: amod.c atable.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h \
+ameta.o: ameta.c atable.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h \
  aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
- actx/x64.sysv.posix.h auser.h aenv.h astr.h aio.h astk.h afun.h amem.h \
- agc.h avm.h aerr.h amod.h
-aobj.o: aobj.c astr.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h aop.h \
+ actx/x64.sysv.posix.h agc.h auser.h aenv.h astr.h aio.h astk.h afun.h \
+ amem.h avm.h aerr.h ameta.h
+aobj.o: aobj.c aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h aop.h \
  asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
- actx/x64.sysv.posix.h aio.h amod.h
+ actx/x64.sysv.posix.h
 aparse.o: aparse.c abc.h adef.h aarch.h alo.h aauxlib.h afun.h aobj.h \
  astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h \
  actx/x64.w64.win.h actx/x64.sysv.posix.h aenv.h astr.h aio.h astk.h \
@@ -93,10 +96,10 @@ atuple.o: atuple.c amem.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h \
  afun.h atuple.h
 auser.o: auser.c atable.h aobj.h adef.h aarch.h alo.h aauxlib.h astrs.h \
  aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h actx.h actx/x64.w64.win.h \
- actx/x64.sysv.posix.h amod.h agc.h avm.h aenv.h astr.h aio.h astk.h \
+ actx/x64.sysv.posix.h agc.h ameta.h avm.h aenv.h astr.h aio.h astk.h \
  afun.h aerr.h auser.h
 avm.o: avm.c abc.h adef.h aarch.h alo.h aauxlib.h aop.h asym/tm.h \
  atuple.h aobj.h astrs.h asym/kw.h asym/pt.h asym/op.h actx.h \
- actx/x64.w64.win.h actx/x64.sysv.posix.h alist.h atable.h afun.h auser.h \
- amod.h afmt.h abuf.h amem.h astr.h aio.h aenv.h astk.h agc.h aerr.h \
+ actx/x64.w64.win.h actx/x64.sysv.posix.h alist.h atable.h agc.h afun.h \
+ auser.h ameta.h afmt.h abuf.h amem.h astr.h aio.h aenv.h astk.h aerr.h \
  aapi.h avm.h

@@ -5,9 +5,6 @@
 #define aobj_c_
 #define ALO_LIB
 
-#include "astr.h"
-#include "amod.h"
-
 #include "aobj.h"
 
 char const ai_obj_type_names[][8] = {
@@ -21,9 +18,8 @@ char const ai_obj_type_names[][8] = {
 	[T_LIST] = "list",
 	[T_TABLE] = "table",
 	[T_FUNC] = "func",
-	[T_MOD] = "mod",
-	[T_AUSER] = "user",
-	[T_CUSER] = "user",
+	[T_META] = "meta",
+	[T_USER] = "user",
 	[T_NAN] = "float",
 	[T_FLOAT] = "float"
 };

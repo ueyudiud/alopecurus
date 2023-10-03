@@ -18,13 +18,12 @@ typedef struct GTuple GTuple;
 typedef struct GList GList;
 typedef struct GTable GTable;
 typedef struct GFun GFun;
-typedef struct alo_Mod GMod;
+typedef struct GUser GUser;
+typedef struct GMeta GMeta;
 typedef struct alo_Env GRoute;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 typedef struct GLoader GLoader;
-
-typedef GTable GAUser;
 
 /* Object pointer. */
 typedef GObj* a_hobj;
@@ -34,15 +33,15 @@ typedef a_usize a_trmark;
 typedef a_hobj a_gcnext;
 typedef a_gcnext a_gclist;
 
-typedef struct VImpl VImpl;
+typedef struct VTable VTable;
+typedef struct Dict Dict;
 typedef struct alo_Alloc Alloc;
 typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Stack Stack;
 typedef struct Global Global;
 typedef struct Loader Loader;
-typedef struct ModCache ModCache;
-typedef struct ByteBuf ByteBuf;
+typedef struct MetaCache MetaCache;
 
 #define T_NIL u32c(0)
 #define T_FALSE u32c(1)
@@ -50,21 +49,20 @@ typedef struct ByteBuf ByteBuf;
 #define T_PTR u32c(3)
 #define T_LIST u32c(4)
 #define T_TABLE u32c(5)
-#define T_MOD u32c(6)
+#define T_META u32c(6)
 #define T_FUNC u32c(7)
 #define T_STR u32c(8)
 #define T_TUPLE u32c(10)
-#define T_AUSER u32c(11)
-#define T_CUSER u32c(12)
+#define T_USER u32c(11)
 #define T_INT u32c(14)
 #define T_NAN u32c(15)
 
 #define T__MIN_OBJ T_LIST
-#define T__MAX_OBJ T_CUSER
+#define T__MAX_OBJ T_USER
 #define T__MIN_NEQ T_TUPLE
-#define T__MAX_NEQ T_CUSER
+#define T__MAX_NEQ T_USER
 #define T__MIN_NHH T_TUPLE
-#define T__MAX_NHH T_CUSER
+#define T__MAX_NHH T_USER
 #define T__MAX_FAST u32c(15)
 
 #define T_FLOAT u32c(16)
@@ -82,40 +80,27 @@ always_inline void v_check_alive(a_henv env, Value v);
 #define V_PAYLOAD_MASK (~V_TAG_MASK)
 #define V_INT_MASK (~(~u64c(0) << 32))
 
-#define V_MASKED_TAG(t) (~cast(a_u64, t) << 47)
+#define V_STENCIL(t) (~cast(a_u64, t) << 47)
 #define V_GET_TAG(r) (~(r) >> 47)
 #define V_GET_PAYLOAD(r) ((r) & V_PAYLOAD_MASK)
-#define V_IS(r,t) (((r) & V_TAG_MASK) == V_MASKED_TAG(t))
+#define V_IS(r,t) (((r) & V_TAG_MASK) == V_STENCIL(t))
 
-#define V_STRICT_NIL (~u64c(0))
-#define V_EMPTY (~u64c(1))
-#define V_FALSE V_MASKED_TAG(T_FALSE)
-#define V_TRUE (V_MASKED_TAG(T_TRUE) | V_PAYLOAD_MASK)
-#define V_FLOAT_MAX u64c(0xfff8000000000000)
-
-static_assert(V_IS(V_STRICT_NIL, T_NIL));
-static_assert(V_IS(V_EMPTY, T_NIL));
-static_assert(V_IS(V_FALSE, T_FALSE));
-static_assert(V_IS(V_TRUE, T_TRUE));
-static_assert(V_TRUE + 1 == V_FALSE);
-static_assert(V_IS(V_FLOAT_MAX, T_NAN));
-
-always_inline a_u64 v_masked_tag(a_enum tag) {
+always_inline a_u64 v_stencil(a_enum tag) {
 	assume(tag <= T__MAX_FAST, "bad value tag.");
-	return V_MASKED_TAG(tag);
+	return V_STENCIL(tag);
 }
 
 always_inline a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
 	assume((payload & ~V_PAYLOAD_MASK) == 0, "bad value payload.");
-	return v_masked_tag(tag) | payload;
+	return v_stencil(tag) | payload;
 }
 
 always_inline a_u64 v_box_nan_raw_min(a_enum tag) {
-	return v_masked_tag(tag);
+	return v_stencil(tag);
 }
 
 always_inline a_u64 v_box_nan_raw_max(a_enum tag) {
-	return v_masked_tag(tag) | V_PAYLOAD_MASK;
+	return v_stencil(tag) | V_PAYLOAD_MASK;
 }
 
 #define v_new(v) (new(Value) {v})
@@ -152,28 +137,53 @@ always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restric
 }
 
 /*=========================================================*
- * Primitives
+ * Nil & Control Values
  *=========================================================*/
+
+#define V_STRICT_NIL (~-u64c ALO_SOK)
+#define V_EMPTY      (~-u64c ALO_EEMPTY)
+#define V_NOT_IMPL   (~-u64c ALO_EBADOP)
+#define V_INVALID    (~-u64c ALO_EINVAL)
+
+static_assert(V_IS(V_STRICT_NIL, T_NIL));
+static_assert(V_IS(V_EMPTY, T_NIL));
+static_assert(V_IS(V_NOT_IMPL, T_NIL));
+static_assert(V_IS(V_INVALID, T_NIL));
 
 #define v_is_nil(v) v_is(v, T_NIL)
 
 #define v_is_strict_nil(v) ((v)._ == V_STRICT_NIL)
+#define v_is_empty(v) ((v)._ == V_EMPTY)
+#define v_is_not_impl(v) ((v)._ = V_NOT_IMPL)
+#define v_is_invalid(v) ((v)._ = V_INVALID)
 
 #define v_of_nil() v_new(V_STRICT_NIL)
+#define v_of_empty() v_new(V_EMPTY)
+#define v_of_not_impl() v_new(V_NOT_IMPL)
+#define v_of_invalid() v_new(V_INVALID)
 
 always_inline void v_set_nil(Value* d) {
-	v_set_raw(d, v_of_nil());
+    v_set_raw(d, v_of_nil());
 }
 
 always_inline void v_set_nil_ranged(Value* l, Value* h) {
-	for (Value* p = l; p < h; ++p) {
-		v_set_nil(p);
-	}
+    for (Value* p = l; p < h; ++p) {
+        v_set_nil(p);
+    }
 }
 
-#define v_is_empty(v) ((v)._ == V_EMPTY)
+/*=========================================================*
+ * Primitives
+ *=========================================================*/
 
-#define v_of_empty() v_new(V_EMPTY)
+#define V_FALSE V_STENCIL(T_FALSE)
+#define V_TRUE (V_STENCIL(T_TRUE) | V_PAYLOAD_MASK)
+#define V_FLOAT_MAX u64c(0xfff8000000000000)
+
+static_assert(V_IS(V_FALSE, T_FALSE));
+static_assert(V_IS(V_TRUE, T_TRUE));
+static_assert(V_TRUE + 1 == V_FALSE);
+static_assert(V_IS(V_FLOAT_MAX, T_NAN));
 
 #define v_is_bool(v) v_is_in(v, T_FALSE, T_TRUE)
 
@@ -237,10 +247,10 @@ always_inline void v_set_ptr(Value* d, void* v) {
  *=========================================================*/
 
 typedef struct { a_usize _; } ObjHeadMark[0];
-typedef VImpl const* a_vptr;
-typedef void const* a_vslot;
+typedef VTable const* a_vtbl;
+typedef void* a_vptr;
 
-#define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; a_vptr _vptr; a_gcnext _gnext; a_trmark _tnext
+#define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; a_vtbl _vptr; a_gcnext _gnext; a_trmark _tnext
 
 struct GObj {
 	GOBJ_STRUCT_HEADER;
@@ -251,17 +261,19 @@ struct GObj {
  ** The virtual table for type, used to dispatch internal methods.
  ** Primitive types do not have virtual table.
  */
-struct VImpl {
-	/* The masked tag to the value from the pointer. */
-	a_u64 _tag;
+struct VTable {
+	/* The stencil for value representation. */
+	a_u64 _stencil;
+	/* The type variant index. */
+	a_u32 _vid;
 	/* The properties of type. */
 	a_u32 _flags;
-	/* The unique indexed name of the type, equals to the displacement between type object and global. */
-	a_usize _iname; /* 0 for no companion type. */
-	/* The string name of the type. */
-	char const* _sname;
+	/* The handle of lookup table. */
+	a_htype _htype; /* null for no type object. */
+	/* The name of the type. */
+	char const* _uid;
 	/* The virtual function pointers. */
-	a_vslot _vfps[];
+	a_vptr _vfps[];
 };
 
 #define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
@@ -272,7 +284,7 @@ always_inline GObj* v_as_obj(Value v) {
 }
 
 always_inline Value v_of_obj(a_hobj v) {
-	return v_new(v->_vptr->_tag | addr_of(v));
+	return v_new(v->_vptr->_stencil | addr_of(v));
 }
 
 #define v_of_obj(v) v_of_obj(gobj_cast(v))
@@ -284,26 +296,63 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
 
 /*=========================================================*
+ * Virtual Dispatch Support
+ *=========================================================*/
+
+#define VTABLE_FLAG_NONE        u8c(0x00)
+#define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
+
+#define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
+
+#define METHOD_LIST(_) \
+	_( 0, drop  ,    void, Global* g                                      ) \
+	_( 1, mark  ,    void, Global* g                                      ) \
+	_( 2, close ,    void, a_henv env                                     ) \
+	                                                                        \
+	_( 3, len   ,  a_uint, a_henv env                                     ) \
+	_( 4, get   ,   Value, a_henv env, Value key                          ) \
+	_( 5, set   ,   a_msg, a_henv env, Value key, Value val, a_isize* pctx) \
+	_( 6, put   ,   a_msg, a_henv env, Value key, Value val               ) \
+	_( 7,iput   ,   a_msg, a_henv env, Value key, Value val, a_isize* pctx)
+
+/* Method Slot Table. */
+union MST {
+#define DEF(i,n,r,p1,pn...) struct { a_vptr M_cat(_off_,n)[i]; r (*n)(p1, a_hobj, ##pn);  };
+    METHOD_LIST(DEF)
+#undef DEF
+};
+
+#define VTABLE_LOCATION(f) (addr_of(&cast(union MST*, null)->f) / sizeof(a_vptr))
+#define vfp_def(f,p) [VTABLE_LOCATION(f)] = (p)
+
+#define a_vfp(f) typeof(cast(union MST*, null)->f)
+
+#define g_vfetch(p,f) cast(a_vfp(f), (p)->_vptr->_vfps[VTABLE_LOCATION(f)])
+
+#define g_vcheck(p,f) ({ \
+	typeof(p) _p2 = p; \
+	a_vfp(f) _f2 = g_vfetch(_p2, f); \
+	assume(_f2 != null, "method '%s."#f"' is null.", _p2->_vptr->_uid); \
+	_f2; \
+})
+
+#define g_vcallp(r,p,fp,a...) (*(fp))(r, gobj_cast(p), ##a)
+#define g_vcall(r,p,f,a...) ({ typeof(p) _p = p; a_vfp(f) _fp = g_vcheck(_p,f); g_vcallp(r, _p, _fp, ##a); })
+#define v_vcall(r,v,f,a...) g_vcall(r, v_as_obj(v), f, ##a)
+
+/*=========================================================*
  * String
  *=========================================================*/
 
-#define GSTR_STRUCT_HEADER \
-	GOBJ_STRUCT_HEADER;    \
-	a_u32 _len;            \
-	a_hash _hash;          \
-	a_byte _ptr[]
-
 struct GStr {
-	GStr* _snext;
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
 	a_hash _hash;
+	GStr* _snext;
 	a_byte _ptr[];
 };
 
 static_assert(offsetof(GObj, _len) == offsetof(GStr, _len) - offsetof(GStr, _obj_head_mark));
-
-#define g_is_str(p) ((p)->_vptr->_tag == V_MASKED_TAG(T_STR))
 
 #define v_is_str(v) v_is(v, T_STR)
 
@@ -364,10 +413,10 @@ always_inline GList* v_as_list(Value v) {
  * Table
  *=========================================================*/
 
-typedef struct HNode HNode;
-typedef struct HLink HLink;
+typedef struct TNode TNode;
+typedef struct TLink TLink;
 
-struct HLink {
+struct TLink {
 	a_x32 _prev;
 	a_x32 _next;
 };
@@ -379,23 +428,23 @@ struct GTable {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _len;
 	a_u32 _hmask;
-	HNode* _ptr; /* Data pointer. */
+	TNode* _ptr; /* Data pointer. */
 };
 
 /**
  ** Table node.
  */
-struct HNode {
+struct TNode {
 	Value _value;
 	Value _key;
 	a_hash _hash;
 	a_x32 _hnext;
-	HLink _link;
+	TLink _link;
 };
 
 static_assert(offsetof(GObj, _len) == offsetof(GTable, _len));
 
-static_assert(offsetof(HNode, _hash) % sizeof(a_u64) == 0);
+static_assert(offsetof(TNode, _hash) % sizeof(a_u64) == 0);
 
 #define v_is_table(v) v_is(v, T_TABLE)
 
@@ -495,96 +544,63 @@ always_inline GFun* v_as_func(Value v) {
  * Userdata
  *=========================================================*/
 
-#define v_is_auser(v) v_is(v, T_AUSER)
-
-always_inline GAUser* v_as_auser(Value v) {
-	assume(v_is_auser(v), "not userdata.");
-	return g_cast(GAUser, v_as_obj(v));
-}
-
-#define v_is_cuser(v) v_is(v, T_CUSER)
-
-#define v_is_user(v) v_is_in(v, T_AUSER, T_CUSER)
-
-/*=========================================================*
- * Module
- *=========================================================*/
-
-#define VTABLE_FLAG_NONE        u8c(0x00)
-#define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
-
-#define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
-
-#define METHOD_LIST(_) \
-	_( 0, drop  ,    void, Global* g                   ) \
-	_( 1, mark  ,    void, Global* g                   ) \
-	_( 2, close ,    void, a_henv env                  )
-
-/* Method Slot Table. */
-union MST {
-#define DEF(i,n,r,p1,pn...) struct { a_vslot M_cat(_off_,n)[i]; r (*n)(p1, a_hobj, ##pn);  };
-	METHOD_LIST(DEF)
-#undef DEF
+struct GUser {
+	GOBJ_STRUCT_HEADER;
 };
 
-#define vfp_loc(f) (addr_of(&cast(union MST*, null)->f) / sizeof(a_vslot))
-#define vfp_def(f,p) [vfp_loc(f)] = (p)
+#define v_is_user(v) v_is(v, T_USER)
 
-#define g_vcheck(p,f) ({ \
-	a_vptr _v2 = (p)->_vptr; \
-	a_vslot _f2 = _v2->_vfps[vfp_loc(f)]; \
-	assume(_f2 != null, "method '%s."#f"' is null.", (_v2)->_sname); \
-	cast(typeof(cast(union MST*, null)->f), _f2); \
-})
+always_inline GUser* v_as_user(Value v) {
+	assume(v_is_user(v), "not userdata.");
+	return g_cast(GUser, v_as_obj(v));
+}
 
-#define g_vcall(r,p,f,a...) ({ \
-	a_hobj _p = gobj_cast(p);  \
-    (*g_vcheck(_p,f))(r, _p, ##a); \
-})
+/*=========================================================*
+ * Metadata
+ *=========================================================*/
 
-typedef struct TDNode TDNode;
+typedef struct {
+    GStr* _key;
+    Value _value;
+} DNode;
 
-struct TDNode {
-	GStr* _key;
-	a_x32 _hnext;
-	a_u32 _index;
+struct Dict {
+    a_u32 _hmask; /* Hash to index mask. */
+    a_u32 _len;
+    DNode* _ptr;
 };
 
 /**
- ** Module.
+ ** Metadata.
  */
-struct alo_Mod {
+struct GMeta {
 	GOBJ_STRUCT_HEADER;
 	a_u32 _size;
 
-	a_u32 _sig; /* Module fields signature, changed when the order of existed fields changed. */
+	a_u32 _mver; /* Method version, changed when the order of existed fields changed. */
 	a_u32 _nref; /* Reference counter. */
-
-	a_u32 _len;
-	a_u32 _hmask;
 
 	a_u16 _flags;
 	a_u8 _tag; /* The type tag. */
 
-	GLoader* _loader;
-	GStr* _name;
-	TDNode* _ptr;
-	Value* _values;
+	GLoader* _loader; /* The loader of metadata, null for builtin loader. */
+	GStr* _uid; /* Unique string index. */
+    Dict _dict;
 
-	GMod* _next; /* Used for linked list in loader. */
+	GMeta* _next; /* Used for linked list in loader. */
 
-	VImpl _opt_vtbl[0];
+	VTable _opt_vtbl[0];
 };
 
-struct ModCache {
-	GMod** _table;
+struct MetaCache {
+	GMeta** _table;
 	a_u32 _hmask;
 	a_u32 _len;
 };
 
 struct Loader {
 	GLoader* _parent;
-	ModCache _cache;
+	MetaCache _cache;
 };
 
 struct GLoader {
@@ -595,15 +611,23 @@ struct GLoader {
 #define MOD_FLAG_NONE u16c(0)
 #define MOD_FLAG_FAST_TM(tm) (u16c(1) << (tm))
 
-#define v_is_mod(v) v_is(v, T_MOD)
+#define v_is_meta(v) v_is(v, T_META)
 
-always_inline GMod* v_as_mod(Value v) {
-	assume(v_is_mod(v), "not module.");
-	return g_cast(GMod, v_as_obj(v));
+always_inline GMeta* v_as_meta(Value v) {
+	assume(v_is_meta(v), "not meta.");
+	return g_cast(GMeta, v_as_obj(v));
 }
 
-#define mod_has_flag(t,f) (((t)->_flags & (f)) != 0)
-#define mod_has_method(t,tm) mod_has_flag(t, MOD_FLAG_FAST_TM(tm))
+#define meta_has_flag(t,f) (((t)->_flags & (f)) != 0)
+#define meta_has_tm(t,tm) meta_has_flag(t, MOD_FLAG_FAST_TM(tm))
+
+always_inline a_htype meta2htype(Global* g, GMeta* self) {
+	return cast(a_htype, ptr_diff(self, g));
+}
+
+always_inline GMeta* htype2meta(Global* g, a_htype hnd) {
+	return ptr_disp(GMeta, g, cast(a_usize, hnd));
+}
 
 /*=========================================================*
  * Route
@@ -708,7 +732,7 @@ struct Global {
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
 	GStr* _nomem_error;
-	ModCache _mod_cache;
+	MetaCache _mod_cache;
 	StrCache _str_cache;
 	a_hash _seed;
 	a_u16 _gcpausemul;
@@ -719,18 +743,18 @@ struct Global {
 	volatile atomic_uint_fast8_t _hookm;
 	GStr* _names[STR__COUNT];
 	struct {
-		GMod _nil;
-		GMod _bool;
-		GMod _int;
-		GMod _ptr;
-		GMod _str;
-		GMod _tuple;
-		GMod _list;
-		GMod _table;
-		GMod _func;
-		GMod _type;
-		GMod _route;
-		GMod _float;
+		GMeta _nil;
+		GMeta _bool;
+		GMeta _int;
+		GMeta _ptr;
+		GMeta _str;
+		GMeta _tuple;
+		GMeta _list;
+		GMeta _table;
+		GMeta _func;
+		GMeta _type;
+		GMeta _route;
+		GMeta _float;
 	} _types;
 };
 
@@ -761,8 +785,8 @@ always_inline GStr* env_int_str(a_henv env, a_u32 tag) {
 	return G(env)->_names[tag];
 }
 
-#define env_type(env,f) (&G(env)->_types.f)
-#define env_type_iname(f) offsetof(Global, _types.f)
+#define g_type(env,f) (&G(env)->_types.f)
+#define g_htype(f) cast(a_htype, offsetof(Global, _types.f))
 
 /*=========================================================*/
 
@@ -786,40 +810,48 @@ always_inline a_hash v_trivial_hash(Value v) {
 	return v_trivial_hash_unchecked(v);
 }
 
+always_inline a_hash v_float_hash(Value v) {
+	a_float f = v_as_float(v);
+	if (f == 0) return 0; /* Special case for 0.0 and -0.0 */
+	return v_trivial_hash_unchecked(v);
+}
+
 /* Identity equality. */
 #define v_trivial_equals_unchecked(v1,v2) ((v1)._ == (v2)._)
 
 always_inline a_bool v_trivial_equals(Value v1, Value v2) {
-	assume(v_has_trivial_equals(v1), "no trivial equals.");
+	assume(v_has_trivial_equals(v1), "object does not have trivial equality.");
 	return v_trivial_equals_unchecked(v1, v2);
 }
 
 intern char const ai_obj_type_names[][8];
 
-always_inline GMod* g_typeof(a_henv env, a_hobj p) {
-	assume(env->_vptr->_iname != 0, "object does not have type.");
-	return ptr_disp(GMod, G(env), p->_vptr->_iname);
+always_inline GMeta* g_typeof(a_henv env, a_hobj p) {
+	assume(env->_vptr->_htype != null, "object does not have a type mirror.");
+	return htype2meta(G(env), p->_vptr->_htype);
 }
+
+#define g_typeof(env,p) g_typeof(env, gobj_cast(p))
 
 always_inline char const* g_nameof(unused a_henv env, a_hobj p) {
-	return p->_vptr->_sname;
+	return p->_vptr->_uid;
 }
 
-always_inline GMod* v_typeof(a_henv env, Value v) {
+always_inline GMeta* v_typeof(a_henv env, Value v) {
 	if (v_is_float(v)) {
-		return &G(env)->_types._float;
+		return g_type(env, _float);
 	}
 	else if (!v_is_obj(v)) {
 		switch (v_get_tag(v)) {
 			case T_NIL:
-				return env_type(env, _nil);
+				return g_type(env, _nil);
 			case T_FALSE:
 			case T_TRUE:
-				return env_type(env, _bool);
+				return g_type(env, _bool);
 			case T_INT:
-				return env_type(env, _int);
+				return g_type(env, _int);
 			case T_PTR:
-				return env_type(env, _ptr);
+				return g_type(env, _ptr);
 			default:
 				panic("bad type tag.");
 		}
@@ -840,5 +872,12 @@ always_inline char const* v_nameof(a_henv env, Value v) {
 		return g_nameof(env, v_as_obj(v));
 	}
 }
+
+#define obj_idx(k,l,f) ({ \
+    a_int _k = k; a_uint _l = l; \
+    a_uint _i = _k >= 0 ? cast(a_uint, _k) : cast(a_uint, _k) + _l; \
+    if (unlikely(_i >= _l)) return f;   \
+    _i;                 \
+})
 
 #endif /* aobj_h_ */

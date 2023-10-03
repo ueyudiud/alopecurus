@@ -14,7 +14,7 @@
 #include "astr.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
+#include "ameta.h"
 #include "aenv.h"
 #include "agc.h"
 #include "avm.h"
@@ -63,8 +63,8 @@ void aloL_typeerror(a_henv env, a_usize id, char const* name) {
 	aloL_argerror(env, id, what);
 }
 
-void aloL_checktag(a_henv env, a_usize id, a_tag tag) {
-	api_check(tag >= ALO_TEMPTY && tag <= ALO_TUSER, "bad type tag.");
+void aloL_checktag(a_henv env, a_usize id, a_msg tag) {
+	api_check(tag >= ALO_TNIL && tag <= ALO_TUSER, "bad type tag.");
 	if (alo_tagof(env, cast(a_isize, id)) != tag) {
 		aloL_typeerror(env, id, ai_api_tagname[tag]);
 	}
@@ -137,7 +137,7 @@ char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
-a_u32 aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
+a_msg aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
 	if (stat) {
 		alo_pushbool(env, true);
 		return 1;
@@ -168,7 +168,7 @@ a_u32 aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
 
 #endif
 
-a_u32 aloL_resulte(a_henv env, a_i32 stat) {
+a_msg aloL_resulte(a_henv env, a_i32 stat) {
 	char const* what = "exit";
 	errno_t err = errno;
 	if (stat != 0 && err != 0) {
@@ -371,11 +371,11 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 
 void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
-	api_check(v_is_mod(v), "type expected.");
+	api_check(v_is_meta(v), "type expected.");
 
-	GMod* type = v_as_mod(v);
+	GMeta* type = v_as_meta(v);
 
-	ai_mod_hint(env, type, nb);
+	ai_meta_hint(env, type, nb);
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
 		assume(b->name != null);
@@ -397,12 +397,12 @@ void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
 	api_check_slot(env, 1);
 
-	GMod* type = ai_mod_alloc(env, 0, null);
+	GMeta* type = ai_meta_alloc(env, 0, null);
 	v_set_obj(env, api_incr_stack(env), type);
 
-	type->_name = ai_str_new(env, name, strlen(name));
+	type->_uid = ai_str_new(env, name, strlen(name));
 
-	ai_mod_hint(env, type, nb);
+	ai_meta_hint(env, type, nb);
 
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
@@ -429,9 +429,9 @@ typedef struct {
 
 static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
-	a_hmod type = v_as_mod(api_elem(env, -1));
-	ai_mod_cache(env, null, type);
-	ai_vm_set(env, G(env)->_global, v_of_obj(type->_name), v_of_obj(type));
+	GMeta* meta = v_as_meta(api_elem(env, -1));
+    ai_meta_cache(env, null, meta);
+	ai_vm_set(env, G(env)->_global, v_of_obj(meta->_uid), v_of_obj(meta));
 	api_decr_stack(env);
 }
 

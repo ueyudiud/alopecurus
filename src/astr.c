@@ -16,7 +16,7 @@
 
 #include "astr.h"
 
-static VImpl const str_vtable;
+static VTable const str_vtable;
 
 /**
  ** Compute hash code for string, use FNV-1 like algorithm.
@@ -290,21 +290,19 @@ static void cache_remove(StrCache* cache, GStr* str) {
 	cache->_len -= 1;
 }
 
-static void str_mark(Global* g, a_hobj raw_self) {
-	GStr* self = g_cast(GStr, raw_self);
+static void str_mark(Global* g, GStr* self) {
 	ai_gc_trace_work(g, sizeof_GStr(self->_len));
 }
 
-static void str_drop(Global* g, a_hobj raw_self) {
-	GStr* self = g_cast(GStr, raw_self);
+static void str_drop(Global* g, GStr* self) {
 	cache_remove(&g->_str_cache, self);
 	ai_mem_dealloc(g, self, sizeof_GStr(self->_len));
 }
 
-static VImpl const str_vtable = {
-	._tag = V_MASKED_TAG(T_STR),
-	._iname = env_type_iname(_str),
-	._sname = "str",
+static VTable const str_vtable = {
+	._stencil = V_STENCIL(T_STR),
+	._htype = g_htype(_str),
+	._uid = "str",
 	._flags = VTABLE_FLAG_GREEDY_MARK,
 	._vfps = {
 		vfp_def(drop, str_drop),

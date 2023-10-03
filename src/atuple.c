@@ -12,7 +12,7 @@
 
 #include "atuple.h"
 
-static VImpl const tuple_vtable;
+static VTable const tuple_vtable;
 
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
     GTuple* self = ai_mem_alloc(env, sizeof_GTuple(len));
@@ -24,19 +24,9 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
     return self;
 }
 
-Value const* ai_tuple_refi(unused a_henv env, GTuple* self, a_isize pos) {
-    if (pos >= 0) {
-        if (pos >= self->_len) {
-            return null;
-        }
-    }
-    else {
-        pos += self->_len;
-        if (pos < 0) {
-            return null;
-        }
-    }
-    return &self->_ptr[pos];
+Value const* ai_tuple_refi(unused a_henv env, GTuple* self, a_int key) {
+    a_uint i = obj_idx(key, self->_len, null);
+    return &self->_ptr[i];
 }
 
 a_bool ai_tuple_equals(a_henv env, GTuple* self, GTuple* other) {
@@ -87,10 +77,10 @@ Value ai_tuple_geti(a_henv env, GTuple* self, a_int key) {
 	return *value;
 }
 
-static VImpl const tuple_vtable = {
-	._tag = V_MASKED_TAG(T_TUPLE),
-	._iname = env_type_iname(_tuple),
-	._sname = "tuple",
+static VTable const tuple_vtable = {
+	._stencil = V_STENCIL(T_TUPLE),
+	._htype = g_htype(_tuple),
+	._uid = "tuple",
 	._flags = VTABLE_FLAG_NONE,
 	._vfps = {
 		vfp_def(drop, tuple_drop),

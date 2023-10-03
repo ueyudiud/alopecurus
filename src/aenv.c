@@ -10,7 +10,7 @@
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
-#include "amod.h"
+#include "ameta.h"
 #include "actx.h"
 #include "amem.h"
 #include "agc.h"
@@ -37,7 +37,7 @@ static a_bool route_is_active(a_henv env) {
 	return G(env)->_active == env;
 }
 
-static VImpl const route_vtable;
+static VTable const route_vtable;
 
 static void route_new(GRoute* self, Global* g) {
 	*self = new(GRoute) {
@@ -119,10 +119,10 @@ static void route_drop(Global* g, GRoute* self) {
 	ai_mem_dealloc(g, self, sizeof(GRoute));
 }
 
-static VImpl const route_vtable = {
-	._tag = V_MASKED_TAG(T_CUSER),
-	._iname = env_type_iname(_route),
-	._sname = "route",
+static VTable const route_vtable = {
+	._stencil = V_STENCIL(T_USER),
+	._htype = g_htype(_route),
+	._uid = "route",
 	._flags = VTABLE_FLAG_NONE,
 	._vfps = {
 		vfp_def(drop, route_drop),
@@ -174,7 +174,7 @@ nomem1:
 static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env);
 	ai_str_boost(env, m->_reserved);
-	ai_mod_boost(env);
+    ai_meta_boost(env);
 }
 
 static a_usize sizeof_MRoute() {
@@ -249,7 +249,7 @@ void alo_destroy(a_henv env) {
 	route_close(g, &mroute->_route);
 	ai_gc_clean(g);
 	ai_str_clean(g);
-	ai_mod_clean(g);
+    ai_meta_clean(g);
 	ai_cap_clean(g);
 
 	assume(gbl_mem_total(g) == sizeof_MRoute(), "memory leak.");

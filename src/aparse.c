@@ -3942,7 +3942,6 @@ static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 			break;
 		}
 		case TK_ASSIGN: {
-			Expr e;
 			lex_skip(par);
 			l_scan_expr(par, e);
 			expr_return(par, e, line);

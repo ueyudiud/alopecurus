@@ -322,7 +322,7 @@ void aloE_fdump(a_henv env, a_isize id, a_flags options) {
 	dump_func(env, v_as_func(*v), options);
 }
 
-static a_u32 debug_dump(a_henv env) {
+static a_msg debug_dump(a_henv env) {
 	aloL_checktag(env, 0, ALO_TFUNC);
 	char const* options = aloL_optstr(env, 1) ?: "";
 	aloE_fdump(env, 0, dump_option_parse(options));

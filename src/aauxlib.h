@@ -13,7 +13,7 @@ ALO_EXPORT a_henv (aloL_create)(void);
 
 ALO_EXPORT void (aloL_argerror)(a_henv env, a_usize id, char const* what);
 ALO_EXPORT void (aloL_typeerror)(a_henv env, a_usize id, char const* name);
-ALO_EXPORT void (aloL_checktag)(a_henv env, a_usize id, a_tag tag);
+ALO_EXPORT void (aloL_checktag)(a_henv env, a_usize id, a_msg tag);
 ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_usize id);
 ALO_EXPORT a_float (aloL_checknum)(a_henv env, a_usize id);
 ALO_EXPORT char const* (aloL_checklstr)(a_henv env, a_usize id, a_usize* plen);
@@ -26,8 +26,8 @@ ALO_EXPORT char const* (aloL_optlstr)(a_henv env, a_usize id, a_usize* plen);
 #define aloL_optint(env,id,dfl) ({ a_int _v; aloL_optint_(env, id, &_v) ? _v : (dfl); })
 #define aloL_optnum(env,id,dfl) ({ a_float _v; aloL_optnum_(env, id, &_v) ? _v : (dfl); })
 
-ALO_EXPORT a_u32 (aloL_resultcx)(a_henv env, a_bool stat, errno_t err, char const* what);
-ALO_EXPORT a_u32 (aloL_resulte)(a_henv env, a_i32 stat);
+ALO_EXPORT a_msg (aloL_resultcx)(a_henv env, a_bool stat, errno_t err, char const* what);
+ALO_EXPORT a_msg (aloL_resulte)(a_henv env, a_i32 stat);
 
 #define aloL_resultc(env,stat,what) aloL_resultcx(env, stat, errno, what)
 #define aloL_pushfail(env) alo_pushnil(env)

@@ -37,7 +37,7 @@ static void l_unwind(Lexer* lex, a_i32 ch) {
 
 static a_i32 l_poll_checked(Lexer* lex) {
 	a_i32 ch = l_poll(lex);
-	if (unlikely(ch < ALO_ESTMUF)) {
+	if (unlikely(ch == ALO_EOUTER)) {
 		l_foreign_error(lex);
 	}
 	return ch;
@@ -45,7 +45,7 @@ static a_i32 l_poll_checked(Lexer* lex) {
 
 static a_i32 l_peek_checked(Lexer* lex) {
 	a_i32 ch = l_peek(lex);
-	if (unlikely(ch < ALO_ESTMUF)) {
+	if (unlikely(ch == ALO_EOUTER)) {
 		l_foreign_error(lex);
 	}
 	return ch;
@@ -317,7 +317,7 @@ GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
 static a_i32 l_skip_line(Lexer* lex) {
     loop {
 		switch (l_poll(lex)) {
-			case ALO_ESTMUF:
+			case ALO_EEMPTY:
 				return TK_EOF;
 			case ALO_EOUTER:
 				return ALO_EOUTER;
@@ -750,7 +750,7 @@ static void l_scan_sqchr(Lexer* lex, a_u32 line) {
 			lex->_line += 1;
 			break;
 		}
-		case ALO_ESTMUF: {
+		case ALO_EEMPTY: {
 			l_error_unclosed(lex, line);
 			break;
 		}
@@ -788,7 +788,7 @@ static a_bool l_test_tesc_head(Lexer* lex) {
 static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
     a_i32 ch = l_poll_checked(lex);
 	switch (ch) {
-		case ALO_ESTMUF: {
+		case ALO_EEMPTY: {
 			l_error_unclosed(lex, line);
 		}
 		case '\\': {
@@ -927,7 +927,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
     loop {
         a_i32 ch;
         switch (ch = l_poll_checked(lex)) {
-            case ALO_ESTMUF: {
+            case ALO_EEMPTY: {
                 return TK_EOF;
             }
             case ' ':

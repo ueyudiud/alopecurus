@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "atuple.h"
-#include "amod.h"
+#include "ameta.h"
 #include "auser.h"
 #include "agc.h"
 #include "aapi.h"
@@ -109,7 +109,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
                     a_u32 n = MAX_SHOW_LEN;
                     aloi_show("{");
                     a_bool tail = false;
-                    HNode *node;
+                    TNode *node;
                     for (a_x32 itr = val->_ptr->_link._next; !is_nil(itr); itr = node->_link._next) {
                         node = &val->_ptr[unwrap(itr)];
                         if (tail) {
@@ -135,12 +135,11 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			aloi_show("<func:%p>", v_as_obj(v));
 			break;
 		}
-		case T_MOD: {
-			aloi_show("<type:%s>", str2ntstr(v_as_mod(v)->_name));
+		case T_META: {
+			aloi_show("<meta:%s>", str2ntstr(v_as_meta(v)->_uid));
 			break;
 		}
-		case T_AUSER:
-		case T_CUSER: {
+		case T_USER: {
 			aloi_show("<%s:%p>", v_nameof(env, v), v_as_obj(v));
 			break;
 		}
@@ -162,7 +161,7 @@ void aloB_show(a_henv env, a_isize id) {
 	l_show_impl(env, *v, 0);
 }
 
-static a_u32 base_print(a_henv env) {
+static a_msg base_print(a_henv env) {
 	a_usize len = alo_stacksize(env);
 	for (a_usize id = 0; id < len; ++id) {
 		if (id != 0) aloi_show("\t");
@@ -175,7 +174,7 @@ static a_u32 base_print(a_henv env) {
 #define ERROR_DEFAULT_LEVEL 0
 #define ERROR_DEFAULT_LIMIT 6
 
-static a_u32 base_error(a_henv env) {
+static a_msg base_error(a_henv env) {
     a_int level = aloL_optint(env, 1, ERROR_DEFAULT_LEVEL);
     a_int limit = aloL_optint(env, 2, ERROR_DEFAULT_LIMIT);
 
@@ -184,10 +183,10 @@ static a_u32 base_error(a_henv env) {
     alo_raise(env);
 }
 
-static a_u32 base_assert(a_henv env) {
-	a_u32 n = alo_stacksize(env);
+static a_msg base_assert(a_henv env) {
+	a_usize n = alo_stacksize(env);
 	if (alo_tobool(env, 0)) {
-		return n;
+		return cast(a_msg, n);
 	}
 	else {
 		if (n == 1) {
@@ -199,7 +198,7 @@ static a_u32 base_assert(a_henv env) {
 	}
 }
 
-static a_u32 base_typeof(a_henv env) {
+static a_msg base_typeof(a_henv env) {
 	Value v = api_elem(env, 0);
 	alo_settop(env, 1);
 	v_set_obj(env, api_wrslot(env, 0), v_typeof(env, v));
@@ -220,13 +219,13 @@ void aloopen_base(a_henv env) {
 	alo_newmod(env, ALO_LIB_BASE_NAME, 0);
 	aloL_putfields(env, -1, bindings);
 
-	a_hmod type = v_as_mod(api_elem(env, -1));
+	GMeta* meta = v_as_meta(api_elem(env, -1));
 
-	GAUser* global = ai_auser_new(env, type);
+	GUser* global = ai_auser_new(env, meta);
 
-	ai_mod_sets(env, type, env_int_str(env, STR___get__), v_of_obj(type));
-	ai_mod_sets(env, type, ai_str_newl(env, "_G"), v_of_obj(global));
-	ai_mod_sets(env, type, ai_str_newl(env, "_VER"), v_of_int(ALO_VERSION_NUMBER));
+	ai_mod_sets(env, meta, env_int_str(env, STR___get__), v_of_obj(meta));
+	ai_mod_sets(env, meta, ai_str_newl(env, "_G"), v_of_obj(global));
+	ai_mod_sets(env, meta, ai_str_newl(env, "_VER"), v_of_int(ALO_VERSION_NUMBER));
 
 	v_set_obj(env, &G(env)->_global, global);
 
