@@ -5,8 +5,9 @@
 #define auser_c_
 #define ALO_LIB
 
-#include "atable.h"
+#include "adict.h"
 #include "ameta.h"
+#include "amem.h"
 #include "agc.h"
 #include "avm.h"
 #include "aerr.h"
@@ -15,29 +16,38 @@
 
 typedef struct {
 	GOBJ_STRUCT_HEADER;
-	Value _raw;
-	GMeta* _meta;
-} GAUser;
+    Dict _keys;
+} GRec;
 
-GUser* ai_auser_new(a_henv env, GMeta* type) {
-	assume(type->_opt_vtbl->_stencil == v_stencil(T_USER), "not type for auser.");
-	GUser* self = g_cast(GUser, ai_table_new(env));
-	self->_vptr = type->_opt_vtbl; /* Set type. */
-	return self;
+static VTable const rec_vtable;
+
+GUser* ai_rec_new(a_henv env, GUserType* type) {
+	assume(type->_vtbl->_stencil == V_STENCIL(T_USER), "not type for auser.");
+	GRec* self = ai_mem_alloc(env, sizeof(GRec));
+
+    self->_vptr = type->_vtbl; /* Set virtual table. */
+    ai_dict_init(env, &self->_keys);
+
+    ai_gc_register_object(env, self);
+
+	return g_cast(GUser, self);
 }
 
-static Value auser_get(a_henv env, GAUser* self, Value vk) {
+static a_uint rec_len(unused a_henv env, GRec* self) {
+    return self->_keys._len;
+}
+
+static Value rec_get(a_henv env, GRec* self, Value vk) {
 	a_msg msg;
 	Value v;
 
-	msg = ai_vm_uget(env, self->_raw, vk, &v);
-	if (msg == ALO_SOK) 
-		return v;
-	else if (msg == ALO_EINVAL)
-		ai_err_bad_get(env, str2ntstr(self->_meta->_uid), v_nameof(env, v));
-	assume(msg == ALO_EEMPTY || msg == ALO_EBADOP, "unexpected message");
+    if (v_is_str(vk)) {
+        msg = ai_dict_uget(env, &self->_keys, v_as_str(vk), &v);
+        if (msg == ALO_SOK)
+            return v;
+    }
 
-	Value vf = ai_obj_glookftm(env, self->_meta, TM___get__);
+	Value vf = ai_obj_glookftm(env, self, TM___get__);
 	if (v_is_nil(vf)) {
 		if (msg == ALO_EBADOP)
 			ai_err_bad_tm(env, TM___get__);
@@ -47,16 +57,15 @@ static Value auser_get(a_henv env, GAUser* self, Value vk) {
 		return ai_vm_call_meta(env, vm_push_args(env, vf, v_of_obj(self), vk));
 	}
 	else {
-		return ai_vm_get(env, vf, vk);
+        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
 	}
 }
 
-static void auser_set(a_henv env, GAUser* self, Value vk, Value vv) {
+static void rec_set(a_henv env, GRec* self, Value vk, Value vv) {
 	a_msg msg;
-	Value v;
-    a_isize ctx;
+    a_usize ctx;
 
-	Value vf = ai_obj_glookftm(env, self->_meta, TM___set__);
+	Value vf = ai_obj_glookftm(env, self, TM___set__);
 	if (v_is_func(vf)) {
 		ai_vm_call(env, vm_push_args(env, vf, v_of_obj(self), vk, vv), 0);
         return;
@@ -65,42 +74,67 @@ static void auser_set(a_henv env, GAUser* self, Value vk, Value vv) {
 		return ai_vm_set(env, vf, vk, vv);
 	}
 
-	msg = ai_vm_uset(env, self->_raw, vk, vv, &ctx);
+    if (v_is_str(vk)) {
+        msg = ai_dict_uset(env, &self->_keys, v_as_str(vk), vv, &ctx);
 
-	if (msg == ALO_SOK)
-		return;
-	else if (msg == ALO_EINVAL)
-		ai_err_bad_get(env, str2ntstr(self->_meta->_uid), v_nameof(env, v));
-	assume(msg == ALO_EEMPTY || msg == ALO_EBADOP, "unexpected message");
+        if (msg == ALO_SOK)
+            return;
+    }
 
-	vf = ai_obj_glookftm(env, self->_meta, TM___put__);
-	if (v_is_nil(vf)) {
-		if (msg == ALO_EBADOP)
-			ai_err_bad_tm(env, TM___get__);
+	vf = ai_obj_glookftm(env, self, TM___put__);
+	if (!v_is_nil(vf)) {
+        if (v_is_func(vf)) {
+            ai_vm_call(env, vm_push_args(env, vf, v_of_obj(self), vk, vv), 0);
+        }
+        else {
+            ai_vm_set(env, vf, vk, vv);
+        }
 	}
-	else if (v_is_func(vf)) {
-		ai_vm_call(env, vm_push_args(env, vf, v_of_obj(self), vk, vv), 0);
-	}
-	else {
-        ai_vm_set(env, vf, vk, vv);
-	}
+
+    if (v_is_str(vk)) {
+        ctx = 0;
+        msg = ai_dict_uput(env, &self->_keys, v_as_str(vk), vv, &ctx);
+
+        if (msg == ALO_SOK)
+            return;
+    }
+
+    ai_err_bad_tm(env, TM___get__);
 }
 
-static void tuser_mark(Global* g, GTable* self) {
-	GMeta* type = g_typeof(g->_active, self);
+static a_msg rec_uget(a_henv env, GRec* self, Value vk, Value* pv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    return ai_dict_uget(env, &self->_keys, v_as_str(vk), pv);
+}
+
+static a_msg rec_uset(a_henv env, GRec* self, Value vk, Value vv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    a_usize ctx = 0;
+    return ai_dict_uset(env, &self->_keys, v_as_str(vk), vv, &ctx);
+}
+
+static void rec_mark(Global* g, GRec* self) {
+	GType* type = g_typeof(g->_active, self);
 	ai_gc_trace_mark(g, type);
-	ai_table_mark(g, self);
+	ai_dict_mark(g, &self->_keys);
 	ai_gc_trace_work(g, sizeof(GMeta) - sizeof(GTable));
 }
 
-VTable const ai_auser_vtable = {
+static void rec_drop(Global* g, GRec* self) {
+    ai_dict_deinit(g, &self->_keys);
+    ai_mem_dealloc(g, self, sizeof(GRec));
+}
+
+static VTable const rec_vtable = {
 	._stencil = V_STENCIL(T_USER),
-	._uid = "obj",
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = {
-		vfp_def(drop, ai_table_drop),
-		vfp_def(mark, tuser_mark),
-		vfp_def(get, auser_get),
-		vfp_def(set, auser_set)
+	._slots = {
+        [vfp_slot(drop)] = &rec_drop,
+        [vfp_slot(mark)] = rec_mark,
+        [vfp_slot(len)] = rec_len,
+        [vfp_slot(get)] = rec_get,
+        [vfp_slot(uget)] = rec_uget,
+        [vfp_slot(set)] = rec_set,
+        [vfp_slot(uset)] = rec_uset
 	}
 };

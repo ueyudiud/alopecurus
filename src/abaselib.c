@@ -136,7 +136,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			break;
 		}
 		case T_META: {
-			aloi_show("<meta:%s>", str2ntstr(v_as_meta(v)->_uid));
+			aloi_show("<meta:%s>", str2ntstr(v_as_meta(v)->_name));
 			break;
 		}
 		case T_USER: {
@@ -211,23 +211,15 @@ void aloopen_base(a_henv env) {
         { "error", base_error },
 		{ "print", base_print },
 		{ "typeof", base_typeof },
-		{ "__get__", null },
-		{ "_G", null },
 		{ "_VER", null }
 	};
 
-	alo_newmod(env, ALO_LIB_BASE_NAME, 0);
+    alo_push(env, ALO_STACK_INDEX_GLOBAL);
 	aloL_putfields(env, -1, bindings);
 
 	GMeta* meta = v_as_meta(api_elem(env, -1));
 
-	GUser* global = ai_auser_new(env, meta);
-
-	ai_mod_sets(env, meta, env_int_str(env, STR___get__), v_of_obj(meta));
-	ai_mod_sets(env, meta, ai_str_newl(env, "_G"), v_of_obj(global));
-	ai_mod_sets(env, meta, ai_str_newl(env, "_VER"), v_of_int(ALO_VERSION_NUMBER));
-
-	v_set_obj(env, &G(env)->_global, global);
+	ai_meta_set(env, meta, v_of_obj(ai_str_newl(env, "_VER")), v_of_int(ALO_VERSION_NUMBER));
 
 	ai_gc_trigger(env);
 }

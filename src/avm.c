@@ -113,27 +113,30 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 }
 
 static Value vm_look(a_henv env, Value v, GStr* key) {
-	GMeta* type = v_typeof(env, v);
-    if (type->_looker == null) {
-
-    }
-    return ai_vm_get(env, v_of_obj(type->_looker), v_of_obj(key));
+	GType* type = v_typeof(env, v);
+    return ai_meta_gets(env, g_cast(GMeta, type), key);
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
 	switch (v_get_tag(v1)) {
-		case T_TUPLE:
-			return ai_tuple_get(env, v_as_tuple(v1), v2);
-		case T_LIST:
-			return ai_list_get(env, v_as_list(v1), v2);
-		case T_TABLE:
-			return ai_table_get(env, v_as_table(v1), v2);
-		case T_META:
-			return ai_meta_get(env, v_as_meta(v1), v2);
-		case T_USER:
+		case T_TUPLE: {
+            return ai_tuple_get(env, v_as_tuple(v1), v2);
+        }
+		case T_LIST: {
+            return ai_list_get(env, v_as_list(v1), v2);
+        }
+		case T_TABLE: {
+            return ai_table_get(env, v_as_table(v1), v2);
+        }
+		case T_META: {
+            return ai_meta_get(env, v_as_meta(v1), v2);
+        }
+		case T_USER: {
             return v_vcall(env, v1, get, v2);
-        default:
+        }
+        default: {
             ai_err_bad_tm(env, TM___get__);
+        }
 	}
 }
 
@@ -165,14 +168,25 @@ a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
 
 void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
     switch (v_get_tag(v1)) {
-        case T_LIST:
+        case T_LIST: {
             return ai_list_set(env, v_as_list(v1), v2, v3);
-        case T_TABLE:
+        }
+        case T_TABLE: {
             return ai_table_set(env, v_as_table(v1), v2, v3);
-        case T_USER:
-            return v_vcall(env, v1, set, v2, v3);
-        default:
+        }
+        case T_META: {
+            return ai_meta_set(env, v_as_meta(v1), v2, v3);
+        }
+        case T_USER: {
+            GUser* p = v_as_user(v1);
+            a_vfp(set) set = g_vfetch(p, set);
+            if (set == null) ai_err_bad_tm(env, TM___set__);
+            g_vcallp(env, p, set, v2, v3);
+            return;
+        }
+        default: {
             ai_err_bad_tm(env, TM___set__);
+        }
     }
 }
 
@@ -184,11 +198,14 @@ a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
         case T_TABLE: {
             return ai_table_uset(env, v_as_table(v1), v2, v3);
         }
+        case T_META: {
+            return ai_meta_uset(env, v_as_meta(v1), v2, v3);
+        }
 		case T_USER: {
 			GUser* p = v_as_user(v1);
 			a_vfp(uset) uset = g_vfetch(p, uset);
 			if (uset == null) return ALO_EBADOP;
-			return g_vcallp(env, p, uset, v2, v3, pctx);
+			return g_vcallp(env, p, uset, v2, v3);
 		}
         default: {
             return ALO_EBADOP;
@@ -198,23 +215,28 @@ a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
 
 static Value vm_len(a_henv env, Value v) {
 	switch (v_get_tag(v)) {
-		case T_STR:
-			return v_of_int(v_as_str(v)->_len);
-		case T_TUPLE:
-			return v_of_int(v_as_tuple(v)->_len);
-		case T_LIST:
-			return v_of_int(v_as_list(v)->_len);
-		case T_TABLE:
-			return v_of_int(v_as_table(v)->_len);
-        case T_USER:
+        case T_STR: {
+            return v_of_int(v_as_str(v)->_len);
+        }
+        case T_TUPLE: {
+            return v_of_int(v_as_tuple(v)->_len);
+        }
+        case T_LIST: {
+            return v_of_int(v_as_list(v)->_len);
+        }
+        case T_TABLE: {
+            return v_of_int(v_as_table(v)->_len);
+        }
+        case T_USER: {
             return v_of_int(v_vcall(env, v, len));
-		default:
-			ai_err_bad_tm(env, TM___len__);
-	}
+        }
+        default: {
+            ai_err_bad_tm(env, TM___len__);
+        }
+    }
 }
 
 static void vm_iter(a_henv env, Value* restrict vs, Value v) {
-find:
     switch (v_get_tag(v)) {
         case T_TUPLE: {
             v_set(env, &vs[0], v);
@@ -232,12 +254,9 @@ find:
             break;
         }
         case T_META: {
-            GMeta* p = v_as_meta(v);
-            if (p->_looker != null) {
-                v = v_of_obj(p);
-                goto find;
-            }
-            fallthrough;
+            v_set(env, &vs[0], v);
+            v_set_int(&vs[2], 0);
+            break;
         }
         default: {
             //TODO
@@ -253,10 +272,10 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
         case T_TUPLE: {
             GTuple* p = v_as_tuple(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (cast(a_u32, i) >= p->_len)
-                return new(ValueSlice) { null };
+            if (i >= p->_len)
+                return new(ValueSlice) { null, 0 };
             
-            v_set_int(pi, i + 1);
+            v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, p->_ptr[i]);
             return new(ValueSlice) { vd, 1 };
@@ -265,9 +284,9 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             GList* p = v_as_list(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (i >= p->_len)
-                return new(ValueSlice) { null };
+                return new(ValueSlice) { null, 0 };
             
-            v_set_int(pi, i + 1);
+            v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, p->_ptr[i]);
             return new(ValueSlice) { vd, 1 };
@@ -281,9 +300,25 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             i = unwrap(p->_ptr[i]._link._next);
             TNode* n = &p->_ptr[i];
 
-            v_set_int(pi, i);
+            v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, n->_key, n->_value);
+            return new(ValueSlice) { vd, 2 };
+        }
+        case T_META: {
+            GMeta* p = v_as_meta(vc);
+            a_u32 i = cast(a_u32, v_as_int(*pi));
+            if (p->_fields._len == 0)
+                return new(ValueSlice) { };
+
+            DNode* n;
+            while (i <= p->_fields._hmask && (n = &p->_fields._ptr[i])->_key != null) {
+                i += 1;
+            }
+
+            v_set_int(pi, cast(a_i32, i + 1));
+            env->_stack._top = vs;
+            Value* vd = vm_push_args(env, v_of_obj(n->_key), n->_value);
             return new(ValueSlice) { vd, 2 };
         }
         default: {

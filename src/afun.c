@@ -361,30 +361,26 @@ static void proto_mark(Global* g, GProto* self) {
 
 static VTable const afun_vtable = {
 	._stencil = V_STENCIL(T_FUNC),
-	._htype = g_htype(_func),
-	._uid = "func",
-	._vfps = {
-		vfp_def(drop, afun_drop),
-		vfp_def(mark, afun_mark),
+    ._type_ref = g_type_ref(_func),
+	._slots = {
+        [vfp_slot(drop)] = afun_drop,
+        [vfp_slot(mark)] = afun_mark
 	}
 };
 
 static VTable const cfun_vtable = {
 	._stencil = V_STENCIL(T_FUNC),
-	._htype = g_htype(_func),
-	._uid = "func",
-	._flags = VTABLE_FLAG_NONE,
-	._vfps = {
-		vfp_def(drop, cfun_drop),
-		vfp_def(mark, cfun_mark),
+    ._type_ref = g_type_ref(_func),
+	._slots = {
+        [vfp_slot(drop)] = cfun_drop,
+        [vfp_slot(mark)] = cfun_mark
 	}
 };
 
 static VTable const proto_vtable = {
 	._stencil = V_STENCIL(T_USER),
-	._flags = VTABLE_FLAG_NONE,
-	._vfps = {
-		vfp_def(drop, ai_proto_drop),
-		vfp_def(mark, proto_mark),
+	._slots = {
+        [vfp_slot(drop)] = ai_proto_drop,
+        [vfp_slot(mark)] = proto_mark
 	}
 };

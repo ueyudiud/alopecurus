@@ -371,14 +371,13 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 
 void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
-	api_check(v_is_meta(v), "type expected.");
+	api_check(v_is_meta(v), "meta expected.");
 
-	GMeta* type = v_as_meta(v);
+	GMeta* meta = v_as_meta(v);
 
-	ai_meta_hint(env, type, nb);
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
-		assume(b->name != null);
+		assume(b->name != null, "missing field name.");
 
 		GStr* key = ai_str_new(env, b->name, strlen(b->name));
 		Value value = v_of_nil();
@@ -388,35 +387,7 @@ void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 			value = v_of_obj(fun);
 		}
 
-		ai_mod_sets(env, type, key, value);
-	}
-
-	ai_gc_trigger(env);
-}
-
-void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
-	api_check_slot(env, 1);
-
-	GMeta* type = ai_meta_alloc(env, 0, null);
-	v_set_obj(env, api_incr_stack(env), type);
-
-	type->_uid = ai_str_new(env, name, strlen(name));
-
-	ai_meta_hint(env, type, nb);
-
-	for (a_usize i = 0; i < nb; ++i) {
-		aloL_Entry const* b = &bs[i];
-		assume(b->name != null);
-
-		GStr* key = ai_str_new(env, b->name, strlen(b->name));
-		Value value = v_of_nil();
-
-		if (b->fptr != null) {
-			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
-			value = v_of_obj(fun);
-		}
-
-		ai_mod_sets(env, type, key, value);
+        ai_meta_set(env, meta, v_of_obj(key), value);
 	}
 
 	ai_gc_trigger(env);
@@ -431,7 +402,7 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
 	GMeta* meta = v_as_meta(api_elem(env, -1));
     ai_meta_cache(env, null, meta);
-	ai_vm_set(env, G(env)->_global, v_of_obj(meta->_uid), v_of_obj(meta));
+	ai_vm_set(env, G(env)->_global, v_of_obj(meta->_name), v_of_obj(meta));
 	api_decr_stack(env);
 }
 

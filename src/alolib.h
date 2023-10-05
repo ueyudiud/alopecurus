@@ -7,7 +7,7 @@
 
 #include "alo.h"
 
-#define ALO_LIB_BASE_NAME "__base"
+#define ALO_LIB_BASE_NAME "_G"
 ALO_EXPORT void aloopen_base(a_henv env);
 
 #define ALO_LIB_DEBUG_NAME "debug"

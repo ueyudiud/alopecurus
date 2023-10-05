@@ -454,14 +454,43 @@ void ai_table_put(a_henv env, GTable* self, Value key, a_hash hash, Value value)
 	self->_len += 1;
 }
 
-void ai_table_drop(Global* g, GTable* self) {
+a_msg ai_table_ugeti(a_henv env, GTable* self, a_int key, Value* pval) {
+    Value const* psrc = ai_table_refi(env, self, key);
+    if (psrc == null) return ALO_EEMPTY;
+    v_cpy(env, pval, psrc);
+    return ALO_SOK;
+}
+
+a_msg ai_table_uget(a_henv env, GTable* self, Value key, Value* pval) {
+    a_hash hash;
+    Value* psrc = ai_table_ref(env, self, key, &hash);
+    if (psrc == null) return ALO_EEMPTY;
+    v_cpy(env, pval, psrc);
+    return ALO_SOK;
+}
+
+a_msg ai_table_uset(a_henv env, GTable* self, Value key, Value val) {
+    a_hash hash;
+    Value* pdst = ai_table_ref(env, self, key, &hash);
+
+    if (pdst == null) {
+        ai_table_put(env, self, key, hash, val);
+        return ALO_SOK;
+    }
+
+    v_set(env, pdst, val);
+    ai_gc_barrier_backward_val(env, self, val);
+    return ALO_SOK;
+}
+
+static void table_drop(Global* g, GTable* self) {
 	if (self->_ptr != null) {
 		bucket_free(g, table_bucket(self));
 	}
 	ai_mem_dealloc(g, self, sizeof(GTable));
 }
 
-void ai_table_mark(Global* g, GTable* self) {
+static void table_mark(Global* g, GTable* self) {
 	if (self->_ptr != null) {
 		HBucket* bucket = table_bucket(self);
 		for (a_u32 i = 0; i <= self->_hmask; ++i) {
@@ -478,11 +507,10 @@ void ai_table_mark(Global* g, GTable* self) {
 
 static VTable const table_vtable = {
 	._stencil = V_STENCIL(T_TABLE),
-	._htype = g_htype(_table),
-	._uid = "table",
-	._flags = VTABLE_FLAG_NONE,
-	._vfps = {
-		vfp_def(drop, ai_table_drop),
-		vfp_def(mark, ai_table_mark),
+	._type_ref = g_type_ref(_table),
+    ._flags = VTABLE_FLAG_NONE,
+	._slots = {
+        [vfp_slot(drop)] = table_drop,
+        [vfp_slot(mark)] = table_mark
 	}
 };

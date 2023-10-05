@@ -193,8 +193,8 @@ endif
 
 KER_O= aapi.o aparse.o alex.o adbg.o aerr.o aload.o asave.o avm.o \
 afmt.o agc.o amem.o aenv.o astk.o auser.o ameta.o afun.o atable.o \
-alist.o atuple.o astr.o adict.o abuf.o aio.o aobj.o abc.o actx.o \
-ajmp.o
+alist.o atuple.o astr.o adict.o abuf.o avec.o aio.o aobj.o abc.o \
+actx.o ajmp.o
 LIB_O= asyslib.o adbglib.o abaselib.o aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
 

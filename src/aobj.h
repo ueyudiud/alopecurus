@@ -12,6 +12,9 @@
 #include "astrs.h"
 #include "actx.h"
 
+typedef struct Vec Vec;
+typedef struct Dict Dict;
+
 typedef struct GObj GObj;
 typedef struct GStr GStr;
 typedef struct GTuple GTuple;
@@ -19,11 +22,15 @@ typedef struct GList GList;
 typedef struct GTable GTable;
 typedef struct GFun GFun;
 typedef struct GUser GUser;
-typedef struct GMeta GMeta;
 typedef struct alo_Env GRoute;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 typedef struct GLoader GLoader;
+
+typedef struct GMeta GMeta;
+typedef struct GType GType;
+typedef struct GRefType GRefType;
+typedef struct GUserType GUserType;
 
 /* Object pointer. */
 typedef GObj* a_hobj;
@@ -34,13 +41,11 @@ typedef a_hobj a_gcnext;
 typedef a_gcnext a_gclist;
 
 typedef struct VTable VTable;
-typedef struct Dict Dict;
 typedef struct alo_Alloc Alloc;
 typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Stack Stack;
 typedef struct Global Global;
-typedef struct Loader Loader;
 typedef struct MetaCache MetaCache;
 
 #define T_NIL u32c(0)
@@ -131,19 +136,19 @@ always_inline void v_cpy(a_henv env, Value* restrict d, Value const* restrict s)
 }
 
 always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
-	for (a_usize i = 0; i < n; ++i) {
-		v_cpy(env, &d[i], &s[i]);
-	}
+    for (a_usize i = 0; i < n; ++i) {
+        v_cpy(env, &d[i], &s[i]);
+    }
 }
 
 /*=========================================================*
  * Nil & Control Values
  *=========================================================*/
 
-#define V_STRICT_NIL (~-u64c ALO_SOK)
-#define V_EMPTY      (~-u64c ALO_EEMPTY)
-#define V_NOT_IMPL   (~-u64c ALO_EBADOP)
-#define V_INVALID    (~-u64c ALO_EINVAL)
+#define V_STRICT_NIL (~-(u64c(0) + ALO_SOK))
+#define V_EMPTY      (~-(u64c(0) + ALO_EEMPTY))
+#define V_NOT_IMPL   (~-(u64c(0) + ALO_EBADOP))
+#define V_INVALID    (~-(u64c(0) + ALO_EINVAL))
 
 static_assert(V_IS(V_STRICT_NIL, T_NIL));
 static_assert(V_IS(V_EMPTY, T_NIL));
@@ -202,7 +207,7 @@ always_inline a_int v_as_int(Value v) {
 	return cast(a_int, v._ & V_INT_MASK);
 }
 
-#define v_of_int(v) v_box_nan(T_INT, v)
+#define v_of_int(v) v_box_nan(T_INT, cast(a_uint, v))
 
 always_inline void v_set_int(Value* d, a_int v) {
 	v_set_raw(d, v_of_int(v));
@@ -243,102 +248,209 @@ always_inline void v_set_ptr(Value* d, void* v) {
 }
 
 /*=========================================================*
- * Object
+ * Internal Data Structure
+ *=========================================================*/
+
+#define VEC_STRUCT_HEADER \
+    a_u32 _len;           \
+    a_u32 _cap;           \
+    Value* _ptr
+
+struct Vec {
+    VEC_STRUCT_HEADER;
+};
+
+typedef struct {
+    GStr* _key;
+    Value _value;
+} DNode;
+
+#define DICT_STRUCT_HEADER \
+    a_u32 _len;            \
+    /* Hash to index mask. */ \
+    a_u32 _hmask;          \
+    DNode* _ptr
+
+struct Dict {
+    DICT_STRUCT_HEADER;
+};
+
+/*=========================================================*
+ * Object & Metadata
  *=========================================================*/
 
 typedef struct { a_usize _; } ObjHeadMark[0];
-typedef VTable const* a_vtbl;
-typedef void* a_vptr;
 
-#define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; a_vtbl _vptr; a_gcnext _gnext; a_trmark _tnext
+#define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; VTable const* _vptr; a_gcnext _gnext; a_trmark _tnext
 
 struct GObj {
 	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
 };
 
-/**
- ** The virtual table for type, used to dispatch internal methods.
- ** Primitive types do not have virtual table.
- */
-struct VTable {
-	/* The stencil for value representation. */
-	a_u64 _stencil;
-	/* The type variant index. */
-	a_u32 _vid;
-	/* The properties of type. */
-	a_u32 _flags;
-	/* The handle of lookup table. */
-	a_htype _htype; /* null for no type object. */
-	/* The name of the type. */
-	char const* _uid;
-	/* The virtual function pointers. */
-	a_vptr _vfps[];
-};
+typedef void (*a_vfp_mark)(Global*, a_hobj);
+typedef void (*a_vfp_drop)(Global*, a_hobj);
+typedef void (*a_vfp_close)(a_henv, a_hobj);
 
-#define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
+#define VTABLE_STRUCT_HEADER \
+    /* The stencil for value representation. */ \
+    a_u64 _stencil;          \
+    /* The type variant index. */               \
+    a_u32 _vid;              \
+    /* The flags for virtual table. */          \
+    a_u32 _flags;            \
+    /* The handle of type object. */            \
+    a_usize _type_ref /* null for no type object. */
 
-always_inline GObj* v_as_obj(Value v) {
-	assume(v_is_obj(v), "not object.");
-	return ptr_of(GObj, v_get_payload(v));
-}
-
-always_inline Value v_of_obj(a_hobj v) {
-	return v_new(v->_vptr->_stencil | addr_of(v));
-}
-
-#define v_of_obj(v) v_of_obj(gobj_cast(v))
-
-always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
-	v_set(env, d, v_of_obj(v));
-}
-
-#define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
-
-/*=========================================================*
- * Virtual Dispatch Support
- *=========================================================*/
-
-#define VTABLE_FLAG_NONE        u8c(0x00)
-#define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
-
-#define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
-
-#define METHOD_LIST(_) \
+#define VTABLE_METHOD_LIST(_) \
 	_( 0, drop  ,    void, Global* g                                      ) \
 	_( 1, mark  ,    void, Global* g                                      ) \
 	_( 2, close ,    void, a_henv env                                     ) \
 	                                                                        \
 	_( 3, len   ,  a_uint, a_henv env                                     ) \
 	_( 4, get   ,   Value, a_henv env, Value key                          ) \
-	_( 5, set   ,   a_msg, a_henv env, Value key, Value val, a_isize* pctx) \
-	_( 6, put   ,   a_msg, a_henv env, Value key, Value val               ) \
-	_( 7,iput   ,   a_msg, a_henv env, Value key, Value val, a_isize* pctx)
+	_( 5, set   ,    void, a_henv env, Value key, Value val               ) \
+	_( 6,uget   ,   a_msg, a_henv env, Value key, Value* pval             ) \
+	_( 7,uset   ,   a_msg, a_henv env, Value key, Value val               )
 
-/* Method Slot Table. */
-union MST {
-#define DEF(i,n,r,p1,pn...) struct { a_vptr M_cat(_off_,n)[i]; r (*n)(p1, a_hobj, ##pn);  };
-    METHOD_LIST(DEF)
+/* Method Slot Index Table. */
+union MSIT {
+#define DEF(i,n,...) struct { a_byte M_cat(_off_,n)[i]; a_byte n;  };
+    VTABLE_METHOD_LIST(DEF)
 #undef DEF
 };
 
-#define VTABLE_LOCATION(f) (addr_of(&cast(union MST*, null)->f) / sizeof(a_vptr))
-#define vfp_def(f,p) [VTABLE_LOCATION(f)] = (p)
+#define vfp_slot(n) addr_of(&null_of(union MSIT)->n)
 
-#define a_vfp(f) typeof(cast(union MST*, null)->f)
+/* Method Slot Table. */
+typedef union {
+#define DEF(i,n,r,p1,pn...) struct { void* M_cat(_off_,n)[i]; r (*n)(p1, a_hobj, ##pn);  };
+    VTABLE_METHOD_LIST(DEF)
+#undef DEF
+} MST;
 
-#define g_vfetch(p,f) cast(a_vfp(f), (p)->_vptr->_vfps[VTABLE_LOCATION(f)])
+/**
+ ** The virtual table for type, used for fast dispatch.
+ ** Primitive types do not have virtual table.
+ */
+struct VTable {
+    VTABLE_STRUCT_HEADER;
+    /* The virtual function pointer slots. */
+    void* _slots[];
+};
+
+#define GMETA_STRUCT_HEADER \
+	GOBJ_STRUCT_HEADER;     \
+                            \
+    a_u32 _size;            \
+    /* Method version, changed when the order of existed fields changed. */ \
+    a_u32 _mver;            \
+    /* Reference counter. */\
+    a_u32 _nref;            \
+                            \
+    a_u32 _flags;           \
+     /* The type tag. */    \
+    a_u8 _tag;              \
+     /* Used for linked list in loader. */                                  \
+    GMeta* _mnext;          \
+    /* The loader of metadata, null for builtin loader. */                  \
+    GLoader* _loader;       \
+    /* The metadata name. */\
+    GStr* _name;            \
+    Dict _fields
+
+/**
+ ** Metadata, base type for type and module.
+ */
+struct GMeta {
+    GMETA_STRUCT_HEADER;
+};
+
+struct GType {
+    GMETA_STRUCT_HEADER;
+};
+
+struct GRefType {
+    /* Common fields for Type. */
+    GMETA_STRUCT_HEADER;
+};
+
+struct GUserType {
+    GMETA_STRUCT_HEADER;
+    VTable const* _vtbl;
+};
+
+struct MetaCache {
+    GMeta** _table;
+    a_u32 _hmask;
+    a_u32 _len;
+};
+
+struct GLoader {
+    GOBJ_STRUCT_HEADER;
+    GLoader* _parent;
+    MetaCache _cache;
+};
+
+#define META_FLAG_NONE u16c(0)
+#define META_FLAG_FAST_TM(tm) (u16c(1) << (tm))
+
+#define v_is_meta(v) v_is(v, T_META)
+
+#define meta_has_flag(t,f) (((t)->_flags & (f)) != 0)
+#define meta_has_tm(t,tm) meta_has_flag(t, META_FLAG_FAST_TM(tm))
+
+always_inline a_htype meta2htype(Global* g, GMeta* self) {
+    return cast(a_htype, ptr_diff(self, g));
+}
+
+always_inline GMeta* htype2meta(Global* g, a_htype hnd) {
+    return ptr_disp(GMeta, g, cast(a_usize, hnd));
+}
+
+#define VTABLE_FLAG_NONE        u8c(0x00)
+#define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
+
+#define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
+
+#define vfp_def(f,p) [vfp_slot(f)] = (p)
+
+#define a_vfp(f) typeof(cast(MST*, null)->f)
+
+#define g_vfetch(p,f) (cast(MST*, (p)->_vptr->_slots)->f)
 
 #define g_vcheck(p,f) ({ \
-	typeof(p) _p2 = p; \
-	a_vfp(f) _f2 = g_vfetch(_p2, f); \
-	assume(_f2 != null, "method '%s."#f"' is null.", _p2->_vptr->_uid); \
-	_f2; \
+	a_vfp(f) _f2 = g_vfetch(p, f); \
+	assume(_f2 != null, "method '"#f"' is null."); \
+	_f2;                    \
 })
 
 #define g_vcallp(r,p,fp,a...) (*(fp))(r, gobj_cast(p), ##a)
 #define g_vcall(r,p,f,a...) ({ typeof(p) _p = p; a_vfp(f) _fp = g_vcheck(_p,f); g_vcallp(r, _p, _fp, ##a); })
 #define v_vcall(r,v,f,a...) g_vcall(r, v_as_obj(v), f, ##a)
+
+#define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
+
+always_inline GObj* v_as_obj(Value v) {
+    assume(v_is_obj(v), "not object.");
+    return ptr_of(GObj, v_get_payload(v));
+}
+
+always_inline Value v_of_obj(a_hobj v) {
+    return v_new(v->_vptr->_stencil | addr_of(v));
+}
+
+#define v_of_obj(v) v_of_obj(gobj_cast(v))
+
+always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
+    v_set(env, d, v_of_obj(v));
+}
+
+#define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
+
+always_inline GMeta* v_as_meta(Value v) {
+    assume(v_is_meta(v), "not meta.");
+    return g_cast(GMeta, v_as_obj(v));
+}
 
 /*=========================================================*
  * String
@@ -351,8 +463,6 @@ struct GStr {
 	GStr* _snext;
 	a_byte _ptr[];
 };
-
-static_assert(offsetof(GObj, _len) == offsetof(GStr, _len) - offsetof(GStr, _obj_head_mark));
 
 #define v_is_str(v) v_is(v, T_STR)
 
@@ -378,8 +488,6 @@ struct GTuple {
 	Value _ptr[0];
 };
 
-static_assert(offsetof(GObj, _len) == offsetof(GTuple, _len));
-
 #define v_is_tuple(v) v_is(v, T_TUPLE)
 
 always_inline GTuple* v_as_tuple(Value v) {
@@ -395,12 +503,13 @@ always_inline GTuple* v_as_tuple(Value v) {
 
 struct GList {
 	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_u32 _cap;
-	Value* _ptr;
+    union {
+        Vec _vec;
+        struct {
+            VEC_STRUCT_HEADER;
+        };
+    };
 };
-
-static_assert(offsetof(GObj, _len) == offsetof(GList, _len));
 
 #define v_is_list(v) v_is(v, T_LIST)
 
@@ -442,8 +551,6 @@ struct TNode {
 	TLink _link;
 };
 
-static_assert(offsetof(GObj, _len) == offsetof(GTable, _len));
-
 static_assert(offsetof(TNode, _hash) % sizeof(a_u64) == 0);
 
 #define v_is_table(v) v_is(v, T_TABLE)
@@ -464,14 +571,12 @@ typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
 typedef struct ProtoDesc ProtoDesc;
 
-#define GFUN_STRUCT_HEADER \
-	GOBJ_STRUCT_HEADER; \
-	a_u32 _len; \
-	a_u16 _flags; \
-	a_u16 _fname /* Function name. */
-
 struct GFun {
-	GFUN_STRUCT_HEADER;
+    GOBJ_STRUCT_HEADER;
+	a_u32 _len;
+	a_u16 _flags;
+    /* Function name. */
+	a_u16 _fname;
 	union {
 		a_cfun _fptr;
 		GProto* _proto;
@@ -482,17 +587,14 @@ struct GFun {
 	};
 };
 
-#define GPROTO_STRUCT_HEADER \
-	GOBJ_STRUCT_HEADER;         \
-	a_u32 _size;                \
-	a_u16 _flags;               \
-	a_u8 _nstack;               \
-	a_u8 _nparam;               \
-	Value* _consts;             \
-	a_insn* _code
-
 struct GProto {
-	GPROTO_STRUCT_HEADER;
+    GOBJ_STRUCT_HEADER;
+	a_u32 _size;
+	a_u16 _flags;
+	a_u8 _nstack;
+	a_u8 _nparam;
+	Value* _consts;
+	a_insn* _code;
 	a_u16 _nconst;
 	a_u16 _ninsn;
 	a_u16 _nsub;
@@ -545,7 +647,7 @@ always_inline GFun* v_as_func(Value v) {
  *=========================================================*/
 
 struct GUser {
-	GOBJ_STRUCT_HEADER;
+    GOBJ_STRUCT_HEADER;
 };
 
 #define v_is_user(v) v_is(v, T_USER)
@@ -553,80 +655,6 @@ struct GUser {
 always_inline GUser* v_as_user(Value v) {
 	assume(v_is_user(v), "not userdata.");
 	return g_cast(GUser, v_as_obj(v));
-}
-
-/*=========================================================*
- * Metadata
- *=========================================================*/
-
-typedef struct {
-    GStr* _key;
-    Value _value;
-} DNode;
-
-struct Dict {
-    a_u32 _hmask; /* Hash to index mask. */
-    a_u32 _len;
-    DNode* _ptr;
-};
-
-/**
- ** Metadata.
- */
-struct GMeta {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _size;
-
-	a_u32 _mver; /* Method version, changed when the order of existed fields changed. */
-	a_u32 _nref; /* Reference counter. */
-
-	a_u16 _flags;
-	a_u8 _tag; /* The type tag. */
-
-	GLoader* _loader; /* The loader of metadata, null for builtin loader. */
-	GStr* _uid; /* Unique string index. */
-    Dict _dict;
-
-	GMeta* _next; /* Used for linked list in loader. */
-
-	VTable _opt_vtbl[0];
-};
-
-struct MetaCache {
-	GMeta** _table;
-	a_u32 _hmask;
-	a_u32 _len;
-};
-
-struct Loader {
-	GLoader* _parent;
-	MetaCache _cache;
-};
-
-struct GLoader {
-	GOBJ_STRUCT_HEADER;
-	Loader _body;
-};
-
-#define MOD_FLAG_NONE u16c(0)
-#define MOD_FLAG_FAST_TM(tm) (u16c(1) << (tm))
-
-#define v_is_meta(v) v_is(v, T_META)
-
-always_inline GMeta* v_as_meta(Value v) {
-	assume(v_is_meta(v), "not meta.");
-	return g_cast(GMeta, v_as_obj(v));
-}
-
-#define meta_has_flag(t,f) (((t)->_flags & (f)) != 0)
-#define meta_has_tm(t,tm) meta_has_flag(t, MOD_FLAG_FAST_TM(tm))
-
-always_inline a_htype meta2htype(Global* g, GMeta* self) {
-	return cast(a_htype, ptr_diff(self, g));
-}
-
-always_inline GMeta* htype2meta(Global* g, a_htype hnd) {
-	return ptr_disp(GMeta, g, cast(a_usize, hnd));
 }
 
 /*=========================================================*
@@ -732,7 +760,7 @@ struct Global {
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
 	GStr* _nomem_error;
-	MetaCache _mod_cache;
+	MetaCache _meta_cache;
 	StrCache _str_cache;
 	a_hash _seed;
 	a_u16 _gcpausemul;
@@ -743,18 +771,18 @@ struct Global {
 	volatile atomic_uint_fast8_t _hookm;
 	GStr* _names[STR__COUNT];
 	struct {
-		GMeta _nil;
-		GMeta _bool;
-		GMeta _int;
-		GMeta _ptr;
-		GMeta _str;
-		GMeta _tuple;
-		GMeta _list;
-		GMeta _table;
-		GMeta _func;
-		GMeta _type;
-		GMeta _route;
-		GMeta _float;
+		GType _nil;
+		GType _bool;
+		GType _int;
+        GType _float;
+		GType _ptr;
+		GRefType _str;
+		GRefType _tuple;
+		GRefType _list;
+		GRefType _table;
+		GRefType _func;
+		GRefType _type;
+		GRefType _route;
 	} _types;
 };
 
@@ -786,7 +814,7 @@ always_inline GStr* env_int_str(a_henv env, a_u32 tag) {
 }
 
 #define g_type(env,f) (&G(env)->_types.f)
-#define g_htype(f) cast(a_htype, offsetof(Global, _types.f))
+#define g_type_ref(f) addr_of(&null_of(Global)->_types.f)
 
 /*=========================================================*/
 
@@ -812,8 +840,8 @@ always_inline a_hash v_trivial_hash(Value v) {
 
 always_inline a_hash v_float_hash(Value v) {
 	a_float f = v_as_float(v);
-	if (f == 0) return 0; /* Special case for 0.0 and -0.0 */
-	return v_trivial_hash_unchecked(v);
+    if (f == 0) return 0; /* Special case for 0.0 and -0.0 */
+    return v_trivial_hash_unchecked(v);
 }
 
 /* Identity equality. */
@@ -826,18 +854,20 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 
 intern char const ai_obj_type_names[][8];
 
-always_inline GMeta* g_typeof(a_henv env, a_hobj p) {
-	assume(env->_vptr->_htype != null, "object does not have a type mirror.");
-	return htype2meta(G(env), p->_vptr->_htype);
+always_inline GType* g_typeof(a_henv env, a_hobj p) {
+	assume(p->_vptr->_type_ref != 0, "no type mirror for object.");
+	return ptr_disp(GType, G(env), p->_vptr->_type_ref);
 }
 
 #define g_typeof(env,p) g_typeof(env, gobj_cast(p))
 
-always_inline char const* g_nameof(unused a_henv env, a_hobj p) {
-	return p->_vptr->_uid;
+always_inline char const* g_nameof(a_henv env, a_hobj p) {
+	return str2ntstr(g_typeof(env, p)->_name);
 }
 
-always_inline GMeta* v_typeof(a_henv env, Value v) {
+#define g_nameof(env,p) g_nameof(env, gobj_cast(p))
+
+always_inline GType* v_typeof(a_henv env, Value v) {
 	if (v_is_float(v)) {
 		return g_type(env, _float);
 	}

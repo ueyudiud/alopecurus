@@ -66,7 +66,7 @@ static void stack_reloc(a_henv env, a_isize diff) {
 	for (Frame* frame = env->_frame; frame != null; frame = frame->_prev) {
 		frame->_stack_bot = ptr_disp(Value, frame->_stack_bot, diff);
 
-		for (RcCap* cap = frame->_open_caps; cap != null; cap = cap->_next) {
+		for (RcCap* cap = frame->_open_caps; cap != null; cap = cap->_mnext) {
 			cap->_ptr = ptr_disp(Value, cap->_ptr, diff);
 		}
 	}

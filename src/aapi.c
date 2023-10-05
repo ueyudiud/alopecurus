@@ -159,7 +159,7 @@ Value const* api_roslot(a_henv env, a_isize id) {
 	}
 	else if (id >= MIN_NEG_STACK_INDEX) {
 		Value const* bot = ai_stk_bot(env);
-		if (-id <= env->_stack._top - bot)
+		if (-id > env->_stack._top - bot)
 			return null;
 		return env->_stack._top + id;
 	}
@@ -447,18 +447,18 @@ a_msg alo_rawlen(a_henv env, a_isize id, a_usize* plen) {
 
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
-			GTuple* value = v_as_tuple(v);
-			*plen = value->_len;
+			GTuple* p = v_as_tuple(v);
+			*plen = p->_len;
 			break;
 		}
 		case T_LIST: {
-			GList* value = v_as_list(v);
-			*plen = value->_len;
+			GList* p = v_as_list(v);
+			*plen = p->_len;
 			break;
 		}
 		case T_TABLE: {
-			GTable* value = v_as_table(v);
-			*plen = value->_len;
+			GTable* p = v_as_table(v);
+			*plen = p->_len;
 			break;
 		}
 		case T_USER: {
@@ -472,7 +472,7 @@ a_msg alo_rawlen(a_henv env, a_isize id, a_usize* plen) {
 			return ALO_EBADOP;
 		}
 	}
-	
+
 	return ALO_SOK;
 }
 
@@ -667,31 +667,32 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	return str2ntstr(val);
 }
 
-static a_htype l_use_mod(a_henv env, GMeta* type) {
-	if (unlikely(type->_nref == UINT32_MAX))
+static a_htype l_use_meta(a_henv env, GMeta* meta) {
+	if (unlikely(meta->_nref == UINT32_MAX))
 		return null;
-	type->_nref += 1;
-	return meta2htype(G(env), type);
+    meta->_nref += 1;
+	return meta2htype(G(env), meta);
 }
 
 a_htype alo_typeof(a_henv env, a_isize id) {
 	Value const* pv = api_roslot(env, id);
 	if (pv != null) {
-		GMeta* mod = v_typeof(env, *pv);
-		return l_use_mod(env, mod);
+		GType* type = v_typeof(env, *pv);
+		return l_use_meta(env, g_cast(GMeta, type));
 	}
 	return null;
 }
 
-void alo_newmod(a_henv env, char const* name, a_flags flags) {
+void alo_newmod(a_henv env, char const* n, a_flags flags) {
 	api_check_slot(env, 1);
 
-	GMeta* self = flags & ALO_NEWMOD_FLAG_STATIC ? ai_meta_alloc(env, 0, null) : ai_ameta_new(env);
-	v_set_obj(env, api_incr_stack(env), self);
+    Value* p = api_incr_stack(env);
 
-	if (name != null) {
-		self->_uid = ai_str_new(env, name, strlen(name));
-	}
+    GStr* name = ai_str_new(env, n, strlen(n));
+    v_set_obj(env, p, name);
+
+	GMeta* self = ai_mod_new(env, name, null);
+	v_set_obj(env, p, self);
 
 	ai_gc_trigger(env);
 }
@@ -699,14 +700,14 @@ void alo_newmod(a_henv env, char const* name, a_flags flags) {
 char const* alo_modname(unused a_henv env, a_htype hmod) {
 	api_check(hmod != null, "module is null.");
 	GMeta* mod = htype2meta(G(env), hmod);
-	return str2ntstr(mod->_uid);
+	return str2ntstr(mod->_name);
 }
 
 a_htype alo_openmod(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
 	if (likely(v_is_meta(v))) {
 		GMeta* mod = v_as_meta(v);
-		return l_use_mod(env, mod);
+		return l_use_meta(env, mod);
 	}
 	return null;
 }

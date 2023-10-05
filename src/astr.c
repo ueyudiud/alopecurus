@@ -90,7 +90,7 @@ static GStr* str_alloc(a_henv env, a_usize len) {
 	return ai_mem_alloc(env, sizeof_GStr(len));
 }
 
-static void str_init(GStr* self, void const* src, a_usize len, a_hash hash) {
+static void str_init(a_henv env, GStr* self, void const* src, a_usize len, a_hash hash) {
 	self->_vptr = &str_vtable;
     self->_len = len;
     self->_hash = hash;
@@ -127,7 +127,7 @@ static GStr* str_get_or_new_with_hash(a_henv env, void const* src, a_usize len, 
 	cache_hint(env, cache);
 	
 	self = str_alloc(env, len);
-	str_init(self, src, len, hash);
+	str_init(env, self, src, len, hash);
 
 	cache_emplace_in_place(cache, self);
     ai_gc_register_object(env, self);
@@ -145,7 +145,7 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 
 	self = buff;
 	/* Complete all fields. */
-	self->_vptr = &str_vtable;
+	self->_vptr = g_type(env, _str)->_vptr;
 	self->_len = len;
 	self->_hash = hash;
 	self->_ptr[len] = '\0';
@@ -222,6 +222,30 @@ a_bool ai_str_equals(GStr* self, GStr* other) {
     return self == other || (self->_hash == other->_hash && ai_str_requals(self, self->_ptr, self->_len));
 }
 
+static void str_mark(Global* g, GStr* self) {
+    ai_gc_trace_work(g, sizeof_GStr(self->_len));
+}
+
+static void cache_remove(StrCache* cache, GStr* str) {
+    /* Remove string from intern table. */
+    GStr** slot = cache_head(cache, str->_hash);
+    loop {
+        GStr* str1 = *slot;
+        assume(str1 != null);
+        if (str == str1) {
+            *slot = str->_snext;
+            break;
+        }
+        slot = &str->_snext;
+    }
+    cache->_len -= 1;
+}
+
+static void str_drop(Global* g, GStr* self) {
+    cache_remove(&g->_str_cache, self);
+    ai_mem_dealloc(g, self, sizeof_GStr(self->_len));
+}
+
 void ai_str_boost(a_henv env, void* block) {
     Global* g = G(env);
     
@@ -236,7 +260,7 @@ void ai_str_boost(a_henv env, void* block) {
 	run {
 		g->_nomem_error = ai_str_newl(env, "out of memory.");
 		ai_gc_fix_object(env, g->_nomem_error);
-	};
+	}
 
 	run {
 		static a_u8 const l_str_len[STR__COUNT] = {
@@ -257,7 +281,7 @@ void ai_str_boost(a_henv env, void* block) {
 
 			g_set_gray(self);
 
-			str_init(self, src, len, hash);
+			str_init(env, self, src, len, hash);
 			str_id_set(self, i);
 
 			cache_emplace_in_place(cache, self);
@@ -271,43 +295,18 @@ void ai_str_boost(a_henv env, void* block) {
 
 void ai_str_clean(Global* g) {
     StrCache* cache = &g->_str_cache;
-    assume(cache->_len == STR__COUNT);
+    assume(cache->_len == STR__COUNT, "string size not matched.");
     ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
 }
 
-static void cache_remove(StrCache* cache, GStr* str) {
-	/* Remove string from intern table. */
-	GStr** slot = cache_head(cache, str->_hash);
-	loop {
-		GStr* str1 = *slot;
-		assume(str1 != null);
-		if (str == str1) {
-			*slot = str->_snext;
-			break;
-		}
-		slot = &str->_snext;
-	}
-	cache->_len -= 1;
-}
-
-static void str_mark(Global* g, GStr* self) {
-	ai_gc_trace_work(g, sizeof_GStr(self->_len));
-}
-
-static void str_drop(Global* g, GStr* self) {
-	cache_remove(&g->_str_cache, self);
-	ai_mem_dealloc(g, self, sizeof_GStr(self->_len));
-}
-
 static VTable const str_vtable = {
-	._stencil = V_STENCIL(T_STR),
-	._htype = g_htype(_str),
-	._uid = "str",
-	._flags = VTABLE_FLAG_GREEDY_MARK,
-	._vfps = {
-		vfp_def(drop, str_drop),
-		vfp_def(mark, str_mark),
-	}
+    ._stencil = V_STENCIL(T_STR),
+    ._flags = VTABLE_FLAG_NONE,
+    ._type_ref = g_type_ref(_str),
+    ._slots = {
+        [vfp_slot(drop)] = str_drop,
+        [vfp_slot(mark)] = str_mark
+    }
 };
 
 char const ai_str_interns[] = {

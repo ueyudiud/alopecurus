@@ -83,23 +83,23 @@ typedef a_usize a_flags;
 #define ALO_EBADOP (-2) /* Bad Operation */
 #define ALO_EEMPTY (-1) /* Empty Value */
 
-#define ALO_SOK (0)
-#define ALO_SYIELD (1) /* Route is Yield */
-#define ALO_SDEAD (2) /* Route is Dead */
+#define ALO_SOK 0
+#define ALO_SYIELD 1 /* Route is Yield */
+#define ALO_SDEAD 2 /* Route is Dead */
 
-#define ALO_TNIL (0)
-#define ALO_TBOOL (1)
-#define ALO_TINT (2)
-#define ALO_TFLOAT (3)
-#define ALO_TPTR (4)
-#define ALO_TSTR (5)
-#define ALO_TTUPLE (6)
-#define ALO_TLIST (7)
-#define ALO_TTABLE (8)
-#define ALO_TFUNC (9)
-#define ALO_TROUTE (10)
-#define ALO_TTYPE (11)
-#define ALO_TUSER (12)
+#define ALO_TNIL 0
+#define ALO_TBOOL 1
+#define ALO_TINT 2
+#define ALO_TFLOAT 3
+#define ALO_TPTR 4
+#define ALO_TSTR 5
+#define ALO_TTUPLE 6
+#define ALO_TLIST 7
+#define ALO_TTABLE 8
+#define ALO_TFUNC 9
+#define ALO_TROUTE 10
+#define ALO_TTYPE 11
+#define ALO_TUSER 12
 
 /* Hook masks. */
 #define ALO_HMNONE  0x0000
@@ -206,7 +206,7 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 #define ALO_NEWMOD_FLAG_STATIC 0x0001
 
 /* Type operations. */
-ALO_EXPORT void (alo_newmod)(a_henv env, char const* name, a_flags flags);
+ALO_EXPORT void (alo_newmod)(a_henv env, char const* n, a_flags flags);
 ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
 ALO_EXPORT char const* (alo_modname)(a_henv env, a_htype mod);
 ALO_EXPORT a_htype (alo_loadmod)(a_henv env, char const* src, a_usize len);

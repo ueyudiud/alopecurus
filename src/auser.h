@@ -7,8 +7,6 @@
 
 #include "aobj.h"
 
-intern VTable const ai_auser_vtable;
-
-intern GUser* ai_auser_new(a_henv env, GMeta* type);
+intern GUser* ai_rec_new(a_henv env, GUserType* type);
 
 #endif /* auser_h_ */
