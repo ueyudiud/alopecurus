@@ -19,7 +19,7 @@ intern GStr* ai_str_new(a_henv env, void const* src, a_usize len);
 intern a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr);
 intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
 intern a_bool ai_str_requals(GStr* self, void const* dat, a_usize len);
-intern a_bool ai_str_equals(GStr* self, GStr* other);
+intern a_bool ai_str_equals(GStr* self, GStr* o);
 intern void ai_str_boost(a_henv env, void* block);
 intern void ai_str_clean(Global* g);
 

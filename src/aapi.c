@@ -660,11 +660,11 @@ a_float alo_tofloat(a_henv env, a_isize id) {
 char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	Value v = api_elem(env, id);
 	api_check(v_is_str(v), "cannot cast to string");
-	GStr* val = v_as_str(v);
+	GStr* p = v_as_str(v);
 	if (plen != null) {
-		*plen = cast(a_usize, val->_len);
+		*plen = cast(a_usize, p->_len);
 	}
-	return str2ntstr(val);
+	return str2ntstr(p);
 }
 
 static a_htype l_use_meta(a_henv env, GMeta* meta) {
@@ -686,13 +686,13 @@ a_htype alo_typeof(a_henv env, a_isize id) {
 void alo_newmod(a_henv env, char const* n, a_flags flags) {
 	api_check_slot(env, 1);
 
-    Value* p = api_incr_stack(env);
+    Value* pv = api_incr_stack(env);
 
     GStr* name = ai_str_new(env, n, strlen(n));
-    v_set_obj(env, p, name);
+    v_set_obj(env, pv, name);
 
 	GMeta* self = ai_mod_new(env, name, null);
-	v_set_obj(env, p, self);
+	v_set_obj(env, pv, self);
 
 	ai_gc_trigger(env);
 }

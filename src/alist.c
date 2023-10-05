@@ -31,10 +31,10 @@ void ai_list_hint(a_henv env, GList* self, a_usize len) {
     ai_vec_hint(env, &self->_vec, len);
 }
 
-void ai_list_push(a_henv env, GList* self, Value val) {
-    ai_vec_push(env, &self->_vec, val);
+void ai_list_push(a_henv env, GList* self, Value v) {
+    ai_vec_push(env, &self->_vec, v);
 
-	ai_gc_barrier_backward_val(env, self, val);
+	ai_gc_barrier_backward_val(env, self, v);
 }
 
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
@@ -51,29 +51,29 @@ static Value* list_refi(GList *self, a_int key) {
     return &self->_ptr[i];
 }
 
-Value ai_list_get(a_henv env, GList* self, Value key) {
-	if (unlikely(!v_is_int(key))) {
-        ai_err_bad_key(env, "list", v_nameof(env, key));
+Value ai_list_get(a_henv env, GList* self, Value vk) {
+	if (unlikely(!v_is_int(vk))) {
+        ai_err_bad_key(env, "list", v_nameof(env, vk));
 	}
-	return ai_list_geti(env, self, v_as_int(key));
+	return ai_list_geti(env, self, v_as_int(vk));
 }
 
-Value ai_list_geti(unused a_henv env, GList* self, a_int key) {
-	Value* ref = list_refi(self, key);
+Value ai_list_geti(unused a_henv env, GList* self, a_int k) {
+	Value* ref = list_refi(self, k);
 	return ref ? *ref : v_of_nil();
 }
 
-void ai_list_set(a_henv env, GList* self, Value key, Value value) {
-	if (unlikely(!v_is_int(key))) {
-		ai_err_raisef(env, ALO_EINVAL, "bad key for list.");
+void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
+	if (unlikely(!v_is_int(vk))) {
+        ai_err_bad_key(env, "list", v_nameof(env, vv));
 	}
-	ai_list_seti(env, self, v_as_int(key), value);
+	ai_list_seti(env, self, v_as_int(vk), vv);
 }
 
 void ai_list_seti(a_henv env, GList* self, a_int key, Value value) {
 	Value* ref = list_refi(self, key);
 	if (unlikely(ref == null)) {
-		ai_err_raisef(env, ALO_EINVAL, "list key out of bound.");
+		ai_err_raisef(env, ALO_EINVAL, "list index out of bound.");
 	}
 	v_set(env, ref, value);
 	ai_gc_barrier_forward_val(env, self, value);
@@ -99,9 +99,9 @@ a_msg ai_list_useti(a_henv env, GList* self, a_int k, Value v) {
     return ALO_SOK;
 }
 
-a_msg ai_list_uset(a_henv env, GList* self, Value k, Value v) {
-    if (!v_is_int(k)) return ALO_EINVAL;
-    return ai_list_useti(env, self, v_as_int(k), v);
+a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v) {
+    if (!v_is_int(vk)) return ALO_EINVAL;
+    return ai_list_useti(env, self, v_as_int(vk), v);
 }
 
 static void list_mark(Global* g, GList* self) {

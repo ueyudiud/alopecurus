@@ -31,11 +31,11 @@ Value const* ai_tuple_refi(unused a_henv env, GTuple* self, a_int key) {
     return &self->_ptr[i];
 }
 
-a_bool ai_tuple_equals(a_henv env, GTuple* self, GTuple* other) {
-	if (self->_len != other->_len)
+a_bool ai_tuple_equals(a_henv env, GTuple* self, GTuple* o) {
+	if (self->_len != o->_len)
 		return false;
 	for (a_u32 i = 0; i < self->_len; ++i) {
-		if (!ai_vm_equals(env, self->_ptr[i], other->_ptr[i]))
+		if (!ai_vm_equals(env, self->_ptr[i], o->_ptr[i]))
 			return false;
 	}
 	return true;
@@ -52,30 +52,30 @@ a_hash ai_tuple_hash(a_henv env, GTuple* self) {
 	return self->_hash;
 }
 
-Value ai_tuple_get(a_henv env, GTuple* self, Value key) {
-	if (unlikely(!v_is_int(key))) {
-        ai_err_bad_key(env, "tuple", v_nameof(env, key));
+Value ai_tuple_get(a_henv env, GTuple* self, Value vk) {
+	if (unlikely(!v_is_int(vk))) {
+        ai_err_bad_key(env, "tuple", v_nameof(env, vk));
 	}
-	return ai_tuple_geti(env, self, v_as_int(key));
+	return ai_tuple_geti(env, self, v_as_int(vk));
 }
 
-Value ai_tuple_geti(a_henv env, GTuple* self, a_int key) {
-	Value const* value = ai_tuple_refi(env, self, key);
+Value ai_tuple_geti(a_henv env, GTuple* self, a_int k) {
+	Value const* value = ai_tuple_refi(env, self, k);
 	if (unlikely(value == null)) {
 		ai_err_raisef(env, ALO_EINVAL, "index out of bound.");
 	}
 	return *value;
 }
 
-a_msg ai_tuple_ugeti(a_henv env, GTuple* self, a_int key, Value* pval) {
-    a_uint i = obj_idx(key, self->_len, ALO_EINVAL);
-    v_set(env, pval, self->_ptr[i]);
+a_msg ai_tuple_ugeti(a_henv env, GTuple* self, a_int k, Value* pv) {
+    a_uint i = obj_idx(k, self->_len, ALO_EINVAL);
+    v_set(env, pv, self->_ptr[i]);
     return ALO_SOK;
 }
 
-a_msg ai_tuple_uget(a_henv env, GTuple* self, Value key, Value* pval) {
-    if (!v_is_int(key)) return ALO_EINVAL;
-    return ai_tuple_ugeti(env, self, v_as_int(key), pval);
+a_msg ai_tuple_uget(a_henv env, GTuple* self, Value vk, Value* pv) {
+    if (!v_is_int(vk)) return ALO_EINVAL;
+    return ai_tuple_ugeti(env, self, v_as_int(vk), pv);
 }
 
 static void tuple_drop(Global* g, GTuple* self) {

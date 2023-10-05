@@ -221,38 +221,38 @@ void ai_meta_clean(Global* g) {
     cache_drop(g, &g->_meta_cache);
 }
 
-Value ai_meta_get(a_henv env, GMeta* self, Value key) {
-    if (!v_is_str(key)) {
-        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, key));
+Value ai_meta_get(a_henv env, GMeta* self, Value vk) {
+    if (!v_is_str(vk)) {
+        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
     }
 
-    return ai_meta_gets(env, self, v_as_str(key));
+    return ai_meta_gets(env, self, v_as_str(vk));
 }
 
-Value ai_meta_gets(a_henv env, GMeta* self, GStr* key) {
+Value ai_meta_gets(a_henv env, GMeta* self, GStr* k) {
     Value val;
-    a_msg msg = ai_dict_uget(env, &self->_fields, key, &val);
+    a_msg msg = ai_dict_uget(env, &self->_fields, k, &val);
 
     if (msg != ALO_SOK) {
         assume(msg == ALO_EEMPTY, "unexpected error.");
-        ai_err_raisef(env, ALO_EBADOP, "no entry %s.%s",
+        ai_err_raisef(env, ALO_EBADOP, "no meta entry '%s.%s'",
                       str2ntstr(self->_name),
-                      str2ntstr(key));
+                      str2ntstr(k));
     }
 
     return val;
 }
 
-void ai_meta_set(a_henv env, GMeta* self, Value key, Value val) {
-    if (!v_is_str(key)) {
-        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, key));
+void ai_meta_set(a_henv env, GMeta* self, Value vk, Value vv) {
+    if (!v_is_str(vk)) {
+        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
     }
 
     a_usize ctx;
-    a_msg msg = ai_dict_uset(env, &self->_fields, v_as_str(key), val, &ctx);
+    a_msg msg = ai_dict_uset(env, &self->_fields, v_as_str(vk), vv, &ctx);
 
     if (msg != ALO_SOK) {
-        msg = ai_dict_uput(env, &self->_fields, v_as_str(key), val, &ctx);
+        msg = ai_dict_uput(env, &self->_fields, v_as_str(vk), vv, &ctx);
     }
 
     assume(msg == ALO_SOK);
@@ -260,25 +260,25 @@ void ai_meta_set(a_henv env, GMeta* self, Value key, Value val) {
     self->_mver += 1;
 }
 
-a_msg ai_meta_uget(a_henv env, GMeta* self, Value key, Value* pval) {
-    if (!v_is_str(key)) return ALO_EINVAL;
-    return ai_dict_uget(env, &self->_fields, v_as_str(key), pval);
+a_msg ai_meta_uget(a_henv env, GMeta* self, Value vk, Value* pv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    return ai_dict_uget(env, &self->_fields, v_as_str(vk), pv);
 }
 
-a_msg ai_meta_uset(a_henv env, GMeta* self, Value key, Value val) {
-    if (!v_is_str(key)) return ALO_EINVAL;
-    return ai_meta_usets(env, self, v_as_str(key), val);
+a_msg ai_meta_uset(a_henv env, GMeta* self, Value vk, Value vv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    return ai_meta_usets(env, self, v_as_str(vk), vv);
 }
 
-a_msg ai_meta_usets(a_henv env, GMeta* self, GStr* key, Value val) {
+a_msg ai_meta_usets(a_henv env, GMeta* self, GStr* k, Value vv) {
     a_usize ctx;
 
-    try(ai_dict_uset(env, &self->_fields, key, val, &ctx));
+    try(ai_dict_uset(env, &self->_fields, k, vv, &ctx));
 
     self->_mver += 1;
 
-    ai_gc_barrier_forward(env, self, key);
-    ai_gc_barrier_backward_val(env, self, val);
+    ai_gc_barrier_forward(env, self, k);
+    ai_gc_barrier_backward_val(env, self, vv);
 
     return ALO_SOK;
 }

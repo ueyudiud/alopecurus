@@ -188,7 +188,7 @@ static TNode* table_get_hprev(GTable* self, TNode* node) {
 	return nodep;
 }
 
-static void table_put(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
+static void table_put(a_henv env, GTable* self, Value vk, a_hash hash, Value vv) {
     TNode* nodeh = table_hfirst(self, hash);
     if (hnode_is_hhead(self, nodeh)) {
         /* Insert into hash list. */
@@ -198,7 +198,7 @@ static void table_put(a_henv env, GTable* self, Value key, a_hash hash, Value va
         /*                       v
          * h -> n -> ... => h -> t -> n -> ...
          */
-		hnode_put(env, nodet, key, hash, value);
+		hnode_put(env, nodet, vk, hash, vv);
 
 		nodet->_hnext = nodeh->_hnext;
 		nodeh->_hnext = wrap(nodet - self->_ptr);
@@ -223,7 +223,7 @@ static void table_put(a_henv env, GTable* self, Value key, a_hash hash, Value va
 		/*    v
 		 * => h
 		 */
-		hnode_put(env, nodeh, key, hash, value);
+		hnode_put(env, nodeh, vk, hash, vv);
         nodeh->_hnext = nil;
 		table_link_tail(self, nodeh);
     }
@@ -303,63 +303,63 @@ static a_bool titer_hnext(GTable* self, TNode** pnode) {
 
 #define table_for_hash(v,t,h) for (a_bool _has_next = titer_hfirst(t, &v, h); _has_next; _has_next = titer_hnext(t, &v))
 
-static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value key) {
+static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value vk) {
 	TNode* node;
 	table_for_hash(node, self, hash) {
-		if (v_trivial_equals(key, node->_key)) {
+		if (v_trivial_equals(vk, node->_key)) {
 			return &node->_value;
 		}
 	}
 	return null;
 }
 
-static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* key) {
+static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* vk) {
 	TNode* node;
 	table_for_hash(node, self, hash) {
-		if (v_is_str(node->_key) && ai_str_requals(v_as_str(node->_key), key->_ptr, key->_len)) {
+		if (v_is_str(node->_key) && ai_str_requals(v_as_str(node->_key), vk->_ptr, vk->_len)) {
 			return &node->_value;
 		}
 	}
 	return null;
 }
 
-static Value* table_find_any(unused a_henv env, GTable* self, a_hash hash, Value key) {
+static Value* table_find_any(unused a_henv env, GTable* self, a_hash hash, Value vk) {
 	TNode* node;
 	table_for_hash(node, self, hash) {
-		if (ai_vm_equals(env, key, node->_key)) {
+		if (ai_vm_equals(env, vk, node->_key)) {
 			return &node->_value;
 		}
 	}
 	return null;
 }
 
-Value const* ai_table_refi(a_henv env, GTable* self, a_int key) {
-    return table_find_id(env, self, v_trivial_hash(v_of_int(key)), v_of_int(key));
+Value const* ai_table_refi(a_henv env, GTable* self, a_int k) {
+    return table_find_id(env, self, v_trivial_hash(v_of_int(k)), v_of_int(k));
 }
 
-Value const* ai_table_refls(a_henv env, GTable* self, a_lstr const* key) {
-    return table_find_str(env, self, ai_str_hashof(env, key->_ptr, key->_len), key);
+Value const* ai_table_refls(a_henv env, GTable* self, a_lstr const* k) {
+    return table_find_str(env, self, ai_str_hashof(env, k->_ptr, k->_len), k);
 }
 
-Value const* ai_table_refs(a_henv env, GTable* self, GStr* key) {
-	return table_find_id(env, self, key->_hash, v_of_obj(key));
+Value const* ai_table_refs(a_henv env, GTable* self, GStr* k) {
+	return table_find_id(env, self, k->_hash, v_of_obj(k));
 }
 
-Value* ai_table_ref(a_henv env, GTable* self, Value key, a_u32* restrict phash) {
-	if (likely(v_has_trivial_equals(key))) {
-		*phash = v_trivial_hash(key);
-		return table_find_id(env, self, *phash, key);
+Value* ai_table_ref(a_henv env, GTable* self, Value vk, a_u32* restrict phash) {
+	if (likely(v_has_trivial_equals(vk))) {
+		*phash = v_trivial_hash(vk);
+		return table_find_id(env, self, *phash, vk);
 	}
-	else if (unlikely(v_is_float(key))) {
-		if (unlikely(v_is_nan(key))) {
+	else if (unlikely(v_is_float(vk))) {
+		if (unlikely(v_is_nan(vk))) {
 			return null;
 		}
-		*phash = v_trivial_hash(key);
-		return table_find_id(env, self, *phash, key);
+		*phash = v_trivial_hash(vk);
+		return table_find_id(env, self, *phash, vk);
 	}
 	else {
-		*phash = ai_vm_hash(env, key);
-		return table_find_any(env, self, *phash, key);
+		*phash = ai_vm_hash(env, vk);
+		return table_find_any(env, self, *phash, vk);
 	}
 }
 
@@ -422,64 +422,64 @@ a_bool alo_hremove(a_henv env, a_isize id, a_ritr itr) {
 	return true;
 }
 
-Value ai_table_get(a_henv env, GTable* self, Value key) {
+Value ai_table_get(a_henv env, GTable* self, Value vk) {
 	a_u32 hash;
-	Value const* value = ai_table_ref(env, self, key, &hash);
+	Value const* value = ai_table_ref(env, self, vk, &hash);
 	return value != null ? *value : v_of_nil();
 }
 
-Value ai_table_gets(a_henv env, GTable* self, GStr* key) {
-	Value const* v = table_find_id(env, self, key->_hash, v_of_obj(key));
+Value ai_table_gets(a_henv env, GTable* self, GStr* k) {
+	Value const* v = table_find_id(env, self, k->_hash, v_of_obj(k));
 	return v != null ? *v : v_of_nil();
 }
 
-void ai_table_set(a_henv env, GTable* self, Value key, Value value) {
+void ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
 	a_hash hash;
-	Value* ref = ai_table_ref(env, self, key, &hash);
+	Value* ref = ai_table_ref(env, self, vk, &hash);
 	if (ref != null) {
-		v_set(env, ref, value);
-		ai_gc_barrier_backward_val(env, self, value);
+		v_set(env, ref, vv);
+		ai_gc_barrier_backward_val(env, self, vv);
 	}
 	else {
 		ai_table_hint(env, self, 1);
-		ai_table_put(env, self, key, hash, value);
+		ai_table_put(env, self, vk, hash, vv);
 	}
 }
 
-void ai_table_put(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
+void ai_table_put(a_henv env, GTable* self, Value vk, a_hash hash, Value vv) {
 	assume(self->_ptr != null && self->_len + 1 <= (self->_hmask + 1) * ALOI_TABLE_LOAD_FACTOR, "need hint before emplace.");
-	table_put(env, self, key, hash, value);
-	ai_gc_barrier_backward_val(env, self, key);
-	ai_gc_barrier_backward_val(env, self, value);
+	table_put(env, self, vk, hash, vv);
+	ai_gc_barrier_backward_val(env, self, vk);
+	ai_gc_barrier_backward_val(env, self, vv);
 	self->_len += 1;
 }
 
-a_msg ai_table_ugeti(a_henv env, GTable* self, a_int key, Value* pval) {
-    Value const* psrc = ai_table_refi(env, self, key);
+a_msg ai_table_ugeti(a_henv env, GTable* self, a_int k, Value* pv) {
+    Value const* psrc = ai_table_refi(env, self, k);
     if (psrc == null) return ALO_EEMPTY;
-    v_cpy(env, pval, psrc);
+    v_cpy(env, pv, psrc);
     return ALO_SOK;
 }
 
-a_msg ai_table_uget(a_henv env, GTable* self, Value key, Value* pval) {
+a_msg ai_table_uget(a_henv env, GTable* self, Value vk, Value* pv) {
     a_hash hash;
-    Value* psrc = ai_table_ref(env, self, key, &hash);
+    Value* psrc = ai_table_ref(env, self, vk, &hash);
     if (psrc == null) return ALO_EEMPTY;
-    v_cpy(env, pval, psrc);
+    v_cpy(env, pv, psrc);
     return ALO_SOK;
 }
 
-a_msg ai_table_uset(a_henv env, GTable* self, Value key, Value val) {
+a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
     a_hash hash;
-    Value* pdst = ai_table_ref(env, self, key, &hash);
+    Value* pdst = ai_table_ref(env, self, vk, &hash);
 
     if (pdst == null) {
-        ai_table_put(env, self, key, hash, val);
+        ai_table_put(env, self, vk, hash, vv);
         return ALO_SOK;
     }
 
-    v_set(env, pdst, val);
-    ai_gc_barrier_backward_val(env, self, val);
+    v_set(env, pdst, vv);
+    ai_gc_barrier_backward_val(env, self, vv);
     return ALO_SOK;
 }
 
