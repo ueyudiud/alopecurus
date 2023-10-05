@@ -340,6 +340,7 @@ struct VTable {
 
 #define GMETA_STRUCT_HEADER \
 	GOBJ_STRUCT_HEADER;     \
+    Dict _fields;           \
                             \
     a_u32 _size;            \
     /* Method version, changed when the order of existed fields changed. */ \
@@ -355,8 +356,7 @@ struct VTable {
     /* The loader of metadata, null for builtin loader. */                  \
     GLoader* _loader;       \
     /* The metadata name. */\
-    GStr* _name;            \
-    Dict _fields
+    GStr* _name
 
 /**
  ** Metadata, base type for type and module.
@@ -376,7 +376,7 @@ struct GRefType {
 
 struct GUserType {
     GMETA_STRUCT_HEADER;
-    VTable const* _vtbl;
+    VTable _vtbl[1];
 };
 
 struct MetaCache {
@@ -674,21 +674,20 @@ typedef a_isize StkPtr;
 typedef Value* StkPtr;
 #endif
 
+#define FRAME_FLAG_VLR 0x01
+#define FRAME_FLAG_TAIL 0x02
+#define FRAME_FLAG_META 0x04
+
 struct Frame {
-	a_henv _env;
 	Frame* _prev;
 	a_insn const* _pc;
-	StkPtr _stack_bot;
+	Value* _stack_bot;
+    Value* _stack_dst;
+#if ALO_STRICT_STACK_CHECK
 	StkPtr _bound; /* In strict stack checking mode, the API will use frame bound to check index range. */
-	union {
-		a_u8 _flags;
-		struct {
-			a_u8 _fvret: 1; /* Variable length result mark. */
-			a_u8 _ftail: 1; /* Tail call mark. */
-			a_u8 _fmeta: 1; /* Meta call mark. */
-		};
-	};
-	a_u8 _nret;
+#endif
+    a_u32 _num_ret;
+    a_u8 _flags;
 };
 
 typedef void* a_rctx;

@@ -90,7 +90,7 @@ static GStr* str_alloc(a_henv env, a_usize len) {
 	return ai_mem_alloc(env, sizeof_GStr(len));
 }
 
-static void str_init(a_henv env, GStr* self, void const* src, a_usize len, a_hash hash) {
+static void str_init(GStr* self, void const* src, a_usize len, a_hash hash) {
 	self->_vptr = &str_vtable;
     self->_len = len;
     self->_hash = hash;
@@ -127,7 +127,7 @@ static GStr* str_get_or_new_with_hash(a_henv env, void const* src, a_usize len, 
 	cache_hint(env, cache);
 	
 	self = str_alloc(env, len);
-	str_init(env, self, src, len, hash);
+    str_init(self, src, len, hash);
 
 	cache_emplace_in_place(cache, self);
     ai_gc_register_object(env, self);
@@ -281,7 +281,7 @@ void ai_str_boost(a_henv env, void* block) {
 
 			g_set_gray(self);
 
-			str_init(env, self, src, len, hash);
+            str_init(self, src, len, hash);
 			str_id_set(self, i);
 
 			cache_emplace_in_place(cache, self);

@@ -336,7 +336,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
 				try(ai_buf_nputs(env, buf, "\n\t..."));
 				break;
 			}
-			else if (frame->_ftail) {
+			else if (frame->_flags & FRAME_FLAG_TAIL) {
 				try(ai_buf_nputs(env, buf, "\n\t... (tail call)"));
 				if (limit > 1) {
 					limit -= 1;

@@ -2053,7 +2053,7 @@ static void expr_return(Parser* par, InoutExpr e, a_line line) {
 		assume(e->_d1 == par->_head_label - 1 && !par->_fnscope->_fjump, "not head label.");
 		assume(op == BC_CALL || op == BC_CALLM, "not call operation.");
 
-		bc_store_op(ip, op + 2);
+		bc_store_op(ip, op + (BC_TCALL - BC_CALL));
 		bc_store_c(ip, 0);
 
 		par->_fnscope->_fpass = false;
@@ -2747,7 +2747,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 			}
 			break;
 		}
-		default: unreachable();
+		default: panic("not implemented."); //TODO
 	}
 }
 
@@ -3928,8 +3928,10 @@ static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 
 	a_line line1 = lex_line(par);
 	lex_check_skip(par, TK_LBK);
-	l_scan_pattern(par, param_bind, line1);
-	lex_check_pair_right(par, TK_LBK, TK_RBK, line1);
+    if (!lex_test_skip(par, TK_RBK)) {
+        l_scan_pattern(par, param_bind, line1);
+        lex_check_pair_right(par, TK_LBK, TK_RBK, line1);
+    }
 
 	lex_sync(par);
 	line = lex_line(par);
@@ -5065,9 +5067,10 @@ static void l_scan_let_stat(Parser* par) {
         }
 		case TK_IDENT: {
 			if (lex_forward(par) == TK_LBK) {
+                Expr e1, e2;
+                GStr* name;
 			scan_func:
-				Expr e1, e2;
-				GStr* name = lex_check_ident(par);
+                name = lex_check_ident(par);
     	        local_bind(par, e1, name, line);
 
 				l_scan_function(par, e2, name, line);
