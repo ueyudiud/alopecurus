@@ -15,12 +15,12 @@
 #include "alolib.h"
 
 static a_msg int_new(a_henv env) {
-    if (alo_tagof(env, 1) == ALO_EEMPTY) {
+    if (alo_tagof(env, 0) == ALO_EEMPTY) {
         alo_pushint(env, 0);
         return 1;
     }
 
-    Value v = api_elem(env, 1);
+    Value v = api_elem(env, 0);
     if (v_is_float(v)) {
         alo_pushint(env, cast(a_int, v_as_float(v)));
     }
@@ -38,7 +38,7 @@ static a_msg int_new(a_henv env) {
             break;
         }
         case T_STR: {
-            a_int radix = aloL_optint(env, 2, 0);
+            a_int radix = aloL_optint(env, 1, 0);
             GStr* str = v_as_str(v);
             char const* p = str2ntstr(str);
             char* q; /* strtol() says end pointer should be mutable. */
@@ -56,15 +56,15 @@ static a_msg int_new(a_henv env) {
             break;
 
         einval:
-            aloL_argerror(env, 1, "cannot parse string to integer.");
+            aloL_argerror(env, 0, "cannot parse string to integer.");
             break;
 
         erange:
-            aloL_argerror(env, 1, "integer out of range.");
+            aloL_argerror(env, 0, "integer out of range.");
             break;
         }
         default: {
-            aloL_argerror(env, 1, "cannot convert to int."); //TODO __int__ meta call.
+            aloL_argerror(env, 0, "cannot convert to int."); //TODO __int__ meta call.
         }
     }
     return 1;
