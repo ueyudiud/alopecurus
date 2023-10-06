@@ -14,6 +14,7 @@ ALO_EXPORT a_henv (aloL_create)(void);
 ALO_EXPORT void (aloL_argerror)(a_henv env, a_usize id, char const* what);
 ALO_EXPORT void (aloL_typeerror)(a_henv env, a_usize id, char const* name);
 ALO_EXPORT void (aloL_checktag)(a_henv env, a_usize id, a_msg tag);
+ALO_EXPORT a_msg (aloL_checkany)(a_henv env, a_usize id);
 ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_usize id);
 ALO_EXPORT a_float (aloL_checknum)(a_henv env, a_usize id);
 ALO_EXPORT char const* (aloL_checklstr)(a_henv env, a_usize id, a_usize* plen);
