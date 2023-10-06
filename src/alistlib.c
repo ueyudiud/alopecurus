@@ -58,26 +58,39 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
 
 static a_msg list_get(a_henv env) {
     aloL_checktag(env, 0, ALO_TLIST);
-    aloL_checkint(env, 1);
+    a_int k = aloL_checkint(env, 1);
 
     GList* self = v_as_list(api_elem(env, 0));
-    a_int k = v_as_int(api_elem(env, 1));
     Value v;
 
     a_msg msg = ai_list_ugeti(env, self, k, &v);
     if (msg == ALO_SOK) {
         v_set(env, api_incr_stack(env), v);
-        return 1;
+    }
+    else {
+        alo_settop(env, 3); /* or null, return nil or default value. */
     }
 
-    alo_settop(env, 3); /* or null, return nil or default value. */
     return 1;
+}
+
+static a_msg list_push(a_henv env) {
+    aloL_checktag(env, 0, ALO_TLIST);
+    aloL_checkany(env, 1);
+
+    GList* self = v_as_list(api_elem(env, 0));
+    Value v = api_elem(env, 1);
+
+    ai_list_push(env, self, v);
+
+    return 0;
 }
 
 void aloopen_list(a_henv env) {
     static aloL_Entry const bindings[] = {
         {"__new__", list___new__ },
-        { "get", list_get }
+        { "get", list_get },
+        { "push", list_push }
     };
 
     v_set_obj(env, api_incr_stack(env), g_type(env, _list));
