@@ -214,7 +214,7 @@ static a_i32 l_read_file(unused a_henv env, void* rctx, void const** pdst, size_
 }
 
 a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options) {
-	a_lstr str = {src, len};
+	a_lstr str = {src, len };
 	alo_pushstr(env, fname, strlen(fname));
 	a_msg msg = alo_compile(env, l_read_str, &str, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
@@ -409,6 +409,7 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 void aloL_openlibs(a_henv env) {
 	static LibEntry const entries[] = {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
+        { ALO_LIB_TYPE_NAME, aloopen_type },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
 		{ ALO_LIB_SYS_NAME, aloopen_sys }
 	};
