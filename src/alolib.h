@@ -10,6 +10,9 @@
 #define ALO_LIB_BASE_NAME "_G"
 ALO_EXPORT void aloopen_base(a_henv env);
 
+#define ALO_LIB_TYPE_NAME "type"
+ALO_EXPORT void aloopen_type(a_henv env);
+
 #define ALO_LIB_DEBUG_NAME "debug"
 ALO_EXPORT void aloopen_debug(a_henv env);
 

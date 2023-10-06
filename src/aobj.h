@@ -141,6 +141,13 @@ always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restric
     }
 }
 
+always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n) {
+    assume(d >= s, "not move backward.");
+    for (a_usize i = n - 1; i < n; --i) {
+        v_cpy(env, &d[i], &s[i]);
+    }
+}
+
 /*=========================================================*
  * Nil & Control Values
  *=========================================================*/
