@@ -6,7 +6,6 @@
 #define ALO_LIB
 
 #include <stdlib.h>
-#include <errno.h>
 
 #include "ameta.h"
 #include "agc.h"
