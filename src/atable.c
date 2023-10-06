@@ -9,79 +9,15 @@
 #include "astr.h"
 #include "amem.h"
 #include "agc.h"
+#include "aerr.h"
 #include "avm.h"
 #include "aapi.h"
 
 #include "atable.h"
 
-typedef struct HBucket HBucket;
-
-/**
- ** Table bucket.
- */
-struct HBucket {
-	a_hash _hmask;
-	a_x32 _hfree;
-	union {
-		TLink _link;
-		struct {
-			a_x32 _llast;
-			a_x32 _lfirst;
-		};
-	};
-	TNode _nodes[];
-};
-
-static_assert(offsetof(TNode, _hash) - offsetof(TNode, _hash) == offsetof(HBucket, _hmask));
-static_assert(offsetof(TNode, _hnext) - offsetof(TNode, _hash) == offsetof(HBucket, _hfree));
-static_assert(offsetof(TNode, _link) - offsetof(TNode, _hash) == offsetof(HBucket, _link));
-static_assert(sizeof(TNode) - offsetof(TNode, _hash) == offsetof(HBucket, _nodes));
-
-#ifndef ALOI_TABLE_LOAD_FACTOR
-# define ALOI_TABLE_LOAD_FACTOR 0.75
-#endif
-
 static VTable const table_vtable;
 
-static a_usize bucket_size(a_usize cap) {
-	return sizeof(HBucket) + sizeof(TNode) * cap;
-}
-
-static HBucket* table_bucket(GTable* self) {
-	return from_member(HBucket, _nodes[-1], self->_ptr);
-}
-
-static TNode* bucket_init(HBucket* self, a_usize cap) {
-	assume(cap > 0, "bucket is empty.");
-
-	self->_hmask = cap - 1;
-
-	self->_lfirst = self->_llast = nil;
-
-	for (a_u32 i = 0; i < cap; ++i) {
-		TNode* node = &self->_nodes[i];
-		v_set_nil(&node->_key);
-		node->_link = new(TLink) {
-			._prev = wrap(i),
-			._next = i < cap - 1 ? wrap(i + 2) : nil
-		};
-	}
-	return &self->_nodes[-1];
-}
-
-static TNode* bucket_index(HBucket* self, a_x32 id) {
-	return &self->_nodes[unwrap_unsafe(id) - 1];
-}
-
-static void bucket_alloc(a_henv env, GTable* table, a_usize cap) {
-	HBucket* self = ai_mem_alloc(env, bucket_size(cap));
-	table->_ptr = bucket_init(self, cap);
-	table->_hmask = cap - 1;
-}
-
-static void bucket_free(Global* g, HBucket* self) {
-	ai_mem_dealloc(g, self, bucket_size(self->_hmask + 1));
-}
+#define MAX_BUCKET_CAPACITY ((UINT32_MAX >> 1) + 1)
 
 GTable* ai_table_new(a_henv env) {
     GTable* self = ai_mem_alloc(env, sizeof(GTable));
@@ -90,354 +26,199 @@ GTable* ai_table_new(a_henv env) {
 	self->_ptr = null;
 	self->_len = 0;
 	self->_hmask = 0;
+    self->_lfirst = tn_nokey;
+    self->_llast = tn_nokey;
 
 	ai_gc_register_object(env, self);
     return self;
 }
 
-static TNode* table_hfirst(GTable* self, a_u32 hash) {
-	return &self->_ptr[(hash & self->_hmask) + 1];
-}
+#define table_hfor(self,hash,node) \
+    for (a_u32 _index = (hash) & (self)->_hmask, _perturb = _index; \
+            (node) = &(self)->_ptr[_index], true; \
+            _perturb >>= 5, _index = (_index * 5 + 1 + _perturb) & (self)->_hmask)
 
-static a_bool hnode_is_hhead(GTable* table, TNode* node) {
-    return !hnode_is_empty(node) && node == table_hfirst(table, node->_hash);
-}
+static void table_put_inplace(a_henv env, GTable* self, Value vk, a_hash hash, Value vv) {
+    TNode* node;
+    assume(self->_ptr != null, "table is empty.");
 
-static void hnode_put(a_henv env, TNode* node, Value key, a_hash hash, Value value) {
-    v_set(env, &node->_key, key);
-    v_set(env, &node->_value, value);
-    node->_hash = hash;
-}
+    table_hfor(self, hash, node) {
+        if (v_is_nil(node->_key)) {
+            v_set(env, &node->_key, vk);
+            v_set(env, &node->_value, vv);
+            node->_hash = hash;
 
-static void hnode_link(GTable* table, TNode* restrict node, a_x32 prev, a_x32 next) {
-	HBucket* bucket = table_bucket(table);
-	TNode* nodep = bucket_index(bucket, prev);
-	TNode* noden = bucket_index(bucket, next);
-	a_x32 id = wrap(node - table->_ptr);
-	noden->_link._prev = nodep->_link._next = id;
-	node->_link = new(TLink) { ._prev = prev, ._next = next };
-}
+            node->_lprev = self->_llast;
+            node->_lnext = tn_nokey;
 
-/**
- ** Move entry and link data to another node.
- **
- *@param env the runtime environment.
- *@param noded the destination node.
- *@param nodes the source node.
- */
-static void hnode_move(a_henv env, GTable* table, TNode* restrict noded, TNode* restrict nodes) {
-	assume(noded != nodes, "cannot move inplace.");
-	hnode_put(env, noded, nodes->_key, nodes->_hash, nodes->_value);
-	hnode_link(table, noded, nodes->_link._prev, nodes->_link._next);
-	noded->_hnext = nodes->_hnext;
-}
-
-/**
- ** Pop a node from free list.
- *@param self the table.
- *@return the free node.
- */
-static TNode* table_pop_free(GTable* self) {
-	HBucket* bucket = table_bucket(self);
-	TNode* node = bucket_index(bucket, bucket->_hfree);
-	assume(is_nil(node->_link._prev), "not head of free node.");
-
-	bucket->_hfree = node->_link._next;
-	TNode* noden = bucket_index(bucket, node->_link._next);
-	noden->_link._prev = nil;
-
-	assume(node != null && hnode_is_empty(node));
-	return node;
-}
-
-static void table_unlink_free(GTable* self, TNode* node) {
-	HBucket* bucket = table_bucket(self);
-
-	a_x32 prev = node->_link._prev;
-	a_x32 next = node->_link._next;
-
-	if (is_nil(prev)) {
-		bucket->_hfree = next;
-	}
-	else {
-		bucket_index(bucket, prev)->_link._next = next;
-	}
-	if (!is_nil(next)) {
-		bucket_index(bucket, next)->_link._prev = prev;
-	}
-}
-
-/**
- ** Link node at end of linked list of table.
- *@param self the table.
- *@param node the node to be linked.
- */
-static void table_link_tail(GTable* self, TNode* node) {
-	hnode_link(self, node, self->_ptr->_link._prev, nil);
-}
-
-static TNode* table_get_hprev(GTable* self, TNode* node) {
-	TNode* nodep = table_hfirst(self, node->_hash);
-	loop {
-		TNode* node1 = &self->_ptr[unwrap(nodep->_hnext)];
-		if (node1 == node) {
-			break;
-		}
-		nodep = node1;
-	}
-	return nodep;
-}
-
-static void table_put(a_henv env, GTable* self, Value vk, a_hash hash, Value vv) {
-    TNode* nodeh = table_hfirst(self, hash);
-    if (hnode_is_hhead(self, nodeh)) {
-        /* Insert into hash list. */
-        TNode* nodet = table_pop_free(self);
-
-		/* Emplace node at another free node. */
-        /*                       v
-         * h -> n -> ... => h -> t -> n -> ...
-         */
-		hnode_put(env, nodet, vk, hash, vv);
-
-		nodet->_hnext = nodeh->_hnext;
-		nodeh->_hnext = wrap(nodet - self->_ptr);
-
-		table_link_tail(self, nodet);
+            if (self->_llast != tn_nokey) {
+                self->_ptr[self->_llast]._lnext = _index;
+                self->_llast = _index;
+            }
+            else {
+                self->_lfirst = self->_llast = _index;
+            }
+            break;
+        }
     }
-    else {
-		if (hnode_is_empty(nodeh)) {
-			table_unlink_free(self, nodeh);
-		}
-		else {
-			/* Move placed entry to other node. */
-			/*                         v
-			 * ... -> p -> h -> ... => h; ... -> p -> f -> ...
-			 */
-			TNode* nodef = table_pop_free(self);
-			TNode* nodep = table_get_hprev(self, nodeh);
-			hnode_move(env, self, nodef, nodeh);
-			nodep->_hnext = wrap(nodef - self->_ptr);
-		}
-		/* Emplace node locally. */
-		/*    v
-		 * => h
-		 */
-		hnode_put(env, nodeh, vk, hash, vv);
-        nodeh->_hnext = nil;
-		table_link_tail(self, nodeh);
+}
+
+static void table_resize(a_henv env, GTable* self, a_usize new_cap) {
+    assume(new_cap <= MAX_BUCKET_CAPACITY);
+
+    TNode* new_ptr = ai_mem_vnew(env, TNode, new_cap);
+    TNode* old_ptr = self->_ptr;
+
+    a_usize old_cap = self->_hmask + 1;
+
+    self->_hmask = new_cap - 1;
+    self->_ptr = new_ptr;
+
+    memset(new_ptr, -1, sizeof(TNode) * new_cap); /* Set all fields to nil. */
+
+    a_u32 old_lfirst = self->_lfirst;
+
+    self->_lfirst = self->_llast = tn_nokey;
+
+    if (old_ptr != null) {
+        for (a_u32 id = old_lfirst; id != tn_nokey;) {
+            TNode* node = &old_ptr[id];
+            table_put_inplace(env, self, node->_key, node->_hash, node->_value);
+            id = node->_lnext;
+        }
+
+        ai_mem_vdel(G(env), old_ptr, old_cap);
     }
+}
+
+static a_bool table_hint(a_henv env, GTable* self, a_usize len) {
+    a_usize old_cap = self->_hmask + 1;
+    a_usize need;
+
+    try(checked_add_usize(self->_len, len, &need));
+    if (unlikely(need >= MAX_BUCKET_CAPACITY / 4 * 3)) return true;
+
+    if (need * 3 / 4 <= old_cap) return false;
+
+    a_usize new_cap = ceil_pow2m1_usize(need * 4 / 3) + 1;
+    new_cap = max(new_cap, 4);
+
+    table_resize(env, self, new_cap);
+    return true;
+}
+
+static void table_hint_failed(a_henv env) {
+    ai_err_raisef(env, ALO_EINVAL, "too many elements.");
 }
 
 void ai_table_hint(a_henv env, GTable* self, a_usize len) {
-    a_usize old_cap = self->_hmask + 1;
-    a_usize expect = self->_len + len;
-    if (expect > cast(a_usize, old_cap * ALOI_TABLE_LOAD_FACTOR)) {
-		a_usize new_cap = ceil_pow2m1_usize(cast(a_usize, ceil(expect / ALOI_TABLE_LOAD_FACTOR))) + 1;
-		assume(expect <= new_cap && new_cap > 0);
-
-		HBucket* bucket = self->_ptr != null ? table_bucket(self) : null;
-
-		bucket_alloc(env, self, new_cap);
-
-		if (bucket != null) {
-			TNode* node;
-			for (a_x32 i = bucket->_lfirst; !is_nil(i); i = node->_link._next) {
-				node = bucket_index(bucket, i);
-				table_put(env, self, node->_key, node->_hash, node->_value);
-			}
-
-			bucket_free(G(env), bucket);
-		}
-	}
+    if (unlikely(table_hint(env, self, len))) {
+        table_hint_failed(env);
+    }
 }
 
-static void table_remove(a_henv env, GTable* self, TNode* node) {
-	assume(!hnode_is_empty(node), "cannot remove empty node.");
+static void table_unlink(GTable* self, TNode* node) {
+    v_set_raw(&node->_key, v_of_empty());
 
-	HBucket* bucket = table_bucket(self);
+    if (node->_lprev != tn_nokey) {
+        self->_ptr[node->_lprev]._lnext = node->_lnext;
+    }
+    else {
+        self->_lfirst = node->_lnext;
+    }
 
-	/* Remove from link */
-	TLink link = node->_link;
-	TNode* nodep = bucket_index(bucket, link._prev);
-	TNode* noden = bucket_index(bucket, link._next);
-
-	nodep->_link._next = link._next;
-	noden->_link._prev = link._prev;
-
-	/* Remove from hash */
-	if (hnode_is_hhead(self, node)) {
-		if (!is_nil(node->_hnext)) {
-			TNode* nodeh = bucket_index(bucket, node->_hnext);
-			hnode_move(env, self, node, nodeh);
-		}
-	}
-	else {
-		TNode* nodeh = table_get_hprev(self, node);
-		nodeh->_hnext = node->_hnext;
-	}
-
-	/* Add to free list */
-	node->_link = new(TLink) { ._prev = nil, ._next = bucket->_hfree };
-	bucket->_hfree = wrap(node - self->_ptr);
+    if (node->_lnext != tn_nokey) {
+        node[node->_lnext]._lprev = node->_lprev;
+    }
+    else {
+        self->_llast = node->_lprev;
+    }
 
 	self->_len -= 1;
 }
 
-static a_bool titer_hfirst(GTable* self, TNode** pnode, a_hash hash) {
-	if (unlikely(self->_len == 0)) return false;
-	
-	TNode* node = table_hfirst(self, hash);
-	if (!hnode_is_hhead(self,node)) return false;
-
-	*pnode = node;
-	return true;
+static Value* table_ref_id(unused a_henv env, GTable* self, a_hash hash, Value vk) {
+    TNode* node;
+    if (self->_len == 0) return null;
+    table_hfor(self, hash, node) {
+        if (v_trivial_equals(vk, node->_key)) {
+            return &node->_value;
+        }
+        else if (v_is_strict_nil(node->_key)) {
+            return null;
+        }
+    }
 }
 
-static a_bool titer_hnext(GTable* self, TNode** pnode) {
-	TNode* node = *pnode;
-	if (is_nil(node->_hnext)) return false;
-	*pnode = &self->_ptr[unwrap(node->_hnext)];
-	return true;
+static Value* table_ref_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* k) {
+    TNode* node;
+    if (self->_len == 0) return null;
+    table_hfor(self, hash, node) {
+        if (v_is_str(node->_key) && v_as_str(node->_key)->_hash == hash &&
+                ai_str_requals(v_as_str(node->_key), k->_ptr, k->_len)) {
+            return &node->_value;
+        }
+        else if (v_is_strict_nil(node->_key)) {
+            return null;
+        }
+    }
 }
 
-#define table_for_hash(v,t,h) for (a_bool _has_next = titer_hfirst(t, &v, h); _has_next; _has_next = titer_hnext(t, &v))
-
-static Value* table_find_id(unused a_henv env, GTable* self, a_hash hash, Value vk) {
-	TNode* node;
-	table_for_hash(node, self, hash) {
-		if (v_trivial_equals(vk, node->_key)) {
-			return &node->_value;
-		}
-	}
-	return null;
+static Value* table_ref_any(a_henv env, GTable* self, a_hash hash, Value vk) {
+    TNode* node;
+    if (self->_len == 0) return null;
+    table_hfor(self, hash, node) {
+        if (ai_vm_equals(env, vk, node->_key)) {
+            return &node->_value;
+        }
+        else if (v_is_strict_nil(node->_key)) {
+            return null;
+        }
+    }
 }
 
-static Value* table_find_str(unused a_henv env, GTable* self, a_hash hash, a_lstr const* vk) {
-	TNode* node;
-	table_for_hash(node, self, hash) {
-		if (v_is_str(node->_key) && ai_str_requals(v_as_str(node->_key), vk->_ptr, vk->_len)) {
-			return &node->_value;
-		}
-	}
-	return null;
+static Value const* table_refi(a_henv env, GTable* self, a_int k) {
+    return table_ref_id(env, self, v_trivial_hash(v_of_int(k)), v_of_int(k));
 }
 
-static Value* table_find_any(unused a_henv env, GTable* self, a_hash hash, Value vk) {
-	TNode* node;
-	table_for_hash(node, self, hash) {
-		if (ai_vm_equals(env, vk, node->_key)) {
-			return &node->_value;
-		}
-	}
-	return null;
+static Value const* table_refls(a_henv env, GTable* self, a_lstr const* k) {
+    return table_ref_str(env, self, ai_str_hashof(env, k->_ptr, k->_len), k);
 }
 
-Value const* ai_table_refi(a_henv env, GTable* self, a_int k) {
-    return table_find_id(env, self, v_trivial_hash(v_of_int(k)), v_of_int(k));
-}
-
-Value const* ai_table_refls(a_henv env, GTable* self, a_lstr const* k) {
-    return table_find_str(env, self, ai_str_hashof(env, k->_ptr, k->_len), k);
-}
-
-Value const* ai_table_refs(a_henv env, GTable* self, GStr* k) {
-	return table_find_id(env, self, k->_hash, v_of_obj(k));
-}
-
-Value* ai_table_ref(a_henv env, GTable* self, Value vk, a_u32* restrict phash) {
+static Value* table_ref(a_henv env, GTable* self, Value vk, a_u32* restrict phash) {
 	if (likely(v_has_trivial_equals(vk))) {
 		*phash = v_trivial_hash(vk);
-		return table_find_id(env, self, *phash, vk);
+		return table_ref_id(env, self, *phash, vk);
 	}
 	else if (unlikely(v_is_float(vk))) {
 		if (unlikely(v_is_nan(vk))) {
 			return null;
 		}
-		*phash = v_trivial_hash(vk);
-		return table_find_id(env, self, *phash, vk);
+		*phash = v_float_hash(vk);
+		return table_ref_id(env, self, *phash, v_float_key(vk));
 	}
 	else {
 		*phash = ai_vm_hash(env, vk);
-		return table_find_any(env, self, *phash, vk);
+		return table_ref_any(env, self, *phash, vk);
 	}
-}
-
-static void api_check_hitr(GTable* self, a_ritr const itr) {
-	a_u32 pos = itr[0];
-
-	api_check(
-			pos <= table_bucket(self)->_hmask &&
-			(pos == 0 || !hnode_is_empty(&self->_ptr[pos])), "invalid table iterator.");
-}
-
-a_usize alo_hnext(a_henv env, a_isize id, a_ritr itr) {
-	api_check_slot(env, 2);
-
-	Value v = api_elem(env, id);
-	api_check(v_is_table(v), "not table.");
-
-	GTable* self = v_as_table(v);
-
-	api_check_hitr(self, itr);
-
-	HBucket* bucket = table_bucket(self);
-
-	a_u32 pos = itr[0];
-
-	/* Get next position. */
-	TNode* prev = &bucket->_nodes[pos - 1];
-	if (is_nil(prev->_link._next)) {
-		/* Reach to end. */
-		return 0;
-	}
-
-	pos = unwrap(prev->_link._next);
-
-	itr[0] = pos; /* Store cursor. */
-
-	TNode* node = &self->_ptr[pos - 1];
-	v_set(env, api_incr_stack(env), node->_key);
-	v_set(env, api_incr_stack(env), node->_value);
-
-	return 2;
-}
-
-a_bool alo_hremove(a_henv env, a_isize id, a_ritr itr) {
-	Value v = api_elem(env, id);
-	api_check(v_is_table(v), "not table.");
-
-	GTable* self = v_as_table(v);
-
-	api_check_hitr(self, itr);
-
-	a_u32 pos = itr[0];
-
-	api_check(pos != 0, "no element need to remove.");
-
-	TNode* node = &self->_ptr[pos];
-	itr[0] = unwrap_unsafe(node->_link._prev);
-	table_remove(env, self, node);
-
-	return true;
 }
 
 Value ai_table_get(a_henv env, GTable* self, Value vk) {
 	a_u32 hash;
-	Value const* value = ai_table_ref(env, self, vk, &hash);
+	Value const* value = table_ref(env, self, vk, &hash);
 	return value != null ? *value : v_of_nil();
 }
 
 Value ai_table_gets(a_henv env, GTable* self, GStr* k) {
-	Value const* v = table_find_id(env, self, k->_hash, v_of_obj(k));
+	Value const* v = table_ref_id(env, self, k->_hash, v_of_obj(k));
 	return v != null ? *v : v_of_nil();
 }
 
 void ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
 	a_hash hash;
-	Value* ref = ai_table_ref(env, self, vk, &hash);
-	if (ref != null) {
-		v_set(env, ref, vv);
+	Value* pv = table_ref(env, self, vk, &hash);
+	if (pv != null) {
+		v_set(env, pv, vv);
 		ai_gc_barrier_backward_val(env, self, vv);
 	}
 	else {
@@ -447,15 +228,23 @@ void ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
 }
 
 void ai_table_put(a_henv env, GTable* self, Value vk, a_hash hash, Value vv) {
-	assume(self->_ptr != null && self->_len + 1 <= (self->_hmask + 1) * ALOI_TABLE_LOAD_FACTOR, "need hint before emplace.");
-	table_put(env, self, vk, hash, vv);
+	assume(self->_ptr != null && self->_len + 1 <= (self->_hmask + 1) * 3 / 4, "need hint before emplace.");
+    table_put_inplace(env, self, vk, hash, vv);
 	ai_gc_barrier_backward_val(env, self, vk);
 	ai_gc_barrier_backward_val(env, self, vv);
 	self->_len += 1;
 }
 
+a_bool ai_table_del(a_henv env, GTable* self, Value vk) {
+    a_hash hash;
+    Value* pv = table_ref(env, self, vk, &hash);
+    if (pv == null) return false;
+    table_unlink(self, from_member(TNode, _value, pv));
+    return true;
+}
+
 a_msg ai_table_ugeti(a_henv env, GTable* self, a_int k, Value* pv) {
-    Value const* psrc = ai_table_refi(env, self, k);
+    Value const* psrc = table_refi(env, self, k);
     if (psrc == null) return ALO_EEMPTY;
     v_cpy(env, pv, psrc);
     return ALO_SOK;
@@ -463,7 +252,7 @@ a_msg ai_table_ugeti(a_henv env, GTable* self, a_int k, Value* pv) {
 
 a_msg ai_table_uget(a_henv env, GTable* self, Value vk, Value* pv) {
     a_hash hash;
-    Value* psrc = ai_table_ref(env, self, vk, &hash);
+    Value* psrc = table_ref(env, self, vk, &hash);
     if (psrc == null) return ALO_EEMPTY;
     v_cpy(env, pv, psrc);
     return ALO_SOK;
@@ -471,7 +260,7 @@ a_msg ai_table_uget(a_henv env, GTable* self, Value vk, Value* pv) {
 
 a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
     a_hash hash;
-    Value* pdst = ai_table_ref(env, self, vk, &hash);
+    Value* pdst = table_ref(env, self, vk, &hash);
 
     if (pdst == null) {
         ai_table_put(env, self, vk, hash, vv);
@@ -485,22 +274,21 @@ a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
 
 static void table_drop(Global* g, GTable* self) {
 	if (self->_ptr != null) {
-		bucket_free(g, table_bucket(self));
+        ai_mem_vdel(g, self->_ptr, self->_hmask + 1);
 	}
 	ai_mem_dealloc(g, self, sizeof(GTable));
 }
 
 static void table_mark(Global* g, GTable* self) {
 	if (self->_ptr != null) {
-		HBucket* bucket = table_bucket(self);
 		for (a_u32 i = 0; i <= self->_hmask; ++i) {
-			TNode *node = &bucket->_nodes[i];
-			if (!hnode_is_empty(node)) {
+			TNode* node = &self->_ptr[i];
+			if (!v_is_nil(node->_key)) {
 				ai_gc_trace_mark_val(g, node->_key);
 				ai_gc_trace_mark_val(g, node->_value);
 			}
 		}
-		ai_gc_trace_work(g, bucket_size(bucket->_hmask + 1));
+		ai_gc_trace_work(g, sizeof(TNode) * (self->_hmask + 1));
 	}
 	ai_gc_trace_work(g, sizeof(GTable));
 }

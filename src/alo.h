@@ -112,8 +112,6 @@ typedef a_i32 a_int;
 typedef a_u32 a_uint;
 /* VM float point number type. */
 typedef a_f64 a_float;
-/* Iterator for external used. */
-typedef a_u32 a_ritr[1];
 
 /* Allocation function table. */
 typedef struct alo_Alloc a_alloc;
@@ -212,11 +210,6 @@ ALO_EXPORT char const* (alo_modname)(a_henv env, a_htype mod);
 ALO_EXPORT a_htype (alo_loadmod)(a_henv env, char const* src, a_usize len);
 ALO_EXPORT a_htype (alo_openmod)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_closemod)(a_henv env, a_htype mod);
-
-/* Table operations. */
-ALO_EXPORT a_usize (alo_hnext)(a_henv env, a_isize id, a_ritr itr);
-ALO_EXPORT a_bool (alo_hinsert)(a_henv env, a_isize id, a_ritr itr);
-ALO_EXPORT a_bool (alo_hremove)(a_henv env, a_isize id, a_ritr itr);
 
 ALO_EXPORT void (alo_fullgc)(a_henv env);
 

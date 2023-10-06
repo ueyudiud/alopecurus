@@ -101,7 +101,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 				aloi_show("{...}");
 			}
 			else {
-                GTable *val = v_as_table(v);
+                GTable* val = v_as_table(v);
                 if (val->_len == 0) {
                     aloi_show("{}");
                 }
@@ -109,9 +109,9 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
                     a_u32 n = MAX_SHOW_LEN;
                     aloi_show("{");
                     a_bool tail = false;
-                    TNode *node;
-                    for (a_x32 itr = val->_ptr->_link._next; !is_nil(itr); itr = node->_link._next) {
-                        node = &val->_ptr[unwrap(itr)];
+                    TNode* node;
+                    for (a_u32 itr = val->_lfirst; itr <= val->_hmask; itr = node->_lnext) {
+                        node = &val->_ptr[itr];
                         if (tail) {
                             aloi_show(", ");
                         }

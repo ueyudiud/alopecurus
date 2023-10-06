@@ -316,10 +316,13 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
         case T_TABLE: {
             GTable* p = v_as_table(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (p->_len == 0 || unwrap_unsafe(p->_ptr->_link._prev) == cast(a_i32, i))
+            if (i == 0 && p->_len == 0)
                 return new(ValueSlice) { };
 
-            i = unwrap(p->_ptr[i]._link._next);
+            i = p->_ptr[i]._lnext;
+            if (i > p->_hmask)
+                return new(ValueSlice) { };
+
             TNode* n = &p->_ptr[i];
 
             v_set_int(pi, cast(a_i32, i + 1));

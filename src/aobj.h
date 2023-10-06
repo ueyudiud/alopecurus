@@ -530,12 +530,6 @@ always_inline GList* v_as_list(Value v) {
  *=========================================================*/
 
 typedef struct TNode TNode;
-typedef struct TLink TLink;
-
-struct TLink {
-	a_x32 _prev;
-	a_x32 _next;
-};
 
 /**
  ** Linked hash table.
@@ -545,6 +539,8 @@ struct GTable {
 	a_u32 _len;
 	a_u32 _hmask;
 	TNode* _ptr; /* Data pointer. */
+    a_u32 _lfirst;
+    a_u32 _llast;
 };
 
 /**
@@ -554,11 +550,9 @@ struct TNode {
 	Value _value;
 	Value _key;
 	a_hash _hash;
-	a_x32 _hnext;
-	TLink _link;
+    a_u32 _lprev;
+    a_u32 _lnext;
 };
-
-static_assert(offsetof(TNode, _hash) % sizeof(a_u64) == 0);
 
 #define v_is_table(v) v_is(v, T_TABLE)
 
@@ -567,7 +561,7 @@ always_inline GTable* v_as_table(Value v) {
 	return g_cast(GTable, v_as_obj(v));
 }
 
-#define hnode_is_empty(n) v_is_strict_nil((n)->_key)
+#define tn_nokey (~u32c(0))
 
 /*=========================================================*
  * Function & Prototype
@@ -847,8 +841,14 @@ always_inline a_hash v_trivial_hash(Value v) {
 
 always_inline a_hash v_float_hash(Value v) {
 	a_float f = v_as_float(v);
-    if (f == 0) return 0; /* Special case for 0.0 and -0.0 */
+    if (f == 0.0) return 0; /* Special case for 0.0 and -0.0 */
     return v_trivial_hash_unchecked(v);
+}
+
+always_inline Value v_float_key(Value v) {
+    a_float f = v_as_float(v);
+    if (f == 0.0) return v_of_float(0.0); /* Special case for 0.0 and -0.0 */
+    return v;
 }
 
 /* Identity equality. */
@@ -902,7 +902,7 @@ always_inline char const* v_nameof(a_henv env, Value v) {
 	if (v_is_float(v)) {
 		return ai_obj_type_names[T_FLOAT];
 	}
-	else if (!v_is_user(v)) {
+	else if (!v_is_obj(v)) {
 		return ai_obj_type_names[v_get_tag(v)];
 	}
 	else {
