@@ -312,9 +312,12 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
                 return new(ValueSlice) { };
 
             DNode* n;
-            while (i <= p->_fields._hmask && (n = &p->_fields._ptr[i])->_key != null) {
+            while (i <= p->_fields._hmask && (n = &p->_fields._ptr[i])->_key == null) {
                 i += 1;
             }
+
+            if (i > p->_fields._hmask)
+                return new(ValueSlice) { };
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
@@ -503,19 +506,34 @@ tail_call:
                 ai_err_bad_tm(env, TM___call__);
             }
 
-            for (Value* p = env->_stack._top; p > R; --p) {
-                v_cpy(env, p, p - 1);
+            if (R > frame->_stack_dst) {
+                frame->_stack_bot -= 1;
+                reload_stack();
+                v_set(env, &R[0], vf);
             }
-            v_set(env, &R[0], vf);
+            else {
+                for (Value* p = env->_stack._top; p > R; --p) {
+                    v_cpy(env, p, p - 1);
+                }
+                v_set(env, &R[0], vf);
 
-            env->_stack._top += 1;
+                env->_stack._top += 1;
+            }
 
             check_stack(env->_stack._top);
         }
 		fun = v_as_func(vf);
+        if (R > frame->_stack_dst) {
+            a_usize len = env->_stack._top - R;
+            v_mov_all(env, frame->_stack_dst, R, len);
+            env->_stack._top = frame->_stack_dst + len;
+            frame->_stack_bot = frame->_stack_dst;
+        }
     }
 
-	frame->_stack_bot = R + 1;
+    assume(frame->_stack_bot == frame->_stack_dst, "unexpected stack pointer.");
+
+	frame->_stack_bot += 1;
 	reload_stack();
 
 	if (fun->_flags & FUN_FLAG_NATIVE) {
@@ -532,6 +550,7 @@ tail_call:
         ai_cap_close_above(env, frame->_stack_bot);
         v_mov_all(env, frame->_stack_dst, p, n);
         frame->_num_ret -= n;
+        frame->_stack_dst += n;
 		goto handle_return;
 	}
 	else {
@@ -1357,10 +1376,8 @@ tail_call:
                 frame->_stack_dst += n;
                 frame->_num_ret -= n;
 
-                v_mov_all(env, frame->_stack_dst, &R[a + c], b - c);
-
-                env->_stack._top = &R[a + b - 1];
-                frame->_stack_bot = &R[a + c - 1];
+                env->_stack._top = &R[a + b];
+                frame->_stack_bot = &R[a + c];
 
                 goto handle_tail_call;
             }
@@ -1391,8 +1408,8 @@ tail_call:
 
                 v_mov_all(env, frame->_stack_dst, &R[a + c], b - c);
 
-                env->_stack._top = &R[a + b - 1];
-                frame->_stack_bot = &R[a + c - 1];
+                env->_stack._top = &R[a + b];
+                frame->_stack_bot = &R[a + c];
 
                 goto handle_tail_call;
             }
