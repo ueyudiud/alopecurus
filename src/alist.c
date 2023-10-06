@@ -27,28 +27,33 @@ GList* ai_list_new(a_henv env) {
     return self;
 }
 
+static void list_hint_failed(a_henv env) {
+    ai_err_raisef(env, ALO_EINVAL, "too many elements.");
+}
+
 void ai_list_hint(a_henv env, GList* self, a_usize len) {
-    ai_vec_hint(env, &self->_vec, len);
+    if (unlikely(ai_vec_hint(env, &self->_vec, len))) {
+        list_hint_failed(env);
+    }
 }
 
 void ai_list_push(a_henv env, GList* self, Value v) {
-    ai_vec_push(env, &self->_vec, v);
+    if (unlikely(ai_vec_push(env, &self->_vec, v))) {
+        list_hint_failed(env);
+    }
 
 	ai_gc_barrier_backward_val(env, self, v);
 }
 
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
-    ai_vec_push_all(env, &self->_vec, src, len);
+    if (unlikely(ai_vec_push_all(env, &self->_vec, src, len))) {
+        list_hint_failed(env);
+    }
 
 	/* We assume the elements in source has white value. */
 	if (g_has_black_color(self)) {
 		join_trace(&G(env)->_tr_regray, self);
 	}
-}
-
-static Value* list_refi(GList *self, a_int key) {
-    a_uint i = obj_idx(key, self->_len, null);
-    return &self->_ptr[i];
 }
 
 Value ai_list_get(a_henv env, GList* self, Value vk) {
@@ -59,8 +64,8 @@ Value ai_list_get(a_henv env, GList* self, Value vk) {
 }
 
 Value ai_list_geti(unused a_henv env, GList* self, a_int k) {
-	Value* ref = list_refi(self, k);
-	return ref ? *ref : v_of_nil();
+    a_u32 i = obj_idx(k, self->_len, v_of_nil());
+	return self->_ptr[i];
 }
 
 void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
@@ -71,11 +76,10 @@ void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
 }
 
 void ai_list_seti(a_henv env, GList* self, a_int key, Value value) {
-	Value* ref = list_refi(self, key);
-	if (unlikely(ref == null)) {
-		ai_err_raisef(env, ALO_EINVAL, "list index out of bound.");
-	}
-	v_set(env, ref, value);
+    a_u32 i = obj_idx(key, self->_len,
+        ai_err_raisef(env, ALO_EINVAL, "list index out of bound.")
+    );
+	v_set(env, &self->_ptr[i], value);
 	ai_gc_barrier_forward_val(env, self, value);
 }
 

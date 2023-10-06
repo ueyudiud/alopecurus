@@ -51,7 +51,7 @@ static a_bool vec_hint1(a_henv env, Vec* self) {
         a_usize new_cap;
 
         if (old_cap != 0) {
-            new_cap = old_cap * 2;
+            try(checked_mul_usize(old_cap, 2, &new_cap));
         }
         else {
             new_cap = 4;
@@ -61,7 +61,7 @@ static a_bool vec_hint1(a_henv env, Vec* self) {
         self->_cap = new_cap;
     }
 
-    return true;
+    return false;
 }
 
 a_bool ai_vec_push(a_henv env, Vec* self, Value val) {
