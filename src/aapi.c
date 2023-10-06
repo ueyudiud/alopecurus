@@ -537,7 +537,7 @@ a_msg alo_rawset(a_henv env, a_isize id, a_isize* pctx) {
 	return ALO_SOK;
 }
 
-void alo_insert(a_henv env, a_isize id) {
+void alo_put(a_henv env, a_isize id) {
 	Value v1 = api_elem(env, id);
 	api_check(v_is_list(v1));
 	Value v2 = api_pre_decr_stack(env);
