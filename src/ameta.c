@@ -223,10 +223,6 @@ void ai_meta_boost(a_henv env) {
     };
 }
 
-void ai_meta_clean(Global* g) {
-    cache_drop(g, &g->_meta_cache);
-}
-
 Value ai_meta_get(a_henv env, GMeta* self, Value vk) {
     if (!v_is_str(vk)) {
         ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
@@ -282,9 +278,13 @@ a_msg ai_meta_usets(a_henv env, GMeta* self, GStr* k, Value vv) {
 
     try(ai_dict_uset(env, &self->_fields, k, vv, &ctx));
 
+    if (str_istm(k) && str_id(k) <= TM__FAST_MAX) {
+        self->_flags |= META_FLAG_FAST_TM(str_id(k));
+    }
+
     self->_mver += 1;
 
-    ai_gc_barrier_forward(env, self, k);
+    ai_gc_barrier_backward(env, self, k);
     ai_gc_barrier_backward_val(env, self, vv);
 
     return ALO_SOK;
@@ -301,8 +301,28 @@ static void meta_mark(Global* g, GMeta* self) {
     ai_gc_trace_work(g, self->_size);
 }
 
-static void meta_drop(Global* g, GMeta* self) {
+static void meta_clean(Global* g, GMeta* self) {
     ai_dict_deinit(g, &self->_fields);
+}
+
+void ai_meta_clean(Global* g) {
+    meta_clean(g, g_cast(GMeta, &g->_types._nil));
+    meta_clean(g, g_cast(GMeta, &g->_types._bool));
+    meta_clean(g, g_cast(GMeta, &g->_types._int));
+    meta_clean(g, g_cast(GMeta, &g->_types._float));
+    meta_clean(g, g_cast(GMeta, &g->_types._ptr));
+    meta_clean(g, g_cast(GMeta, &g->_types._tuple));
+    meta_clean(g, g_cast(GMeta, &g->_types._list));
+    meta_clean(g, g_cast(GMeta, &g->_types._table));
+    meta_clean(g, g_cast(GMeta, &g->_types._func));
+    meta_clean(g, g_cast(GMeta, &g->_types._route));
+    meta_clean(g, g_cast(GMeta, &g->_types._type));
+    meta_clean(g, g_cast(GMeta, &g->_types._mod));
+    cache_drop(g, &g->_meta_cache);
+}
+
+static void meta_drop(Global* g, GMeta* self) {
+    meta_clean(g, self);
     ai_mem_dealloc(g, self, self->_size);
 }
 
