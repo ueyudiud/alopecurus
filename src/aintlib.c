@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "ameta.h"
 #include "agc.h"
 #include "avm.h"
 #include "aapi.h"
@@ -68,9 +69,18 @@ static a_msg int_new(a_henv env) {
 
 void aloopen_int(a_henv env) {
 	static aloL_Entry const bindings[] = {
-        { "__new__", int_new }
+        { "__new__", int_new },
+        { "MAX", null },
+        { "MIN", null },
 	};
 
-    v_set_obj(env, api_incr_stack(env), &G(env)->_types._int);
+    GMeta* type = g_cast(GMeta, g_type(env, _int));
+
+    v_set_obj(env, api_incr_stack(env), type);
 	aloL_putfields(env, -1, bindings);
+
+    ai_meta_usets(env, type, ai_str_newl(env, "MAX"), v_of_int(INT32_MAX));
+    ai_meta_usets(env, type, ai_str_newl(env, "MIN"), v_of_int(INT32_MIN));
+
+    ai_gc_trigger(env);
 }
