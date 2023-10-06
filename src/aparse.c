@@ -4180,23 +4180,19 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
                 lex_skip(par);
 				expr_or_nil(par, e, &label,  line2);
 				GStr* name = lex_check_ident(par);
-				expr_index_str(par, e, name, line2);
-				break;
-			}
-			case TK_QARROW: {
-				a_line line2 = lex_line(par);
-                lex_skip(par);
-				expr_or_nil(par, e, &label,  line2);
+                if (lex_test_skip(par, TK_LBK)) {
+                    expr_lookup(par, e, name, line2);
 
-				GStr* name = lex_check_ident(par);
-				expr_lookup(par, e, name, line2);
+                    if (!lex_test_skip(par, TK_RBK)) {
+                        l_scan_exprs(par, e, true);
+                        lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
+                    }
 
-				lex_check_skip(par, TK_LBK);
-				if (!lex_test_skip(par, TK_RBK)) {
-					l_scan_exprs(par, e, true);
-					lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
-				}
-				expr_call(par, e, line2);
+                    expr_call(par, e, line2);
+                }
+                else {
+                    expr_index_str(par, e, name, line2);
+                }
 				break;
 			}
 			case TK_BANG: {
@@ -4210,22 +4206,19 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 				a_line line2 = lex_line(par);
                 lex_skip(par);
 				GStr* name = lex_check_ident(par);
-				expr_index_str(par, e, name, line2);
-				break;
-			}
-			case TK_ARROW: {
-				a_line line2 = lex_line(par);
-                lex_skip(par);
+                if (lex_test_skip(par, TK_LBK)) {
+                    expr_lookup(par, e, name, line2);
 
-				GStr* name = lex_check_ident(par);
-				expr_lookup(par, e, name, line2);
+                    if (!lex_test_skip(par, TK_RBK)) {
+                        l_scan_exprs(par, e, true);
+                        lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
+                    }
 
-                lex_check_skip(par, TK_LBK);
-				if (!lex_test_skip(par, TK_RBK)) {
-					l_scan_exprs(par, e, true);
-                    lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
-				}
-				expr_call(par, e, line2);
+                    expr_call(par, e, line2);
+                }
+                else {
+                    expr_index_str(par, e, name, line2);
+                }
 				break;
 			}
 			case TK_LSQ: {

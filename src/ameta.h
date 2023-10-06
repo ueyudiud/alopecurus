@@ -17,9 +17,9 @@ intern void ai_meta_boost(a_henv env);
 intern void ai_meta_clean(Global* g);
 
 intern Value ai_meta_get(a_henv env, GMeta* self, Value vk);
-intern Value ai_meta_gets(a_henv env, GMeta* self, GStr* k);
 intern void ai_meta_set(a_henv env, GMeta* self, Value vk, Value vv);
 intern a_msg ai_meta_uget(a_henv env, GMeta* self, Value vk, Value* pv);
+intern a_msg ai_meta_ugets(a_henv env, GMeta* self, GStr* k, Value* pv);
 intern a_msg ai_meta_uset(a_henv env, GMeta* self, Value vk, Value vv);
 intern a_msg ai_meta_usets(a_henv env, GMeta* self, GStr* k, Value vv);
 

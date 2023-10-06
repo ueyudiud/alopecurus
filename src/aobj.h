@@ -781,6 +781,7 @@ struct Global {
 		GRefType _table;
 		GRefType _func;
 		GRefType _type;
+		GRefType _mod;
 		GRefType _route;
 	} _types;
 };

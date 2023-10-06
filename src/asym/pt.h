@@ -22,7 +22,7 @@ STRDEF(table)
 STRDEF(func )
 STRDEF(route)
 STRDEF(type )
-STRDEF(user )
+STRDEF(mod  )
 
 #ifdef EPILOGUE
 EPILOGUE(PT)

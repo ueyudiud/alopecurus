@@ -112,9 +112,31 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	return v_to_bool(ai_vm_call_meta(env, base));
 }
 
-static Value vm_look(a_henv env, Value v, GStr* key) {
-	GType* type = v_typeof(env, v);
-    return ai_meta_gets(env, g_cast(GMeta, type), key);
+#define v_of_call() v_of_empty()
+#define v_is_call(v) v_is_empty(v)
+
+static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
+    a_msg msg;
+    Value vv;
+    GType* type = v_typeof(env, v);
+
+    msg = ai_meta_ugets(env, g_cast(GMeta, type), k, &vv);
+
+    if (msg == ALO_SOK) {
+        v_set(env, &pv[0], vv);
+        v_set(env, &pv[1], v);
+        return;
+    }
+
+    msg = ai_vm_uget(env, v, v_of_obj(k), &vv);
+
+    if (msg == ALO_SOK) {
+        v_set(env, &pv[0], v_of_call());
+        v_set(env, &pv[1], vv);
+        return;
+    }
+
+    ai_err_bad_tm(env, TM___get__); //TODO
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
@@ -500,6 +522,11 @@ tail_call:
 
     run { /* Check for function. */
         Value vf = R[0];
+        if (v_is_call(vf)) { /* For static call from look. */
+            frame->_stack_bot += 1; /* Elision call stub. */
+            reload_stack();
+            vf = R[0];
+        }
         while (unlikely(!v_is_func(vf))) {
             vf = ai_obj_vlooktm(env, vf, TM___call__);
             if (v_is_nil(vf)) {
@@ -748,10 +775,7 @@ tail_call:
                 Value vb = R[b];
                 Value vc = K[c];
 
-                Value vt = vm_look(env, vb, v_as_str(vc));
-                v_set(env, &R[a], vt);
-                v_set(env, &R[a + 1], vb);
-
+                vm_look(env, vb, v_as_str(vc), &R[a]);
                 break;
             }
             case BC_LOOKX: {
@@ -761,10 +785,7 @@ tail_call:
                 Value vb = R[b];
                 Value vc = K[ex];
 
-                Value vt = vm_look(env, vb, v_as_str(vc));
-                v_set(env, &R[a], vt);
-                v_set(env, &R[a + 1], vb);
-
+                vm_look(env, vb, v_as_str(vc), &R[a]);
                 break;
             }
             case BC_ITER: {

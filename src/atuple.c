@@ -26,11 +26,6 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
     return self;
 }
 
-Value const* ai_tuple_refi(unused a_henv env, GTuple* self, a_int key) {
-    a_uint i = obj_idx(key, self->_len, null);
-    return &self->_ptr[i];
-}
-
 a_bool ai_tuple_equals(a_henv env, GTuple* self, GTuple* o) {
 	if (self->_len != o->_len)
 		return false;
@@ -59,8 +54,13 @@ Value ai_tuple_get(a_henv env, GTuple* self, Value vk) {
 	return ai_tuple_geti(env, self, v_as_int(vk));
 }
 
+static Value const* tuple_refi(unused a_henv env, GTuple* self, a_int key) {
+    a_uint i = obj_idx(key, self->_len, null);
+    return &self->_ptr[i];
+}
+
 Value ai_tuple_geti(a_henv env, GTuple* self, a_int k) {
-	Value const* value = ai_tuple_refi(env, self, k);
+	Value const* value = tuple_refi(env, self, k);
 	if (unlikely(value == null)) {
 		ai_err_raisef(env, ALO_EINVAL, "index out of bound.");
 	}

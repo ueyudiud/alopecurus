@@ -209,6 +209,12 @@ void ai_meta_boost(a_henv env) {
         ._tag = ALO_TROUTE,
         ._name = env_int_str(env, STR_route)
     };
+    g->_types._mod = new(GRefType) {
+        ._vptr = &type_vtable,
+        ._flags = META_FLAG_NONE,
+        ._tag = ALO_TUSER,
+        ._name = env_int_str(env, STR_mod)
+    };
     g->_types._type = new(GRefType) {
         ._vptr = &type_vtable,
         ._flags = META_FLAG_NONE,
@@ -226,12 +232,9 @@ Value ai_meta_get(a_henv env, GMeta* self, Value vk) {
         ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
     }
 
-    return ai_meta_gets(env, self, v_as_str(vk));
-}
-
-Value ai_meta_gets(a_henv env, GMeta* self, GStr* k) {
-    Value val;
-    a_msg msg = ai_dict_uget(env, &self->_fields, k, &val);
+    GStr* k = v_as_str(vk);
+    Value vv;
+    a_msg msg = ai_dict_uget(env, &self->_fields, k, &vv);
 
     if (msg != ALO_SOK) {
         assume(msg == ALO_EEMPTY, "unexpected error.");
@@ -240,7 +243,7 @@ Value ai_meta_gets(a_henv env, GMeta* self, GStr* k) {
                       str2ntstr(k));
     }
 
-    return val;
+    return vv;
 }
 
 void ai_meta_set(a_henv env, GMeta* self, Value vk, Value vv) {
@@ -262,7 +265,11 @@ void ai_meta_set(a_henv env, GMeta* self, Value vk, Value vv) {
 
 a_msg ai_meta_uget(a_henv env, GMeta* self, Value vk, Value* pv) {
     if (!v_is_str(vk)) return ALO_EINVAL;
-    return ai_dict_uget(env, &self->_fields, v_as_str(vk), pv);
+    return ai_meta_ugets(env, self, v_as_str(vk), pv);
+}
+
+a_msg ai_meta_ugets(a_henv env, GMeta* self, GStr* k, Value* pv) {
+    return ai_dict_uget(env, &self->_fields, k, pv);
 }
 
 a_msg ai_meta_uset(a_henv env, GMeta* self, Value vk, Value vv) {
@@ -301,6 +308,7 @@ static void meta_drop(Global* g, GMeta* self) {
 
 static VTable const mod_vtable = {
     ._stencil = V_STENCIL(T_META),
+    ._type_ref = g_type_ref(_mod),
     ._slots = {
         [vfp_slot(drop)] = meta_drop,
         [vfp_slot(mark)] = meta_mark
@@ -309,6 +317,7 @@ static VTable const mod_vtable = {
 
 static VTable const type_vtable = {
 	._stencil = V_STENCIL(T_META),
+    ._type_ref = g_type_ref(_type),
 	._slots = {
         [vfp_slot(drop)] = meta_drop,
         [vfp_slot(mark)] = meta_mark
