@@ -12,6 +12,7 @@ PROLOGUE(TM)
 
 STRDEF(__get__  )
 STRDEF(__set__  )
+STRDEF(__put__  )
 STRDEF(__len__  )
 STRDEF(__close__)
 STRDEF(__hash__ )

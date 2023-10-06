@@ -5,69 +5,136 @@
 #define auser_c_
 #define ALO_LIB
 
-#include "atable.h"
-#include "atype.h"
+#include "adict.h"
+#include "ameta.h"
+#include "amem.h"
 #include "agc.h"
 #include "avm.h"
 #include "aerr.h"
 
 #include "auser.h"
 
-GAUser* ai_auser_new(a_henv env, GType* type) {
-	assume(type->_opt_vtbl->_tag == v_masked_tag(T_AUSER), "not type for auser.");
-	GTable* self = ai_table_new(env);
-	self->_vptr = type->_opt_vtbl; /* Set type. */
-	return self;
+typedef struct {
+	GOBJ_STRUCT_HEADER;
+    Dict _keys;
+} GRec;
+
+static VTable const rec_vtable;
+
+GUser* ai_rec_new(a_henv env, GUserType* type) {
+	assume(type->_vtbl->_stencil == V_STENCIL(T_USER), "not type for auser.");
+	GRec* self = ai_mem_alloc(env, sizeof(GRec));
+
+    self->_vptr = type->_vtbl; /* Set virtual table. */
+    ai_dict_init(env, &self->_keys);
+
+    ai_gc_register_object(env, self);
+
+	return g_cast(GUser, self);
 }
 
-Value ai_auser_get(a_henv env, GAUser* self, Value key) {
-	a_hash hash;
+static a_uint rec_len(unused a_henv env, GRec* self) {
+    return self->_keys._len;
+}
 
-	Value const* ref = ai_table_ref(env, self, key, &hash);
-	if (ref != null) {
-		return *ref;
-	}
+static Value rec_get(a_henv env, GRec* self, Value vk) {
+	a_msg msg;
+	Value v;
+
+    if (v_is_str(vk)) {
+        msg = ai_dict_uget(env, &self->_keys, v_as_str(vk), &v);
+        if (msg == ALO_SOK)
+            return v;
+    }
 
 	Value vf = ai_obj_glookftm(env, self, TM___get__);
 	if (v_is_nil(vf)) {
+		if (msg == ALO_EBADOP)
+			ai_err_bad_tm(env, TM___get__);
 		return v_of_nil();
 	}
-
-	return ai_vm_meta_get(env, vf, v_of_obj(self), key);
+	else if (v_is_func(vf)) {
+		return ai_vm_call_meta(env, vm_push_args(env, vf, v_of_obj(self), vk));
+	}
+	else {
+        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
+	}
 }
 
-void ai_auser_set(a_henv env, GAUser* self, Value key, Value value) {
-	a_hash hash;
-
-	Value* ref = ai_table_ref(env, self, key, &hash);
-	if (ref != null) {
-		v_set(env, ref, value);
-		ai_gc_barrier_backward_val(env, self, value);
-		return;
-	}
+static void rec_set(a_henv env, GRec* self, Value vk, Value vv) {
+	a_msg msg;
+    a_usize ctx;
 
 	Value vf = ai_obj_glookftm(env, self, TM___set__);
-	if (v_is_nil(vf)) {
-		ai_table_hint(env, self, 1);
-		return ai_table_put(env, self, key, hash, value);
+	if (v_is_func(vf)) {
+		ai_vm_call(env, vm_push_args(env, vf, v_of_obj(self), vk, vv), 0);
+        return;
+	}
+	else if (!v_is_nil(vf)) {
+		return ai_vm_set(env, vf, vk, vv);
 	}
 
-	return ai_vm_meta_set(env, vf, v_of_obj(self), key, value);
+    if (v_is_str(vk)) {
+        msg = ai_dict_uset(env, &self->_keys, v_as_str(vk), vv, &ctx);
+
+        if (msg == ALO_SOK)
+            return;
+    }
+
+	vf = ai_obj_glookftm(env, self, TM___put__);
+	if (!v_is_nil(vf)) {
+        if (v_is_func(vf)) {
+            ai_vm_call(env, vm_push_args(env, vf, v_of_obj(self), vk, vv), 0);
+        }
+        else {
+            ai_vm_set(env, vf, vk, vv);
+        }
+	}
+
+    if (v_is_str(vk)) {
+        ctx = 0;
+        msg = ai_dict_uput(env, &self->_keys, v_as_str(vk), vv, &ctx);
+
+        if (msg == ALO_SOK)
+            return;
+    }
+
+    ai_err_bad_tm(env, TM___get__);
 }
 
-static void tuser_mark(Global* g, GTable* self) {
-	GType* type = ptr_disp(GType, g, self->_vptr->_iname);
+static a_msg rec_uget(a_henv env, GRec* self, Value vk, Value* pv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    return ai_dict_uget(env, &self->_keys, v_as_str(vk), pv);
+}
+
+static a_msg rec_uset(a_henv env, GRec* self, Value vk, Value vv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    a_usize ctx = 0;
+    return ai_dict_uset(env, &self->_keys, v_as_str(vk), vv, &ctx);
+}
+
+static void rec_mark(Global* g, GRec* self) {
+	GType* type = g_typeof(g->_active, self);
 	ai_gc_trace_mark(g, type);
-	ai_table_mark(g, self);
-	ai_gc_trace_work(g, sizeof(GType) - sizeof(GTable));
+	ai_dict_mark(g, &self->_keys);
+	ai_gc_trace_work(g, sizeof(GMeta) - sizeof(GTable));
 }
 
-VImpl const ai_auser_vtable = {
-	._tag = V_MASKED_TAG(T_AUSER),
-	._sname = "obj",
+static void rec_drop(Global* g, GRec* self) {
+    ai_dict_deinit(g, &self->_keys);
+    ai_mem_dealloc(g, self, sizeof(GRec));
+}
+
+static VTable const rec_vtable = {
+	._stencil = V_STENCIL(T_USER),
 	._flags = VTABLE_FLAG_NONE,
-	._vfps = {
-		vfp_def(drop, ai_table_drop),
-		vfp_def(mark, tuser_mark)
+	._slots = {
+        [vfp_slot(drop)] = &rec_drop,
+        [vfp_slot(mark)] = rec_mark,
+        [vfp_slot(len)] = rec_len,
+        [vfp_slot(get)] = rec_get,
+        [vfp_slot(uget)] = rec_uget,
+        [vfp_slot(set)] = rec_set,
+        [vfp_slot(uset)] = rec_uset
 	}
 };

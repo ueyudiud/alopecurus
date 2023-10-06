@@ -147,7 +147,7 @@ typedef a_u32 a_insn;
 # else
 #  define ALO_ASSERT_NAME M_cat(ai_assert_,__LINE__)
 # endif
-# define static_assert(e) extern (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
+# define static_assert(e) extern void (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
 #endif
 
 /* Special generic functors. */

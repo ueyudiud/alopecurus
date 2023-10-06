@@ -56,20 +56,17 @@ static a_msg l_save_const(OutCtx* oc, Value v) {
             l_put(oc, a_u8, LVTAG_INT);
             break;
         }
-        case T_ISTR: {
+        case T_STR: {
             val = v_as_str(v);
-        save_sstr:
-            l_put(oc, a_u8, val->_len);
-            l_putv(oc, val->_data, val->_len);
-            break;
-        }
-        case T_HSTR: {
-            val = v_as_str(v);
-            if (likely(val->_len <= LVLSTR_LEN_BIAS)) 
-                goto save_sstr;
-            l_put(oc, a_u8, LVTAG_LSTR);
-            l_putvi(oc, a_u32, val->_len - LVLSTR_LEN_BIAS);
-            l_putv(oc, val->_data, val->_len);
+            if (likely(val->_len <= LVLSTR_LEN_BIAS)) {
+                l_put(oc, a_u8, val->_len);
+                l_putv(oc, val->_ptr, val->_len);
+            }
+            else {
+                l_put(oc, a_u8, LVTAG_LSTR);
+                l_putvi(oc, a_u32, val->_len - LVLSTR_LEN_BIAS);
+                l_putv(oc, val->_ptr, val->_len);
+            }
             break;
         }
         default: {

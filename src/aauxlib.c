@@ -14,7 +14,7 @@
 #include "astr.h"
 #include "atable.h"
 #include "afun.h"
-#include "atype.h"
+#include "ameta.h"
 #include "aenv.h"
 #include "agc.h"
 #include "avm.h"
@@ -63,8 +63,8 @@ void aloL_typeerror(a_henv env, a_usize id, char const* name) {
 	aloL_argerror(env, id, what);
 }
 
-void aloL_checktag(a_henv env, a_usize id, a_tag tag) {
-	api_check(tag >= ALO_TEMPTY && tag <= ALO_TUSER, "bad type tag.");
+void aloL_checktag(a_henv env, a_usize id, a_msg tag) {
+	api_check(tag >= ALO_TNIL && tag <= ALO_TUSER, "bad type tag.");
 	if (alo_tagof(env, cast(a_isize, id)) != tag) {
 		aloL_typeerror(env, id, ai_api_tagname[tag]);
 	}
@@ -137,7 +137,7 @@ char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
-a_u32 aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
+a_msg aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
 	if (stat) {
 		alo_pushbool(env, true);
 		return 1;
@@ -168,7 +168,7 @@ a_u32 aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
 
 #endif
 
-a_u32 aloL_resulte(a_henv env, a_i32 stat) {
+a_msg aloL_resulte(a_henv env, a_i32 stat) {
 	char const* what = "exit";
 	errno_t err = errno;
 	if (stat != 0 && err != 0) {
@@ -214,7 +214,7 @@ static a_i32 l_read_file(unused a_henv env, void* rctx, void const** pdst, size_
 }
 
 a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options) {
-	a_lstr str = {src, len};
+	a_lstr str = {src, len };
 	alo_pushstr(env, fname, strlen(fname));
 	a_msg msg = alo_compile(env, l_read_str, &str, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
@@ -303,10 +303,9 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
     }
 
     switch (v_get_tag(*err)) {
-        case T_HSTR:
-        case T_ISTR: {
+        case T_STR: {
             GStr* str = v_as_str(*err);
-            try(ai_buf_nputls(env, buf, str->_data, str->_len));
+            try(ai_buf_nputls(env, buf, str->_ptr, str->_len));
             break;
         }
         case T_INT: {
@@ -337,7 +336,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
 				try(ai_buf_nputs(env, buf, "\n\t..."));
 				break;
 			}
-			else if (frame->_ftail) {
+			else if (frame->_flags & FRAME_FLAG_TAIL) {
 				try(ai_buf_nputs(env, buf, "\n\t... (tail call)"));
 				if (limit > 1) {
 					limit -= 1;
@@ -372,14 +371,13 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 
 void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
-	api_check(v_is_type(v), "type expected.");
+	api_check(v_is_meta(v), "meta expected.");
 
-	GType* type = v_as_type(v);
+	GMeta* meta = v_as_meta(v);
 
-	ai_type_hint(env, type, nb);
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
-		assume(b->name != null);
+		assume(b->name != null, "missing field name.");
 
 		GStr* key = ai_str_new(env, b->name, strlen(b->name));
 		Value value = v_of_nil();
@@ -389,35 +387,7 @@ void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 			value = v_of_obj(fun);
 		}
 
-		ai_type_setis(env, type, key, value);
-	}
-
-	ai_gc_trigger(env);
-}
-
-void aloL_newmod_(a_henv env, char const* name, aloL_Entry const* bs, a_usize nb) {
-	api_check_slot(env, 1);
-
-	GType* type = ai_type_alloc(env, 0, null);
-	v_set_obj(env, api_incr_stack(env), type);
-
-	type->_name = ai_str_new(env, name, strlen(name));
-
-	ai_type_hint(env, type, nb);
-
-	for (a_usize i = 0; i < nb; ++i) {
-		aloL_Entry const* b = &bs[i];
-		assume(b->name != null);
-
-		GStr* key = ai_str_new(env, b->name, strlen(b->name));
-		Value value = v_of_nil();
-
-		if (b->fptr != null) {
-			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
-			value = v_of_obj(fun);
-		}
-
-		ai_type_setis(env, type, key, value);
+        ai_meta_set(env, meta, v_of_obj(key), value);
 	}
 
 	ai_gc_trigger(env);
@@ -430,15 +400,16 @@ typedef struct {
 
 static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
-	a_htype type = v_as_type(api_elem(env, -1));
-	ai_type_cache(env, null, type);
-	ai_vm_set(env, G(env)->_global, v_of_obj(type->_name), v_of_obj(type));
+	GMeta* meta = v_as_meta(api_elem(env, -1));
+    ai_meta_cache(env, null, meta);
+	ai_vm_set(env, G(env)->_global, v_of_obj(meta->_name), v_of_obj(meta));
 	api_decr_stack(env);
 }
 
 void aloL_openlibs(a_henv env) {
 	static LibEntry const entries[] = {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
+        { ALO_LIB_TYPE_NAME, aloopen_type },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
 		{ ALO_LIB_INT_NAME, aloopen_int },
 		{ ALO_LIB_SYS_NAME, aloopen_sys }

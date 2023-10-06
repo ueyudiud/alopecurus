@@ -7,7 +7,7 @@
 
 #include "aenv.h"
 #include "afun.h"
-#include "atype.h"
+#include "ameta.h"
 #include "amem.h"
 
 #include "agc.h"
@@ -82,7 +82,7 @@ void ai_gc_trace_mark_(Global* g, a_hobj obj) {
 	/* Tested in inline function. */
 	assume(g_has_white_color(g, obj));
 	/* Mark object lazily or greedily. */
-	VImpl const* vptr = obj->_vptr;
+	VTable const* vptr = obj->_vptr;
 	if (vtable_has_flag(vptr, VTABLE_FLAG_GREEDY_MARK)) {
 		g_set_gray(obj); /* Mark object to gray before propagation. */
 		really_mark_object(g, obj);
@@ -223,7 +223,7 @@ static void propagate_atomic(Global* g) {
 	if (v_is_obj(g->_global)) {
 		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
-	ai_type_cache_mark(g, &g->_type_cache);
+    ai_meta_cache_mark(g, &g->_meta_cache);
 	if (g->_gmark != null) {
 		(*g->_gmark)(g, g->_gctx);
 	}

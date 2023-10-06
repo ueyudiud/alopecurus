@@ -12,9 +12,9 @@
 
 #include "afun.h"
 
-static VImpl const afun_vtable;
-static VImpl const cfun_vtable;
-static VImpl const proto_vtable;
+static VTable const afun_vtable;
+static VTable const cfun_vtable;
+static VTable const proto_vtable;
 
 static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
@@ -189,8 +189,7 @@ static RcCap* cap_load(a_henv env, CapInfo const* info, RcCap** up, Value* stack
 }
 
 static void v_close(a_henv env, Value v) {
-    a_hobj obj = v_as_obj(v);
-    g_vcall(env, obj, close);
+    v_vcall(env, v, close);
 }
 
 void ai_cap_mark_tbc(a_henv env, Value* pv) {
@@ -360,32 +359,28 @@ static void proto_mark(Global* g, GProto* self) {
 	ai_gc_trace_work(g, self->_size);
 }
 
-static VImpl const afun_vtable = {
-	._tag = V_MASKED_TAG(T_FUNC),
-	._iname = env_type_iname(_func),
-	._sname = "func",
-	._vfps = {
-		vfp_def(drop, afun_drop),
-		vfp_def(mark, afun_mark),
+static VTable const afun_vtable = {
+	._stencil = V_STENCIL(T_FUNC),
+    ._type_ref = g_type_ref(_func),
+	._slots = {
+        [vfp_slot(drop)] = afun_drop,
+        [vfp_slot(mark)] = afun_mark
 	}
 };
 
-static VImpl const cfun_vtable = {
-	._tag = V_MASKED_TAG(T_FUNC),
-	._iname = env_type_iname(_func),
-	._sname = "func",
-	._flags = VTABLE_FLAG_NONE,
-	._vfps = {
-		vfp_def(drop, cfun_drop),
-		vfp_def(mark, cfun_mark),
+static VTable const cfun_vtable = {
+	._stencil = V_STENCIL(T_FUNC),
+    ._type_ref = g_type_ref(_func),
+	._slots = {
+        [vfp_slot(drop)] = cfun_drop,
+        [vfp_slot(mark)] = cfun_mark
 	}
 };
 
-static VImpl const proto_vtable = {
-	._tag = V_MASKED_TAG(T_CUSER),
-	._flags = VTABLE_FLAG_NONE,
-	._vfps = {
-		vfp_def(drop, ai_proto_drop),
-		vfp_def(mark, proto_mark),
+static VTable const proto_vtable = {
+	._stencil = V_STENCIL(T_USER),
+	._slots = {
+        [vfp_slot(drop)] = ai_proto_drop,
+        [vfp_slot(mark)] = proto_mark
 	}
 };

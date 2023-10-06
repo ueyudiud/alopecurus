@@ -118,8 +118,8 @@ always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
 /*================================================================================*/ \
     _(  TRIM,  "trim",reg,___,len,___) /* R[a:a+c] := R[a:]                       */ \
     _(   LDF,   "ldf",reg,fun,___,___) /* R[a] := func(F[b])                      */ \
-    _(  LOOK,  "look",reg,reg,kst,___) /* R[a:a+2] := look(R[b], K[c]), R[b]      */ \
-    _( LOOKX, "lookx",reg,reg,___,kst) /* R[a:a+2] := look(R[b], K[ex]), R[b]     */ \
+    _(  LOOK,  "look",reg,reg,kst,___) /* R[a:a+2] := look(R[b], K[c])            */ \
+    _( LOOKX, "lookx",reg,reg,___,kst) /* R[a:a+2] := look(R[b], K[ex])           */ \
     _(  ITER,  "iter",reg,reg,___,___) /* R[a:a+2] := iter(R[b])                  */ \
     _(  FORG,  "forg",reg,reg,len,___) /* t, R[a:a+c] := next(R[b:b+2])
                                           if R[a] { pc += 1; R[b+2] := t }        */ \
@@ -172,14 +172,14 @@ always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
     _( BXORI, "bxori",reg,reg,int,___) /* R[a] := R[b] ~ int(c)                   */ \
     _(  CALL,  "call",reg,len,len,___) /* R[a:a+c] := R[a](R[a+1:a+b])            */ \
     _( CALLV, "callv",reg,len,___,___) /* R[a:] := R[a](R[a+1:a+b])               */ \
-    _( TCALL, "tcall",reg,len,len,len) /* return R[a:a+c], R[a+c](R[a+c+1:a+b])   */ \
+    _( TCALL, "tcall",reg,len,len,___) /* return R[a:a+c], R[a+c](R[a+c+1:a+b])   */ \
     _( CALLM, "callm",reg,___,len,___) /* R[a:a+c] := R[a](R[a+1:])               */ \
     _(CALLMV,"callmv",reg,___,___,___) /* R[a:] := R[a](R[a+1:])                  */ \
-    _(TCALLM,"tcallm",reg,len,___,len) /* return R[a:a+c], R[a+c](R[a+c+1:])      */ \
+    _(TCALLM,"tcallm",reg,___,len,___) /* return R[a:a+c], R[a+c](R[a+c+1:])      */ \
     _(   CAT,   "cat",reg,reg,len,___) /* R[a] := concat(R[b:b+c])                */ \
     _(  CATM,  "catm",reg,reg,___,___) /* R[a] := concat(R[b:])                   */ \
-    _(   TBC,   "tbc",reg,___,___,___) /* mark R[A] to be closed                  */ \
-    _( CLOSE, "close",reg,___,___,___) /* close(C[A:])                            */ \
+    _(   TBC,   "tbc",reg,___,___,___) /* mark R[a] to be closed                  */ \
+    _( CLOSE, "close",reg,___,___,___) /* close(C[a:])                            */ \
     _(  RET0,  "ret0",___,___,___,___) /* return                                  */ \
     _(   RET,   "ret",reg,len,___,___) /* return R[a:a+b+1]                       */ \
     _(  RETM,  "retm",reg,___,___,___) /* return R[a:]                            */ \

@@ -13,12 +13,12 @@
 
 void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in) {
     *in = new(ZIn) {
-        ._env =  env,
-        ._fun =  fun,
-        ._ctx =  ctx,
-        ._ptr =  null,
-        ._len =  0,
-        ._err =  0
+        ._env = env,
+        ._fun = fun,
+        ._ctx = ctx,
+        ._ptr = null,
+        ._len = 0,
+        ._err = 0
     };
 }
 
@@ -33,9 +33,9 @@ a_i32 ai_io_igetc(ZIn* in) {
     if (unlikely(in->_len == 0)) {
         try(in_fetch(in));
         if (in->_len == 0)
-            return ALO_ESTMUF;
+            return ALO_EEMPTY;
     }
-    a_i32 ch = cast(a_i32, cast(a_u32, *in->_ptr));
+    a_i32 ch = *in->_ptr;
     in->_ptr += 1;
     in->_len -= 1;
     return ch;
@@ -57,7 +57,7 @@ a_msg ai_io_iget(ZIn* in, void* dst, a_usize len) {
 	fetch:
 		try(in_fetch(in));
 		if (unlikely(in->_len == 0))
-			return ALO_ESTMUF;
+			return ALO_EEMPTY;
 	}
 }
 

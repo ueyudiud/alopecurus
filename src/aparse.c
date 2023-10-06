@@ -554,8 +554,8 @@ static Value const_at(Parser* par, a_u32 index) {
 	return par->_consts._ptr[par->_fnscope->_const_off + index];
 }
 
-static a_bool const_is_istr(Parser* par, a_u32 index) {
-	return v_is_istr(const_at(par, index));
+static a_bool const_is_str(Parser* par, a_u32 index) {
+	return v_is_str(const_at(par, index));
 }
 
 #define INSN_NOP ((a_insn) 0)
@@ -2053,7 +2053,7 @@ static void expr_return(Parser* par, InoutExpr e, a_line line) {
 		assume(e->_d1 == par->_head_label - 1 && !par->_fnscope->_fjump, "not head label.");
 		assume(op == BC_CALL || op == BC_CALLM, "not call operation.");
 
-		bc_store_op(ip, op + 2);
+		bc_store_op(ip, op + (BC_TCALL - BC_CALL));
 		bc_store_c(ip, 0);
 
 		par->_fnscope->_fpass = false;
@@ -2177,7 +2177,7 @@ static a_bool l_try_fold_append(Parser* par, QBuf* buf, InExpr e) {
 		}
 		case EXPR_STR: {
 			GStr* str = e->_s;
-			at_buf_putls(par->_env, buf, str->_data, str->_len);
+			at_buf_putls(par->_env, buf, str->_ptr, str->_len);
 			return true;
 		}
 		default: {
@@ -2421,7 +2421,7 @@ assign:
 		case EXPR_REFCK: {
             expr_to_reg(par, e2);
 
-			if (const_is_istr(par, e1->_d2)) {
+			if (const_is_str(par, e1->_d2)) {
                 l_emit_aby(par, BC_CSETS, e2->_d1, e1->_d1, e1->_d2, line);
 			}
 			else {
@@ -2747,7 +2747,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 			}
 			break;
 		}
-		default: unreachable();
+		default: panic("not implemented."); //TODO
 	}
 }
 
@@ -2822,7 +2822,7 @@ static void pat_bind(Parser* par, Pat* pat, InExpr e) {
 
     a_u32 reg = stack_alloc_succ(par, pat->_tmp_top, e->_line);
     pat_bind_with(par, pat, e, reg);
-	assume(par->_scope->_top_ntr - abs_top == par->_scope->_top_reg - pat->_tmp_top, "bind compute incorrect.");
+	assume(par->_scope->_top_ntr - abs_top == cast(a_u32, par->_scope->_top_reg - pat->_tmp_top), "bind compute incorrect.");
 	stack_free_succ(par, par->_scope->_top_ntr);
 }
 
@@ -2843,7 +2843,7 @@ static void param_bind(Parser* par, Pat* pat, a_usize ctx) {
 	a_line line = cast(a_line, ctx);
 	
 	Expr e;
-	expr_init(e, EXPR_VNTMP, ._d1 = 0, ._fupk = true);
+	expr_init(e, EXPR_VNTMP, ._d1 = 0, ._fupk = true, ._line = line);
 
 	pat_bind(par, pat, e);
 
@@ -3227,7 +3227,7 @@ bind:
 		}
 		case EXPR_REFK: {
             a_u32 k = e->_d2;
-			if (const_is_istr(par, k)) {
+			if (const_is_str(par, k)) {
 				return l_emit_aby(par, BC_GETS, reg, e->_d1, k, e->_line);
 			}
 			else {
@@ -3244,7 +3244,7 @@ bind:
 		}
 		case EXPR_REFCK: {
 			a_u32 k = e->_d2;
-			if (const_is_istr(par, k)) {
+			if (const_is_str(par, k)) {
 				return l_emit_aby(par, BC_CGETS, reg, e->_d1, k, e->_line);
 			}
 			else {
@@ -3928,14 +3928,28 @@ static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 
 	a_line line1 = lex_line(par);
 	lex_check_skip(par, TK_LBK);
-	l_scan_pattern(par, param_bind, line1);
-	lex_check_pair_right(par, TK_LBK, TK_RBK, line1);
+    if (!lex_test_skip(par, TK_RBK)) {
+        l_scan_pattern(par, param_bind, line1);
+        lex_check_pair_right(par, TK_LBK, TK_RBK, line1);
+    }
 
-    lex_check_skip(par, TK_LBR);
+	lex_sync(par);
 	line = lex_line(par);
 
-	l_scan_stats(par);
-    lex_check_pair_right(par, TK_LBR, TK_RBR, line);
+	switch (lex_peek(par)) {
+		case TK_LBR: {
+			lex_skip(par);
+			l_scan_stats(par);
+    		lex_check_pair_right(par, TK_LBR, TK_RBR, line);
+			break;
+		}
+		case TK_ASSIGN: {
+			lex_skip(par);
+			l_scan_expr(par, e);
+			expr_return(par, e, line);
+			break;
+		}
+	}
 
 	GProto* meta = fnscope_epilogue(par, name, false, lex_line(par));
 	expr_func(par, e, meta);
@@ -4166,23 +4180,19 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
                 lex_skip(par);
 				expr_or_nil(par, e, &label,  line2);
 				GStr* name = lex_check_ident(par);
-				expr_index_str(par, e, name, line2);
-				break;
-			}
-			case TK_QARROW: {
-				a_line line2 = lex_line(par);
-                lex_skip(par);
-				expr_or_nil(par, e, &label,  line2);
+                if (lex_test_skip(par, TK_LBK)) {
+                    expr_lookup(par, e, name, line2);
 
-				GStr* name = lex_check_ident(par);
-				expr_lookup(par, e, name, line2);
+                    if (!lex_test_skip(par, TK_RBK)) {
+                        l_scan_exprs(par, e, true);
+                        lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
+                    }
 
-				lex_check_skip(par, TK_LBK);
-				if (!lex_test_skip(par, TK_RBK)) {
-					l_scan_exprs(par, e, true);
-					lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
-				}
-				expr_call(par, e, line2);
+                    expr_call(par, e, line2);
+                }
+                else {
+                    expr_index_str(par, e, name, line2);
+                }
 				break;
 			}
 			case TK_BANG: {
@@ -4196,22 +4206,19 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 				a_line line2 = lex_line(par);
                 lex_skip(par);
 				GStr* name = lex_check_ident(par);
-				expr_index_str(par, e, name, line2);
-				break;
-			}
-			case TK_ARROW: {
-				a_line line2 = lex_line(par);
-                lex_skip(par);
+                if (lex_test_skip(par, TK_LBK)) {
+                    expr_lookup(par, e, name, line2);
 
-				GStr* name = lex_check_ident(par);
-				expr_lookup(par, e, name, line2);
+                    if (!lex_test_skip(par, TK_RBK)) {
+                        l_scan_exprs(par, e, true);
+                        lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
+                    }
 
-                lex_check_skip(par, TK_LBK);
-				if (!lex_test_skip(par, TK_RBK)) {
-					l_scan_exprs(par, e, true);
-                    lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
-				}
-				expr_call(par, e, line2);
+                    expr_call(par, e, line2);
+                }
+                else {
+                    expr_index_str(par, e, name, line2);
+                }
 				break;
 			}
 			case TK_LSQ: {
@@ -5034,14 +5041,8 @@ static void l_scan_let_stat(Parser* par) {
 
 	switch (lex_peek(par)) {
 		case TK_fn: {
-			Expr e1, e2;
-            lex_skip(par);
-			GStr* name = lex_check_ident(par);
-            local_bind(par, e1, name, line);
-
-			l_scan_function(par, e2, name, line);
-			expr_assign(par, e1, e2, line);
-			break;
+			lex_skip(par);
+			goto scan_func;
 		}
         case TK_use: {
             Expr e1, e2;
@@ -5057,6 +5058,20 @@ static void l_scan_let_stat(Parser* par) {
             expr_tbc(par, e1, line);
             break;
         }
+		case TK_IDENT: {
+			if (lex_forward(par) == TK_LBK) {
+                Expr e1, e2;
+                GStr* name;
+			scan_func:
+                name = lex_check_ident(par);
+    	        local_bind(par, e1, name, line);
+
+				l_scan_function(par, e2, name, line);
+				expr_assign(par, e1, e2, line);
+				break;
+			}
+			fallthrough;
+		}
 		default: {
 			l_scan_pattern(par, l_scan_let_stat2, line);
 			break;
@@ -5087,26 +5102,21 @@ static void l_scan_pub_stat(Parser* par) {
 	a_line line = lex_line(par);
     lex_skip(par);
 
-	switch (lex_peek(par)) {
-		case TK_fn: {
-			Expr e1, e2;
-            lex_skip(par);
-			GStr* name = lex_check_ident(par);
-            sym_export(par, e1, name, line);
-			l_scan_function(par, e2, name, line);
-			expr_assign(par, e1, e2, line);
-			break;
-		}
-		default: {
-			Expr e;
-			GStr* name = lex_check_ident(par);
-            sym_export(par, e, name, line);
-			if (lex_test_skip(par, TK_ASSIGN)) {
-				Expr e2 = {};
-				l_scan_expr(par, e2);
-				expr_assign(par, e, e2, line);
-			}
-			break;
+	if ((lex_peek(par) == TK_IDENT && lex_forward(par) == TK_LBK) || lex_test_skip(par, TK_fn)) {
+		Expr e1, e2;
+		GStr* name = lex_check_ident(par);
+        sym_export(par, e1, name, line);
+		l_scan_function(par, e2, name, line);
+		expr_assign(par, e1, e2, line);
+	}
+	else {
+		Expr e;
+		GStr* name = lex_check_ident(par);
+        sym_export(par, e, name, line);
+		if (lex_test_skip(par, TK_ASSIGN)) {
+			Expr e2 = {};
+			l_scan_expr(par, e2);
+			expr_assign(par, e, e2, line);
 		}
 	}
 }
