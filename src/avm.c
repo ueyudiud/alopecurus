@@ -1033,12 +1033,14 @@ tail_call:
                 if (v_is_tuple(vb)) {
                     GTuple* val = v_as_tuple(vb);
                     check_stack(&R[a] + val->_len);
-					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_ptr, val->_len);
+					v_mov_all(env, &R[a], val->_ptr, val->_len);
+                    env->_stack._top = &R[a + val->_len];
                 }
                 else if (v_is_list(vb)) {
                     GList* val = v_as_list(vb);
                     check_stack(&R[a] + val->_len);
-					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, val->_ptr, val->_len);
+					v_mov_all(env, &R[a], val->_ptr, val->_len);
+                    env->_stack._top = &R[a + val->_len];
                 }
                 else {
 					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_nameof(env, vb));
