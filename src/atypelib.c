@@ -25,11 +25,9 @@ static a_msg type___call__(a_henv env) { /* Should this function write in script
         Value* p = env->_frame->_stack_bot;
         a_usize n = env->_stack._top - p;
 
-        v_mov_all_bwd(env, p + 1, p, n);
         v_set(env, p, v);
 
-        env->_stack._top += 1;
-        alo_call(env, n, 1);
+        alo_call(env, n - 1, 1);
     }
     else {
         //TODO No constructor, try default initializer.
