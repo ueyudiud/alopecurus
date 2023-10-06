@@ -180,7 +180,7 @@ ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_isize id, a_int key);
 ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_isize id);
 ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_isize id, a_isize* pctx);
 ALO_EXPORT a_msg (alo_rawput)(a_henv env, a_isize id, a_isize* pctx);
-ALO_EXPORT void (alo_insert)(a_henv env, a_isize id);
+ALO_EXPORT void (alo_put)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_call)(a_henv env, a_usize narg, a_isize nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsav);
 ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);

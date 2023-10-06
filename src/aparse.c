@@ -1954,14 +1954,18 @@ static void exprs_push(Parser *par, InoutExpr es, InExpr e) {
 
             bc_store_op(ip, bc_load_op(ip) + 1);
             bc_store_c(ip, DMB);
+
+            es->_tag = EXPR_VNTMP;
 			break;
 		}
 		case EXPR_VDYN: {
 			a_insn* ip = par->_code[e->_d1];
 
             bc_store_op(ip, bc_load_op(ip) + 1);
-            bc_store_a(ip, es->_d1);
+            bc_store_a(ip, par->_scope->_top_reg);
             bc_store_c(ip, DMB);
+
+            es->_tag = EXPR_VNTMP;
 			break;
 		}
 		default: {
@@ -1984,14 +1988,17 @@ static void exprs_pop(Parser* par, InoutExpr es, InExpr e, a_line line) {
 
 static void expr_box_tuple(Parser* par, InoutExpr e, a_line line) {
     exprs_to_top_tmps(par, e);
-    expr_drop(par, e);
+
+    a_u32 reg = e->_d1;
 
 	if (expr_has_vararg_top(e)) {
-		l_emit_idb(par, BC_TNEWM, e, e->_d1, line);
+		l_emit_idb(par, BC_TNEWM, e, reg, line);
 	}
 	else {
-		l_emit_idbc(par, BC_TNEW, e, e->_d1, par->_scope->_top_reg - e->_d1, line);
+		l_emit_idbc(par, BC_TNEW, e, reg, par->_scope->_top_reg - reg, line);
 	}
+
+    stack_free_succ(par, reg);
 }
 
 static void expr_box_list(Parser* par, InoutExpr e, a_line line) {

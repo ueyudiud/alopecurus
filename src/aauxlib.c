@@ -63,11 +63,21 @@ void aloL_typeerror(a_henv env, a_usize id, char const* name) {
 	aloL_argerror(env, id, what);
 }
 
+#define aloL_tagof(env,id) alo_tagof(env, cast(a_isize, id))
+
 void aloL_checktag(a_henv env, a_usize id, a_msg tag) {
 	api_check(tag >= ALO_TNIL && tag <= ALO_TUSER, "bad type tag.");
-	if (alo_tagof(env, cast(a_isize, id)) != tag) {
+	if (aloL_tagof(env, id) != tag) {
 		aloL_typeerror(env, id, ai_api_tagname[tag]);
 	}
+}
+
+a_msg aloL_checkany(a_henv env, a_usize id) {
+    a_msg tag = aloL_tagof(env, id);
+    if (tag == ALO_EEMPTY) {
+        aloL_argerror(env, id, "value expected");
+    }
+    return tag;
 }
 
 a_int aloL_checkint(a_henv env, a_usize id) {

@@ -416,15 +416,15 @@ void alo_newtuple(a_henv env, a_usize n) {
 void alo_newlist(a_henv env, a_usize n) {
 	GList* val = ai_list_new(env);
 	v_set_obj(env, api_incr_stack(env), val);
-	ai_gc_trigger(env);
 	ai_list_hint(env, val, n);
+    ai_gc_trigger(env);
 }
 
 void alo_newtable(a_henv env, a_usize n) {
 	GTable* val = ai_table_new(env);
 	v_set_obj(env, api_incr_stack(env), val);
-	ai_gc_trigger(env);
 	ai_table_hint(env, val, n);
+    ai_gc_trigger(env);
 }
 
 void alo_newcfun(a_henv env, a_cfun f, a_usize n) {
@@ -537,7 +537,7 @@ a_msg alo_rawset(a_henv env, a_isize id, a_isize* pctx) {
 	return ALO_SOK;
 }
 
-void alo_insert(a_henv env, a_isize id) {
+void alo_put(a_henv env, a_isize id) {
 	Value v1 = api_elem(env, id);
 	api_check(v_is_list(v1));
 	Value v2 = api_pre_decr_stack(env);
