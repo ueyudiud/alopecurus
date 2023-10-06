@@ -410,6 +410,7 @@ void aloL_openlibs(a_henv env) {
 	static LibEntry const entries[] = {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
         { ALO_LIB_TYPE_NAME, aloopen_type },
+        { ALO_LIB_LIST_NAME, aloopen_list },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
 		{ ALO_LIB_SYS_NAME, aloopen_sys }
 	};
