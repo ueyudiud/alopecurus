@@ -15,12 +15,16 @@
 #include "alolib.h"
 
 static a_msg int_new(a_henv env) {
-    Value v = api_elem(env, 1); //TODO value checking.
+    if (alo_tagof(env, 1) == ALO_EEMPTY) {
+        alo_pushint(env, 0);
+        return 1;
+    }
+
+    Value v = api_elem(env, 1);
     if (v_is_float(v)) {
         alo_pushint(env, cast(a_int, v_as_float(v)));
     }
     else switch (v_get_tag(v)) {
-        case T_NIL:
         case T_FALSE: {
             alo_pushint(env, 0);
             break;
