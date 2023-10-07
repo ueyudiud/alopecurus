@@ -59,15 +59,15 @@ static a_none l_div_0_err(a_henv env) {
 }
 
 a_hash ai_vm_hash(a_henv env, Value v) {
-	if (likely(v_has_trivial_hash(v))) {
-		return v_trivial_hash(v);
-	}
-	else if (likely(v_is_str(v))) {
-		return v_as_str(v)->_hash;
-	}
-	else if (likely(v_is_tuple(v))) {
-		return ai_tuple_hash(env, v_as_tuple(v));
-	}
+    if (likely(v_has_trivial_hash(v))) {
+        return v_trivial_hash(v);
+    }
+    else if (likely(v_is_str(v))) {
+        return v_as_str(v)->_hash;
+    }
+    else if (likely(v_is_tuple(v))) {
+        return ai_tuple_hash(env, v_as_tuple(v));
+    }
     else if (unlikely(v_is_float(v))) {
         return v_float_hash(v);
     }
@@ -136,7 +136,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
         return;
     }
 
-    ai_err_bad_tm(env, TM___get__); //TODO
+    ai_err_bad_look(env, v_nameof(env, v), k); //TODO
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
@@ -179,11 +179,11 @@ a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
         case T_USER: {
             GUser* p = v_as_user(v1);
             a_vfp(uget) uget = g_vfetch(p, uget);
-            if (uget == null) return ALO_EBADOP;
+            if (uget == null) return ALO_EXIMPL;
             return g_vcallp(env, p, uget, v2, pv);
         }
         default: {
-            return ALO_EBADOP;
+            return ALO_EXIMPL;
         }
     }
 }
@@ -226,11 +226,11 @@ a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
 		case T_USER: {
 			GUser* p = v_as_user(v1);
 			a_vfp(uset) uset = g_vfetch(p, uset);
-			if (uset == null) return ALO_EBADOP;
+			if (uset == null) return ALO_EXIMPL;
 			return g_vcallp(env, p, uset, v2, v3);
 		}
         default: {
-            return ALO_EBADOP;
+            return ALO_EXIMPL;
         }
     }
 }

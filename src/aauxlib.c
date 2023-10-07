@@ -233,7 +233,7 @@ a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname,
 
 a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
 	a_fno handle = open(fname, O_RDONLY);
-	if (handle < 0) return ALO_EIO;
+	if (handle < 0) return ALO_EOUTER;
 
 	FileReadCtx ctx;
 	ctx._handle = handle;

@@ -154,7 +154,7 @@ always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n
 
 #define V_STRICT_NIL (~-(u64c(0) + ALO_SOK))
 #define V_EMPTY      (~-(u64c(0) + ALO_EEMPTY))
-#define V_NOT_IMPL   (~-(u64c(0) + ALO_EBADOP))
+#define V_NOT_IMPL   (~-(u64c(0) + ALO_EXIMPL))
 #define V_INVALID    (~-(u64c(0) + ALO_EINVAL))
 
 static_assert(V_IS(V_STRICT_NIL, T_NIL));
@@ -293,10 +293,6 @@ typedef struct { a_usize _; } ObjHeadMark[0];
 struct GObj {
 	GOBJ_STRUCT_HEADER;
 };
-
-typedef void (*a_vfp_mark)(Global*, a_hobj);
-typedef void (*a_vfp_drop)(Global*, a_hobj);
-typedef void (*a_vfp_close)(a_henv, a_hobj);
 
 #define VTABLE_STRUCT_HEADER \
     /* The stencil for value representation. */ \

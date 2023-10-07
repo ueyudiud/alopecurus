@@ -234,7 +234,7 @@ Value ai_meta_get(a_henv env, GMeta* self, Value vk) {
 
     if (msg != ALO_SOK) {
         assume(msg == ALO_EEMPTY, "unexpected error.");
-        ai_err_raisef(env, ALO_EBADOP, "no meta entry '%s.%s'",
+        ai_err_raisef(env, ALO_EXIMPL, "no meta entry '%s.%s'",
                       str2ntstr(self->_name),
                       str2ntstr(k));
     }

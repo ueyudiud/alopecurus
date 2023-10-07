@@ -73,14 +73,13 @@ typedef a_usize a_flags;
 
 #define ALO_STACK_INDEX_CAPTURE(n) (ALO_STACK_INDEX_CAPTURE_BASE + (n))
 
-#define ALO_EIO    (-9) /* Foreign IO Error */
 #define ALO_ERAISE (-8) /* User Raised Error */
 #define ALO_ECHUNK (-7) /* Text/Binary Chunk Error */
 #define ALO_EOUTER (-6) /* External Error */
 #define ALO_ESTKOF (-5) /* Stack Overflow */
 #define ALO_ENOMEM (-4) /* Out of Memory */
 #define ALO_EINVAL (-3) /* Invalid Argument */
-#define ALO_EBADOP (-2) /* Bad Operation */
+#define ALO_EXIMPL (-2) /* Not Implemented */
 #define ALO_EEMPTY (-1) /* Empty Value */
 
 #define ALO_SOK 0
@@ -109,7 +108,6 @@ typedef int a_bool;
 
 /* VM integer number type. */
 typedef a_i32 a_int;
-typedef a_u32 a_uint;
 /* VM float point number type. */
 typedef a_f64 a_float;
 
@@ -117,8 +115,6 @@ typedef a_f64 a_float;
 typedef struct alo_Alloc a_alloc;
 /* Environment handle. */
 typedef struct alo_Env* a_henv;
-/* Type handle. */
-typedef struct alo_Type* a_htype;
 
 struct alo_Alloc {
 	void* (*allocate)(void*, a_usize);
@@ -161,7 +157,7 @@ ALO_EXPORT char const* (alo_pushstr)(a_henv env, void const* src, a_usize len);
 ALO_EXPORT char const* (alo_pushntstr)(a_henv env, char const* src);
 ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);
 ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg);
-ALO_EXPORT void (alo_pushtype)(a_henv env, a_htype hnd);
+
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_usize n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_isize id);
@@ -203,13 +199,10 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 
 #define ALO_NEWMOD_FLAG_STATIC 0x0001
 
-/* Type operations. */
 ALO_EXPORT void (alo_newmod)(a_henv env, char const* n, a_flags flags);
-ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
-ALO_EXPORT char const* (alo_modname)(a_henv env, a_htype mod);
-ALO_EXPORT a_htype (alo_loadmod)(a_henv env, char const* src, a_usize len);
-ALO_EXPORT a_htype (alo_openmod)(a_henv env, a_isize id);
-ALO_EXPORT void (alo_closemod)(a_henv env, a_htype mod);
+
+/* Type operations. */
+ALO_EXPORT void (alo_typeof)(a_henv env, a_isize id);
 
 ALO_EXPORT void (alo_fullgc)(a_henv env);
 

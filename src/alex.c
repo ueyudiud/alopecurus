@@ -17,7 +17,7 @@
 #include "alex.h"
 
 static a_none l_foreign_error(Lexer* lex) {
-	ai_err_raise(lex->_env, ALO_EIO, v_of_int(lex->_in._err));
+	ai_err_raise(lex->_env, ALO_EOUTER, v_of_int(lex->_in._err));
 }
 
 always_inline a_i32 l_poll(Lexer* lex) {

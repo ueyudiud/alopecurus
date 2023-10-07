@@ -49,7 +49,7 @@ static Value rec_get(a_henv env, GRec* self, Value vk) {
 
 	Value vf = ai_obj_glookftm(env, self, TM___get__);
 	if (v_is_nil(vf)) {
-		if (msg == ALO_EBADOP)
+		if (msg == ALO_EXIMPL)
 			ai_err_bad_tm(env, TM___get__);
 		return v_of_nil();
 	}

@@ -104,6 +104,8 @@ typedef struct {
 
 typedef struct { a_i32 _; } a_x32;
 
+typedef a_u32 a_uint;
+
 typedef a_u32 a_hash;
 typedef a_u32 a_insn;
 

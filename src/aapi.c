@@ -314,7 +314,7 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 						break;
 					}
 					default: {
-						return ALO_EBADOP;
+						return ALO_EXIMPL;
 					}
 				}
 				break;
@@ -371,17 +371,6 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	return str2ntstr(val);
-}
-
-void alo_pushtype(a_henv env, a_htype hnd) {
-	if (hnd != null) {
-		GMeta* val = htype2meta(G(env), hnd);
-		api_check(val->_nref > 0, "type not referenced by API.");
-		v_set_obj(env, api_incr_stack(env), val);
-	}
-	else {
-		v_set_nil(api_incr_stack(env));
-	}
 }
 
 void alo_pushroute(a_henv env) {
@@ -464,12 +453,12 @@ a_msg alo_rawlen(a_henv env, a_isize id, a_usize* plen) {
 		case T_USER: {
 			GUser* p = v_as_user(v);
 			a_vfp(len) len = g_vfetch(p, len);
-			if (len == null) return ALO_EBADOP;
+			if (len == null) return ALO_EXIMPL;
 			*plen = g_vcallp(env, p, len);
 			break;
 		}
 		default: {
-			return ALO_EBADOP;
+			return ALO_EXIMPL;
 		}
 	}
 
@@ -500,12 +489,12 @@ a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
 		case T_USER: {
 			GUser* p = v_as_user(v);
 			a_vfp(uget) uget = g_vfetch(p, uget);
-			if (uget == null) return ALO_EBADOP;
+			if (uget == null) return ALO_EXIMPL;
 			try(g_vcallp(env, p, uget, v_of_int(key), &v));
 			break;
 		}
 		default: {
-			return ALO_EBADOP;
+			return ALO_EXIMPL;
 		}
 	}
 
@@ -667,20 +656,10 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	return str2ntstr(p);
 }
 
-static a_htype l_use_meta(a_henv env, GMeta* meta) {
-	if (unlikely(meta->_nref == UINT32_MAX))
-		return null;
-    meta->_nref += 1;
-	return meta2htype(G(env), meta);
-}
-
-a_htype alo_typeof(a_henv env, a_isize id) {
-	Value const* pv = api_roslot(env, id);
-	if (pv != null) {
-		GType* type = v_typeof(env, *pv);
-		return l_use_meta(env, g_cast(GMeta, type));
-	}
-	return null;
+void alo_typeof(a_henv env, a_isize id) {
+    api_check_slot(env, 1);
+    Value v = api_elem(env, id);
+    v_set_obj(env, api_incr_stack(env), v_typeof(env, v));
 }
 
 void alo_newmod(a_henv env, char const* n, a_flags flags) {
@@ -695,29 +674,6 @@ void alo_newmod(a_henv env, char const* n, a_flags flags) {
 	v_set_obj(env, pv, self);
 
 	ai_gc_trigger(env);
-}
-
-char const* alo_modname(unused a_henv env, a_htype hmod) {
-	api_check(hmod != null, "module is null.");
-	GMeta* mod = htype2meta(G(env), hmod);
-	return str2ntstr(mod->_name);
-}
-
-a_htype alo_openmod(a_henv env, a_isize id) {
-	Value v = api_elem(env, id);
-	if (likely(v_is_meta(v))) {
-		GMeta* mod = v_as_meta(v);
-		return l_use_meta(env, mod);
-	}
-	return null;
-}
-
-void alo_closemod(a_henv env, a_htype hmod) {
-	if (hmod != null) {
-		GMeta* mod = htype2meta(G(env), hmod);
-		api_check(mod->_nref > 0, "type not referenced by API.");
-		mod->_nref -= 1;
-	}
 }
 
 void alo_fullgc(a_henv env) {
