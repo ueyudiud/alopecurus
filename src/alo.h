@@ -199,7 +199,7 @@ ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
 
 #define ALO_NEWMOD_FLAG_STATIC 0x0001
 
-ALO_EXPORT void (alo_newmod)(a_henv env, char const* n, a_flags flags);
+ALO_EXPORT void (alo_newtype)(a_henv env, char const* n, a_flags flags);
 
 /* Type operations. */
 ALO_EXPORT void (alo_typeof)(a_henv env, a_isize id);

@@ -27,9 +27,7 @@ typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 typedef struct GLoader GLoader;
 
-typedef struct GMeta GMeta;
 typedef struct GType GType;
-typedef struct GRefType GRefType;
 typedef struct GUserType GUserType;
 
 /* Object pointer. */
@@ -46,7 +44,7 @@ typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Stack Stack;
 typedef struct Global Global;
-typedef struct MetaCache MetaCache;
+typedef struct TypeCache TypeCache;
 
 #define T_NIL u32c(0)
 #define T_FALSE u32c(1)
@@ -54,7 +52,7 @@ typedef struct MetaCache MetaCache;
 #define T_PTR u32c(3)
 #define T_LIST u32c(4)
 #define T_TABLE u32c(5)
-#define T_META u32c(6)
+#define T_TYPE u32c(6)
 #define T_FUNC u32c(7)
 #define T_STR u32c(8)
 #define T_TUPLE u32c(10)
@@ -348,32 +346,21 @@ struct VTable {
     a_u32 _size;            \
     /* Method version, changed when the order of existed fields changed. */ \
     a_u32 _mver;            \
-    /* Reference counter. */\
-    a_u32 _nref;            \
                             \
     a_u32 _flags;           \
      /* The type tag. */    \
     a_u8 _tag;              \
      /* Used for linked list in loader. */                                  \
-    GMeta* _mnext;          \
+    GType* _mnext;          \
     /* The loader of metadata, null for builtin loader. */                  \
     GLoader* _loader;       \
     /* The metadata name. */\
     GStr* _name
 
 /**
- ** Metadata, base type for type and module.
+ ** Type.
  */
-struct GMeta {
-    GMETA_STRUCT_HEADER;
-};
-
 struct GType {
-    GMETA_STRUCT_HEADER;
-};
-
-struct GRefType {
-    /* Common fields for Type. */
     GMETA_STRUCT_HEADER;
 };
 
@@ -382,8 +369,8 @@ struct GUserType {
     VTable _vtbl[1];
 };
 
-struct MetaCache {
-    GMeta** _table;
+struct TypeCache {
+    GType** _ptr;
     a_u32 _hmask;
     a_u32 _len;
 };
@@ -391,31 +378,21 @@ struct MetaCache {
 struct GLoader {
     GOBJ_STRUCT_HEADER;
     GLoader* _parent;
-    MetaCache _cache;
+    TypeCache _cache;
 };
 
-#define META_FLAG_NONE u16c(0)
-#define META_FLAG_FAST_TM(tm) (u16c(1) << (tm))
+#define TYPE_FLAG_NONE u16c(0)
+#define TYPE_FLAG_FAST_TM(tm) (u16c(1) << (tm))
 
-#define v_is_meta(v) v_is(v, T_META)
+#define v_is_type(v) v_is(v, T_TYPE)
 
-#define meta_has_flag(t,f) (((t)->_flags & (f)) != 0)
-#define meta_has_tm(t,tm) meta_has_flag(t, META_FLAG_FAST_TM(tm))
-
-always_inline a_htype meta2htype(Global* g, GMeta* self) {
-    return cast(a_htype, ptr_diff(self, g));
-}
-
-always_inline GMeta* htype2meta(Global* g, a_htype hnd) {
-    return ptr_disp(GMeta, g, cast(a_usize, hnd));
-}
+#define type_has_flag(t,f) (((t)->_flags & (f)) != 0)
+#define type_has_tm(t,tm) type_has_flag(t, TYPE_FLAG_FAST_TM(tm))
 
 #define VTABLE_FLAG_NONE        u8c(0x00)
 #define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
 
 #define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
-
-#define vfp_def(f,p) [vfp_slot(f)] = (p)
 
 #define a_vfp(f) typeof(cast(MST*, null)->f)
 
@@ -450,9 +427,9 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
 
-always_inline GMeta* v_as_meta(Value v) {
-    assume(v_is_meta(v), "not meta.");
-    return g_cast(GMeta, v_as_obj(v));
+always_inline GType* v_as_type(Value v) {
+    assume(v_is_type(v), "not type.");
+    return g_cast(GType, v_as_obj(v));
 }
 
 /*=========================================================*
@@ -756,7 +733,7 @@ struct Global {
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
 	GStr* _nomem_error;
-	MetaCache _meta_cache;
+	TypeCache _type_cache;
 	StrCache _str_cache;
 	a_hash _seed;
 	a_u16 _gcpausemul;
@@ -772,14 +749,14 @@ struct Global {
 		GType _int;
         GType _float;
 		GType _ptr;
-		GRefType _str;
-		GRefType _tuple;
-		GRefType _list;
-		GRefType _table;
-		GRefType _func;
-		GRefType _type;
-		GRefType _mod;
-		GRefType _route;
+		GType _str;
+		GType _tuple;
+		GType _list;
+		GType _table;
+		GType _func;
+		GType _type;
+		GType _mod;
+		GType _route;
 	} _types;
 };
 

@@ -6,7 +6,7 @@
 #define ALO_LIB
 
 #include "aobj.h"
-#include "ameta.h"
+#include "atype.h"
 #include "agc.h"
 #include "aapi.h"
 
@@ -17,10 +17,10 @@
 static a_msg type___call__(a_henv env) { /* Should this function write in script? */
     aloL_checktag(env, 0, ALO_TTYPE);
 
-    GMeta* self = v_as_meta(api_elem(env, 0));
+    GType* self = v_as_type(api_elem(env, 0));
     Value v;
 
-    a_msg msg = ai_meta_ugets(env, self, ai_str_newl(env, "__new__"), &v);
+    a_msg msg = ai_type_ugets(env, self, ai_str_newl(env, "__new__"), &v);
     if (msg == ALO_SOK) {
         Value* p = env->_frame->_stack_bot;
         a_usize n = env->_stack._top - p;

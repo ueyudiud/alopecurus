@@ -11,7 +11,7 @@
 #include "atable.h"
 #include "afun.h"
 #include "auser.h"
-#include "ameta.h"
+#include "atype.h"
 #include "actx.h"
 #include "agc.h"
 #include "aerr.h"
@@ -662,7 +662,7 @@ void alo_typeof(a_henv env, a_isize id) {
     v_set_obj(env, api_incr_stack(env), v_typeof(env, v));
 }
 
-void alo_newmod(a_henv env, char const* n, a_flags flags) {
+void alo_newtype(a_henv env, char const* n, a_flags flags) {
 	api_check_slot(env, 1);
 
     Value* pv = api_incr_stack(env);
@@ -670,7 +670,7 @@ void alo_newmod(a_henv env, char const* n, a_flags flags) {
     GStr* name = ai_str_new(env, n, strlen(n));
     v_set_obj(env, pv, name);
 
-	GMeta* self = ai_mod_new(env, name, null);
+	GType* self = ai_stype_new(env, name, null);
 	v_set_obj(env, pv, self);
 
 	ai_gc_trigger(env);

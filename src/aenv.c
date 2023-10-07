@@ -10,7 +10,7 @@
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
-#include "ameta.h"
+#include "atype.h"
 #include "actx.h"
 #include "amem.h"
 #include "agc.h"
@@ -174,9 +174,9 @@ static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env);
 
     ai_str_boost(env, m->_reserved);
-    ai_meta_boost(env);
+    ai_type_boost(env);
 
-    GMeta* gbl = ai_mod_new(env, env_int_str(env, STR_EMPTY), null);
+    GType* gbl = ai_stype_new(env, env_int_str(env, STR_EMPTY), null);
     v_set_obj(env, &G(env)->_global, gbl);
 }
 
@@ -252,7 +252,7 @@ void alo_destroy(a_henv env) {
 	route_close(g, &mroute->_route);
 	ai_gc_clean(g);
 	ai_str_clean(g);
-    ai_meta_clean(g);
+    ai_type_clean(g);
 	ai_cap_clean(g);
 
 	assume(gbl_mem_total(g) == sizeof_MRoute(), "memory leak.");

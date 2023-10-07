@@ -6,7 +6,7 @@
 #define ALO_LIB
 
 #include "adict.h"
-#include "ameta.h"
+#include "atype.h"
 #include "amem.h"
 #include "agc.h"
 #include "avm.h"
@@ -117,7 +117,7 @@ static void rec_mark(Global* g, GRec* self) {
 	GType* type = g_typeof(g->_active, self);
 	ai_gc_trace_mark(g, type);
 	ai_dict_mark(g, &self->_keys);
-	ai_gc_trace_work(g, sizeof(GMeta) - sizeof(GTable));
+	ai_gc_trace_work(g, sizeof(GType) - sizeof(GTable));
 }
 
 static void rec_drop(Global* g, GRec* self) {

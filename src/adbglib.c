@@ -335,6 +335,6 @@ void aloopen_debug(a_henv env) {
 		{ "dump", debug_dump }
 	};
 
-	alo_newmod(env, ALO_LIB_DEBUG_NAME, ALO_NEWMOD_FLAG_STATIC);
+    alo_newtype(env, ALO_LIB_DEBUG_NAME, ALO_NEWMOD_FLAG_STATIC);
 	aloL_putfields(env, -1, bindings);
 }

@@ -12,7 +12,7 @@
 #include "atable.h"
 #include "afun.h"
 #include "auser.h"
-#include "ameta.h"
+#include "atype.h"
 #include "afmt.h"
 #include "aenv.h"
 #include "agc.h"
@@ -120,7 +120,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vv;
     GType* type = v_typeof(env, v);
 
-    msg = ai_meta_ugets(env, g_cast(GMeta, type), k, &vv);
+    msg = ai_type_ugets(env, g_cast(GType, type), k, &vv);
 
     if (msg == ALO_SOK) {
         v_set(env, &pv[0], vv);
@@ -150,8 +150,8 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
 		case T_TABLE: {
             return ai_table_get(env, v_as_table(v1), v2);
         }
-		case T_META: {
-            return ai_meta_get(env, v_as_meta(v1), v2);
+		case T_TYPE: {
+            return ai_type_get(env, v_as_type(v1), v2);
         }
 		case T_USER: {
             return v_vcall(env, v1, get, v2);
@@ -173,8 +173,8 @@ a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
         case T_TABLE: {
             return ai_table_uget(env, v_as_table(v1), v2, pv);
         }
-        case T_META: {
-            return ai_meta_uget(env, v_as_meta(v1), v2, pv);
+        case T_TYPE: {
+            return ai_type_uget(env, v_as_type(v1), v2, pv);
         }
         case T_USER: {
             GUser* p = v_as_user(v1);
@@ -196,8 +196,8 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
         case T_TABLE: {
             return ai_table_set(env, v_as_table(v1), v2, v3);
         }
-        case T_META: {
-            return ai_meta_set(env, v_as_meta(v1), v2, v3);
+        case T_TYPE: {
+            return ai_type_set(env, v_as_type(v1), v2, v3);
         }
         case T_USER: {
             GUser* p = v_as_user(v1);
@@ -220,8 +220,8 @@ a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
         case T_TABLE: {
             return ai_table_uset(env, v_as_table(v1), v2, v3);
         }
-        case T_META: {
-            return ai_meta_uset(env, v_as_meta(v1), v2, v3);
+        case T_TYPE: {
+            return ai_type_uset(env, v_as_type(v1), v2, v3);
         }
 		case T_USER: {
 			GUser* p = v_as_user(v1);
@@ -275,7 +275,7 @@ static void vm_iter(a_henv env, Value* restrict vs, Value v) {
             v_set_int(&vs[2], 0);
             break;
         }
-        case T_META: {
+        case T_TYPE: {
             v_set(env, &vs[0], v);
             v_set_int(&vs[2], 0);
             break;
@@ -330,8 +330,8 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             Value* vd = vm_push_args(env, n->_key, n->_value);
             return new(ValueSlice) { vd, 2 };
         }
-        case T_META: {
-            GMeta* p = v_as_meta(vc);
+        case T_TYPE: {
+            GType* p = v_as_type(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (p->_fields._len == 0)
                 return new(ValueSlice) { };
@@ -431,7 +431,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				case T_TABLE:
 				case T_FUNC:
 				case T_USER:
-				case T_META: {
+				case T_TYPE: {
 					Value vf = ai_obj_vlooktm(env, v, TM___str__);
 					if (v_is_nil(vf)) {
 						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));

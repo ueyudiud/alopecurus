@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "atuple.h"
-#include "ameta.h"
+#include "atype.h"
 #include "auser.h"
 #include "agc.h"
 #include "aapi.h"
@@ -135,8 +135,8 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			aloi_show("<func:%p>", v_as_obj(v));
 			break;
 		}
-		case T_META: {
-			aloi_show("<meta:%s>", str2ntstr(v_as_meta(v)->_name));
+		case T_TYPE: {
+			aloi_show("<type:%s>", str2ntstr(v_as_type(v)->_name));
 			break;
 		}
 		case T_USER: {
@@ -217,9 +217,9 @@ void aloopen_base(a_henv env) {
     alo_push(env, ALO_STACK_INDEX_GLOBAL);
 	aloL_putfields(env, -1, bindings);
 
-	GMeta* meta = v_as_meta(api_elem(env, -1));
+	GType* tp = v_as_type(api_elem(env, -1));
 
-	ai_meta_set(env, meta, v_of_obj(ai_str_newl(env, "_VER")), v_of_int(ALO_VERSION_NUMBER));
+    ai_type_set(env, tp, v_of_obj(ai_str_newl(env, "_VER")), v_of_int(ALO_VERSION_NUMBER));
 
 	ai_gc_trigger(env);
 }

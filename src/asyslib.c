@@ -72,6 +72,6 @@ void aloopen_sys(a_henv env) {
 		{ "getenv", sys_getenv }
 	};
 
-	alo_newmod(env, ALO_LIB_SYS_NAME, ALO_NEWMOD_FLAG_STATIC);
+    alo_newtype(env, ALO_LIB_SYS_NAME, ALO_NEWMOD_FLAG_STATIC);
 	aloL_putfields(env, -1, bindings);
 }

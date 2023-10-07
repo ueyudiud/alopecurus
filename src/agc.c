@@ -7,7 +7,7 @@
 
 #include "aenv.h"
 #include "afun.h"
-#include "ameta.h"
+#include "atype.h"
 #include "amem.h"
 
 #include "agc.h"
@@ -223,7 +223,7 @@ static void propagate_atomic(Global* g) {
 	if (v_is_obj(g->_global)) {
 		join_trace(&g->_tr_gray, v_as_obj(g->_global));
 	}
-    ai_meta_cache_mark(g, &g->_meta_cache);
+    ai_type_cache_mark(g, &g->_type_cache);
 	if (g->_gmark != null) {
 		(*g->_gmark)(g, g->_gctx);
 	}

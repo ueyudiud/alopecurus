@@ -50,7 +50,7 @@ static a_msg aloi_readline(a_henv env, LinePtr buf, a_usize* plen, char const* p
 		aloi_show_flush();
 	}
 	if (fgets(buf, sizeof(LinePtr), stdin) == null)
-		return ALO_EIO;
+		return ALO_EOUTER;
 	a_usize len = strlen(buf);
 	*plen = len;
 	return likely(buf[len - 1] == '\n') ? ALO_SYIELD : ALO_SOK;
