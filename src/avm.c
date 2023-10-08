@@ -333,16 +333,15 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
         case T_TYPE: {
             GType* p = v_as_type(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (p->_fields._len == 0)
+            if (p->_fields._len == 0 || i <= p->_fields._hmask)
                 return new(ValueSlice) { };
 
             DNode* n;
-            while (i <= p->_fields._hmask && (n = &p->_fields._ptr[i])->_key == null) {
+            while ((n = &p->_fields._ptr[i])->_key == null) {
                 i += 1;
+                if (i > p->_fields._hmask)
+                    return new(ValueSlice) { };
             }
-
-            if (i > p->_fields._hmask)
-                return new(ValueSlice) { };
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
