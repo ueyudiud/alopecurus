@@ -117,22 +117,21 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 
 static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     a_msg msg;
-    Value vv;
-    GType* type = v_typeof(env, v);
+    Value vm;
 
-    msg = ai_type_ugets(env, g_cast(GType, type), k, &vv);
+    msg = ai_obj_vlook(env, v, k, &vm);
 
     if (msg == ALO_SOK) {
-        v_set(env, &pv[0], vv);
+        v_set(env, &pv[0], vm);
         v_set(env, &pv[1], v);
         return;
     }
 
-    msg = ai_vm_uget(env, v, v_of_obj(k), &vv);
+    msg = ai_vm_uget(env, v, v_of_obj(k), &vm);
 
     if (msg == ALO_SOK) {
         v_set(env, &pv[0], v_of_call());
-        v_set(env, &pv[1], vv);
+        v_set(env, &pv[1], vm);
         return;
     }
 

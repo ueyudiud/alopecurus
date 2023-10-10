@@ -124,7 +124,7 @@ a_msg ai_dict_uget(a_henv env, Dict* self, GStr* key, Value* pval) {
     }
 }
 
-a_msg ai_dict_uset(a_henv env, Dict* self, GStr* key, Value val, a_usize* pctx) {
+Value* ai_dict_uref(a_henv env, Dict* self, GStr* key, a_usize* pctx) {
     a_u32 hash = key->_hash;
     a_u32 hmask = self->_hmask;
     a_u32 i = hash & hmask;
@@ -139,8 +139,7 @@ a_msg ai_dict_uset(a_henv env, Dict* self, GStr* key, Value val, a_usize* pctx) 
     loop {
         DNode* node = &self->_ptr[i];
         if (node->_key == key) {
-            v_set(env, &node->_value, val);
-            return ALO_SOK;
+            return &node->_value;
         }
         if (node->_key == dead_key) {
             empty = node;
@@ -157,8 +156,7 @@ find:
     loop {
         DNode* node = &self->_ptr[i];
         if (node->_key == key) {
-            v_set(env, &node->_value, val);
-            return ALO_SOK;
+            return &node->_value;
         }
         if (node->_key == null) {
             goto empty;
@@ -170,6 +168,15 @@ find:
 
 empty:
     *pctx = addr_of(empty);
+    return null;
+}
+
+a_msg ai_dict_uset(a_henv env, Dict* self, GStr* key, Value val, a_usize* pctx) {
+    Value* pv = ai_dict_uref(env, self, key, pctx);
+    if (pv != null) {
+        v_set(env, pv, val);
+        return ALO_SOK;
+    }
     return ALO_EEMPTY;
 }
 

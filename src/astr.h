@@ -24,6 +24,7 @@ intern void ai_str_boost(a_henv env, void* block);
 intern void ai_str_clean(Global* g);
 
 #define ai_str_newl(env,src) ai_str_new(env, ""src, sizeof(src) - sizeof(char))
+#define ai_str_newc(env,src) ai_str_new(env, src, strlen(src))
 
 intern char const ai_str_interns[STR__TOTAL_LEN];
 

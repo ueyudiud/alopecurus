@@ -7,7 +7,7 @@
 
 #include "aobj.h"
 
-intern GType* ai_type_alloc(a_henv env, a_usize size, VTable const* vptr);
+intern GType* ai_type_alloc(a_henv env, a_usize size);
 intern GType* ai_stype_new(a_henv env, GStr* name, GLoader* loader);
 
 intern GType* ai_type_look(a_henv env, GLoader* loader, GStr* name, a_bool load);
@@ -22,6 +22,9 @@ intern a_msg ai_type_uget(a_henv env, GType* self, Value vk, Value* pv);
 intern a_msg ai_type_ugets(a_henv env, GType* self, GStr* k, Value* pv);
 intern a_msg ai_type_uset(a_henv env, GType* self, Value vk, Value vv);
 intern a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv);
+
+intern a_msg ai_obj_vlook(a_henv env, Value v, GStr* k, Value* pv);
+intern a_msg ai_dyn_ugets(a_henv env, GObj* self, GStr* k, Value* pv);
 
 always_inline Value ai_obj_vlooktm(a_henv env, Value v, a_enum tm) {
 	GType* type = v_typeof(env, v);

@@ -389,7 +389,7 @@ void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 		aloL_Entry const* b = &bs[i];
 		assume(b->name != null, "missing field name.");
 
-		GStr* key = ai_str_new(env, b->name, strlen(b->name));
+		GStr* key = ai_str_newc(env, b->name);
 		Value value = v_of_nil();
 
 		if (b->fptr != null) {

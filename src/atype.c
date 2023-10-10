@@ -5,6 +5,7 @@
 #define atype_c_
 #define ALO_LIB
 
+#include "abuf.h"
 #include "adict.h"
 #include "atable.h"
 #include "auser.h"
@@ -18,11 +19,11 @@
 
 static VTable const type_vtable;
 
-GType* ai_type_alloc(a_henv env, a_usize size, VTable const* vptr) {
+GType* ai_type_alloc(a_henv env, a_usize size) {
 	GType* self = ai_mem_alloc(env, size);
 	memclr(self, size);
 
-	self->_vptr = vptr;
+	self->_vptr = &type_vtable;
 	self->_size = size;
 
 	ai_gc_register_object(env, self);
@@ -30,7 +31,7 @@ GType* ai_type_alloc(a_henv env, a_usize size, VTable const* vptr) {
 }
 
 GType* ai_stype_new(a_henv env, GStr* name, GLoader* loader) {
-	GType* self = ai_type_alloc(env, sizeof(GType), &type_vtable);
+	GType* self = ai_type_alloc(env, sizeof(GType));
 
     self->_name = name;
     self->_loader = loader;
@@ -137,8 +138,266 @@ static void cache_drop(Global* g, TypeCache* cache) {
 	}
 }
 
+static a_msg obj_get_field(a_henv env, GObj* self, GStr* k, Value* pv) {
+    GType* type = g_typeof(env, self);
+
+    Value v;
+    try(ai_dict_uget(env, &type->_fields, k, &v));
+
+    if (v_is_meta(v)) {
+        Meta* meta = &type->_metas._ptr[v_get_payload(v)];
+
+        switch (meta->_tags) {
+            case META_MEMBER_FIELD_ANY: {
+                Value* p = ptr_disp(Value, self, meta->_field_offset);
+                v_cpy(env, pv, p);
+                return ALO_SOK;
+            }
+            case META_MEMBER_FIELD_STR:
+            case META_MEMBER_FIELD_OPT_STR: {
+                a_hobj* pp = ptr_disp(a_hobj, self, meta->_field_offset);
+                if (pp != null) {
+                    v_set_obj(env, pv, *pp);
+                }
+                else {
+                    v_set_nil(pv);
+                }
+                return ALO_SOK;
+            }
+            case META_MEMBER_FIELD_INT:
+            case META_MEMBER_FIELD_UINT: {
+                a_int* pi = ptr_disp(a_int, self, meta->_field_offset);
+                v_set_int(pv, *pi);
+                return ALO_SOK;
+            }
+            default: break;
+        }
+    }
+
+    return ALO_EEMPTY;
+}
+
+static a_msg obj_set_field(a_henv env, GObj* self, GStr* k, Value vv) {
+    GType* type = g_typeof(env, self);
+
+    Value v;
+    try(ai_dict_uget(env, &type->_fields, k, &v));
+
+    if (v_is_meta(v)) {
+        Meta* meta = &type->_metas._ptr[v_get_payload(v)];
+
+        if (!(meta->_modifiers & META_MODIFIER_MUTABLE)) return ALO_EINVAL;
+
+        switch (meta->_tags) {
+            case META_MEMBER_FIELD_ANY: {
+                Value* p = ptr_disp(Value, self, meta->_field_offset);
+                v_set(env, p, v);
+                return ALO_SOK;
+            }
+            case META_MEMBER_FIELD_STR: {
+                if (!v_is_str(vv)) return ALO_EINVAL;
+                GStr** pp = ptr_disp(GStr*, self, meta->_field_offset);
+                *pp = v_as_str(vv);
+                return ALO_SOK;
+            }
+            case META_MEMBER_FIELD_OPT_STR: {
+                if (!(v_is_str(vv) || v_is_nil(vv))) return ALO_EINVAL;
+                GStr** pp = ptr_disp(GStr*, self, meta->_field_offset);
+                *pp = v_is_nil(vv) ? null : v_as_str(vv);
+                return ALO_SOK;
+            }
+            case META_MEMBER_FIELD_INT:
+            case META_MEMBER_FIELD_UINT: {
+                if (!(v_is_int(vv))) return ALO_EINVAL;
+                a_int* pi = ptr_disp(a_int, self, meta->_field_offset);
+                *pi = v_as_int(vv);
+                return ALO_SOK;
+            }
+            default: return ALO_EINVAL;
+        }
+    }
+
+    return ALO_EEMPTY;
+}
+
+static Value type_get_meta_mirror(a_henv env, GType* self, Meta* meta) {
+    if (!v_is_empty(meta->_mirror))
+        return meta->_mirror;
+
+    quiet(env);
+
+    switch (meta->_tags) {
+        case META_CONST_FIELD: panic("constant field always has mirror.");
+        case META_STATIC_FIELD: panic("static field always has mirror.");
+        case META_MEMBER_METHOD: panic("member method always has mirror.");
+        default: unreachable(); //TODO
+    }
+}
+
+static Value type_unwrap_maybe_meta(a_henv env, GType* self, Value v) {
+    return v_is_meta(v) ? type_get_meta_mirror(env, self, &self->_metas._ptr[v_get_payload(v)]) : v;
+}
+
+Value ai_type_get(a_henv env, GType* self, Value vk) {
+    if (!v_is_str(vk)) {
+        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
+    }
+
+    GStr* k = v_as_str(vk);
+    Value vv;
+
+    a_msg msg = obj_get_field(env, gobj_cast(self), k, &vv);
+
+    if (msg == ALO_SOK) return vv;
+
+    msg = ai_dict_uget(env, &self->_fields, k, &vv);
+
+    if (msg != ALO_SOK) {
+        assume(msg == ALO_EEMPTY, "unexpected error.");
+        ai_err_raisef(env, ALO_EXIMPL, "no meta entry '%s.%s'",
+                      str2ntstr(self->_name),
+                      str2ntstr(k));
+    }
+
+    return type_unwrap_maybe_meta(env, self, vv);
+}
+
+void ai_type_set(a_henv env, GType* self, Value vk, Value vv) {
+    if (!v_is_str(vk)) {
+        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
+    }
+
+    GStr* k = v_as_str(vk);
+
+    a_msg msg = obj_set_field(env, gobj_cast(self), k, vv);
+
+    if (msg == ALO_SOK)
+        return;
+    if (msg == ALO_EINVAL)
+        goto invalid;
+
+    msg = ai_type_usets(env, self, v_as_str(vk), vv);
+
+    if (msg == ALO_EINVAL)
+        goto invalid;
+
+    return;
+
+invalid:
+    ai_err_raisef(env, msg, "cannot overwrite field for type: '%s.%s'",
+                  str2ntstr(self->_name),
+                  str2ntstr(v_as_str(vk)));
+}
+
+a_msg ai_type_uget(a_henv env, GType* self, Value vk, Value* pv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    return ai_type_ugets(env, self, v_as_str(vk), pv);
+}
+
+a_msg ai_type_ugets(a_henv env, GType* self, GStr* k, Value* pv) {
+    Value v;
+    a_msg msg = obj_get_field(env, gobj_cast(self), k, pv);
+    if (msg != ALO_EEMPTY) return msg;
+
+    try(ai_dict_uget(env, &self->_fields, k, &v));
+
+    *pv = type_unwrap_maybe_meta(env, self, v);
+    return ALO_SOK;
+}
+
+a_msg ai_type_uset(a_henv env, GType* self, Value vk, Value vv) {
+    if (!v_is_str(vk)) return ALO_EINVAL;
+    return ai_type_usets(env, self, v_as_str(vk), vv);
+}
+
+a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
+    a_usize ctx;
+
+    a_msg msg = obj_set_field(env, gobj_cast(self), k, vv);
+    if (msg != ALO_EEMPTY) return msg;
+
+    Value* pv = ai_dict_uref(env, &self->_fields, k, &ctx);
+    if (pv != null) {
+        Value v = *pv;
+        if (v_is_meta(v)) {
+            return ALO_EINVAL;
+        }
+        v_set(env, pv, vv);
+    }
+    else {
+        try(ai_dict_uput(env, &self->_fields, k, vv, &ctx));
+
+        if (str_istm(k) && str_id(k) <= TM__FAST_MAX) {
+            self->_flags |= TYPE_FLAG_FAST_TM(str_id(k));
+        }
+    }
+
+    self->_mver += 1;
+
+    ai_gc_barrier_backward(env, self, k);
+    ai_gc_barrier_backward_val(env, self, vv);
+
+    return ALO_SOK;
+}
+
+a_msg ai_obj_vlook(a_henv env, Value v, GStr* k, Value* pv) {
+    GType* type = v_typeof(env, v);
+
+    Value vm;
+    try(ai_dict_uget(env, &type->_fields, k, &vm));
+
+    if (v_is_meta(v)) {
+        Meta* meta = &type->_metas._ptr[v_get_payload(v)];
+
+        if (meta->_modifiers & META_MODIFIER_MEMBER_VISIBLE) {
+            v_set(env, pv, type_get_meta_mirror(env, type, meta));
+            return ALO_SOK;
+        }
+
+        return ALO_EEMPTY;
+    }
+
+    return ALO_EEMPTY;
+}
+
+a_msg ai_dyn_ugets(a_henv env, GObj* self, GStr* k, Value* pv) {
+    a_msg msg = obj_get_field(env, self, k, pv);
+    if (msg == ALO_SOK) return ALO_SOK;
+
+    return msg;
+}
+
+static void metas_hint1(a_henv env, Metas* metas) {
+    if (metas->_len == metas->_cap) {
+        a_usize old_cap = metas->_cap;
+        a_usize new_cap = old_cap;
+        catch(ai_buf_nhint(&new_cap, metas->_len, 1, INT32_MAX), ai_buf_error, env, "meta");
+
+        metas->_ptr = ai_mem_vgrow(env, metas->_ptr, old_cap, new_cap);
+        metas->_cap = new_cap;
+    }
+}
+
+static void type_new_meta_fast_inplace(a_henv env, GType* self, char const* key, Meta meta) {
+    Metas* metas = &self->_metas;
+    metas_hint1(env, metas);
+
+    a_u32 id = metas->_len++;
+    metas->_ptr[id] = meta;
+
+    ai_dict_hint(env, &self->_fields, 1);
+    ai_dict_put_inplace(env, &self->_fields, ai_str_newc(env, key), v_of_meta(id));
+}
+
+static void type_clean(Global* g, GType* self) {
+    ai_dict_deinit(g, &self->_fields);
+    if (self->_metas._ptr != null) {
+        ai_mem_vdel(g, self->_metas._ptr, self->_metas._cap);
+    }
+}
+
 void ai_type_boost(a_henv env) {
-	Global* g = G(env);
+    Global* g = G(env);
 
     g->_types._nil = new(GType) {
         ._vptr = &type_vtable,
@@ -212,88 +471,13 @@ void ai_type_boost(a_henv env) {
         ._tag = ALO_TTYPE,
         ._name = env_int_str(env, STR_type)
     };
-}
 
-Value ai_type_get(a_henv env, GType* self, Value vk) {
-    if (!v_is_str(vk)) {
-        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
-    }
-
-    GStr* k = v_as_str(vk);
-    Value vv;
-    a_msg msg = ai_dict_uget(env, &self->_fields, k, &vv);
-
-    if (msg != ALO_SOK) {
-        assume(msg == ALO_EEMPTY, "unexpected error.");
-        ai_err_raisef(env, ALO_EXIMPL, "no meta entry '%s.%s'",
-                      str2ntstr(self->_name),
-                      str2ntstr(k));
-    }
-
-    return vv;
-}
-
-void ai_type_set(a_henv env, GType* self, Value vk, Value vv) {
-    if (!v_is_str(vk)) {
-        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
-    }
-
-    a_usize ctx;
-    a_msg msg = ai_dict_uset(env, &self->_fields, v_as_str(vk), vv, &ctx);
-
-    if (msg != ALO_SOK) {
-        msg = ai_dict_uput(env, &self->_fields, v_as_str(vk), vv, &ctx);
-    }
-
-    assume(msg == ALO_SOK);
-
-    self->_mver += 1;
-}
-
-a_msg ai_type_uget(a_henv env, GType* self, Value vk, Value* pv) {
-    if (!v_is_str(vk)) return ALO_EINVAL;
-    return ai_type_ugets(env, self, v_as_str(vk), pv);
-}
-
-a_msg ai_type_ugets(a_henv env, GType* self, GStr* k, Value* pv) {
-    return ai_dict_uget(env, &self->_fields, k, pv);
-}
-
-a_msg ai_type_uset(a_henv env, GType* self, Value vk, Value vv) {
-    if (!v_is_str(vk)) return ALO_EINVAL;
-    return ai_type_usets(env, self, v_as_str(vk), vv);
-}
-
-a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
-    a_usize ctx;
-
-    try(ai_dict_uset(env, &self->_fields, k, vv, &ctx));
-
-    if (str_istm(k) && str_id(k) <= TM__FAST_MAX) {
-        self->_flags |= TYPE_FLAG_FAST_TM(str_id(k));
-    }
-
-    self->_mver += 1;
-
-    ai_gc_barrier_backward(env, self, k);
-    ai_gc_barrier_backward_val(env, self, vv);
-
-    return ALO_SOK;
-}
-
-static void type_mark(Global* g, GType* self) {
-    if (self->_loader != null) {
-        ai_gc_trace_mark(g, self->_loader);
-    }
-    if (self->_name != null) {
-        ai_gc_trace_mark(g, self->_name);
-    }
-    ai_dict_mark(g, &self->_fields);
-    ai_gc_trace_work(g, self->_size);
-}
-
-static void type_clean(Global* g, GType* self) {
-    ai_dict_deinit(g, &self->_fields);
+    type_new_meta_fast_inplace(env, g_type(env, _type), "__name__", new(Meta) {
+        ._mirror = v_of_empty(),
+        ._tags = META_MEMBER_FIELD_STR,
+        ._field_offset = offsetof(GType, _name),
+        ._modifiers = 0,
+    });
 }
 
 void ai_type_clean(Global* g) {
@@ -315,6 +499,24 @@ void ai_type_clean(Global* g) {
 static void type_drop(Global* g, GType* self) {
     type_clean(g, self);
     ai_mem_dealloc(g, self, self->_size);
+}
+
+static void metas_mark(Global* g, Metas* metas) {
+    for (a_u32 i = 0; i < metas->_cap; ++i) {
+        ai_gc_trace_mark_val(g, metas->_ptr[i]._mirror);
+    }
+}
+
+static void type_mark(Global* g, GType* self) {
+    if (self->_loader != null) {
+        ai_gc_trace_mark(g, self->_loader);
+    }
+    if (self->_name != null) {
+        ai_gc_trace_mark(g, self->_name);
+    }
+    metas_mark(g, &self->_metas);
+    ai_dict_mark(g, &self->_fields);
+    ai_gc_trace_work(g, self->_size);
 }
 
 static VTable const type_vtable = {

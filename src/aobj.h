@@ -57,6 +57,7 @@ typedef struct TypeCache TypeCache;
 #define T_STR u32c(8)
 #define T_TUPLE u32c(10)
 #define T_USER u32c(11)
+#define T_META u32c(13)
 #define T_INT u32c(14)
 #define T_NAN u32c(15)
 
@@ -270,14 +271,11 @@ typedef struct {
     Value _value;
 } DNode;
 
-#define DICT_STRUCT_HEADER \
-    a_u32 _len;            \
-    /* Hash to index mask. */ \
-    a_u32 _hmask;          \
-    DNode* _ptr
-
 struct Dict {
-    DICT_STRUCT_HEADER;
+    a_u32 _len;
+    /* Hash to index mask. */
+    a_u32 _hmask;
+    DNode* _ptr;
 };
 
 /*=========================================================*
@@ -339,56 +337,6 @@ struct VTable {
     void* _slots[];
 };
 
-#define GMETA_STRUCT_HEADER \
-	GOBJ_STRUCT_HEADER;     \
-    Dict _fields;           \
-                            \
-    a_u32 _size;            \
-    /* Method version, changed when the order of existed fields changed. */ \
-    a_u32 _mver;            \
-                            \
-    a_u32 _flags;           \
-     /* The type tag. */    \
-    a_u8 _tag;              \
-     /* Used for linked list in loader. */                                  \
-    GType* _mnext;          \
-    /* The loader of metadata, null for builtin loader. */                  \
-    GLoader* _loader;       \
-    /* The metadata name. */\
-    GStr* _name
-
-/**
- ** Type.
- */
-struct GType {
-    GMETA_STRUCT_HEADER;
-};
-
-struct GUserType {
-    GMETA_STRUCT_HEADER;
-    VTable _vtbl[1];
-};
-
-struct TypeCache {
-    GType** _ptr;
-    a_u32 _hmask;
-    a_u32 _len;
-};
-
-struct GLoader {
-    GOBJ_STRUCT_HEADER;
-    GLoader* _parent;
-    TypeCache _cache;
-};
-
-#define TYPE_FLAG_NONE u16c(0)
-#define TYPE_FLAG_FAST_TM(tm) (u16c(1) << (tm))
-
-#define v_is_type(v) v_is(v, T_TYPE)
-
-#define type_has_flag(t,f) (((t)->_flags & (f)) != 0)
-#define type_has_tm(t,tm) type_has_flag(t, TYPE_FLAG_FAST_TM(tm))
-
 #define VTABLE_FLAG_NONE        u8c(0x00)
 #define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
 
@@ -427,10 +375,94 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
 
+/*=========================================================*
+ * Type
+ *=========================================================*/
+
+#define GTYPE_STRUCT_HEADER \
+	GOBJ_STRUCT_HEADER;     \
+                            \
+    a_u32 _size;            \
+    /* Method version, changed when the order of existed fields changed. */ \
+    a_u32 _mver;            \
+                            \
+    a_u32 _flags;           \
+     /* The type tag. */    \
+    a_u8 _tag;              \
+     /* Used for linked list in loader. */                                  \
+    GType* _mnext;          \
+    /* The loader of metadata, null for builtin loader. */                  \
+    GLoader* _loader;       \
+    /* The metadata name. */\
+    GStr* _name
+
+#define META_CONST_FIELD 0
+#define META_STATIC_FIELD 1
+#define META_MEMBER_METHOD 2
+#define META_MEMBER_FIELD_ANY 3
+#define META_MEMBER_FIELD_STR 4
+#define META_MEMBER_FIELD_OPT_STR 5
+#define META_MEMBER_FIELD_INT 6
+#define META_MEMBER_FIELD_UINT 7
+
+#define META_MODIFIER_MUTABLE 0x0001
+#define META_MODIFIER_MEMBER_VISIBLE 0x0002
+
+typedef struct {
+    Value _mirror;
+    a_u32 _field_offset;
+    a_u16 _modifiers;
+    a_u8 _tags;
+} Meta;
+
+typedef struct {
+    Meta* _ptr;
+    a_u32 _cap;
+    a_u32 _len;
+} Metas;
+
+/**
+ ** Type.
+ */
+struct GType {
+    GTYPE_STRUCT_HEADER;
+    Dict _fields;
+    Metas _metas;
+};
+
+struct GUserType {
+    GTYPE_STRUCT_HEADER;
+    VTable _vtbl[1];
+};
+
+struct TypeCache {
+    GType** _ptr;
+    a_u32 _hmask;
+    a_u32 _len;
+};
+
+struct GLoader {
+    GOBJ_STRUCT_HEADER;
+    GLoader* _parent;
+    TypeCache _cache;
+};
+
+#define TYPE_FLAG_NONE u16c(0)
+#define TYPE_FLAG_FAST_TM(tm) (u16c(1) << (tm))
+
+#define v_is_type(v) v_is(v, T_TYPE)
+
+#define type_has_flag(t,f) (((t)->_flags & (f)) != 0)
+#define type_has_tm(t,tm) type_has_flag(t, TYPE_FLAG_FAST_TM(tm))
+
 always_inline GType* v_as_type(Value v) {
     assume(v_is_type(v), "not type.");
     return g_cast(GType, v_as_obj(v));
 }
+
+#define v_of_meta(v) v_box_nan(T_META, v)
+
+#define v_is_meta(v) v_is(v, T_META)
 
 /*=========================================================*
  * String

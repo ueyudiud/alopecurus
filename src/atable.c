@@ -92,19 +92,21 @@ static void table_resize(a_henv env, GTable* self, a_usize new_cap) {
 }
 
 static a_bool table_hint(a_henv env, GTable* self, a_usize len) {
-    a_usize old_cap = self->_hmask + 1;
+    if (len == 0) return false;
+
+    a_usize old_cap = self->_ptr != null ? self->_hmask + 1 : 0;
     a_usize need;
 
     try(checked_add_usize(self->_len, len, &need));
     if (unlikely(need >= MAX_BUCKET_CAPACITY / 4 * 3)) return true;
 
-    if (need * 3 / 4 <= old_cap) return false;
+    if (need <= old_cap * 3 / 4) return false;
 
     a_usize new_cap = ceil_pow2m1_usize(need * 4 / 3) + 1;
     new_cap = max(new_cap, 4);
 
     table_resize(env, self, new_cap);
-    return true;
+    return false;
 }
 
 static void table_hint_failed(a_henv env) {
