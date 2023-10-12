@@ -409,7 +409,7 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 #define META_MODIFIER_MEMBER_VISIBLE 0x0002
 
 typedef struct {
-    Value _mirror;
+    Value _mirror; /* Mirror object of metadata. */
     a_u32 _field_offset;
     a_u16 _modifiers;
     a_u8 _tags;
@@ -815,7 +815,7 @@ always_inline a_usize gbl_mem_total(Global* g) {
 	return g->_mem_base + cast(a_usize, g->_mem_debt);
 }
 
-always_inline GStr* env_int_str(a_henv env, a_u32 tag) {
+always_inline GStr* g_str(a_henv env, a_u32 tag) {
 	return G(env)->_names[tag];
 }
 

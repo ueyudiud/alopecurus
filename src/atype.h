@@ -28,7 +28,7 @@ intern a_msg ai_dyn_ugets(a_henv env, GObj* self, GStr* k, Value* pv);
 
 always_inline Value ai_obj_vlooktm(a_henv env, Value v, a_enum tm) {
 	GType* type = v_typeof(env, v);
-	GStr* key = env_int_str(env, STR_TM__FIRST + tm);
+	GStr* key = g_str(env, STR_TM__FIRST + tm);
 	return ai_type_get(env, g_cast(GType, type), v_of_obj(key));
 }
 
@@ -36,7 +36,7 @@ always_inline Value ai_obj_glookftm(a_henv env, a_hobj p, a_enum tm) {
 	assume(tm <= TM__FAST_MAX, "cannot fast lookup.");
 	GType* type = g_typeof(env, p);
 	if (!type_has_tm(type, tm)) return v_of_nil();
-	GStr* key = env_int_str(env, STR_TM__FIRST + tm);
+	GStr* key = g_str(env, STR_TM__FIRST + tm);
     return ai_type_get(env, g_cast(GType, type), v_of_obj(key));
 }
 
@@ -46,7 +46,7 @@ always_inline Value ai_obj_vlookftm(a_henv env, Value v, a_enum tm) {
 	assume(tm <= TM__FAST_MAX, "cannot fast lookup.");
 	GType* type = v_typeof(env, v);
 	if (!type_has_tm(type, tm)) return v_of_nil();
-	GStr* key = env_int_str(env, STR_TM__FIRST + tm);
+	GStr* key = g_str(env, STR_TM__FIRST + tm);
     return ai_type_get(env, g_cast(GType, type), v_of_obj(key));
 }
 
