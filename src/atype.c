@@ -147,7 +147,7 @@ static a_msg obj_get_field(a_henv env, GObj* self, GStr* k, Value* pv) {
     if (v_is_meta(v)) {
         Meta* meta = &type->_metas._ptr[v_get_payload(v)];
 
-        switch (meta->_tags) {
+        switch (meta->_tag) {
             case META_MEMBER_FIELD_ANY: {
                 Value* p = ptr_disp(Value, self, meta->_field_offset);
                 v_cpy(env, pv, p);
@@ -188,7 +188,7 @@ static a_msg obj_set_field(a_henv env, GObj* self, GStr* k, Value vv) {
 
         if (!(meta->_modifiers & META_MODIFIER_MUTABLE)) return ALO_EINVAL;
 
-        switch (meta->_tags) {
+        switch (meta->_tag) {
             case META_MEMBER_FIELD_ANY: {
                 Value* p = ptr_disp(Value, self, meta->_field_offset);
                 v_set(env, p, v);
@@ -226,7 +226,7 @@ static Value type_get_meta_mirror(a_henv env, GType* self, Meta* meta) {
 
     quiet(env);
 
-    switch (meta->_tags) {
+    switch (meta->_tag) {
         case META_CONST_FIELD: panic("constant field always has mirror.");
         case META_STATIC_FIELD: panic("static field always has mirror.");
         case META_MEMBER_METHOD: panic("member method always has mirror.");
@@ -474,7 +474,7 @@ void ai_type_boost(a_henv env) {
 
     type_new_meta_fast_inplace(env, g_type(env, _type), "__name__", new(Meta) {
         ._mirror = v_of_empty(),
-        ._tags = META_MEMBER_FIELD_STR,
+        ._tag = META_MEMBER_FIELD_STR,
         ._field_offset = offsetof(GType, _name),
         ._modifiers = 0,
     });

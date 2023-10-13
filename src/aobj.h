@@ -412,7 +412,7 @@ typedef struct {
     Value _mirror; /* Mirror object of metadata. */
     a_u32 _field_offset;
     a_u16 _modifiers;
-    a_u8 _tags;
+    a_u8 _tag;
 } Meta;
 
 typedef struct {
