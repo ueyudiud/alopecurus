@@ -58,20 +58,11 @@ struct Token {
     };
 };
 
-typedef struct StrNode StrNode;
-
-struct StrNode { 
-    GStr* _str;
-	a_x32 _hprev;
-	a_x32 _hnext;
-};
-
 typedef struct {
-	StrNode* _ptr;
+	GStr** _ptr;
     a_u32 _len;
 	a_u32 _hmask;
-	a_x32 _hfree;
-} LexStrs;
+} StrSet;
 
 struct Lexer {
 	union {
@@ -82,7 +73,7 @@ struct Lexer {
     a_line _line;
     a_i16 _char; /* Next character. */
     Token _ahead[2];
-    LexStrs _strs;
+    StrSet _strs;
 };
 
 #endif /* alex_h_ */

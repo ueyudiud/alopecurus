@@ -3118,11 +3118,11 @@ static void parser_close(Parser* par) {
 static void parser_mark(Global* g, void* ctx) {
 	Parser* par = ctx;
 	run {
-		LexStrs* strs = &par->_lex._strs;
-		for (a_u32 i = 0; i <= strs->_hmask; ++i) {
-			StrNode* node = &strs->_ptr[i];
-			if (node->_str != null) {
-				ai_gc_trace_mark(g, node->_str);
+		StrSet* set = &par->_lex._strs;
+		for (a_u32 i = 0; i <= set->_hmask; ++i) {
+            GStr* str = set->_ptr[i];
+			if (str != null) {
+				ai_gc_trace_mark(g, str);
 			}
 		}
 	}

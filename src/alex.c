@@ -108,114 +108,56 @@ static void l_bput(Lexer* lex, a_i32 ch) {
 	}
 }
 
-static StrNode* strs_hfirst(LexStrs* strs, a_hash hash) {
-	return &strs->_ptr[(hash & strs->_hmask) + 1];
-}
-
-static StrNode* strs_next_free(LexStrs* strs) {
-	StrNode* node = &strs->_ptr[unwrap(strs->_hfree)];
-	assume(node->_str == null);
-	a_x32 next = node->_hnext;
-	if (!is_nil(next)) {
-		StrNode* noden = &strs->_ptr[unwrap(node->_hnext)];
-		noden->_hprev = nil;
-	}
-	strs->_hfree = next;
-    return node;
-}
-
-static void strs_put(LexStrs* strs, GStr* str) {
-    assume(!is_nil(strs->_hfree));
-    StrNode* node = strs_hfirst(strs, str->_hash);
-    if (node->_str == null) {
-		a_x32 prev = node->_hprev;
-		a_x32 next = node->_hnext;
-		if (is_nil(prev)) {
-			strs->_hfree = next;
-		}
-		else {
-			strs->_ptr[unwrap(prev)]._hnext = next;
-		}
-		if (!is_nil(next)) {
-			strs->_ptr[unwrap(next)]._hprev = prev;
-		}
-        *node = new(StrNode) {
-			._str = str,
-			._hprev = nil,
-			._hnext = nil
-		};
-    }
-    else {
-        StrNode* node2 = strs_next_free(strs);
-		a_x32 prev = node->_hprev;
-		a_x32 next = node->_hnext;
-        if (is_nil(prev)) {
-			*node2 = new(StrNode) {
-				._str = str,
-				._hprev = wrap(node - strs->_ptr),
-				._hnext = next
-			};
-			node->_hnext = wrap(node2 - strs->_ptr);
+static a_bool strs_put(StrSet* set, GStr* str) {
+    a_u32 index = str->_hash & set->_hmask;
+    a_u32 perturb = str->_hash;
+    loop {
+        GStr** slot = &set->_ptr[index];
+        if (*slot == str) {
+            return false;
         }
-        else {
-			*node2 = new(StrNode) {
-				._str = node->_str,
-				._hprev = prev,
-				._hnext = next
-			};
-			strs->_ptr[unwrap(prev)]._hnext = next;
-			if (!is_nil(next)) {
-				strs->_ptr[unwrap(next)]._hprev = prev;
-			}
-			*node = new(StrNode) {
-				._str = str,
-				._hprev = nil,
-				._hnext = nil
-			};
+        else if (*slot == null) {
+            *slot = str;
+            return true;
         }
+        perturb >>= 5;
+        index = index * 5 + 1 + perturb;
     }
 }
 
-static void strs_alloc_array(a_henv env, LexStrs* self, a_usize cap) {
-	StrNode* ptr = ai_mem_vnew(env, StrNode, cap);
+static void strs_alloc_array(a_henv env, StrSet* self, a_usize cap) {
+	GStr** ptr = ai_mem_vnew(env, GStr*, cap);
+    memclr(ptr, sizeof(GStr*) * cap);
 
 	self->_hmask = cap - 1;
-	self->_hfree = x32c(1);
-	self->_ptr = ptr - 1;
-
-	for (a_u32 i = 0; i < cap; ++i) {
-		ptr[i] = new(StrNode) {
-			._str = null,
-			._hprev = wrap(i),
-			._hnext = i < cap - 1 ? wrap(i + 2) : nil
-		};
-	}
+	self->_ptr = ptr;
 }
 
-static void strs_grow(Lexer* lex, LexStrs* self) {
+static void strs_grow(Lexer* lex, StrSet* self) {
     a_usize old_cap = self->_hmask + 1;
 	if (old_cap == u32c(1) << 31) {
 		ai_lex_error(lex, "too many symbol and string in chunk.");
 	}
 
 	a_usize new_cap = old_cap * 2;
-    StrNode* old_ptr = self->_ptr + 1;
+    GStr** old_ptr = self->_ptr;
 
 	strs_alloc_array(lex->_env, self, new_cap);
 
     for (a_usize i = 0; i < old_cap; ++i) {
-        GStr* str = old_ptr[i]._str;
+        GStr* str = old_ptr[i];
         if (str != null) {
-			strs_put(self, str);
+			a_bool succ = strs_put(self, str);
+            assume(succ, "duplicate string.");
         }
     }
 
 	ai_mem_vdel(G(lex->_env), old_ptr, old_cap);
 }
 
-static void strs_close(a_henv env, LexStrs* strs) {
+static void strs_close(a_henv env, StrSet* strs) {
 	if (strs->_ptr != null) {
-		ai_mem_vdel(G(env), strs->_ptr + 1, strs->_hmask + 1);
+		ai_mem_vdel(G(env), strs->_ptr, strs->_hmask + 1);
 	}
 }
 
@@ -290,27 +232,17 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 
 GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
 	a_henv env = lex->_env;
-	LexStrs* strs = &lex->_strs;
-	a_hash hash = ai_str_hashof(env, src, len);
+	StrSet* set = &lex->_strs;
 
-	StrNode* node = strs_hfirst(strs, hash);
-	if (node->_str != null && node == strs_hfirst(strs, node->_str->_hash)) {
-		do {
-			GStr* str = node->_str;
-			if (str->_hash == hash && ai_str_requals(str, src, len)) {
-				return str;
-			}
-		}
-		while (!is_nil(node->_hnext) && (node = &strs->_ptr[unwrap(node->_hnext)], true));
-	}
+    GStr* str = ai_str_new(env, src, len);
 
-	if (strs->_len == strs->_hmask + 1) {
-		strs_grow(lex, strs);
-	}
+    if (strs_put(set, str)) {
+        set->_len += 1;
+        if (set->_len > set->_hmask * 3 / 4) {
+            strs_grow(lex, set);
+        }
+    }
 
-	GStr* str = ai_str_new(env, src, len);
-	strs_put(strs, str);
-	strs->_len += 1;
 	return str;
 }
 
