@@ -89,20 +89,10 @@
 /* Types. */
 #define a_none ALO_NORETURN void
 
-#if ALO_M64
-typedef __int128_t a_isize2;
-typedef __uint128_t a_usize2;
-#else
-typedef int64_t a_isize2;
-typedef uint64_t a_usize2;
-#endif
-
 typedef struct {
 	char const* _ptr;
 	a_usize _len;
 } a_lstr;
-
-typedef struct { a_i32 _; } a_x32;
 
 typedef a_u32 a_uint;
 
@@ -120,8 +110,13 @@ typedef a_u32 a_insn;
 #define i32c INT32_C
 #define i64c INT64_C
 
-#define usizec u64c
-#define isizec i64c
+#if ALO_M64
+# define usizec u64c
+# define isizec i64c
+#else
+# define usizec u32c
+# define isizec i32c
+#endif
 
 #define ISIZE_MAX PTRDIFF_MAX
 #define ISIZE_MIN PTRDIFF_MIN
@@ -130,8 +125,7 @@ typedef a_u32 a_insn;
 
 #define null NULL
 #define false ((a_bool) M_false)
-#define true  (!false)
-#define zero(t) ((t) {0})
+#define true ((a_bool) !false)
 
 #if __STDC_VERSION__ >= 201112L
 # define ALO_C11 M_true
@@ -159,33 +153,13 @@ typedef a_u32 a_insn;
 #define bit_cast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
 #define null_of(t) ((typeof(t)*) 0)
-#define dangling_of(t) ((t*) sizeof(t))
 #define addr_of(p) cast(a_usize, p)
 #define ptr_of(t,a) ({ a_usize _a = (a); cast(typeof(t)*, _a); })
 #define ref_of(t,a) (*ptr_of(t, a))
 #define ptr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
 #define ptr_disp(t,p,d) ptr_of(t, addr_of(p) + (d))
-#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == null_of(typeof(((t*) 0)->f))); ptr_of(t, addr_of(_v) - offsetof(t, f)); })
+#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &((t*) 0)->f); ptr_of(t, addr_of(_v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
-
-/**
- ** Optional index type support.
- */
-
-/**
- ** Internal used `nil` literal.
- ** Used in optional array based table reference to
- ** represent a empty value.
- */
-#define x32c(l) wrap(i32c(l))
-
-#define nil x32c(0)
-
-#define unwrap_unsafe(e) ((e)._)
-#define unwrap(e) ({ a_x32 _x = (e); assume(!is_nil(_x)); unwrap_unsafe(_x); })
-#define wrap(v)  (new(a_x32) { v })
-
-#define is_nil(e) (unwrap_unsafe(e) == unwrap_unsafe(nil))
 
 /* Utility functions. */
 
@@ -227,10 +201,6 @@ intern void ai_dbg_debug(char const* fmt, ...);
  ** Fill memory with zero bits.
  */
 #define memclr(dst,len) __builtin_memset(dst, 0, len)
-
-always_inline a_usize2 mul_usize(a_usize a, a_usize b) {
-    return cast(a_usize2, a) * b;
-}
 
 #define NUM_TYPE_LIST(_) \
     _(i8) \

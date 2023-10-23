@@ -308,9 +308,18 @@ void ai_gc_set_debt(Global* g, a_isize debt) {
 }
 
 static void compute_work(Global* g) {
-	a_usize2 work = mul_usize(cast(a_usize, g->_mem_work) + cast(a_usize, g->_mem_debt), g->_gcstepmul) / GCUNIT;
-	a_isize truncated_work = likely(work < ISIZE_MAX) ? cast(a_isize, work) : ISIZE_MAX;
-	g->_mem_work = max(truncated_work, cast(a_isize, ALOI_MIN_MEM_WORK));
+#if ALO_M64
+    a_usize work = (g->_mem_work + g->_mem_debt) * g->_gcstepmul / GCUNIT;
+    /* We assume address space only use 47-bits, so maximum work will never overflow. */
+    assume(work <= ISIZE_MAX);
+#elif ALO_M32
+    a_isize work;
+    if (checked_mul_isize(g->_mem_work + g->_mem_debt, g->_gcstepmul, &work)) {
+        work = ISIZE_MAX;
+    }
+    work /= GCUNIT;
+#endif
+	g->_mem_work = cast(a_isize, max(work, ALOI_MIN_MEM_WORK));
 }
 
 static void compute_step_debt(Global* g, a_isize work) {
@@ -322,10 +331,19 @@ static void compute_step_debt(Global* g, a_isize work) {
 }
 
 static void compute_pause_debt(Global* g) {
-	a_usize2 debt = mul_usize(g->_mem_estimate, g->_gcpausemul) / GCUNIT;
-	a_isize truncated_debt = likely(debt < ISIZE_MAX) ? cast(a_isize, debt) : ISIZE_MAX;
-	g->_mem_work = truncated_debt;
-	ai_gc_set_debt(g, truncated_debt);
+#if ALO_M64
+    a_usize debt = g->_mem_estimate * g->_gcpausemul / GCUNIT;
+    /* We assume address space only use 47-bits, so maximum work will never overflow. */
+    assume(debt <= ISIZE_MAX);
+#elif ALO_M32
+    a_isize debt;
+    if (checked_mul_isize(g->_mem_estimate, g->_gcpausemul, &work)) {
+        work = ISIZE_MAX;
+    }
+    debt /= GCUNIT;
+#endif
+	g->_mem_work = cast(a_isize, debt);
+	ai_gc_set_debt(g, cast(a_isize, debt));
 }
 
 void ai_gc_incr_gc(a_henv env) {
