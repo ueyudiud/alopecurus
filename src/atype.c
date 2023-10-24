@@ -371,7 +371,9 @@ static void metas_hint1(a_henv env, Metas* metas) {
     if (metas->_len == metas->_cap) {
         a_usize old_cap = metas->_cap;
         a_usize new_cap = old_cap;
-        catch(ai_buf_nhint(&new_cap, metas->_len, 1, INT32_MAX), ai_buf_error, env, "meta");
+        catch(ai_buf_nhint(&new_cap, metas->_len, 1, INT32_MAX), msg) {
+            ai_buf_error(msg, env, "meta");
+        }
 
         metas->_ptr = ai_mem_vgrow(env, metas->_ptr, old_cap, new_cap);
         metas->_cap = new_cap;

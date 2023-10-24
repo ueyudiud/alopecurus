@@ -117,7 +117,9 @@ always_inline a_msg ai_buf_nputv(a_henv env, a_hbuf buf, void const* src, a_usiz
 #define at_buf_put(env,b,v,w) ({ \
 	typeof(b)* _pb = &(b);       \
     a_usize _bid = _pb->_len;    \
-	catch(at_buf_nput(env, *_pb, v), ai_buf_error, env, w); \
+	catch(at_buf_nput(env, *_pb, v), _msg) { \
+        ai_buf_error(_msg, env, w);       \
+    }                            \
     _bid;                        \
 })
 
@@ -127,7 +129,7 @@ always_inline a_msg ai_buf_nputv(a_henv env, a_hbuf buf, void const* src, a_usiz
     _pb->_ptr[--_pb->_len];  \
 })
 
-#define at_buf_putls(env,b,s,l) catch(ai_buf_nputls(env, b, s, l), ai_buf_error, env, "char")
+#define at_buf_putls(env,b,s,l) catch(ai_buf_nputls(env, b, s, l), _msg) { ai_buf_error(_msg, env, "char"); }
 #define at_buf_puts(env,b,s) at_buf_putls(env, b, s, strlen(s))
 #define at_buf_tostr(env,b) ai_str_new(env, (b)->_ptr, (b)->_len)
 

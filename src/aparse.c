@@ -2508,7 +2508,9 @@ static a_u32 sec_record(Parser* par, SecRec rec) {
     a_usize size = offsetof(SecHead, _code)
             + sizeof(a_insn) * head._ninsn
             + sizeof(LineInfo) * head._nline;
-    catch(at_buf_ncheck(par->_env, par->_secs, size), ai_buf_error, par->_env, "section");
+    catch(at_buf_ncheck(par->_env, par->_secs, size), msg) {
+        ai_buf_error(msg, par->_env, "section");
+    }
 
     a_usize base = par->_secs._len;
 
