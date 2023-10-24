@@ -190,7 +190,7 @@ static a_msg base_assert(a_henv env) {
 	}
 	else {
 		if (n == 1) {
-			alo_pushlstr(env, "assertion failed!");
+			alo_pushntstr(env, "assertion failed!");
 		}
 		alo_settop(env, 2);
         aloL_traceerror(env, 1, 1, 6);

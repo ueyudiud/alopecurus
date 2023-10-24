@@ -225,7 +225,7 @@ static a_i32 l_read_file(unused a_henv env, void* rctx, void const** pdst, size_
 
 a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options) {
 	a_lstr str = {src, len };
-	alo_pushstr(env, fname, strlen(fname));
+	alo_pushntstr(env, fname);
 	a_msg msg = alo_compile(env, l_read_str, &str, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
 	return msg;
@@ -238,7 +238,7 @@ a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
 	FileReadCtx ctx;
 	ctx._handle = handle;
 
-	alo_pushstr(env, fname, strlen(fname));
+	alo_pushntstr(env, fname);
 	a_msg msg = alo_compile(env, l_read_file, &ctx, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
 

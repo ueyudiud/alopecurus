@@ -74,30 +74,35 @@ static void l_get_source(alo_Debug* dbg, GFun* fun, a_insn const* pc) {
 	}
 }
 
+static Frame* l_load_frame(a_henv env, Frame** pframe, a_enum n) {
+    Frame* frame;
+    switch (n) {
+        case ALO_DEBUG_HEAD: {
+            frame = env->_frame;
+            break;
+        }
+        case ALO_DEBUG_NEXT: {
+            frame = *pframe;
+            *pframe = frame->_prev;
+            break;
+        }
+        case ALO_DEBUG_THIS: {
+            frame = *pframe;
+            break;
+        }
+        default: api_panic("bad load frame type.");
+    }
+    return frame;
+}
+
 a_bool alo_debug(a_henv env, alo_Debug* dbg, a_enum n, a_flags w) {
-	Frame** pframe = cast(Frame**, &dbg->_hnd);
-	switch (n) {
-		case ALO_DEBUG_START: {
-			*pframe = env->_frame;
-			return true;
-		}
-		case ALO_DEBUG_GET: {
-			Frame* frame = *pframe;
-			api_check(frame != null, "already reach to end.");
-			GFun* func = ai_dbg_get_func(env, frame);
-			if (w & ALO_DEBUG_GET_FLAG_SOURCE) {
-				l_get_source(dbg, func, frame->_pc);
-			}
-			if (w & ALO_DEBUG_GET_FLAG_THEN_NEXT)
-				goto get_next;
-			return true;
-		}
-		case ALO_DEBUG_NEXT: {
-		get_next:
-			return (*pframe = (*pframe)->_prev) != null;
-		}
-		default: {
-			api_panic("bad debug task.");
-		}
-	}
+    Frame* frame = l_load_frame(env, cast(Frame**, &dbg->_frame), n);
+    if (frame == null) return false;
+
+    GFun* p = ai_dbg_get_func(env, frame);
+    if (w & ALO_DEBUG_FLAG_SOURCE) {
+        l_get_source(dbg, p, frame->_pc);
+    }
+
+    return true;
 }

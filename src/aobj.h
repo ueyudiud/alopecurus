@@ -318,7 +318,7 @@ union MSIT {
 #undef DEF
 };
 
-#define vfp_slot(n) addr_of(&null_of(union MSIT)->n)
+#define vfp_slot(n) offsetof(union MSIT, n)
 
 /* Method Slot Table. */
 typedef union {
@@ -820,7 +820,7 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
 }
 
 #define g_type(env,f) (&G(env)->_types.f)
-#define g_type_ref(f) addr_of(&null_of(Global)->_types.f)
+#define g_type_ref(f) offsetof(Global, _types.f)
 
 /*=========================================================*/
 

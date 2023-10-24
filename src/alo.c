@@ -238,8 +238,8 @@ again:
 }
 
 static a_msg l_comp_reps(a_henv env, a_bool* peval) {
-	alo_pushlstr(env, "__main__");
-	alo_pushlstr(env, "stdin");
+    alo_pushntstr(env, "__main__");
+    alo_pushntstr(env, "stdin");
 
 	try(l_try_comp_reps(env, "> ", peval));
 	loop try(l_try_comp_reps(env, ">> ", peval));

@@ -326,10 +326,21 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 	}
 }
 
+/**
+ ** Push a nil value to the top of stack.
+ **
+ *@param env the runtime environment.
+ */
 void alo_pushnil(a_henv env) {
 	v_set_nil(api_incr_stack(env));
 }
 
+/**
+ ** Push a boolean value to the top of stack.
+ **
+ *@param env the runtime environment.
+ *@param val zero represent false value and true value for otherwise.
+ */
 void alo_pushbool(a_henv env, a_bool val) {
 	v_set_bool(api_incr_stack(env), val);
 }
@@ -347,6 +358,7 @@ void alo_pushptr(a_henv env, void* val) {
 }
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
+    api_check(src != null || len == 0, "bad string.");
 	GStr* val = ai_str_new(env, src, len);
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
@@ -354,7 +366,7 @@ char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 }
 
 char const* alo_pushntstr(a_henv env, char const* src) {
-	api_check(src != null, "string is null.");
+    api_check(src != null, "bad string.");
 	return alo_pushstr(env, src, strlen(src));
 }
 
@@ -654,6 +666,12 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 		*plen = cast(a_usize, p->_len);
 	}
 	return str2ntstr(p);
+}
+
+void* alo_toptr(a_henv env, a_isize id) {
+    Value v = api_elem(env, id);
+    api_check(v_is_ptr(v), "cannot cast to pointer");
+    return v_as_ptr(v);
 }
 
 void alo_typeof(a_henv env, a_isize id) {

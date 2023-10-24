@@ -19,8 +19,7 @@ GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, sizeof(GList));
 
     self->_vptr = &list_vtable;
-
-    ai_vec_init(env, &self->_vec);
+    ai_vec_init(&self->_vec);
 
     ai_gc_register_object(env, self);
 
@@ -32,13 +31,13 @@ static void list_hint_failed(a_henv env) {
 }
 
 void ai_list_hint(a_henv env, GList* self, a_usize len) {
-    if (unlikely(ai_vec_hint(env, &self->_vec, len))) {
+    catch (ai_vec_hint(env, &self->_vec, len), _) {
         list_hint_failed(env);
     }
 }
 
 void ai_list_push(a_henv env, GList* self, Value v) {
-    if (unlikely(ai_vec_push(env, &self->_vec, v))) {
+    catch (ai_vec_push(env, &self->_vec, v), _) {
         list_hint_failed(env);
     }
 
@@ -46,7 +45,7 @@ void ai_list_push(a_henv env, GList* self, Value v) {
 }
 
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
-    if (unlikely(ai_vec_push_all(env, &self->_vec, src, len))) {
+    catch (ai_vec_push_all(env, &self->_vec, src, len), _) {
         list_hint_failed(env);
     }
 

@@ -167,8 +167,6 @@ ALO_EXPORT void (alo_newtable)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_usize n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 
-#define alo_pushlstr(env,src) alo_pushstr(env, ""src, sizeof(src) - sizeof((src)[0]))
-
 ALO_EXPORT a_msg (alo_rawlen)(a_henv env, a_isize id, a_usize* plen);
 ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_isize id, a_int key);
 ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_isize id);
@@ -194,6 +192,7 @@ ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_isize id);
 ALO_EXPORT a_int (alo_toint)(a_henv env, a_isize id);
 ALO_EXPORT a_float (alo_tofloat)(a_henv env, a_isize id);
 ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
+ALO_EXPORT void* (alo_toptr)(a_henv env, a_isize id);
 
 #define alo_tostr(env,id) alo_tolstr(env, id, NULL)
 
@@ -221,18 +220,17 @@ ALO_EXPORT a_msg (alo_compile)(a_henv env, a_ifun fun, void* ctx, a_isize id_env
 typedef struct {
 	unsigned char kind;
 	char const* file;
-	size_t line;
+	unsigned line;
 	char const* name;
-	void* _hnd;
+	void const* _frame;
 } alo_Debug;
 
-#define ALO_DEBUG_START 1
+#define ALO_DEBUG_THIS 0
+#define ALO_DEBUG_HEAD 1
+#define ALO_DEBUG_NEXT 2
 
-#define ALO_DEBUG_GET 2
-#define ALO_DEBUG_GET_FLAG_SOURCE 0x0001
-#define ALO_DEBUG_GET_FLAG_THEN_NEXT 0x10000
-
-#define ALO_DEBUG_NEXT 3
+#define ALO_DEBUG_FLAG_SOURCE 0x0001
+#define ALO_DEBUG_FLAG_THEN_NEXT 0x10000
 
 ALO_EXPORT a_bool (alo_debug)(a_henv env, alo_Debug* dbg, a_enum n, a_flags w);
 

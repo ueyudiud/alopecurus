@@ -113,7 +113,7 @@ typedef a_u32 a_insn;
 #if ALO_M64
 # define usizec u64c
 # define isizec i64c
-#else
+#elif ALO_M32
 # define usizec u32c
 # define isizec i32c
 #endif
