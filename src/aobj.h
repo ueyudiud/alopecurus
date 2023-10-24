@@ -107,7 +107,7 @@ always_inline a_u64 v_box_nan_raw_max(a_enum tag) {
 	return v_stencil(tag) | V_PAYLOAD_MASK;
 }
 
-#define v_new(v) (new(Value) {v})
+#define v_new(v) ((Value) {v})
 
 always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
 	return v_new(v_box_nan_raw(tag, payload));

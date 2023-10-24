@@ -40,22 +40,15 @@ static a_bool route_is_active(a_henv env) {
 static VTable const route_vtable;
 
 static void route_new(GRoute* self, Global* g) {
-	*self = new(GRoute) {
-		._vptr = &route_vtable,
-		._status = ALO_SYIELD,
-		._flags = 0,
-		._g = g,
-		._from = null,
-        ._rctx = null,
-		._rctx_alloc = null,
-		._error = v_of_nil(),
-		._open_caps = null,
-		._frame = &self->_base_frame,
-		._base_frame = new(Frame) {
-			._prev = null,
-			._pc = null
-		}
-	};
+    init(self) {
+        ._vptr = &route_vtable,
+        ._status = ALO_SYIELD,
+        ._flags = 0,
+        ._g = g,
+        ._error = v_of_nil(),
+        ._frame = &self->_base_frame,
+        ._base_frame = { }
+    };
 }
 
 static a_bool route_init(a_henv env, GRoute* self) {
@@ -199,24 +192,19 @@ a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
 	Global* g = &mr->_global;
 	GRoute* env = &mr->_route;
 
-	mr->_global = new(Global) {
-		._af = *af,
-		._ac = ac,
-		._active = env,
-		._gc_normal = null,
-		._gc_closable = null,
-		._gc_toclose = null,
-		._gc_sweep = null,
-		._mem_base = size,
-		._mem_debt = 0,
-		._flags = GLOBAL_FLAG_DISABLE_GC,
-		._gcpausemul = ALOI_DFL_GCPAUSEMUL,
-		._gcstepmul = ALOI_DFL_GCSTEPMUL,
-		._white_color = WHITE1_COLOR,
-		._gcstep = GCSTEP_PAUSE,
-		._global = v_of_nil(),
-		._hookm = ALO_HMNONE
-	};
+    init(g) {
+        ._af = *af,
+        ._ac = ac,
+        ._active = env,
+        ._mem_base = size,
+        ._flags = GLOBAL_FLAG_DISABLE_GC,
+        ._gcpausemul = ALOI_DFL_GCPAUSEMUL,
+        ._gcstepmul = ALOI_DFL_GCSTEPMUL,
+        ._white_color = WHITE1_COLOR,
+        ._gcstep = GCSTEP_PAUSE,
+        ._global = v_of_nil(),
+        ._hookm = ALO_HMNONE
+    };
 	
 	route_new(env, g);
 

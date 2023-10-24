@@ -401,80 +401,80 @@ static void type_clean(Global* g, GType* self) {
 void ai_type_boost(a_henv env) {
     Global* g = G(env);
 
-    g->_types._nil = new(GType) {
+    g->_types._nil = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TNIL,
         ._name = g_str(env, STR_nil)
     };
-    g->_types._bool = new(GType) {
+    g->_types._bool = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TBOOL,
         ._name = g_str(env, STR_bool)
     };
-    g->_types._int = new(GType) {
+    g->_types._int = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TINT,
         ._name = g_str(env, STR_int)
     };
-    g->_types._float = new(GType) {
+    g->_types._float = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TFLOAT,
         ._name = g_str(env, STR_float)
     };
-    g->_types._ptr = new(GType) {
+    g->_types._ptr = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TPTR,
         ._name = g_str(env, STR_ptr)
     };
-    g->_types._str = new(GType) {
+    g->_types._str = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TSTR,
         ._name = g_str(env, STR_str)
     };
-    g->_types._tuple = new(GType) {
+    g->_types._tuple = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTUPLE,
         ._name = g_str(env, STR_tuple)
     };
-    g->_types._list = new(GType) {
+    g->_types._list = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TLIST,
         ._name = g_str(env, STR_list)
     };
-    g->_types._table = new(GType) {
+    g->_types._table = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTABLE,
         ._name = g_str(env, STR_table)
     };
-    g->_types._func = new(GType) {
+    g->_types._func = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TFUNC,
         ._name = g_str(env, STR_func)
     };
-    g->_types._route = new(GType) {
+    g->_types._route = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TROUTE,
         ._name = g_str(env, STR_route)
     };
-    g->_types._type = new(GType) {
+    g->_types._type = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTYPE,
         ._name = g_str(env, STR_type)
     };
 
-    type_new_meta_fast_inplace(env, g_type(env, _type), "__name__", new(Meta) {
+    type_new_meta_fast_inplace(env, g_type(env, _type), "__name__", (Meta) {
         ._mirror = v_of_empty(),
         ._tag = META_MEMBER_FIELD_STR,
         ._field_offset = offsetof(GType, _name),

@@ -294,58 +294,58 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             GTuple* p = v_as_tuple(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (i >= p->_len)
-                return new(ValueSlice) { null, 0 };
+                return (ValueSlice) { null, 0 };
             
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, p->_ptr[i]);
-            return new(ValueSlice) { vd, 1 };
+            return (ValueSlice) { vd, 1 };
         }
         case T_LIST: {
             GList* p = v_as_list(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (i >= p->_len)
-                return new(ValueSlice) { null, 0 };
+                return (ValueSlice) { null, 0 };
             
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, p->_ptr[i]);
-            return new(ValueSlice) { vd, 1 };
+            return (ValueSlice) { vd, 1 };
         }
         case T_TABLE: {
             GTable* p = v_as_table(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (i == 0 && p->_len == 0)
-                return new(ValueSlice) { };
+                return (ValueSlice) { };
 
             i = p->_ptr[i]._lnext;
             if (i > p->_hmask)
-                return new(ValueSlice) { };
+                return (ValueSlice) { };
 
             TNode* n = &p->_ptr[i];
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, n->_key, n->_value);
-            return new(ValueSlice) { vd, 2 };
+            return (ValueSlice) { vd, 2 };
         }
         case T_TYPE: {
             GType* p = v_as_type(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (p->_fields._len == 0 || i <= p->_fields._hmask)
-                return new(ValueSlice) { };
+                return (ValueSlice) { };
 
             DNode* n;
             while ((n = &p->_fields._ptr[i])->_key == null) {
                 i += 1;
                 if (i > p->_fields._hmask)
-                    return new(ValueSlice) { };
+                    return (ValueSlice) { };
             }
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, v_of_obj(n->_key), n->_value);
-            return new(ValueSlice) { vd, 2 };
+            return (ValueSlice) { vd, 2 };
         }
         default: {
             //TODO

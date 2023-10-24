@@ -44,7 +44,7 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	}
 #endif
 
-	*stack = new(Stack) {
+    init(stack) {
 		._base = base,
 		._limit = ptr_disp(Value, base, INIT_STACK_SIZE) - RESERVED_STACK_SIZE,
 		._top = base,

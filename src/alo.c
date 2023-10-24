@@ -80,7 +80,10 @@ typedef struct {
 static InLines l_lines;
 
 static void l_init_lines(void) {
-	l_lines = new(InLines) { ._head = null, ._tail = &l_lines._head };
+    init(&l_lines) {
+        ._head = null,
+        ._tail = &l_lines._head
+    };
 }
 
 static void l_deinit_lines(void) {

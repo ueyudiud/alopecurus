@@ -319,7 +319,7 @@ struct ExprDesc {
 
 typedef ExprDesc Expr[1];
 
-#define expr_init(e,k,v...) quiet(*(e) = new(ExprDesc) { ._tag = (k), v })
+#define expr_init(e,k,v...) quiet(init(e) { ._tag = (k), v })
 
 static a_bool expr_has_multi_values(InExpr e) {
 	a_u32 k = e->_tag;
@@ -571,7 +571,7 @@ static a_u32 code_put(Parser* par, a_insn i) {
 static void l_emit_line(Parser* par, a_line line) {
 	FnScope* scope = par->_fnscope;
 	if (scope->_head_line != line) {
-		LineInfo info = new(LineInfo) {UINT32_MAX, line};
+		LineInfo info = {UINT32_MAX, line};
 		a_u32 index = at_buf_put(par->_env, par->_lines, info, "line");
 		if (index > scope->_line_off) { /* Settle end label for last line info. */
 			par->_lines._ptr[index - 1]._end = par->_head_label;
@@ -2656,7 +2656,7 @@ static a_u32 sym_local(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, Sy
 
 	stack_store(par, reg);
 
-	return syms_push(par, new(Sym) {
+	return syms_push(par, (Sym) {
 		._tag = SYM_LOCAL,
 		._scope = par->_scope_depth,
 		._mods = mods,
@@ -2683,7 +2683,7 @@ static void pat_bind_nils(Parser* par, Pat* p, a_line line) {
 	a_u32 reg = stack_alloc_succ(par, num, line);
 	a_u32 label = l_emit_kn(par, reg, num, line);
 	for (Pat* pat = p->_child; pat != null; pat = pat->_sibling) {
-        sym_local(par, pat->_name, reg++, label, new(SymMods) {});
+        sym_local(par, pat->_name, reg++, label, (SymMods) {});
 	}
 
 	scope->_top_ntr = scope->_top_reg;
@@ -2742,7 +2742,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 		}
 		case PAT_VAR: {
             expr_pin_reg(par, e, reg);
-            sym_local(par, pat->_name, reg, par->_head_label, new(SymMods) {});
+            sym_local(par, pat->_name, reg, par->_head_label, (SymMods) {});
 			break;
 		}
 		case PAT_TUPLE: {
@@ -2873,7 +2873,7 @@ static void local_bind(Parser* par, OutExpr e, GStr* name, a_line line) {
 	Scope* scope = par->_scope;
 	assume(scope->_top_ntr == scope->_top_reg, "stack not balanced.");
 	a_u32 reg = stack_alloc(par, line);
-	a_u32 sym = sym_local(par, name, reg, par->_head_label, new(SymMods) {});
+	a_u32 sym = sym_local(par, name, reg, par->_head_label, (SymMods) {});
 	expr_init(e, EXPR_REG,
 		._d1 = reg,
 		._d2 = sym,
@@ -2887,7 +2887,7 @@ static void local_bind(Parser* par, OutExpr e, GStr* name, a_line line) {
 static void sym_export(Parser* par, OutExpr e, GStr* name, a_line line) {
 	Scope* scope = par->_scope;
 	assume(scope->_top_ntr == scope->_top_reg, "stack not balanced.");
-	a_u32 id = syms_push(par, new(Sym) {
+	a_u32 id = syms_push(par, (Sym) {
 		._tag = SYM_EXPORT,
 		._name = name,
 		._scope = par->_scope_depth,
@@ -2911,18 +2911,18 @@ static void stack_compact(Parser* par) {
 }
 
 static void scope_push(Parser* par, Scope* scope, a_u32 reg, a_line line) {
-	*scope = new(Scope) {
-		._up = par->_scope,
-		._bot_reg = reg,
-		._top_ntr = reg,
-		._top_reg = reg,
-		._bot_fur = reg,
-		._num_fur = 0,
-		._begin_line = line,
-		._begin_label = par->_head_label,
-		._end_label = NO_LABEL,
-		._sym_off = par->_syms._len
-	};
+    init(scope) {
+        ._up = par->_scope,
+        ._bot_reg = reg,
+        ._top_ntr = reg,
+        ._top_reg = reg,
+        ._bot_fur = reg,
+        ._num_fur = 0,
+        ._begin_line = line,
+        ._begin_label = par->_head_label,
+        ._end_label = NO_LABEL,
+        ._sym_off = par->_syms._len
+    };
 	par->_scope = scope;
 }
 
@@ -2990,18 +2990,18 @@ static void fnscope_prologue(Parser* par, FnScope* fnscope, a_line line) {
 
 	par->_scope = null;
 
-	*fnscope = new(FnScope) {
-		._fn_up = par->_fnscope,
-		._base_subs = cast(GProto**, par->_rq._tail),
-		._const_off = par->_consts._len,
-		._line_off = par->_lines._len,
-		._local_off = par->_locals._len,
-		._head_jump = NO_LABEL,
-		._head_land = NO_LABEL,
-		._fpass = true,
-		._fland = false,
-		._fjump = false
-	};
+    init(fnscope) {
+        ._fn_up = par->_fnscope,
+        ._base_subs = cast(GProto**, par->_rq._tail),
+        ._const_off = par->_consts._len,
+        ._line_off = par->_lines._len,
+        ._local_off = par->_locals._len,
+        ._head_jump = NO_LABEL,
+        ._head_land = NO_LABEL,
+        ._fpass = true,
+        ._fland = false,
+        ._fjump = false
+    };
 	scope_push(par, &fnscope->_scope, 0, line);
 
 	par->_fnscope = fnscope;
@@ -3047,7 +3047,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 	run {
 		for (a_u32 i = 0; i < desc._ncap; ++i) {
 			RichCapInfo* cap_info = &scope->_caps._ptr[i];
-			proto->_caps[i] = new(CapInfo) {
+            init(&proto->_caps[i]) {
 				._reg = cap_info->_src_index,
 				._fup = cap_info->_scope != par->_scope_depth - 1
 			};
@@ -3156,7 +3156,7 @@ static void parser_start(Parser* par) {
 	par->_gname = ai_lex_to_str(lex(par), ENV_NAME, sizeof(ENV_NAME) - 1);
 
 	/* Add predefined '_ENV' name. */
-	syms_push(par, new(Sym) {
+	syms_push(par, (Sym) {
 		._tag = SYM_CAPTURE,
 		._scope = SCOPE_DEPTH_ENV,
 		._mods = {
@@ -5273,11 +5273,11 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 }
 
 static void parser_init(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, Parser* par) {
-	*par = new(Parser) {
-		._options = options,
-		._file = file,
-		._name = name
-	};
+    init(par) {
+        ._options = options,
+        ._file = file,
+        ._name = name
+    };
 	ai_lex_init(env, &par->_lex, fun, ctx);
 	rq_init(&par->_rq);
 }

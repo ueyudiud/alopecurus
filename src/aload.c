@@ -80,16 +80,16 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
 }
 
 static a_msg l_load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
-	*info = new(ProtoDesc) {
-		._nconst = l_getvi(ic, a_u32),
-		._ninsn = l_getvi(ic, a_u32),
-		._nsub = l_getvi(ic, a_u32),
-		._nlocal = l_getvi(ic, a_u16),
-		._nline = l_getvi(ic, a_u16),
-		._ncap = l_get(ic, a_u8),
-		._nstack = l_get(ic, a_u8),
-		._flags = l_get(ic, ProtoFlags)
-	};
+    init(info) {
+        ._nconst = l_getvi(ic, a_u32),
+        ._ninsn = l_getvi(ic, a_u32),
+        ._nsub = l_getvi(ic, a_u32),
+        ._nlocal = l_getvi(ic, a_u16),
+        ._nline = l_getvi(ic, a_u16),
+        ._ncap = l_get(ic, a_u8),
+        ._nstack = l_get(ic, a_u8),
+        ._flags = l_get(ic, ProtoFlags)
+    };
 	if (info->_flags._froot != root)
 		return ALO_EINVAL;
     return ALO_SOK;

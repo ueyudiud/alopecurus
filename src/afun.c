@@ -83,7 +83,10 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 		self->_dbg_lines = ptr_of(LineInfo, addr);
 		addr += sizeof(LineInfo);
 
-		self->_dbg_lines[0] = new(LineInfo) { ._end = UINT32_MAX, ._lineno = 0 };
+        init(&self->_dbg_lines[0]) {
+            ._end = UINT32_MAX,
+            ._lineno = 0
+        };
 	}
 
 	if (desc->_flags._froot) {
