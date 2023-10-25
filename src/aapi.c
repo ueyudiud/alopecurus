@@ -417,14 +417,16 @@ void alo_newtuple(a_henv env, a_usize n) {
 void alo_newlist(a_henv env, a_usize n) {
 	GList* val = ai_list_new(env);
 	v_set_obj(env, api_incr_stack(env), val);
-	ai_list_hint(env, val, n);
+    ai_list_hint(env, val, n);
     ai_gc_trigger(env);
 }
 
 void alo_newtable(a_henv env, a_usize n) {
 	GTable* val = ai_table_new(env);
 	v_set_obj(env, api_incr_stack(env), val);
-	ai_table_hint(env, val, n);
+	if (n > 0) {
+        ai_table_grow(env, val, n);
+    }
     ai_gc_trigger(env);
 }
 
@@ -443,38 +445,39 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 	return val;
 }
 
-a_msg alo_rawlen(a_henv env, a_isize id, a_usize* plen) {
+/**
+ ** Get length of value without call meta method.
+ **
+ *@param env the runtime environment.
+ *@param id the value index.
+ *@return a non-negative number for the length of object, or ALO_EXIMPL for method not implemented.
+ */
+a_msg alo_rawlen(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
 
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
 			GTuple* p = v_as_tuple(v);
-			*plen = p->_len;
-			break;
+			return cast(a_i32, p->_len);
 		}
 		case T_LIST: {
 			GList* p = v_as_list(v);
-			*plen = p->_len;
-			break;
+            return cast(a_i32, p->_len);
 		}
 		case T_TABLE: {
 			GTable* p = v_as_table(v);
-			*plen = p->_len;
-			break;
+            return cast(a_i32, p->_len);
 		}
 		case T_USER: {
 			GUser* p = v_as_user(v);
 			a_vfp(len) len = g_vfetch(p, len);
 			if (len == null) return ALO_EXIMPL;
-			*plen = g_vcallp(env, p, len);
-			break;
+			return g_vcallp(env, p, len);
 		}
 		default: {
 			return ALO_EXIMPL;
 		}
 	}
-
-	return ALO_SOK;
 }
 
 a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
@@ -526,14 +529,14 @@ a_msg alo_rawget(a_henv env, a_isize id) {
 	return tag_of(env, v);
 }
 
-a_msg alo_rawset(a_henv env, a_isize id, a_isize* pctx) {
+a_msg alo_rawset(a_henv env, a_isize id) {
 	api_check_elem(env, 2);
 
 	Value v = api_elem(env, id);
 	Value vv = api_decr_stack(env);
 	Value vk = api_decr_stack(env);
 
-	try(ai_vm_uset(env, v, vk, vv, pctx));
+	try(ai_vm_uset(env, v, vk, vv));
 
 	return ALO_SOK;
 }
@@ -609,6 +612,8 @@ a_bool alo_fattrz(a_henv env, a_enum n) {
 	switch (n) {
 		case ALO_FATTR_YIELD:
 			return true;
+        case ALO_FATTR_ASYNC:
+            return false;
 		default:
 			return false;
 	}

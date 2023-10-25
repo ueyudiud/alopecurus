@@ -37,7 +37,7 @@ static void aux_dealloc(unused void* ctx, void* blk, unused a_usize sz) {
 }
 
 a_henv aloL_create(void) {
-	a_alloc af = {
+	alo_Alloc af = {
 		.allocate = aux_alloc,
 		.reallocate = aux_realloc,
 		.deallocate = aux_dealloc

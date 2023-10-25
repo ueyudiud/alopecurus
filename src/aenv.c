@@ -184,7 +184,7 @@ static a_usize sizeof_MRoute() {
 	return size;
 }
 
-a_msg alo_create(a_alloc const* af, void* ac, a_henv* penv) {
+a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	a_usize size = sizeof_MRoute();
 	MRoute* mr = ai_mem_valloc(af, ac, size);
 	if (mr == null) return ALO_ENOMEM;

@@ -14,7 +14,7 @@ intern a_bool ai_vm_equals(a_henv env, Value v1, Value v2);
 intern Value ai_vm_get(a_henv env, Value v1, Value v2);
 intern a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv);
 intern void ai_vm_set(a_henv env, Value v1, Value v2, Value v3);
-intern a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx);
+intern a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3);
 intern void ai_vm_call(a_henv env, Value* base, a_i32 nret);
 intern Value ai_vm_call_meta(a_henv env, Value* bot);
 

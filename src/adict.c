@@ -63,7 +63,7 @@ static void dict_put_inplace(a_henv env, Dict* self, GStr* key, Value val) {
 void ai_dict_hint(a_henv env, Dict* self, a_usize len) {
     a_usize need = self->_len + len;
     if (self->_ptr == null) {
-        a_usize new_cap = ceil_pow2m1_usize(need) + 1;
+        a_usize new_cap = ceil_pow2_usize(need);
         if (need >= new_cap * ALO_DICT_LOAD_FACTOR) {
             new_cap <<= 1;
         }
@@ -77,7 +77,7 @@ void ai_dict_hint(a_henv env, Dict* self, a_usize len) {
     }
     else {
         a_usize old_cap = self->_hmask + 1;
-        a_usize new_cap = ceil_pow2m1_usize(need) + 1;
+        a_usize new_cap = ceil_pow2_usize(need);
         if (need >= new_cap * ALO_DICT_LOAD_FACTOR) {
             new_cap <<= 1;
         }
@@ -102,26 +102,29 @@ void ai_dict_hint(a_henv env, Dict* self, a_usize len) {
     }
 }
 
-a_msg ai_dict_uget(a_henv env, Dict* self, GStr* key, Value* pval) {
-    a_u32 hash = key->_hash;
-    a_u32 hmask = self->_hmask;
-    a_u32 i = hash & hmask;
+#define dict_for(self,hash,n) \
+    for (a_hash _p = (hash), _m = (self)->_hmask, n = _p & _m; ; _p >>= 5, n = (n * 5 + 1 + _p) & _m)
 
+static Value* dict_ref(a_henv env, Dict* self, GStr* key) {
     if (self->_len == 0)
-        return ALO_EEMPTY;
+        return null;
 
-    loop {
+    dict_for(self, key->_hash, i) {
         DNode* node = &self->_ptr[i];
         if (node->_key == key) {
-            v_set(env, pval, node->_value);
-            return ALO_SOK;
+            return &node->_value;
         }
         if (node->_key == null) {
-            return ALO_EEMPTY;
+            return null;
         }
-        hash >>= 5;
-        i = (i * 5 + 1 + hash) & hmask;
     }
+}
+
+a_msg ai_dict_uget(a_henv env, Dict* self, GStr* key, Value* pval) {
+    Value* pv = dict_ref(env, self, key);
+    if (pv == null) return ALO_EEMPTY;
+    v_cpy(env, pval, pv);
+    return ALO_SOK;
 }
 
 Value* ai_dict_uref(a_henv env, Dict* self, GStr* key, a_usize* pctx) {
@@ -136,7 +139,7 @@ Value* ai_dict_uref(a_henv env, Dict* self, GStr* key, a_usize* pctx) {
     if (self->_len >= (hmask + 1) * ALO_DICT_LOAD_FACTOR)
         goto find;
 
-    loop {
+    dict_for(self, hash, i) {
         DNode* node = &self->_ptr[i];
         if (node->_key == key) {
             return &node->_value;
@@ -148,8 +151,6 @@ Value* ai_dict_uref(a_henv env, Dict* self, GStr* key, a_usize* pctx) {
         if (node->_key == null) {
             goto empty;
         }
-        hash >>= 5;
-        i = (i * 5 + 1 + hash) & hmask;
     }
 
 find:
@@ -172,7 +173,7 @@ empty:
 }
 
 a_msg ai_dict_uset(a_henv env, Dict* self, GStr* key, Value val, a_usize* pctx) {
-    Value* pv = ai_dict_uref(env, self, key, pctx);
+    Value* pv = dict_ref(env, self, key);
     if (pv != null) {
         v_set(env, pv, val);
         return ALO_SOK;

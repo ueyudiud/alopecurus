@@ -196,7 +196,8 @@ GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
     va_list varg2;
     va_copy(varg2, varg);
 
-    a_usize len = cast(a_isize, vsnprintf(buf, sizeof(buf), fmt, varg2));
+    int len = vsnprintf(buf, sizeof(buf), fmt, varg2);
+    assume(len >= 0, "catch format error.");
 	
 	va_end(varg2);
 

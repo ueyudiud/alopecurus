@@ -112,7 +112,7 @@ typedef a_i32 a_int;
 typedef a_f64 a_float;
 
 /* Allocation function table. */
-typedef struct alo_Alloc a_alloc;
+typedef struct alo_Alloc alo_Alloc;
 /* Environment handle. */
 typedef struct alo_Env* a_henv;
 
@@ -131,7 +131,7 @@ typedef a_i32 (*a_ofun)(a_henv env, void* ctx, a_byte const* src, a_usize len);
 typedef a_i32 (*a_ifun)(a_henv env, void* ctx, void const** pdst, a_usize* plen);
 
 ALO_EXPORT a_msg (alo_init)(void);
-ALO_EXPORT a_msg (alo_create)(a_alloc const* af, void* ac, a_henv* penv);
+ALO_EXPORT a_msg (alo_create)(alo_Alloc const* af, void* ac, a_henv* penv);
 ALO_EXPORT void (alo_destroy)(a_henv env);
 ALO_EXPORT void (alo_setpanic)(a_henv env, a_cfun f);
 ALO_EXPORT void (alo_sethook)(a_henv env, a_hfun kf, a_hctx kc, a_flags mask);
@@ -167,11 +167,10 @@ ALO_EXPORT void (alo_newtable)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_usize n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 
-ALO_EXPORT a_msg (alo_rawlen)(a_henv env, a_isize id, a_usize* plen);
+ALO_EXPORT a_msg (alo_rawlen)(a_henv env, a_isize id);
 ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_isize id, a_int key);
 ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_isize id);
-ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_isize id, a_isize* pctx);
-ALO_EXPORT a_msg (alo_rawput)(a_henv env, a_isize id, a_isize* pctx);
+ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_put)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_call)(a_henv env, a_usize narg, a_isize nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsav);

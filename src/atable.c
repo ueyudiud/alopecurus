@@ -17,7 +17,11 @@
 
 static VTable const table_vtable;
 
-#define MAX_BUCKET_CAPACITY ((UINT32_MAX >> 1) + 1)
+#if ALO_M64
+# define MAX_BUCKET_CAPACITY (cast(a_usize, UINT32_MAX) + 1)
+#elif ALO_M32
+# define MAX_BUCKET_CAPACITY ceil_pow2_usize(UINT32_MAX / sizeof(TNode))
+#endif
 
 GTable* ai_table_new(a_henv env) {
     GTable* self = ai_mem_alloc(env, sizeof(GTable));
@@ -63,13 +67,11 @@ static void table_put_inplace(a_henv env, GTable* self, Value vk, a_hash hash, V
     }
 }
 
-static void table_resize(a_henv env, GTable* self, a_usize new_cap) {
+static void table_resize(a_henv env, GTable* self, a_usize old_cap, a_usize new_cap) {
     assume(new_cap <= MAX_BUCKET_CAPACITY);
 
     TNode* new_ptr = ai_mem_vnew(env, TNode, new_cap);
     TNode* old_ptr = self->_ptr;
-
-    a_usize old_cap = self->_hmask + 1;
 
     self->_hmask = new_cap - 1;
     self->_ptr = new_ptr;
@@ -91,31 +93,26 @@ static void table_resize(a_henv env, GTable* self, a_usize new_cap) {
     }
 }
 
-static a_bool table_hint(a_henv env, GTable* self, a_usize len) {
-    if (len == 0) return false;
-
-    a_usize old_cap = self->_ptr != null ? self->_hmask + 1 : 0;
+static a_bool table_grow(a_henv env, GTable* self, a_usize len) {
+    a_usize old_cap = (cast(a_usize, self->_hmask) + 1) & ~usizec(1);
     a_usize need;
 
     try(checked_add_usize(self->_len, len, &need));
-    if (unlikely(need >= MAX_BUCKET_CAPACITY / 4 * 3)) return true;
 
-    if (need <= old_cap * 3 / 4) return false;
+    if (unlikely(need >= MAX_BUCKET_CAPACITY)) return true;
 
-    a_usize new_cap = ceil_pow2m1_usize(need * 4 / 3) + 1;
+    a_usize new_cap = ceil_pow2_usize(need);
     new_cap = max(new_cap, 4);
+    if (need > new_cap / 4 * 3) new_cap <<= 1;
+    new_cap = min(MAX_BUCKET_CAPACITY, new_cap);
 
-    table_resize(env, self, new_cap);
+    table_resize(env, self, old_cap, new_cap);
     return false;
 }
 
-static void table_hint_failed(a_henv env) {
-    ai_err_raisef(env, ALO_EINVAL, "too many elements.");
-}
-
-void ai_table_hint(a_henv env, GTable* self, a_usize len) {
-    if (unlikely(table_hint(env, self, len))) {
-        table_hint_failed(env);
+void ai_table_grow(a_henv env, GTable* self, a_usize len) {
+    if (unlikely(table_grow(env, self, len))) {
+        ai_err_raisef(env, ALO_EINVAL, "table size too large.");
     }
 }
 

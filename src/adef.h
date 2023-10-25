@@ -232,8 +232,8 @@ always_inline a_u32 clz_usize(a_usize a) {
 #endif
 }
 
-always_inline a_usize ceil_pow2m1_usize(a_usize a) {
-    return likely(a != 0) ? ~usizec(0) >> clz_usize(a) : 0;
+always_inline a_usize ceil_pow2_usize(a_usize a) {
+    return (~usizec(0) >> clz_usize(a)) + 1;
 }
 
 #define pad_to_raw(s,g) (((s) + (g) - 1) & ~((g) - 1))

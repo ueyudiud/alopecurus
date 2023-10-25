@@ -15,6 +15,8 @@
 static VTable const tuple_vtable;
 
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
+    if (len > INT32_MAX) ai_err_raisef(env, ALO_EINVAL, "tuple size too large.");
+
     GTuple* self = ai_mem_alloc(env, sizeof_GTuple(len));
 
 	self->_vptr = &tuple_vtable;

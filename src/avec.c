@@ -7,6 +7,7 @@
 
 #include "amem.h"
 #include "agc.h"
+#include "aerr.h"
 
 #include "avec.h"
 
@@ -28,6 +29,13 @@ void ai_vec_grow(a_henv env, Vec* self, a_usize need) {
 
     a_usize old_cap = self->_cap;
     a_usize new_cap = max(old_cap * 2, need + 4);
+
+    if (unlikely(need > INT32_MAX)) {
+        ai_err_raisef(env, ALO_EINVAL, "list size too large.");
+    }
+    else if (unlikely(new_cap > INT32_MAX)) {
+        new_cap = INT32_MAX; /* Trim to maximum capacity. */
+    }
 
     self->_ptr = ai_mem_vgrow(env, self->_ptr, old_cap, new_cap);
     self->_cap = new_cap;

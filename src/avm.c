@@ -211,7 +211,7 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
     }
 }
 
-a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
+a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3) {
     switch (v_get_tag(v1)) {
         case T_LIST: {
             return ai_list_uset(env, v_as_list(v1), v2, v3);
@@ -764,7 +764,9 @@ tail_call:
 
                 GTable* val = ai_table_new(env);
                 v_set_obj(env, &R[a], val);
-                ai_table_hint(env, val, b);
+                if (b > 0) {
+                    ai_table_grow(env, val, b);
+                }
 
                 check_gc();
                 break;
