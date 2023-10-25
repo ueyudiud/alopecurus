@@ -494,7 +494,6 @@ void ai_type_clean(Global* g) {
     type_clean(g, &g->_types._func);
     type_clean(g, &g->_types._route);
     type_clean(g, &g->_types._type);
-    type_clean(g, &g->_types._mod);
     cache_drop(g, &g->_type_cache);
 }
 

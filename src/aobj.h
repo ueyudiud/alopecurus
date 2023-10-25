@@ -787,7 +787,6 @@ struct Global {
 		GType _table;
 		GType _func;
 		GType _type;
-		GType _mod;
 		GType _route;
 	} _types;
 };
