@@ -285,6 +285,8 @@ a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
     self->_mver += 1;
 
     ai_gc_barrier_forward_val(env, self, vv);
+
+    return ALO_SOK;
 }
 
 a_msg ai_obj_vlook(a_henv env, Value v, GStr* k, Value* pv) {

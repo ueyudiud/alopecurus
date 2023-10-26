@@ -68,7 +68,7 @@ static a_bool at_dict_next_(Dict* self, a_u32* pi, Node** pn) {
 
 #endif
 
-#define dict_for_hash(self,hash,n) \
+#define at_dict_for_hash(self,hash,n) \
     for (a_hash                    \
         _perturb = (hash),         \
         _mask = (self)->_hmask,    \
@@ -80,7 +80,7 @@ static a_bool at_dict_next_(Dict* self, a_u32* pi, Node** pn) {
     )
 
 static a_u32 dict_reserve_inplace(Dict* self, a_hash hash) {
-    dict_for_hash(self, hash, i) {
+    at_dict_for_hash(self, hash, i) {
         Node* node = &self->_ptr[i];
         if (node_is_empty(node)) {
             return i;
@@ -165,7 +165,7 @@ static a_bool at_dict_find(a_henv env, Dict* self, TKey key, a_usize* pindex) {
     if (self->_len == 0)
         return false;
 
-    dict_for_hash(self, key_hash(key), i) {
+    at_dict_for_hash(self, key_hash(key), i) {
         Node* node = &self->_ptr[i];
         if (node_match(node, key)) {
             *pindex = i;

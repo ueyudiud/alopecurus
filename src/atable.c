@@ -121,7 +121,7 @@ static a_bool table_find_with_trivial_equality(GTable* self, Key key, a_usize* p
     if (self->_len == 0) {
         return false;
     }
-    dict_for_hash(self, key._hash, index) {
+    at_dict_for_hash(self, key._hash, index) {
         TNode* node = &self->_ptr[index];
         if (v_trivial_equals(node->_key._value, key._value)) {
             *pindex = index;
@@ -137,7 +137,7 @@ static a_bool table_find_with_generic_equality(a_henv env, GTable* self, Key key
     if (self->_len == 0) {
         return false;
     }
-    dict_for_hash(self, key._hash, index) {
+    at_dict_for_hash(self, key._hash, index) {
         TNode* node = &self->_ptr[index];
         if (ai_vm_equals(env, node->_key._value, key._value)) {
             *pindex = index;
