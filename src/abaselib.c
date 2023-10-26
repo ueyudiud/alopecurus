@@ -136,7 +136,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			break;
 		}
 		case T_TYPE: {
-			aloi_show("<type:%s>", str2ntstr(v_as_type(v)->_name));
+			aloi_show("<type:%s>", str2ntstr(v_as_type(v)->_id));
 			break;
 		}
 		case T_USER: {

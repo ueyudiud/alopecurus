@@ -20,12 +20,10 @@ typedef struct GTable GTable;
 typedef struct GFun GFun;
 typedef struct GUser GUser;
 typedef struct alo_Env GRoute;
+typedef struct GType GType;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 typedef struct GLoader GLoader;
-
-typedef struct GType GType;
-typedef struct GUserType GUserType;
 
 /* Object pointer. */
 typedef GObj* a_hobj;
@@ -54,7 +52,7 @@ typedef struct TypeCache TypeCache;
 #define T_STR u32c(8)
 #define T_TUPLE u32c(10)
 #define T_USER u32c(11)
-#define T_META u32c(13)
+#define T_STUB u32c(13)
 #define T_INT u32c(14)
 #define T_NAN u32c(15)
 
@@ -367,23 +365,6 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
  * Type
  *=========================================================*/
 
-#define GTYPE_STRUCT_HEADER \
-	GOBJ_STRUCT_HEADER;     \
-                            \
-    a_u32 _size;            \
-    /* Method version, changed when the order of existed fields changed. */ \
-    a_u32 _mver;            \
-                            \
-    a_u32 _flags;           \
-     /* The type tag. */    \
-    a_u8 _tag;              \
-     /* Used for linked list in loader. */                                  \
-    GType* _mnext;          \
-    /* The loader of metadata, null for builtin loader. */                  \
-    GLoader* _loader;       \
-    /* The metadata name. */\
-    GStr* _name
-
 #define META_CONST_FIELD 0
 #define META_STATIC_FIELD 1
 #define META_MEMBER_METHOD 2
@@ -397,8 +378,11 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 #define META_MODIFIER_MEMBER_VISIBLE 0x0002
 
 typedef struct {
-    Value _mirror; /* Mirror object of metadata. */
-    a_u32 _field_offset;
+    union {
+        Value _slot;
+        void (*_fptr)();
+        a_usize _gptr;
+    };
     a_u16 _modifiers;
     a_u8 _tag;
 } Meta;
@@ -418,20 +402,22 @@ typedef struct {
     MetaRef* _ptr;
     a_u32 _len;
     a_u32 _hmask;
-} MetaMap;
+} MetaTable;
 
 /**
  ** Type.
  */
 struct GType {
-    GTYPE_STRUCT_HEADER;
-    MetaMap _map;
+	GOBJ_STRUCT_HEADER;
+    a_u32 _size;
+    a_u32 _mver; /* Method version, changed when the order of existed fields changed. */
+    a_u32 _flags;
+    a_u8 _tag; /* The type tag. */
+    GType* _mnext; /* Used for linked list in loader. */
+    GLoader* _loader; /* The loader of metadata, null for builtin loader. */
+    GStr* _id; /* The metadata identifier. */
+    MetaTable _table;
     Metas _metas;
-};
-
-struct GUserType {
-    GTYPE_STRUCT_HEADER;
-    VTable _vtbl[1];
 };
 
 struct TypeCache {
@@ -459,9 +445,14 @@ always_inline GType* v_as_type(Value v) {
     return g_cast(GType, v_as_obj(v));
 }
 
-#define v_of_meta(v) v_box_nan(T_META, v)
+#define v_of_stub(v) v_box_nan(T_STUB, v)
 
-#define v_is_meta(v) v_is(v, T_META)
+#define v_is_stub(v) v_is(v, T_STUB)
+
+always_inline a_u32 v_as_stub(Value v) {
+    assume(v_is_stub(v), "not stub.");
+    return cast(a_u32, v._);
+}
 
 /*=========================================================*
  * String
@@ -874,7 +865,7 @@ always_inline GType* g_typeof(a_henv env, a_hobj p) {
 #define g_typeof(env,p) g_typeof(env, gobj_cast(p))
 
 always_inline char const* g_nameof(a_henv env, a_hobj p) {
-	return str2ntstr(g_typeof(env, p)->_name);
+	return str2ntstr(g_typeof(env, p)->_id);
 }
 
 #define g_nameof(env,p) g_nameof(env, gobj_cast(p))

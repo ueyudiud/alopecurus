@@ -412,7 +412,7 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
 	GType* tp = v_as_type(api_elem(env, -1));
     ai_type_cache(env, null, tp);
-	ai_vm_set(env, G(env)->_global, v_of_obj(tp->_name), v_of_obj(tp));
+	ai_vm_set(env, G(env)->_global, v_of_obj(tp->_id), v_of_obj(tp));
 	api_decr_stack(env);
 }
 

@@ -31,7 +31,7 @@ static a_msg type___call__(a_henv env) { /* Should this function write in script
     }
     else {
         //TODO No constructor, try default initializer.
-        aloL_raisef(env, "no entry for '%s.__new__'", str2ntstr(self->_name));
+        aloL_raisef(env, "no entry for '%s.__new__'", str2ntstr(self->_id));
     }
 
     return 1;
