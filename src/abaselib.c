@@ -118,7 +118,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
                         else {
                             tail = true;
                         }
-                        l_show_impl(env, node->_key, depth + 1);
+                        l_show_impl(env, node->_key._value, depth + 1);
                         aloi_show(" -> ");
                         l_show_impl(env, node->_value, depth + 1);
                         if (--n == 0) {

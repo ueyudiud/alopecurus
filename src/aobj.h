@@ -12,9 +12,6 @@
 #include "astrs.h"
 #include "actx.h"
 
-typedef struct Vec Vec;
-typedef struct Dict Dict;
-
 typedef struct GObj GObj;
 typedef struct GStr GStr;
 typedef struct GTuple GTuple;
@@ -257,15 +254,6 @@ always_inline void v_set_ptr(Value* d, void* v) {
  * Internal Data Structure
  *=========================================================*/
 
-#define VEC_STRUCT_HEADER \
-    a_u32 _len;           \
-    a_u32 _cap;           \
-    Value* _ptr
-
-struct Vec {
-    VEC_STRUCT_HEADER;
-};
-
 typedef struct {
     GStr* _key;
     Value _value;
@@ -405,7 +393,7 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 #define META_MEMBER_FIELD_INT 6
 #define META_MEMBER_FIELD_UINT 7
 
-#define META_MODIFIER_MUTABLE 0x0001
+#define META_MODIFIER_CONFIGURABLE 0x0001
 #define META_MODIFIER_MEMBER_VISIBLE 0x0002
 
 typedef struct {
@@ -421,12 +409,23 @@ typedef struct {
     a_u32 _len;
 } Metas;
 
+typedef struct {
+    a_usize _key;
+    Value _value;
+} MetaRef;
+
+typedef struct {
+    MetaRef* _ptr;
+    a_u32 _len;
+    a_u32 _hmask;
+} MetaMap;
+
 /**
  ** Type.
  */
 struct GType {
     GTYPE_STRUCT_HEADER;
-    Dict _fields;
+    MetaMap _map;
     Metas _metas;
 };
 
@@ -515,12 +514,9 @@ always_inline GTuple* v_as_tuple(Value v) {
 
 struct GList {
 	GOBJ_STRUCT_HEADER;
-    union {
-        Vec _vec;
-        struct {
-            VEC_STRUCT_HEADER;
-        };
-    };
+    a_u32 _len;
+    a_u32 _cap;
+    Value* _ptr;
 };
 
 #define v_is_list(v) v_is(v, T_LIST)
@@ -535,6 +531,7 @@ always_inline GList* v_as_list(Value v) {
  *=========================================================*/
 
 typedef struct TNode TNode;
+typedef struct Key Key;
 
 /**
  ** Linked hash table.
@@ -548,13 +545,17 @@ struct GTable {
     a_u32 _llast;
 };
 
+struct Key {
+    Value _value;
+    a_hash _hash;
+};
+
 /**
  ** Table node.
  */
 struct TNode {
 	Value _value;
-	Value _key;
-	a_hash _hash;
+	Key _key;
     a_u32 _lprev;
     a_u32 _lnext;
 };

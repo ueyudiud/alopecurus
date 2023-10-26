@@ -105,6 +105,12 @@ always_inline a_enum ai_op_bin2tm(a_enum op) {
 # define ai_op_mod_int(a,b) ((a) % (b))
 #endif
 
+#ifdef aloi_op_pow_float
+# define ai_op_pow_float(a,b) aloi_op_pow_float(a, b)
+#else
+# define ai_op_pow_float(a,b) __builtin_pow(a, b)
+#endif
+
 #ifdef aloi_op_mod_float
 # define ai_op_mod_float(a,b) aloi_op_div_float(a, b)
 #else
@@ -216,6 +222,8 @@ always_inline a_float ai_op_bin_float(a_float a, a_float b, a_enum op) {
 			return ai_op_div_float(a, b);
 		case OP_MOD:
 			return ai_op_mod_float(a, b);
+        case OP_POW:
+            return ai_op_pow_float(a, b);
 		default:
 			panic("bad operation.");
 	}

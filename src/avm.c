@@ -326,19 +326,19 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
-            Value* vd = vm_push_args(env, n->_key, n->_value);
+            Value* vd = vm_push_args(env, n->_key._value, n->_value);
             return (ValueSlice) { vd, 2 };
         }
         case T_TYPE: {
             GType* p = v_as_type(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (p->_fields._len == 0 || i <= p->_fields._hmask)
+            if (p->_map._len == 0 || i <= p->_map._hmask)
                 return (ValueSlice) { };
 
             DNode* n;
-            while ((n = &p->_fields._ptr[i])->_key == null) {
+            while ((n = &p->_map._ptr[i])->_key == null) {
                 i += 1;
-                if (i > p->_fields._hmask)
+                if (i > p->_map._hmask)
                     return (ValueSlice) { };
             }
 
@@ -1036,13 +1036,13 @@ tail_call:
                 if (v_is_tuple(vb)) {
                     GTuple* val = v_as_tuple(vb);
                     check_stack(&R[a] + val->_len);
-					v_mov_all(env, &R[a], val->_ptr, val->_len);
+                    v_cpy_all(env, &R[a], val->_ptr, val->_len);
                     env->_stack._top = &R[a + val->_len];
                 }
                 else if (v_is_list(vb)) {
                     GList* val = v_as_list(vb);
                     check_stack(&R[a] + val->_len);
-					v_mov_all(env, &R[a], val->_ptr, val->_len);
+					v_cpy_all(env, &R[a], val->_ptr, val->_len);
                     env->_stack._top = &R[a + val->_len];
                 }
                 else {
@@ -1093,6 +1093,25 @@ tail_call:
                     v_set_int(&R[a], val);
                 }
                 else if (v_is_num(vb) && v_is_num(vc)) {
+                    a_float val = ai_op_bin_float(v_as_num(vb), v_as_num(vc), op);
+                    v_set_float(&R[a], val);
+                }
+                else {
+                    Value vt = vm_meta_bin(env, vb, vc, ai_op_bin2tm(op));
+                    reload_stack();
+                    v_set(env, &R[a], vt);
+                }
+                break;
+            }
+            case BC_POW: {
+                loadB();
+                loadC();
+
+                a_u32 op = bc - BC_ADD + OP_ADD;
+                Value vb = R[b];
+                Value vc = R[c];
+
+                if (v_is_num(vb) && v_is_num(vc)) {
                     a_float val = ai_op_bin_float(v_as_num(vb), v_as_num(vc), op);
                     v_set_float(&R[a], val);
                 }
@@ -1167,6 +1186,25 @@ tail_call:
                     v_set_int(&R[a], val);
                 }
                 else if (v_is_float(vb)) {
+                    a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
+                    v_set_float(&R[a], val);
+                }
+                else {
+                    Value vt = vm_meta_bin(env, vb, v_of_int(ic), ai_op_bin2tm(op));
+                    reload_stack();
+                    v_set(env, &R[a], vt);
+                }
+                break;
+            }
+            case BC_POWI: {
+                loadB();
+                loadsC();
+
+                a_u32 op = bc - BC_ADDI + OP_ADD;
+                Value vb = R[b];
+                a_int ic = cast(a_int, c);
+
+                if (v_is_float(vb)) {
                     a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
                     v_set_float(&R[a], val);
                 }

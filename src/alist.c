@@ -6,7 +6,6 @@
 #define ALO_LIB
 
 #include "aop.h"
-#include "avec.h"
 #include "amem.h"
 #include "agc.h"
 #include "aerr.h"
@@ -15,11 +14,19 @@
 
 static VTable const list_vtable;
 
+#define Vec GList
+
+#define at_vec_grow_amortized list_grow_amortized
+
+static a_bool at_vec_grow_amortized(a_henv env, Vec* self, a_usize addition);
+
+#include "avec.h"
+
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, sizeof(GList));
 
     self->_vptr = &list_vtable;
-    ai_vec_init(&self->_vec);
+    at_vec_init(self);
 
     ai_gc_register_object(env, self);
 
@@ -30,14 +37,34 @@ static void list_hint_failed(a_henv env) {
     ai_err_raisef(env, ALO_EINVAL, "too many elements.");
 }
 
+static a_bool list_grow_amortized(a_henv env, GList* self, a_usize addition) {
+    a_usize need;
+    try(checked_add_usize(self->_len, addition, &need));
+
+    assume(need >= self->_cap, "not need to grow.");
+
+    a_usize old_cap = self->_cap;
+    a_usize new_cap = max(old_cap * 2, need + 4);
+
+    if (unlikely(need > INT32_MAX)) {
+        return true;
+    }
+    else if (unlikely(new_cap > INT32_MAX)) {
+        new_cap = INT32_MAX; /* Trim to maximum capacity. */
+    }
+
+    at_vec_resize(env, self, old_cap, new_cap);
+    return false;
+}
+
 void ai_list_hint(a_henv env, GList* self, a_usize len) {
-    catch (ai_vec_hint(env, &self->_vec, len), _) {
+    catch (at_vec_hint(env, self, len), _) {
         list_hint_failed(env);
     }
 }
 
 void ai_list_push(a_henv env, GList* self, Value v) {
-    catch (ai_vec_push(env, &self->_vec, v), _) {
+    catch (at_vec_push(env, self, v), _) {
         list_hint_failed(env);
     }
 
@@ -45,7 +72,7 @@ void ai_list_push(a_henv env, GList* self, Value v) {
 }
 
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
-    catch (ai_vec_push_all(env, &self->_vec, src, len), _) {
+    catch (at_vec_push_all(env, self, src, len), _) {
         list_hint_failed(env);
     }
 
@@ -108,12 +135,14 @@ a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v) {
 }
 
 static void list_mark(Global* g, GList* self) {
-    ai_vec_mark(g, &self->_vec);
-    ai_gc_trace_work(g, sizeof(GList));
+    for (a_u32 i = 0; i < self->_len; ++i) {
+        ai_gc_trace_mark_val(g, self->_ptr[i]);
+    }
+    ai_gc_trace_work(g, sizeof(GList) + sizeof(Value) * self->_cap);
 }
 
 static void list_drop(Global* g, GList* self) {
-    ai_vec_deinit(g, &self->_vec);
+    at_vec_deinit(g, self);
     ai_mem_dealloc(g, self, sizeof(GList));
 }
 

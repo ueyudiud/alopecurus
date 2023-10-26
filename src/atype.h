@@ -7,14 +7,13 @@
 
 #include "aobj.h"
 
+#define TYPE_META_CAT_NORMAL 0
+#define TYPE_META_CAT_GETTER 1
+#define TYPE_META_CAT_SETTER 2
+#define TYPE_META_CAT_VPTR 3
+
 intern GType* ai_type_alloc(a_henv env, a_usize size);
 intern GType* ai_stype_new(a_henv env, GStr* name, GLoader* loader);
-
-intern GType* ai_type_look(a_henv env, GLoader* loader, GStr* name, a_bool load);
-intern void ai_type_cache(a_henv env, GLoader* loader, GType* type);
-intern void ai_type_cache_mark(Global* g, TypeCache* cache);
-intern void ai_type_boost(a_henv env);
-intern void ai_type_clean(Global* g);
 
 intern Value ai_type_get(a_henv env, GType* self, Value vk);
 intern void ai_type_set(a_henv env, GType* self, Value vk, Value vv);
@@ -22,6 +21,12 @@ intern a_msg ai_type_uget(a_henv env, GType* self, Value vk, Value* pv);
 intern a_msg ai_type_ugets(a_henv env, GType* self, GStr* k, Value* pv);
 intern a_msg ai_type_uset(a_henv env, GType* self, Value vk, Value vv);
 intern a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv);
+
+intern GType* ai_type_look(a_henv env, GLoader* loader, GStr* name, a_bool load);
+intern void ai_type_cache(a_henv env, GLoader* loader, GType* type);
+intern void ai_type_cache_mark(Global* g, TypeCache* cache);
+intern void ai_type_boost(a_henv env);
+intern void ai_type_clean(Global* g);
 
 intern a_msg ai_obj_vlook(a_henv env, Value v, GStr* k, Value* pv);
 intern a_msg ai_dyn_ugets(a_henv env, GObj* self, GStr* k, Value* pv);
