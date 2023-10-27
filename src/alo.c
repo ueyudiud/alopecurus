@@ -160,7 +160,7 @@ static a_i32 l_source_input(unused a_henv env, void* rctx, void const** pdst, a_
 	return 0;
 }
 
-#define EOF_MARK ", got <EOF>"
+#define EOF_MARK ", got <eof>"
 
 static a_bool l_is_eof_error(a_henv env) {
 	a_usize len;
