@@ -365,17 +365,14 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
  * Type
  *=========================================================*/
 
-#define META_CONST_FIELD 0
-#define META_STATIC_FIELD 1
-#define META_MEMBER_METHOD 2
-#define META_MEMBER_FIELD_ANY 3
-#define META_MEMBER_FIELD_STR 4
-#define META_MEMBER_FIELD_OPT_STR 5
-#define META_MEMBER_FIELD_INT 6
-#define META_MEMBER_FIELD_UINT 7
+#define META_DIRECT_METHOD 2
+#define META_FIELD_ANY 3
+#define META_FIELD_STR 4
+#define META_FIELD_OPT_STR 5
+#define META_FIELD_INT 6
+#define META_FIELD_UINT 7
 
 #define META_MODIFIER_CONFIGURABLE 0x0001
-#define META_MODIFIER_MEMBER_VISIBLE 0x0002
 
 typedef struct {
     union {
@@ -418,6 +415,7 @@ struct GType {
     GStr* _id; /* The metadata identifier. */
     MetaTable _table;
     Metas _metas;
+    /* Type slots below. */
 };
 
 struct TypeCache {

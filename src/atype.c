@@ -18,26 +18,6 @@
 
 static VTable const type_vtable;
 
-GType* ai_type_alloc(a_henv env, a_usize size) {
-	GType* self = ai_mem_alloc(env, size);
-	memclr(self, size);
-
-	self->_vptr = &type_vtable;
-	self->_size = size;
-
-	ai_gc_register_object(env, self);
-	return self;
-}
-
-GType* ai_stype_new(a_henv env, GStr* name, GLoader* loader) {
-	GType* self = ai_type_alloc(env, sizeof(GType));
-
-    self->_id = name;
-    self->_loader = loader;
-
-	return self;
-}
-
 static GStr* str_from_key(a_usize key) {
     return ptr_of(GStr, key & ~usizec(0x7));
 }
@@ -62,6 +42,27 @@ static a_usize key_from(GStr* str, a_usize cat) {
 
 #include "adict.h"
 
+GType* ai_type_alloc(a_henv env, a_usize size) {
+    GType* self = ai_mem_alloc(env, size);
+    memclr(self, size);
+
+    self->_vptr = &type_vtable;
+    self->_size = size;
+    at_dict_init(&self->_table);
+
+    ai_gc_register_object(env, self);
+    return self;
+}
+
+GType* ai_stype_new(a_henv env, GStr* name, GLoader* loader) {
+    GType* self = ai_type_alloc(env, sizeof(GType));
+
+    self->_id = name;
+    self->_loader = loader;
+
+    return self;
+}
+
 static Value* type_get_meta_ref(a_henv env, GType* self, GStr* key, a_usize cat) {
     return at_dict_get(env, &self->_table, key_from(key, cat));
 }
@@ -76,13 +77,13 @@ static a_msg obj_get_field(a_henv env, GObj* self, GStr* key, Value* pv) {
     Meta* meta = &type->_metas._ptr[v_as_stub(v_meta)];
 
     switch (meta->_tag) {
-        case META_MEMBER_FIELD_ANY: {
+        case META_FIELD_ANY: {
             Value v = *ptr_disp(Value, self, meta->_gptr);
             v_set(env, pv, v);
             return ALO_SOK;
         }
-        case META_MEMBER_FIELD_STR:
-        case META_MEMBER_FIELD_OPT_STR: {
+        case META_FIELD_STR:
+        case META_FIELD_OPT_STR: {
             a_hobj p = *ptr_disp(a_hobj, self, meta->_gptr);
             if (p != null) {
                 v_set_obj(env, pv, p);
@@ -92,8 +93,8 @@ static a_msg obj_get_field(a_henv env, GObj* self, GStr* key, Value* pv) {
             }
             return ALO_SOK;
         }
-        case META_MEMBER_FIELD_INT:
-        case META_MEMBER_FIELD_UINT: {
+        case META_FIELD_INT:
+        case META_FIELD_UINT: {
             a_int i = *ptr_disp(a_int, self, meta->_gptr);
             v_set_int(pv, i);
             return ALO_SOK;
@@ -112,25 +113,25 @@ static a_msg obj_set_field(a_henv env, GObj* self, GStr* key, Value vv) {
     Meta* meta = &type->_metas._ptr[v_as_stub(v_meta)];
 
     switch (meta->_tag) {
-        case META_MEMBER_FIELD_ANY: {
+        case META_FIELD_ANY: {
             Value* p = ptr_disp(Value, self, meta->_gptr);
             v_set(env, p, v_meta);
             return ALO_SOK;
         }
-        case META_MEMBER_FIELD_STR: {
+        case META_FIELD_STR: {
             if (!v_is_str(vv)) return ALO_EINVAL;
             GStr** pp = ptr_disp(GStr*, self, meta->_gptr);
             *pp = v_as_str(vv);
             return ALO_SOK;
         }
-        case META_MEMBER_FIELD_OPT_STR: {
+        case META_FIELD_OPT_STR: {
             if (!(v_is_str(vv) || v_is_nil(vv))) return ALO_EINVAL;
             GStr** pp = ptr_disp(GStr*, self, meta->_gptr);
             *pp = v_is_nil(vv) ? null : v_as_str(vv);
             return ALO_SOK;
         }
-        case META_MEMBER_FIELD_INT:
-        case META_MEMBER_FIELD_UINT: {
+        case META_FIELD_INT:
+        case META_FIELD_UINT: {
             if (!(v_is_int(vv))) return ALO_EINVAL;
             a_int* pi = ptr_disp(a_int, self, meta->_gptr);
             *pi = v_as_int(vv);
@@ -140,22 +141,28 @@ static a_msg obj_set_field(a_henv env, GObj* self, GStr* key, Value vv) {
     }
 }
 
-static Value type_get_meta_mirror(a_henv env, GType* self, Meta* meta) {
-    if (!v_is_empty(meta->_slot))
-        return meta->_slot;
-
+static Value type_get_meta(a_henv env, GType* self, Meta* meta) {
     quiet(env);
+    quiet(self);
 
     switch (meta->_tag) {
-        case META_CONST_FIELD: panic("constant field always has mirror.");
-        case META_STATIC_FIELD: panic("static field always has mirror.");
-        case META_MEMBER_METHOD: panic("member method always has mirror.");
+        case META_DIRECT_METHOD: {
+            return meta->_slot;
+        }
         default: unreachable(); //TODO
     }
 }
 
-static Value type_unwrap_maybe_meta(a_henv env, GType* self, Value v) {
-    return v_is_stub(v) ? type_get_meta_mirror(env, self, &self->_metas._ptr[v_as_stub(v)]) : v;
+static Value type_wrap_maybe_stub(a_henv env, GType* self, Value* pv) {
+    Value v = *pv;
+
+    if (unlikely(v_is_stub(v))) {
+        v = type_get_meta(env, self, &self->_metas._ptr[v_as_stub(v)]);
+        v_set(env, pv, v);
+        ai_gc_barrier_forward_val(env, self, v);
+    }
+
+    return v;
 }
 
 static Value type_gets(a_henv env, GType* self, GStr* key) {
@@ -166,12 +173,12 @@ static Value type_gets(a_henv env, GType* self, GStr* key) {
     if (msg == ALO_SOK)
         return v;
 
-    Value const* p = type_get_meta_ref(env, self, key, TYPE_META_CAT_STATIC);
+    Value* p = type_get_meta_ref(env, self, key, TYPE_META_CAT_STATIC);
 
     if (p == null)
         goto invalid;
 
-    return type_unwrap_maybe_meta(env, self, *p);
+    return type_wrap_maybe_stub(env, self, p);
 
 invalid:
     ai_err_raisef(env, ALO_EXIMPL, "cannot access field for type: '%s.%s'",
@@ -243,11 +250,10 @@ a_msg ai_type_ugets(a_henv env, GType* self, GStr* k, Value* pv) {
     a_msg msg = obj_get_field(env, gobj_cast(self), k, pv);
     if (msg != ALO_EEMPTY) return msg;
 
-    Value const* p = type_get_meta_ref(env, self, k, TYPE_META_CAT_STATIC);
-
+    Value* p = type_get_meta_ref(env, self, k, TYPE_META_CAT_STATIC);
     if (p == null) return ALO_EEMPTY;
 
-    v_set(env, pv, type_unwrap_maybe_meta(env, self, *p));
+    v_set(env, pv, type_wrap_maybe_stub(env, self, p));
     return ALO_SOK;
 }
 
@@ -258,9 +264,7 @@ a_msg ai_type_uset(a_henv env, GType* self, Value vk, Value vv) {
 
 a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
     a_msg msg = obj_set_field(env, gobj_cast(self), k, vv);
-
-    if (msg != ALO_EEMPTY)
-        return msg;
+    if (msg != ALO_EEMPTY) return msg;
 
     Value* p = type_get_meta_ref(env, self, k, TYPE_META_CAT_STATIC);
 
@@ -275,7 +279,7 @@ a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
         v_set(env, p, vv);
     }
     else {
-        catch (at_dict_put(env, &self->_table, addr_of(k) | TYPE_META_CAT_STATIC, vv), _) {
+        catch (at_dict_put(env, &self->_table, key_from(k, TYPE_META_CAT_STATIC), vv), _) {
             return ALO_EINVAL;
         }
 
@@ -295,7 +299,7 @@ a_msg ai_obj_vlook(a_henv env, Value v, GStr* k, Value* pv) {
     Value const* pv_meta = type_get_meta_ref(env, type, k, TYPE_META_CAT_MEMBER);
     if (pv_meta == null) return ALO_EEMPTY;
 
-    *pv = type_unwrap_maybe_meta(env, type, *pv_meta);
+    v_cpy(env, pv, pv_meta);
     return ALO_SOK;
 }
 
@@ -511,7 +515,7 @@ void ai_type_boost(a_henv env) {
 
     type_new_meta_fast_inplace(env, g_type(env, _type), "__id__", TYPE_META_CAT_GETTER, (Meta) {
         ._gptr = offsetof(GType, _id),
-        ._tag = META_MEMBER_FIELD_STR,
+        ._tag = META_FIELD_STR,
         ._modifiers = 0,
     });
 }

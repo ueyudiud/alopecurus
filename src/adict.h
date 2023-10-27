@@ -101,7 +101,7 @@ static void at_dict_emplace(a_henv env, Dict* self, a_u32 index, TKey key, Value
 
 #ifndef at_dict_erase
 
-static void at_dict_erase(a_henv env, Dict* self, a_u32 index) {
+static void at_dict_erase(unused a_henv env, Dict* self, a_u32 index) {
     Node* node = &self->_ptr[index];
     node_erase(node);
 }
@@ -161,7 +161,7 @@ static a_bool at_dict_hint(a_henv env, Dict* self, a_usize addition) {
 
 #ifndef at_dict_find
 
-static a_bool at_dict_find(a_henv env, Dict* self, TKey key, a_usize* pindex) {
+static a_bool at_dict_find(unused a_henv env, Dict* self, TKey key, a_usize* pindex) {
     if (self->_len == 0)
         return false;
 
