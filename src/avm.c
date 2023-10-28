@@ -11,11 +11,11 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "auser.h"
 #include "atype.h"
 #include "afmt.h"
 #include "aenv.h"
 #include "agc.h"
+#include "ameta.h"
 #include "aerr.h"
 #include "aapi.h"
 
@@ -71,19 +71,11 @@ a_hash ai_vm_hash(a_henv env, Value v) {
     else if (unlikely(v_is_float(v))) {
         return v_float_hash(v);
     }
-    else {
-        Value vf = ai_obj_vlookftm(env, v, TM___hash__);
 
-        if (v_is_nil(vf)) {
-            return v_trivial_hash_unchecked(v);
-        }
+    a_hash hash;
+    if (ai_meta_hash(env, v, &hash)) return hash;
 
-        Value* base = vm_push_args(env, vf, v);
-
-        Value vr = ai_vm_call_meta(env, base);
-        if (!v_is_int(vr)) ai_err_raisef(env, ALO_EINVAL, "result for '__hash__' should be int.");
-        return cast(a_hash, v_as_int(vr));
-    }
+    return v_trivial_hash_unchecked(v);
 }
 
 a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
@@ -102,14 +94,10 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 		return ai_op_eq_float(v_as_num(v1), v_as_num(v2));
 	}
 
-	Value vf = ai_obj_vlookftm(env, v1, TM___eq__);
+    a_bool z;
+    if (ai_meta_equals(env, v1, v2, &z)) return z;
 
-	if (v_is_nil(vf)) {
-		return v_trivial_equals_unchecked(v1, v2);
-	}
-
-	Value* base = vm_push_args(env, vf, v1, v2);
-	return v_to_bool(ai_vm_call_meta(env, base));
+    return v_trivial_equals_unchecked(v1, v2);
 }
 
 #define v_of_call() v_of_empty()
@@ -153,7 +141,11 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
             return ai_type_get(env, v_as_type(v1), v2);
         }
 		case T_USER: {
-            return v_vcall(env, v1, get, v2);
+            Value v;
+            if (ai_meta_get(env, v1, v2, &v)) {
+                return v;
+            }
+            fallthrough;
         }
         default: {
             ai_err_bad_tm(env, TM___get__);
@@ -175,7 +167,7 @@ a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
         case T_TYPE: {
             return ai_type_uget(env, v_as_type(v1), v2, pv);
         }
-        case T_USER: {
+        case T_USER: { //TODO
             GUser* p = v_as_user(v1);
             a_vfp(uget) uget = g_vfetch(p, uget);
             if (uget == null) return ALO_EXIMPL;
@@ -199,11 +191,10 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
             return ai_type_set(env, v_as_type(v1), v2, v3);
         }
         case T_USER: {
-            GUser* p = v_as_user(v1);
-            a_vfp(set) set = g_vfetch(p, set);
-            if (set == null) ai_err_bad_tm(env, TM___set__);
-            g_vcallp(env, p, set, v2, v3);
-            return;
+            if (ai_meta_set(env, v1, v2, v3)) {
+                return;
+            }
+            fallthrough;
         }
         default: {
             ai_err_bad_tm(env, TM___set__);
@@ -249,7 +240,11 @@ static Value vm_len(a_henv env, Value v) {
             return v_of_int(v_as_table(v)->_len);
         }
         case T_USER: {
-            return v_of_int(v_vcall(env, v, len));
+            a_uint i;
+            if (ai_meta_len(env, v, &i)) {
+                return v_of_int(i);
+            }
+            fallthrough;
         }
         default: {
             ai_err_bad_tm(env, TM___len__);
@@ -355,25 +350,23 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
 }
 
 static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
-	Value vf = ai_obj_vlooktm(env, v1, tm);
+    Value vr;
 
-	if (v_is_nil(vf)) {
-		ai_err_bad_tm(env, tm);
-	}
+    if (ai_meta_unary(env, tm, v1, &vr)) {
+        ai_err_bad_tm(env, tm);
+    }
 
-	Value* base = vm_push_args(env, vf, v1);
-	return ai_vm_call_meta(env, base);
+    return vr;
 }
 
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlooktm(env, v1, tm);
+	Value vr;
 
-	if (v_is_nil(vf)) {
+	if (ai_meta_binary(env, tm, v1, v2, &vr)) {
 		ai_err_bad_tm(env, tm);
 	}
 
-	Value* base = vm_push_args(env, vf, v1, v2);
-	return ai_vm_call_meta(env, base);
+    return vr;
 }
 
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
@@ -419,29 +412,19 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 					at_fmt_putp(env, buf, v_as_ptr(v));
 					break;
 				}
-				case T_STR: {
-					GStr* str = v_as_str(v);
-					at_buf_putls(env, buf, str->_ptr, str->_len);
-					break;
-				}
+				case T_STR: unreachable();
 				case T_TUPLE:
 				case T_LIST:
 				case T_TABLE:
 				case T_FUNC:
 				case T_USER:
 				case T_TYPE: {
-					Value vf = ai_obj_vlooktm(env, v, TM___str__);
-					if (v_is_nil(vf)) {
-						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
-					}
-					Value* args = vm_push_args(env, vf, v);
+                    GStr* str;
 					StkPtr bptr = val2stk(env, base);
-					Value vs = ai_vm_call_meta(env, args);
+                    if (!ai_meta_str(env, v, &str)) {
+                        ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+                    }
 					base = stk2val(env, bptr);
-					if (!v_is_str(vs)) {
-						ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
-					}
-					GStr* str = v_as_str(v);
 					at_buf_putls(env, buf, str->_ptr, str->_len);
 					break;
 				}
@@ -491,8 +474,7 @@ static a_u32 vm_fetch_ex(a_insn const** pc) {
 static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_u32 num_ret, a_u32 flags) {
 	GFun* fun;
 	Value const* K;
-    Frame frame_ = {};
-    Frame* const frame = &frame_;
+    Frame frame[1] = {};
 
 #define pc (frame->_pc)
 #if ALO_STACK_RELOC
