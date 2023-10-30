@@ -198,7 +198,7 @@ static EXCEPTION_DISPOSITION catch_except_hook(
 	a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
 	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
-	a_henv env = ptr_of(GRoute, DispatcherContext->ContextRecord->Rsi);
+	a_henv env = int2ptr(GRoute, DispatcherContext->ContextRecord->Rsi);
 	Global* g = G(env);
 	if (g->_gexecpt != null) {
 		(*g->_gexecpt)(env, g->_gctx, msg);

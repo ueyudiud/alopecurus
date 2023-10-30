@@ -40,7 +40,7 @@ always_inline void check_in_stack(a_henv env, Value* v) {
 always_inline StkPtr val2stk(a_henv env, Value* v) {
 	check_in_stack(env, v);
 #if ALO_STACK_RELOC
-	return ptr_diff(v, env->_stack._impl);
+	return addr_diff(v, env->_stack._impl);
 #else
 	quiet(env);
 	return v;

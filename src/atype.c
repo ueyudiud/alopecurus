@@ -19,11 +19,11 @@
 static VTable const type_vtable;
 
 static GStr* str_from_key(a_usize key) {
-    return ptr_of(GStr, key & ~usizec(0x7));
+    return int2ptr(GStr, key & ~usizec(0x7));
 }
 
 static a_usize key_from(GStr* str, a_usize cat) {
-    return addr_of(str) | cat;
+    return ptr2int(str) | cat;
 }
 
 #define dead_key usizec(8)

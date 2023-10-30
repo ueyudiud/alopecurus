@@ -108,13 +108,13 @@ always_inline void v_check_alive(a_henv env, Value v) {
 
 always_inline void join_trace(a_trmark* list, GObj* elem) {
 	elem->_tnext = *list;
-	*list = addr_of(elem);
+	*list = ptr2int(elem);
 }
 
 #define join_trace(list,elem) join_trace(list, gobj_cast(elem))
 
 always_inline GObj* strip_trace(a_trmark* list) {
-	GObj* elem = ptr_of(GObj, *list);
+	GObj* elem = int2ptr(GObj, *list);
 	*list = elem->_tnext;
 	return elem;
 }

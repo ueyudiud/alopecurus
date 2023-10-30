@@ -83,12 +83,12 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	Value* stack_new;
 #if ALO_STRICT_MEMORY_CHECK
 	stack_new = ai_mem_alloc(env, size_new);
-	memcpy(stack_new, stack_old, ptr_diff(stack->_top, stack->_base));
+	memcpy(stack_new, stack_old, addr_diff(stack->_top, stack->_base));
 	ai_mem_dealloc(G(env), stack_old, size_old);
 #else
 	stack_new = ai_mem_realloc(env, stack_old, size_old, size_new);
 #endif
-	diff = ptr_diff(stack_new, stack_old);
+	diff = addr_diff(stack_new, stack_old);
 	stack->_base = stack_new;
 	stack->_alloc_size = size_new;
 
@@ -131,8 +131,8 @@ a_none ai_stk_overflow(a_henv env, a_isize diff) {
 a_isize ai_stk_grow(a_henv env, Value* top) {
 	Stack* stack = &env->_stack;
 	assume(top > stack->_limit);
-	a_usize current_size = ptr_diff(stack->_limit, stack->_base);
-	a_usize expect_size = ptr_diff(top, stack->_base);
+	a_usize current_size = addr_diff(stack->_limit, stack->_base);
+	a_usize expect_size = addr_diff(top, stack->_base);
 	assume(expect_size > current_size);
 	if (unlikely(expect_size > MAX_STACK_SIZE)) {
 		if (current_size == MAX_OVERFLOWED_STACK_SIZE) {

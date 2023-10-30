@@ -59,28 +59,28 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
     self->_nstack = desc->_nstack;
 	self->_nparam = desc->_nparam;
 
-	a_usize addr = addr_of(self) + sizeof(GProto);
+	a_usize addr = ptr2int(self) + sizeof(GProto);
 
-	/* self->_subs = ptr_of(GProto*, addr); */
+	/* self->_subs = int2ptr(GProto*, addr); */
 	addr += sizeof(GProto*) * desc->_nsub;
 
-	self->_consts = ptr_of(Value, addr);
+	self->_consts = int2ptr(Value, addr);
 	addr += sizeof(Value) * desc->_nconst;
 
 	if (desc->_flags._fdebug) {
-		self->_dbg_lines = ptr_of(LineInfo, addr);
+		self->_dbg_lines = int2ptr(LineInfo, addr);
 		addr += sizeof(LineInfo) * desc->_nline;
 
-		self->_dbg_locals = ptr_of(LocalInfo, addr);
+		self->_dbg_locals = int2ptr(LocalInfo, addr);
 		addr += sizeof(LocalInfo) * desc->_nlocal;
 
-		self->_dbg_cap_names = ptr_of(GStr*, addr);
+		self->_dbg_cap_names = int2ptr(GStr*, addr);
 		addr += sizeof(GStr*) * desc->_ncap;
 	}
 	else {
 		self->_dbg_lndef = self->_dbg_lnldef = 0;
 
-		self->_dbg_lines = ptr_of(LineInfo, addr);
+		self->_dbg_lines = int2ptr(LineInfo, addr);
 		addr += sizeof(LineInfo);
 
         init(&self->_dbg_lines[0]) {
@@ -90,14 +90,14 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	}
 
 	if (desc->_flags._froot) {
-		GFun* fun = ptr_of(GFun, addr);
+		GFun* fun = int2ptr(GFun, addr);
 		addr += fun_size(desc->_ncap);
 
 		fun->_vptr = &afun_vtable;
 		fun->_proto = self;
 		fun->_len = desc->_ncap;
 		if (desc->_ncap > 0) {
-			RcCap* cap = ptr_of(RcCap, addr);
+			RcCap* cap = int2ptr(RcCap, addr);
 			addr += sizeof(RcCap);
 
 			cap->_ptr = &cap->_slot;
@@ -110,13 +110,13 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 		self->_cache = fun;
 	}
 
-	self->_caps = ptr_of(CapInfo, addr);
+	self->_caps = int2ptr(CapInfo, addr);
 	addr += sizeof(CapInfo) * self->_ncap;
 
-	self->_code = ptr_of(a_insn, addr);
+	self->_code = int2ptr(a_insn, addr);
 	addr += sizeof(a_insn) * self->_ninsn;
 
-	assume(addr_of(self) + total_size == addr);
+	assume(ptr2int(self) + total_size == addr);
 
 	return self;
 }

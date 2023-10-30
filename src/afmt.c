@@ -70,7 +70,7 @@ void ai_fmt_putf(a_henv env, a_hbuf buf, a_float v) {
 
 a_usize ai_fmt_ptr2str(char* p, void* v) {
 	char* q = p;
-	a_usize addr = addr_of(v);
+	a_usize addr = ptr2int(v);
 
 	for (a_u32 i = 0; i < BUFF_SIZE_FOR_PTR; ++i) {
 		*(--q) = l_digits[addr & 0xf];

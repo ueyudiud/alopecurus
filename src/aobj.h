@@ -239,10 +239,10 @@ always_inline a_float v_as_num(Value v) {
 
 always_inline void* v_as_ptr(Value v) {
 	assume(v_is_ptr(v), "not pointer.");
-	return ptr_of(void, v_get_payload(v));
+	return int2ptr(void, v_get_payload(v));
 }
 
-#define v_of_ptr(v) v_box_nan(T_PTR, addr_of(v))
+#define v_of_ptr(v) v_box_nan(T_PTR, ptr2int(v))
 
 always_inline void v_set_ptr(Value* d, void* v) {
 	v_set_raw(d, v_of_ptr(v));
@@ -346,11 +346,11 @@ struct VTable {
 
 always_inline GObj* v_as_obj(Value v) {
     assume(v_is_obj(v), "not object.");
-    return ptr_of(GObj, v_get_payload(v));
+    return int2ptr(GObj, v_get_payload(v));
 }
 
 always_inline Value v_of_obj(a_hobj v) {
-    return v_new(v->_vptr->_stencil | addr_of(v));
+    return v_new(v->_vptr->_stencil | ptr2int(v));
 }
 
 #define v_of_obj(v) v_of_obj(gobj_cast(v))

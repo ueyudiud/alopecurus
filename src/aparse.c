@@ -2866,7 +2866,7 @@ typedef struct {
 } ForStat;
 
 static void for_bind(Parser* par, Pat* pat, a_usize ctx) {
-	ForStat* stat = ptr_of(ForStat, ctx);
+	ForStat* stat = int2ptr(ForStat, ctx);
 	stat->_label = for_bind_real(par, pat, stat->_line);
 }
 
@@ -5002,7 +5002,7 @@ static void l_scan_for_stat(Parser* par) {
 
 	a_u32 line2 = lex_line(par);
 	lex_check_skip(par, TK_BAR);
-	l_scan_pattern(par, for_bind, addr_of(&stat));
+	l_scan_pattern(par, for_bind, ptr2int(&stat));
 	lex_check_pair_right(par, TK_BAR, TK_BAR, line2);
 
 	l_scan_stat(par);

@@ -472,8 +472,8 @@ a_msg alo_rawlen(a_henv env, a_isize id) {
             GUser* p = v_as_user(v);
             if (ai_obj_ulookftm(env, v, TM___len__)) {
 
-            }fallthrough;
-
+            }
+            fallthrough;
         }
 		default: {
 			return ALO_EXIMPL;
