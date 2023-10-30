@@ -208,31 +208,40 @@ static a_bool table_find_by_value(a_henv env, GTable* self, Value vk, Key* key, 
     }
 }
 
-Value ai_table_get(a_henv env, GTable* self, Value vk) {
+a_bool ai_table_get(a_henv env, GTable* self, Value vk, Value* pv) {
     a_usize index;
     Key key;
-	return table_find_by_value(env, self, vk, &key, &index) ? self->_ptr[index]._value : v_of_nil();
+	if (table_find_by_value(env, self, vk, &key, &index)) {
+        v_set(env, pv, self->_ptr[index]._value);
+        return true;
+    }
+    return false;
 }
 
 Value ai_table_gets(a_henv env, GTable* self, GStr* k) {
     a_usize index;
     Key key;
+
     key_from_value_with_trivial_equality(v_of_obj(k), &key);
-	return table_find_with_trivial_equality(self, key, &index) ? self->_ptr[index]._value : v_of_nil();
+
+    return table_find_with_trivial_equality(self, key, &index) ? self->_ptr[index]._value : v_of_nil();
 }
 
-void ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
+a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
     a_usize index;
     Key key;
 
     if (table_find_by_value(env, self, vk, &key, &index)) {
         v_set(env, &self->_ptr[index]._value, vv);
+        return true;
     }
     else {
         at_dict_put(env, self, key, vv);
 
         ai_gc_barrier_backward_val(env, self, vk);
         ai_gc_barrier_backward_val(env, self, vv);
+
+        return false;
     }
 }
 
@@ -248,17 +257,6 @@ a_msg ai_table_ugeti(a_henv env, GTable* self, a_int k, Value* pv) {
     key_from_value_with_trivial_equality(v_of_int(k), &key);
 
     if (!table_find_with_trivial_equality(self, key, &index))
-        return ALO_EEMPTY;
-
-    v_cpy(env, pv, &self->_ptr[index]._value);
-    return ALO_SOK;
-}
-
-a_msg ai_table_uget(a_henv env, GTable* self, Value vk, Value* pv) {
-    a_usize index;
-    Key key;
-
-    if (!table_find_by_value(env, self, vk, &key, &index))
         return ALO_EEMPTY;
 
     v_cpy(env, pv, &self->_ptr[index]._value);

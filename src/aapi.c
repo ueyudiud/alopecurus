@@ -458,22 +458,23 @@ a_msg alo_rawlen(a_henv env, a_isize id) {
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
 			GTuple* p = v_as_tuple(v);
-			return cast(a_i32, p->_len);
+			return cast(a_msg, p->_len);
 		}
 		case T_LIST: {
 			GList* p = v_as_list(v);
-            return cast(a_i32, p->_len);
+            return cast(a_msg, p->_len);
 		}
 		case T_TABLE: {
 			GTable* p = v_as_table(v);
-            return cast(a_i32, p->_len);
+            return cast(a_msg, p->_len);
 		}
-		case T_USER: {
-			GUser* p = v_as_user(v);
-			a_vfp(len) len = g_vfetch(p, len);
-			if (len == null) return ALO_EXIMPL;
-			return g_vcallp(env, p, len);
-		}
+        case T_USER: {
+            GUser* p = v_as_user(v);
+            if (ai_obj_ulookftm(env, v, TM___len__)) {
+
+            }fallthrough;
+
+        }
 		default: {
 			return ALO_EXIMPL;
 		}
@@ -499,13 +500,6 @@ a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
 		case T_TABLE: {
 			GTable* p = v_as_table(v);
 			try(ai_table_ugeti(env, p, key, &v));
-			break;
-		}
-		case T_USER: {
-			GUser* p = v_as_user(v);
-			a_vfp(uget) uget = g_vfetch(p, uget);
-			if (uget == null) return ALO_EXIMPL;
-			try(g_vcallp(env, p, uget, v_of_int(key), &v));
 			break;
 		}
 		default: {
@@ -576,21 +570,25 @@ static void l_pcall(a_henv env, void* rctx) {
 a_msg alo_pcall(a_henv env, a_usize narg, a_isize nres, a_usize nsav) {
 	api_check(nres < 256, "bad result count.");
 	api_check_elem(env, max(nsav + 1, narg + 1));
-	PCallCtx ctx = {
+
+    PCallCtx ctx = {
 		._narg = narg,
 		._nres = cast(a_i32, nres)
 	};
-	Frame* frame = env->_frame;
-	a_msg msg = ai_env_pcall(env, l_pcall, &ctx);
-	if (unlikely(msg != ALO_SOK)) {
-		env->_frame = frame; /* Recover frame. */
 
-		Value* bot = ai_stk_bot(env) + nsav;
-		env->_stack._top = bot;
-		ai_cap_close_above(env, bot);
-		ai_env_pop_error(env, api_incr_stack(env));
-	}
-	return msg;
+    Frame* frame = env->_frame;
+
+    catch (ai_env_pcall(env, l_pcall, &ctx), msg) {
+        env->_frame = frame; /* Recover frame. */
+
+        Value* bot = ai_stk_bot(env) + nsav;
+        env->_stack._top = bot;
+        ai_cap_close_above(env, bot);
+        ai_env_pop_error(env, api_incr_stack(env));
+        return msg;
+    }
+
+	return ALO_SOK;
 }
 
 void alo_raise(a_henv env) {

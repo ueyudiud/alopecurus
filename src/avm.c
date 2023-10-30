@@ -73,7 +73,7 @@ a_hash ai_vm_hash(a_henv env, Value v) {
     }
 
     a_hash hash;
-    if (ai_meta_hash(env, v, &hash)) return hash;
+    if (!ai_meta_hash(env, v, &hash)) return hash;
 
     return v_trivial_hash_unchecked(v);
 }
@@ -95,7 +95,7 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	}
 
     a_bool z;
-    if (ai_meta_equals(env, v1, v2, &z)) return z;
+    if (!ai_meta_equals(env, v1, v2, &z)) return z;
 
     return v_trivial_equals_unchecked(v1, v2);
 }
@@ -107,7 +107,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     a_msg msg;
     Value vm;
 
-    msg = ai_obj_vlook(env, v, k, &vm);
+    msg = ai_obj_ulook(env, v, k, &vm);
 
     if (msg == ALO_SOK) {
         v_set(env, &pv[0], vm);
@@ -135,14 +135,15 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
             return ai_list_get(env, v_as_list(v1), v2);
         }
 		case T_TABLE: {
-            return ai_table_get(env, v_as_table(v1), v2);
+            Value v;
+            return ai_table_get(env, v_as_table(v1), v2, &v) ? v : v_of_nil();
         }
 		case T_TYPE: {
             return ai_type_get(env, v_as_type(v1), v2);
         }
 		case T_USER: {
             Value v;
-            if (ai_meta_get(env, v1, v2, &v)) {
+            if (!ai_meta_get(env, v1, v2, &v)) {
                 return v;
             }
             fallthrough;
@@ -162,16 +163,10 @@ a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
             return ai_list_uget(env, v_as_list(v1), v2, pv);
         }
         case T_TABLE: {
-            return ai_table_uget(env, v_as_table(v1), v2, pv);
+            return ai_table_get(env, v_as_table(v1), v2, pv) ? ALO_SOK : ALO_EEMPTY;
         }
         case T_TYPE: {
             return ai_type_uget(env, v_as_type(v1), v2, pv);
-        }
-        case T_USER: { //TODO
-            GUser* p = v_as_user(v1);
-            a_vfp(uget) uget = g_vfetch(p, uget);
-            if (uget == null) return ALO_EXIMPL;
-            return g_vcallp(env, p, uget, v2, pv);
         }
         default: {
             return ALO_EXIMPL;
@@ -185,13 +180,14 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
             return ai_list_set(env, v_as_list(v1), v2, v3);
         }
         case T_TABLE: {
-            return ai_table_set(env, v_as_table(v1), v2, v3);
+            ai_table_set(env, v_as_table(v1), v2, v3);
+            break;
         }
         case T_TYPE: {
             return ai_type_set(env, v_as_type(v1), v2, v3);
         }
         case T_USER: {
-            if (ai_meta_set(env, v1, v2, v3)) {
+            if (!ai_meta_set(env, v1, v2, v3)) {
                 return;
             }
             fallthrough;
@@ -241,7 +237,7 @@ static Value vm_len(a_henv env, Value v) {
         }
         case T_USER: {
             a_uint i;
-            if (ai_meta_len(env, v, &i)) {
+            if (!ai_meta_len(env, v, &i)) {
                 return v_of_int(i);
             }
             fallthrough;
@@ -370,14 +366,13 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 }
 
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlooktm(env, v1, tm);
+    a_bool r;
 
-	if (v_is_nil(vf)) {
-		ai_err_bad_tm(env, tm);
-	}
+    catch (ai_meta_relation(env, tm, v1, v2, &r)) {
+        ai_err_bad_tm(env, tm);
+    }
 
-	Value* base = vm_push_args(env, vf, v1, v2);
-	return v_to_bool(ai_vm_call_meta(env, base));
+    return r;
 }
 
 static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
@@ -511,8 +506,7 @@ tail_call:
             vf = R[0];
         }
         while (unlikely(!v_is_func(vf))) {
-            vf = ai_obj_vlooktm(env, vf, TM___call__);
-            if (v_is_nil(vf)) {
+            catch (ai_obj_ulooktm(env, vf, TM___call__, &vf)) {
                 ai_err_bad_tm(env, TM___call__);
             }
 

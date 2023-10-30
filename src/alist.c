@@ -58,13 +58,13 @@ static a_bool list_grow_amortized(a_henv env, GList* self, a_usize addition) {
 }
 
 void ai_list_hint(a_henv env, GList* self, a_usize len) {
-    catch (at_vec_hint(env, self, len), _) {
+    catch (at_vec_hint(env, self, len)) {
         list_hint_failed(env);
     }
 }
 
 void ai_list_push(a_henv env, GList* self, Value v) {
-    catch (at_vec_push(env, self, v), _) {
+    catch (at_vec_push(env, self, v)) {
         list_hint_failed(env);
     }
 
@@ -72,7 +72,7 @@ void ai_list_push(a_henv env, GList* self, Value v) {
 }
 
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
-    catch (at_vec_push_all(env, self, src, len), _) {
+    catch (at_vec_push_all(env, self, src, len)) {
         list_hint_failed(env);
     }
 

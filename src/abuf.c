@@ -51,7 +51,7 @@ GBuf* ai_buf_new(a_henv env) {
 	return self;
 }
 
-a_none ai_buf_error(a_msg msg, a_henv env, char const* what) {
+a_none ai_buf_error(a_henv env, a_msg msg, char const* what) {
 	if (msg == ALO_EINVAL) {
 		ai_err_raisef(env, msg, "too many %s.", what);
 	}

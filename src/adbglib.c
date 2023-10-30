@@ -158,6 +158,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_MUL:
 			case BC_DIV:
 			case BC_MOD:
+            case BC_POW:
 			case BC_SHL:
 			case BC_SHR:
 			case BC_BAND:
@@ -201,6 +202,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_MULI:
 			case BC_DIVI:
 			case BC_MODI:
+            case BC_POWI:
 			case BC_SHLI:
 			case BC_SHRI:
 			case BC_BANDI:

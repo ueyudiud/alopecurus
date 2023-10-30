@@ -207,7 +207,7 @@ static void type_sets(a_henv env, GType* self, GStr* key, Value value) {
         v_set(env, p, value);
     }
     else {
-        catch (at_dict_put(env, &self->_table, key_from(key, TYPE_META_CAT_STATIC), value), _) {
+        catch (at_dict_put(env, &self->_table, key_from(key, TYPE_META_CAT_STATIC), value)) {
             ai_err_raisef(env, ALO_EINVAL, "too many fields.");
         }
 
@@ -279,7 +279,7 @@ a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
         v_set(env, p, vv);
     }
     else {
-        catch (at_dict_put(env, &self->_table, key_from(k, TYPE_META_CAT_STATIC), vv), _) {
+        catch (at_dict_put(env, &self->_table, key_from(k, TYPE_META_CAT_STATIC), vv)) {
             return ALO_EINVAL;
         }
 
@@ -293,7 +293,7 @@ a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
     return ALO_SOK;
 }
 
-a_msg ai_obj_vlook(a_henv env, Value v, GStr* k, Value* pv) {
+a_msg ai_obj_ulook(a_henv env, Value v, GStr* k, Value* pv) {
     GType* type = v_typeof(env, v);
 
     Value const* pv_meta = type_get_meta_ref(env, type, k, TYPE_META_CAT_MEMBER);
@@ -406,8 +406,9 @@ static void metas_hint1(a_henv env, Metas* metas) {
     if (metas->_len == metas->_cap) {
         a_usize old_cap = metas->_cap;
         a_usize new_cap = old_cap;
-        catch(ai_buf_nhint(&new_cap, metas->_len, 1, INT32_MAX), msg) {
-            ai_buf_error(msg, env, "meta");
+
+        catch (ai_buf_nhint(&new_cap, metas->_len, 1, INT32_MAX), msg) {
+            ai_buf_error(env, msg, "meta");
         }
 
         metas->_ptr = ai_mem_vgrow(env, metas->_ptr, old_cap, new_cap);

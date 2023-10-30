@@ -173,8 +173,9 @@ typedef a_u32 a_insn;
 
 /* Error handling functions. */
 
-#define catch(e,n) for (typeof(e) n = (e); unlikely(n); n = cast(typeof(n), 0))
-#define try(e) catch(e, _e) { return _e; }
+#define M_catch0(e,n,...) for (typeof(e) n = (e); unlikely(n); n = 0)
+#define catch(e,n...) M_catch0(e, ##n, _e)
+#define try(e) catch(e) { return _e; }
 
 #if ALO_DEBUG && defined(ALO_LIB)
 

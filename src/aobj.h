@@ -436,7 +436,7 @@ struct GLoader {
 #define v_is_type(v) v_is(v, T_TYPE)
 
 #define type_has_flag(t,f) (((t)->_flags & (f)) != 0)
-#define type_has_tm(t,tm) type_has_flag(t, TYPE_FLAG_FAST_TM(tm))
+#define type_has_ftm(t,tm) type_has_flag(t, TYPE_FLAG_FAST_TM(tm))
 
 always_inline GType* v_as_type(Value v) {
     assume(v_is_type(v), "not type.");

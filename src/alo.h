@@ -64,7 +64,7 @@ typedef double a_f64;
 
 typedef a_i32 a_msg;
 typedef a_u32 a_enum;
-typedef a_usize a_flags;
+typedef a_u32 a_flags;
 
 #define ALO_STACK_INDEX_ERROR (-1000)
 #define ALO_STACK_INDEX_CAPTURE_BASE (-2000)
