@@ -219,10 +219,6 @@ a_bool ai_str_requals(GStr* self, void const* dat, a_usize len) {
     return self->_len == len && memcmp(self->_ptr, dat, len) == 0;
 }
 
-a_bool ai_str_equals(GStr* self, GStr* o) {
-    return self == o || (self->_hash == o->_hash && ai_str_requals(self, self->_ptr, self->_len));
-}
-
 static void str_mark(Global* g, GStr* self) {
     ai_gc_trace_work(g, sizeof_GStr(self->_len));
 }

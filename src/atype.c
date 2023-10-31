@@ -306,7 +306,7 @@ a_msg ai_obj_ulook(a_henv env, Value v, GStr* k, Value* pv) {
 static GType* cache_look(TypeCache* cache, GStr* name) {
 	a_u32 id = name->_hash & cache->_hmask;
 	for (GType* type = cache->_ptr[id]; type != null; type = type->_mnext) {
-		if (ai_str_equals(name, type->_id)) {
+		if (name == type->_id) {
 			return type;
 		}
 	}
