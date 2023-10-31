@@ -148,25 +148,17 @@ always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n
 
 #define V_STRICT_NIL (~-(u64c(0) + ALO_SOK))
 #define V_EMPTY      (~-(u64c(0) + ALO_EEMPTY))
-#define V_NOT_IMPL   (~-(u64c(0) + ALO_EXIMPL))
-#define V_INVALID    (~-(u64c(0) + ALO_EINVAL))
 
 static_assert(V_IS(V_STRICT_NIL, T_NIL));
 static_assert(V_IS(V_EMPTY, T_NIL));
-static_assert(V_IS(V_NOT_IMPL, T_NIL));
-static_assert(V_IS(V_INVALID, T_NIL));
 
 #define v_is_nil(v) v_is(v, T_NIL)
 
 #define v_is_strict_nil(v) ((v)._ == V_STRICT_NIL)
 #define v_is_empty(v) ((v)._ == V_EMPTY)
-#define v_is_not_impl(v) ((v)._ = V_NOT_IMPL)
-#define v_is_invalid(v) ((v)._ = V_INVALID)
 
 #define v_of_nil() v_new(V_STRICT_NIL)
 #define v_of_empty() v_new(V_EMPTY)
-#define v_of_not_impl() v_new(V_NOT_IMPL)
-#define v_of_invalid() v_new(V_INVALID)
 
 always_inline void v_set_nil(Value* d) {
     v_set_raw(d, v_of_nil());

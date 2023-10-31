@@ -118,7 +118,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     msg = ai_vm_uget(env, v, v_of_obj(k), &vm);
 
     if (msg == ALO_SOK) {
-        v_set(env, &pv[0], v_of_call());
+        v_set_raw(&pv[0], v_of_call());
         v_set(env, &pv[1], vm);
         return;
     }

@@ -100,9 +100,9 @@ always_inline void g_set_black(a_hobj v) {
 
 always_inline void v_check_alive(a_henv env, Value v) {
 	if (v_is_obj(v)) {
-		GObj* obj = v_as_obj(v);
-		a_usize stencil = v._ ^ obj->_vptr->_stencil;
-		assume((stencil & ~V_PAYLOAD_MASK) == 0 && !g_has_other_color(G(env), obj));
+		GObj* p = v_as_obj(v);
+		a_usize stencil = v._ ^ p->_vptr->_stencil;
+		assume((stencil & ~V_PAYLOAD_MASK) == 0 && !g_has_other_color(G(env), p));
 	}
 }
 
