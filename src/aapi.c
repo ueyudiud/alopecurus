@@ -468,13 +468,6 @@ a_msg alo_rawlen(a_henv env, a_isize id) {
 			GTable* p = v_as_table(v);
             return cast(a_msg, p->_len);
 		}
-        case T_USER: {
-            GUser* p = v_as_user(v);
-            if (ai_obj_ulookftm(env, v, TM___len__)) {
-
-            }
-            fallthrough;
-        }
 		default: {
 			return ALO_EXIMPL;
 		}
@@ -688,7 +681,7 @@ void alo_newtype(a_henv env, char const* n, a_flags flags) {
 
     Value* pv = api_incr_stack(env);
 
-    GStr* name = ai_str_new(env, n, strlen(n));
+    GStr* name = ai_str_newc(env, n);
     v_set_obj(env, pv, name);
 
 	GType* self = ai_stype_new(env, name, null);
