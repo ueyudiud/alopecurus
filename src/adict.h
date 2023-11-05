@@ -12,7 +12,7 @@
 #endif
 
 #ifndef Dict
-# error Dict and Node required.
+# error Metas and Node required.
 
 typedef struct {
     TKey _key;
@@ -24,7 +24,7 @@ typedef struct {
     Node* _ptr;
     a_usize _len;
     a_usize _hmask;
-} Dict;
+} Metas;
 
 # define node_is_empty(n) (true)
 # define node_is_ended(n) (false)

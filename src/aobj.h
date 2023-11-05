@@ -241,22 +241,6 @@ always_inline void v_set_ptr(Value* d, void* v) {
 }
 
 /*=========================================================*
- * Internal Data Structure
- *=========================================================*/
-
-typedef struct {
-    GStr* _key;
-    Value _value;
-} DNode;
-
-struct Dict {
-    a_u32 _len;
-    /* Hash to index mask. */
-    a_u32 _hmask;
-    DNode* _ptr;
-};
-
-/*=========================================================*
  * Object & Metadata
  *=========================================================*/
 
@@ -357,41 +341,16 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
  * Type
  *=========================================================*/
 
-#define META_DIRECT_METHOD 2
-#define META_FIELD_ANY 3
-#define META_FIELD_STR 4
-#define META_FIELD_OPT_STR 5
-#define META_FIELD_INT 6
-#define META_FIELD_UINT 7
-
-#define META_MODIFIER_CONFIGURABLE 0x0001
-
 typedef struct {
-    union {
-        Value _slot;
-        void (*_fptr)();
-        a_usize _gptr;
-    };
-    a_u16 _modifiers;
-    a_u8 _tag;
+    GStr* _key;
+    Value _value;
 } Meta;
 
 typedef struct {
     Meta* _ptr;
-    a_u32 _cap;
-    a_u32 _len;
-} Metas;
-
-typedef struct {
-    a_usize _key;
-    Value _value;
-} MetaRef;
-
-typedef struct {
-    MetaRef* _ptr;
     a_u32 _len;
     a_u32 _hmask;
-} MetaTable;
+} Metas;
 
 /**
  ** Type.
@@ -402,11 +361,13 @@ struct GType {
     a_u32 _mver; /* Method version, changed when the order of existed fields changed. */
     a_u32 _flags;
     a_u8 _tag; /* The type tag. */
+
     GType* _mnext; /* Used for linked list in loader. */
     GLoader* _loader; /* The loader of metadata, null for builtin loader. */
-    GStr* _id; /* The metadata identifier. */
-    MetaTable _table;
+    GStr* _sig; /* The metadata identifier. */
+
     Metas _metas;
+
     /* Type slots below. */
 };
 
@@ -522,23 +483,18 @@ struct GTable {
 	a_u32 _len;
 	a_u32 _hmask;
 	TNode* _ptr; /* Data pointer. */
-    a_u32 _lfirst;
-    a_u32 _llast;
-};
-
-struct Key {
-    Value _value;
-    a_hash _hash;
 };
 
 /**
  ** Table node.
  */
 struct TNode {
-	Value _value;
-	Key _key;
-    a_u32 _lprev;
-    a_u32 _lnext;
+    a_hash _hash;
+    a_i32 _hnext;
+    a_i32 _lprev;
+    a_i32 _lnext;
+    Value _key;
+    Value _value;
 };
 
 #define v_is_table(v) v_is(v, T_TABLE)
@@ -855,7 +811,7 @@ always_inline GType* g_typeof(a_henv env, a_hobj p) {
 #define g_typeof(env,p) g_typeof(env, gobj_cast(p))
 
 always_inline char const* g_nameof(a_henv env, a_hobj p) {
-	return str2ntstr(g_typeof(env, p)->_id);
+	return str2ntstr(g_typeof(env, p)->_sig);
 }
 
 #define g_nameof(env,p) g_nameof(env, gobj_cast(p))

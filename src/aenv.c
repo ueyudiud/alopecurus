@@ -169,7 +169,7 @@ static void global_init(a_henv env, unused void* ctx) {
     ai_str_boost(env, m->_reserved);
     ai_type_boost(env);
 
-    GType* gbl = ai_stype_new(env, g_str(env, STR_EMPTY), null);
+    GType* gbl = ai_type_new(env, g_str(env, STR_EMPTY), null, 0);
     v_set_obj(env, &G(env)->_global, gbl);
 }
 

@@ -317,25 +317,25 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
-            Value* vd = vm_push_args(env, n->_key._value, n->_value);
+            Value* vd = vm_push_args(env, n->_key, n->_value);
             return (ValueSlice) { vd, 2 };
         }
         case T_TYPE: {
             GType* p = v_as_type(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (p->_table._len == 0 || i <= p->_table._hmask)
+            if (p->_metas._len == 0 || i <= p->_metas._hmask)
                 return (ValueSlice) { };
 
-            MetaRef* n;
-            while ((n = &p->_table._ptr[i])->_key <= 8) {
+            Meta* n;
+            while (ptr2int((n = &p->_metas._ptr[i])->_key) <= 8) {
                 i += 1;
-                if (i > p->_table._hmask)
+                if (i > p->_metas._hmask)
                     return (ValueSlice) { };
             }
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
-            Value* vd = vm_push_args(env, v_of_obj(cast(GStr*, n->_key & ~usizec(0x7))), n->_value);
+            Value* vd = vm_push_args(env, v_of_obj(n->_key), n->_value);
             return (ValueSlice) { vd, 2 };
         }
         default: {

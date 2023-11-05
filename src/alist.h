@@ -8,7 +8,8 @@
 #include "aobj.h"
 
 intern GList* ai_list_new(a_henv env);
-intern void ai_list_hint(a_henv env, GList* self, a_usize len);
+intern void ai_list_hint(a_henv env, GList* self, a_usize add);
+intern void ai_list_grow(a_henv env, GList* self, a_usize add);
 intern void ai_list_push(a_henv env, GList* self, Value v);
 intern void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len);
 intern Value ai_list_get(a_henv env, GList* self, Value vk);

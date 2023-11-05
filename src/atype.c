@@ -11,219 +11,189 @@
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
+#include "ameta.h"
 #include "avm.h"
 #include "aerr.h"
 
 #include "atype.h"
 
+#define dead_key ((GStr*) null)
+
 static VTable const type_vtable;
 
-static GStr* str_from_key(a_usize key) {
-    return int2ptr(GStr, key & ~usizec(0x7));
-}
+GType* ai_type_new(a_henv env, GStr* name, GLoader* loader, a_usize extra) {
+    a_usize size = pad_to(sizeof(GType) + extra, sizeof(a_usize));
 
-static a_usize key_from(GStr* str, a_usize cat) {
-    return ptr2int(str) | cat;
-}
-
-#define dead_key usizec(8)
-
-#define TKey a_usize
-#define Node MetaRef
-#define Dict MetaTable
-
-#define node_is_empty(n) ((n)->_key <= dead_key)
-#define node_is_ended(n) ((n)->_key == 0)
-#define node_match(n,k) ((n)->_key == (k))
-#define node_init(n) init(n) { }
-#define node_erase(n) quiet((n)->_key = dead_key)
-
-#define key_hash(k) (str_from_key(k)->_hash)
-
-#include "adict.h"
-
-GType* ai_type_alloc(a_henv env, a_usize size) {
     GType* self = ai_mem_alloc(env, size);
     memclr(self, size);
 
     self->_vptr = &type_vtable;
     self->_size = size;
-    at_dict_init(&self->_table);
+    self->_sig = name;
+    self->_loader = loader;
 
     ai_gc_register_object(env, self);
     return self;
 }
 
-GType* ai_stype_new(a_henv env, GStr* name, GLoader* loader) {
-    GType* self = ai_type_alloc(env, sizeof(GType));
+static Meta* metas_get(Metas* metas, GStr* key) {
+    if (metas->_len == 0) return null;
 
-    self->_id = name;
-    self->_loader = loader;
+    a_u32 index = key->_hash & metas->_hmask;
+    a_u32 perturb = key->_hash;
 
-    return self;
-}
-
-static Value* type_get_meta_ref(a_henv env, GType* self, GStr* key, a_usize cat) {
-    return at_dict_get(env, &self->_table, key_from(key, cat));
-}
-
-static a_msg obj_get_field(a_henv env, GObj* self, GStr* key, Value* pv) {
-    GType* type = g_typeof(env, self);
-
-    Value const* pv_meta = type_get_meta_ref(env, type, key, TYPE_META_CAT_GETTER);
-    if (pv_meta == null) return ALO_EEMPTY;
-
-    Value v_meta = *pv_meta;
-    Meta* meta = &type->_metas._ptr[v_as_stub(v_meta)];
-
-    switch (meta->_tag) {
-        case META_FIELD_ANY: {
-            Value v = *ptr_disp(Value, self, meta->_gptr);
-            v_set(env, pv, v);
-            return ALO_SOK;
+    loop {
+        Meta* meta = &metas->_ptr[index];
+        if (meta->_key == key) {
+            return meta;
         }
-        case META_FIELD_STR:
-        case META_FIELD_OPT_STR: {
-            a_hobj p = *ptr_disp(a_hobj, self, meta->_gptr);
-            if (p != null) {
-                v_set_obj(env, pv, p);
+        if (meta->_key == null) {
+            return null;
+        }
+
+        perturb >>= 5;
+        index = (index * 5 + perturb + 1) & metas->_hmask;
+    }
+}
+
+static void metas_put_inplace(a_henv env, Metas* metas, GStr* key, Value value) {
+    a_u32 index = key->_hash & metas->_hmask;
+    a_u32 perturb = key->_hash;
+
+    loop {
+        Meta* meta = &metas->_ptr[index];
+        if (meta->_key == null) {
+            meta->_key = key;
+            v_set(env, &meta->_value, value);
+            break;
+        }
+
+        perturb >>= 5;
+        index = (index * 5 + perturb + 1) & metas->_hmask;
+    }
+}
+
+static a_bool metas_need_grow(Metas* metas) {
+    return metas->_len >= (metas->_hmask + 1) / 4 * 3;
+}
+
+static void metas_resize(a_henv env, Metas* metas, a_u32 old_cap, a_u32 new_cap) {
+    Meta* old_ptr = metas->_ptr;
+    Meta* new_ptr = ai_mem_vnew(env, Meta, new_cap);
+
+    memclr(new_ptr, sizeof(Meta) * new_cap);
+    metas->_ptr = new_ptr;
+    metas->_hmask = new_cap - 1;
+
+    if (old_ptr != null) {
+        for (a_u32 i = 0; i < old_cap; ++i) {
+            Meta* meta = &old_ptr[i];
+            if (meta->_key > dead_key) {
+                metas_put_inplace(env, metas, meta->_key, meta->_value);
             }
-            else {
-                v_set_nil(pv);
+        }
+
+        ai_mem_vdel(G(env), old_ptr, old_cap);
+    }
+}
+
+static void metas_grow(a_henv env, Metas* metas) {
+    assume(metas->_ptr != null, "grow nothing.");
+
+    a_u32 old_cap = metas->_hmask + 1;
+    a_u32 new_cap = old_cap << 1;
+
+    metas_resize(env, metas, old_cap, new_cap);
+}
+
+static a_bool metas_set(a_henv env, Metas* metas, GStr* key, Value value) {
+    if (unlikely(metas->_ptr == null)) {
+        metas_resize(env, metas, 0, 4);
+        metas_put_inplace(env, metas, key, value);
+    }
+    else {
+        a_bool need_grow = metas_need_grow(metas);
+        a_bool need_seek = !need_grow;
+        Meta* meta_slot = null;
+
+        a_u32 index = key->_hash & metas->_hmask;
+        a_u32 perturb = key->_hash;
+
+        loop {
+            Meta* meta = &metas->_ptr[index];
+            if (meta->_key == key) {
+                v_set(env, &meta->_value, value);
+                return true;
             }
-            return ALO_SOK;
+            if (meta->_key == dead_key) {
+                if (need_seek) {
+                    meta_slot = meta;
+                    need_seek = false;
+                }
+            }
+            if (meta->_key == null) {
+                if (need_seek) {
+                    meta_slot = meta;
+                }
+                break;
+            }
+
+            perturb >>= 5;
+            index = (index * 5 + perturb + 1) & metas->_hmask;
         }
-        case META_FIELD_INT:
-        case META_FIELD_UINT: {
-            a_int i = *ptr_disp(a_int, self, meta->_gptr);
-            v_set_int(pv, i);
-            return ALO_SOK;
+
+        if (meta_slot != null) {
+            meta_slot->_key = key;
+            v_set(env, &meta_slot->_value, value);
         }
-        default: return ALO_EEMPTY;
-    }
-}
-
-static a_msg obj_set_field(a_henv env, GObj* self, GStr* key, Value vv) {
-    GType* type = g_typeof(env, self);
-
-    Value const* pv_meta = type_get_meta_ref(env, type, key, TYPE_META_CAT_SETTER);
-    if (pv_meta == null) return ALO_EEMPTY;
-
-    Value v_meta = *pv_meta;
-    Meta* meta = &type->_metas._ptr[v_as_stub(v_meta)];
-
-    switch (meta->_tag) {
-        case META_FIELD_ANY: {
-            Value* p = ptr_disp(Value, self, meta->_gptr);
-            v_set(env, p, v_meta);
-            return ALO_SOK;
+        else {
+            if (need_grow) metas_grow(env, metas);
+            metas_put_inplace(env, metas, key, value);
         }
-        case META_FIELD_STR: {
-            if (!v_is_str(vv)) return ALO_EINVAL;
-            GStr** pp = ptr_disp(GStr*, self, meta->_gptr);
-            *pp = v_as_str(vv);
-            return ALO_SOK;
-        }
-        case META_FIELD_OPT_STR: {
-            if (!(v_is_str(vv) || v_is_nil(vv))) return ALO_EINVAL;
-            GStr** pp = ptr_disp(GStr*, self, meta->_gptr);
-            *pp = v_is_nil(vv) ? null : v_as_str(vv);
-            return ALO_SOK;
-        }
-        case META_FIELD_INT:
-        case META_FIELD_UINT: {
-            if (!(v_is_int(vv))) return ALO_EINVAL;
-            a_int* pi = ptr_disp(a_int, self, meta->_gptr);
-            *pi = v_as_int(vv);
-            return ALO_SOK;
-        }
-        default: return ALO_EINVAL;
-    }
-}
-
-static Value type_get_meta(a_henv env, GType* self, Meta* meta) {
-    quiet(env);
-    quiet(self);
-
-    switch (meta->_tag) {
-        case META_DIRECT_METHOD: {
-            return meta->_slot;
-        }
-        default: unreachable(); //TODO
-    }
-}
-
-static Value type_wrap_maybe_stub(a_henv env, GType* self, Value* pv) {
-    Value v = *pv;
-
-    if (unlikely(v_is_stub(v))) {
-        v = type_get_meta(env, self, &self->_metas._ptr[v_as_stub(v)]);
-        v_set(env, pv, v);
-        ai_gc_barrier_forward_val(env, self, v);
     }
 
-    return v;
+    metas->_len += 1;
+    return false;
 }
 
 static Value type_gets(a_henv env, GType* self, GStr* key) {
+    Meta* meta = metas_get(&self->_metas, key);
+    if (meta != null) {
+        return meta->_value;
+    }
+
     Value v;
-
-    a_msg msg = obj_get_field(env, gobj_cast(self), key, &v);
-
-    if (msg == ALO_SOK)
-        return v;
-
-    Value* p = type_get_meta_ref(env, self, key, TYPE_META_CAT_STATIC);
-
-    if (p == null)
+    catch (ai_meta_get(env, v_of_obj(self), v_of_obj(key), &v)) {
         goto invalid;
+    }
 
-    return type_wrap_maybe_stub(env, self, p);
+    return v;
 
 invalid:
     ai_err_raisef(env, ALO_EXIMPL, "cannot access field for type: '%s.%s'",
-                  str2ntstr(self->_id),
+                  str2ntstr(self->_sig),
                   str2ntstr(key));
 }
 
 static void type_sets(a_henv env, GType* self, GStr* key, Value value) {
-    a_msg msg = obj_set_field(env, gobj_cast(self), key, value);
+    Meta* meta = metas_get(&self->_metas, key);
 
-    if (msg == ALO_SOK)
-        return;
-    if (msg == ALO_EINVAL)
-        goto invalid;
+    if (meta != null) {
+        v_set(env, &meta->_value, value);
+        self->_mver += 1;
 
-    Value* p = type_get_meta_ref(env, self, key, TYPE_META_CAT_STATIC);
-
-    if (p != null) {
-        Value v = *p;
-        if (v_is_stub(v)) {
-            Meta* meta = &self->_metas._ptr[v_as_stub(v)];
-            if (!(meta->_modifiers & META_MODIFIER_CONFIGURABLE))
-                goto invalid;
-        }
-
-        v_set(env, p, value);
+        ai_gc_barrier_forward_val(env, self, value);
     }
     else {
-        catch (at_dict_put(env, &self->_table, key_from(key, TYPE_META_CAT_STATIC), value)) {
-            ai_err_raisef(env, ALO_EINVAL, "too many fields.");
+        catch (ai_meta_set(env, v_of_obj(self), v_of_obj(key), value)) {
+            metas_set(env, &self->_metas, key, value);
+            self->_mver += 1;
+
+            ai_gc_barrier_forward(env, self, key);
+            ai_gc_barrier_forward_val(env, self, value);
+            break;
         }
-
-        ai_gc_barrier_forward(env, self, key);
     }
-
-    self->_mver += 1;
-
-    ai_gc_barrier_forward_val(env, self, value);
-
-    return;
-
-invalid:
-    ai_err_raisef(env, msg, "cannot overwrite field for type: '%s.%s'",
-                  str2ntstr(self->_id),
-                  str2ntstr(key));
 }
 
 Value ai_type_get(a_henv env, GType* self, Value vk) {
@@ -247,13 +217,10 @@ a_msg ai_type_uget(a_henv env, GType* self, Value vk, Value* pv) {
 }
 
 a_msg ai_type_ugets(a_henv env, GType* self, GStr* k, Value* pv) {
-    a_msg msg = obj_get_field(env, gobj_cast(self), k, pv);
-    if (msg != ALO_EEMPTY) return msg;
+    Meta* meta = metas_get(&self->_metas, k);
+    if (meta == null) return ALO_EEMPTY;
 
-    Value* p = type_get_meta_ref(env, self, k, TYPE_META_CAT_STATIC);
-    if (p == null) return ALO_EEMPTY;
-
-    v_set(env, pv, type_wrap_maybe_stub(env, self, p));
+    v_set(env, pv, meta->_value);
     return ALO_SOK;
 }
 
@@ -263,32 +230,12 @@ a_msg ai_type_uset(a_henv env, GType* self, Value vk, Value vv) {
 }
 
 a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
-    a_msg msg = obj_set_field(env, gobj_cast(self), k, vv);
-    if (msg != ALO_EEMPTY) return msg;
+    metas_set(env, &self->_metas, k, vv);
 
-    Value* p = type_get_meta_ref(env, self, k, TYPE_META_CAT_STATIC);
-
-    if (p != null) {
-        Value v = *p;
-        if (v_is_stub(v)) {
-            Meta* meta = &self->_metas._ptr[v_as_stub(v)];
-            if (!(meta->_modifiers & META_MODIFIER_CONFIGURABLE))
-                return ALO_EINVAL;
-        }
-
-        v_set(env, p, vv);
-    }
-    else {
-        catch (at_dict_put(env, &self->_table, key_from(k, TYPE_META_CAT_STATIC), vv)) {
-            return ALO_EINVAL;
-        }
-
-        ai_gc_barrier_forward(env, self, k);
-    }
+    ai_gc_barrier_forward(env, self, k);
+    ai_gc_barrier_forward_val(env, self, vv);
 
     self->_mver += 1;
-
-    ai_gc_barrier_forward_val(env, self, vv);
 
     return ALO_SOK;
 }
@@ -296,17 +243,17 @@ a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
 a_msg ai_obj_ulook(a_henv env, Value v, GStr* k, Value* pv) {
     GType* type = v_typeof(env, v);
 
-    Value const* pv_meta = type_get_meta_ref(env, type, k, TYPE_META_CAT_MEMBER);
-    if (pv_meta == null) return ALO_EEMPTY;
+    Meta* meta = metas_get(&type->_metas, k);
+    if (meta == null) return ALO_EEMPTY;
 
-    v_cpy(env, pv, pv_meta);
+    v_cpy(env, pv, &meta->_value);
     return ALO_SOK;
 }
 
 static GType* cache_look(TypeCache* cache, GStr* name) {
 	a_u32 id = name->_hash & cache->_hmask;
 	for (GType* type = cache->_ptr[id]; type != null; type = type->_mnext) {
-		if (name == type->_id) {
+		if (name == type->_sig) {
 			return type;
 		}
 	}
@@ -337,7 +284,7 @@ GType* ai_type_look(a_henv env, GLoader* loader, GStr* name, a_bool load) {
 }
 
 static void cache_put_in_place(TypeCache* cache, GType* type) {
-	a_u32 id = type->_id->_hash & cache->_hmask;
+	a_u32 id = type->_sig->_hash & cache->_hmask;
 	GType** slot = &cache->_ptr[id];
 	GType* type2;
 	while ((type2 = *slot) != null) {
@@ -402,39 +349,12 @@ static void cache_drop(Global* g, TypeCache* cache) {
 	}
 }
 
-static void metas_hint1(a_henv env, Metas* metas) {
-    if (metas->_len == metas->_cap) {
-        a_usize old_cap = metas->_cap;
-        a_usize new_cap = old_cap;
-
-        catch (ai_buf_nhint(&new_cap, metas->_len, 1, INT32_MAX), msg) {
-            ai_buf_error(env, msg, "meta");
-        }
-
-        metas->_ptr = ai_mem_vgrow(env, metas->_ptr, old_cap, new_cap);
-        metas->_cap = new_cap;
-    }
-}
-
-static void type_new_meta_fast_inplace(a_henv env, GType* self, char const* name, a_enum cat, Meta meta) {
-    Metas* metas = &self->_metas;
-    metas_hint1(env, metas);
-
-    a_u32 id = metas->_len++;
-    metas->_ptr[id] = meta;
-
-    at_dict_hint(env, &self->_table, 2);
-
-    GStr* str = ai_str_newc(env, name);
-
-    at_dict_put(env, &self->_table, key_from(str, TYPE_META_CAT_STATIC), v_of_stub(id));
-    at_dict_put(env, &self->_table, key_from(str, cat), v_of_stub(id));
-}
-
 static void type_clean(Global* g, GType* self) {
-    at_dict_deinit(g, &self->_table);
-    if (self->_metas._ptr != null) {
-        ai_mem_vdel(g, self->_metas._ptr, self->_metas._cap);
+    run {
+        Metas* metas = &self->_metas;
+        if (metas->_ptr != null) {
+            ai_mem_vdel(g, metas->_ptr, metas->_hmask + 1);
+        }
     }
 }
 
@@ -445,80 +365,74 @@ void ai_type_boost(a_henv env) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TNIL,
-        ._id = g_str(env, STR_nil)
+        ._sig = g_str(env, STR_nil)
     };
     g->_types._bool = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TBOOL,
-        ._id = g_str(env, STR_bool)
+        ._sig = g_str(env, STR_bool)
     };
     g->_types._int = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TINT,
-        ._id = g_str(env, STR_int)
+        ._sig = g_str(env, STR_int)
     };
     g->_types._float = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TFLOAT,
-        ._id = g_str(env, STR_float)
+        ._sig = g_str(env, STR_float)
     };
     g->_types._ptr = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TPTR,
-        ._id = g_str(env, STR_ptr)
+        ._sig = g_str(env, STR_ptr)
     };
     g->_types._str = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TSTR,
-        ._id = g_str(env, STR_str)
+        ._sig = g_str(env, STR_str)
     };
     g->_types._tuple = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTUPLE,
-        ._id = g_str(env, STR_tuple)
+        ._sig = g_str(env, STR_tuple)
     };
     g->_types._list = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TLIST,
-        ._id = g_str(env, STR_list)
+        ._sig = g_str(env, STR_list)
     };
     g->_types._table = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTABLE,
-        ._id = g_str(env, STR_table)
+        ._sig = g_str(env, STR_table)
     };
     g->_types._func = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TFUNC,
-        ._id = g_str(env, STR_func)
+        ._sig = g_str(env, STR_func)
     };
     g->_types._route = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TROUTE,
-        ._id = g_str(env, STR_route)
+        ._sig = g_str(env, STR_route)
     };
     g->_types._type = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTYPE,
-        ._id = g_str(env, STR_type)
+        ._sig = g_str(env, STR_type)
     };
-
-    type_new_meta_fast_inplace(env, g_type(env, _type), "__id__", TYPE_META_CAT_GETTER, (Meta) {
-        ._gptr = offsetof(GType, _id),
-        ._tag = META_FIELD_STR,
-        ._modifiers = 0,
-    });
 }
 
 void ai_type_clean(Global* g) {
@@ -542,8 +456,16 @@ static void type_drop(Global* g, GType* self) {
 }
 
 static void metas_mark(Global* g, Metas* metas) {
-    for (a_u32 i = 0; i < metas->_cap; ++i) {
-        ai_gc_trace_mark_val(g, metas->_ptr[i]._slot);
+    if (metas->_ptr != null) {
+        a_u32 cap = metas->_hmask + 1;
+        for (a_u32 i = 0; i < cap; ++i) {
+            Meta* meta = &metas->_ptr[i];
+            if (meta->_key > dead_key) {
+                ai_gc_trace_mark(g, meta->_key);
+                ai_gc_trace_mark_val(g, meta->_value);
+            }
+        }
+        ai_gc_trace_work(g, sizeof(Meta) * cap);
     }
 }
 
@@ -551,19 +473,10 @@ static void type_mark(Global* g, GType* self) {
     if (self->_loader != null) {
         ai_gc_trace_mark(g, self->_loader);
     }
-    if (self->_id != null) {
-        ai_gc_trace_mark(g, self->_id);
+    if (self->_sig != null) {
+        ai_gc_trace_mark(g, self->_sig);
     }
     metas_mark(g, &self->_metas);
-    if (self->_table._ptr != null) {
-        MetaRef* ref;
-        at_dict_for(&self->_table, ref) {
-            if (ref->_key > dead_key) {
-                ai_gc_trace_mark(g, str_from_key(ref->_key));
-                ai_gc_trace_mark_val(g, ref->_value);
-            }
-        }
-    }
     ai_gc_trace_work(g, self->_size);
 }
 

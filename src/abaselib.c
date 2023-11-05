@@ -110,7 +110,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
                     aloi_show("{");
                     a_bool tail = false;
                     TNode* node;
-                    for (a_u32 itr = val->_lfirst; itr <= val->_hmask; itr = node->_lnext) {
+                    for (a_i32 itr = val->_ptr[-1]._lnext; itr <= cast(a_i32, val->_hmask); itr = node->_lnext) {
                         node = &val->_ptr[itr];
                         if (tail) {
                             aloi_show(", ");
@@ -118,7 +118,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
                         else {
                             tail = true;
                         }
-                        l_show_impl(env, node->_key._value, depth + 1);
+                        l_show_impl(env, node->_key, depth + 1);
                         aloi_show(" -> ");
                         l_show_impl(env, node->_value, depth + 1);
                         if (--n == 0) {
@@ -136,7 +136,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			break;
 		}
 		case T_TYPE: {
-			aloi_show("<type:%s>", str2ntstr(v_as_type(v)->_id));
+			aloi_show("<type:%s>", str2ntstr(v_as_type(v)->_sig));
 			break;
 		}
 		case T_USER: {

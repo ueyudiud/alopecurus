@@ -7,14 +7,7 @@
 
 #include "aobj.h"
 
-#define TYPE_META_CAT_STATIC 0
-#define TYPE_META_CAT_GETTER 1
-#define TYPE_META_CAT_SETTER 2
-#define TYPE_META_CAT_MEMBER 3
-
-intern GType* ai_type_alloc(a_henv env, a_usize size);
-intern GType* ai_stype_new(a_henv env, GStr* name, GLoader* loader);
-
+intern GType* ai_type_new(a_henv env, GStr* name, GLoader* loader, a_usize extra);
 intern Value ai_type_get(a_henv env, GType* self, Value vk);
 intern void ai_type_set(a_henv env, GType* self, Value vk, Value vv);
 

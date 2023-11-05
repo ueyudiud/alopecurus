@@ -684,7 +684,7 @@ void alo_newtype(a_henv env, char const* n, a_flags flags) {
     GStr* name = ai_str_newc(env, n);
     v_set_obj(env, pv, name);
 
-	GType* self = ai_stype_new(env, name, null);
+	GType* self = ai_type_new(env, name, null, 0);
 	v_set_obj(env, pv, self);
 
 	ai_gc_trigger(env);

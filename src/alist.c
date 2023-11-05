@@ -14,32 +14,22 @@
 
 static VTable const list_vtable;
 
-#define Vec GList
-
-#define at_vec_grow_amortized list_grow_amortized
-
-static a_bool at_vec_grow_amortized(a_henv env, Vec* self, a_usize addition);
-
-#include "avec.h"
-
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, sizeof(GList));
 
     self->_vptr = &list_vtable;
-    at_vec_init(self);
+    self->_ptr = null;
+    self->_cap = 0;
+    self->_len = 0;
 
     ai_gc_register_object(env, self);
 
     return self;
 }
 
-static void list_hint_failed(a_henv env) {
-    ai_err_raisef(env, ALO_EINVAL, "too many elements.");
-}
-
-static a_bool list_grow_amortized(a_henv env, GList* self, a_usize addition) {
+static a_bool list_grow(a_henv env, GList* self, a_usize add) {
     a_usize need;
-    try(checked_add_usize(self->_len, addition, &need));
+    try (checked_add_usize(self->_len, add, &need));
 
     assume(need >= self->_cap, "not need to grow.");
 
@@ -53,30 +43,40 @@ static a_bool list_grow_amortized(a_henv env, GList* self, a_usize addition) {
         new_cap = INT32_MAX; /* Trim to maximum capacity. */
     }
 
-    at_vec_resize(env, self, old_cap, new_cap);
+    self->_ptr = ai_mem_vgrow(env, self->_ptr, old_cap, new_cap);
+    self->_cap = new_cap;
+
     return false;
 }
 
-void ai_list_hint(a_henv env, GList* self, a_usize len) {
-    catch (at_vec_hint(env, self, len)) {
-        list_hint_failed(env);
+void ai_list_grow(a_henv env, GList* self, a_usize add) {
+    catch (list_grow(env, self, add)) {
+        ai_err_raisef(env, ALO_EINVAL, "too many elements.");
+    }
+}
+
+void ai_list_hint(a_henv env, GList* self, a_usize add) {
+    if (unlikely(add > self->_cap - self->_len)) {
+        ai_list_grow(env, self, add);
     }
 }
 
 void ai_list_push(a_henv env, GList* self, Value v) {
-    catch (at_vec_push(env, self, v)) {
-        list_hint_failed(env);
-    }
+    ai_list_hint(env, self, 1);
+
+    v_set(env, &self->_ptr[self->_len], v);
+    self->_len += 1;
 
 	ai_gc_barrier_backward_val(env, self, v);
 }
 
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
-    catch (at_vec_push_all(env, self, src, len)) {
-        list_hint_failed(env);
-    }
+    ai_list_hint(env, self, len);
 
-	/* We assume the elements in source has white value. */
+    v_cpy_all(env, &self->_ptr[self->_len], src, len);
+    self->_len += len;
+
+    /* We assume the elements in source has white value. */
 	if (g_has_black_color(self)) {
 		join_trace(&G(env)->_tr_regray, self);
 	}
@@ -142,7 +142,9 @@ static void list_mark(Global* g, GList* self) {
 }
 
 static void list_drop(Global* g, GList* self) {
-    at_vec_deinit(g, self);
+    if (self->_ptr != null) {
+        ai_mem_vdel(g, self->_ptr, self->_cap);
+    }
     ai_mem_dealloc(g, self, sizeof(GList));
 }
 
