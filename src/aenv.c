@@ -178,10 +178,10 @@ static void global_init(a_henv env, unused void* ctx) {
 
 static a_usize sizeof_MRoute() {
 	a_usize size = sizeof(MRoute) + sizeof(GcHead) + str_size(0)
-                   #define STRDEF(n) + sizeof(GcHead) + str_size(sizeof(#n) - 1)
-                   # include "asym/kw.h"
-                   # include "asym/tm.h"
-                   # include "asym/pt.h"
+#define STRDEF(n) + sizeof(GcHead) + str_size(sizeof(#n) - 1)
+# include "asym/kw.h"
+# include "asym/tm.h"
+# include "asym/pt.h"
 #undef STRDEF
 	;
 	return size;

@@ -71,7 +71,7 @@ struct Lexer {
 	};
     ByteBuf _buf;
     a_line _line;
-    a_i16 _char; /* Next character. */
+    a_i32 _char; /* Next character. */
     Token _ahead[2];
     StrSet _strs;
 };

@@ -20,14 +20,14 @@ static a_none l_foreign_error(Lexer* lex) {
 	ai_err_raise(lex->_env, ALO_EOUTER, v_of_int(lex->_in._err));
 }
 
-always_inline a_i32 l_poll(Lexer* lex) {
+always_inline a_i32 l_poll_unchecked(Lexer* lex) {
     a_i32 ch = lex->_char;
     lex->_char = ai_io_igetc(&lex->_in);
     return ch;
 }
 
 static void l_unwind(Lexer* lex, a_i32 ch) {
-    assume(ch >= 0);
+    assume(ch >= 0, "cannot unwind error.");
     lex->_in._ptr -= 1;
     lex->_in._len += 1;
     lex->_char = ch;
@@ -35,16 +35,8 @@ static void l_unwind(Lexer* lex, a_i32 ch) {
 
 #define l_peek(lex) ((lex)->_char)
 
-static a_i32 l_poll_checked(Lexer* lex) {
-	a_i32 ch = l_poll(lex);
-	if (unlikely(ch == ALO_EOUTER)) {
-		l_foreign_error(lex);
-	}
-	return ch;
-}
-
-static a_i32 l_peek_checked(Lexer* lex) {
-	a_i32 ch = l_peek(lex);
+static a_i32 l_poll(Lexer* lex) {
+	a_i32 ch = l_poll_unchecked(lex);
 	if (unlikely(ch == ALO_EOUTER)) {
 		l_foreign_error(lex);
 	}
@@ -55,7 +47,7 @@ static a_i32 l_peek_checked(Lexer* lex) {
 
 #define l_test(lex,ch) (l_peek(lex) == (ch))
 
-#define l_test_skip(lex,ch) (l_test(lex, ch) && (l_poll(lex), true))
+#define l_test_skip(lex,ch) (l_test(lex, ch) && (l_poll_unchecked(lex), true))
 
 static a_i32 c_bdigit(a_i32 ch) {
 	if (ch >= '0' && ch <= '1') {
@@ -177,7 +169,7 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 	strs_alloc_array(env, &lex->_strs, STRS_INIT_CAP);
 	lex->_strs._len = 0;
 
-	l_poll(lex);
+    l_poll_unchecked(lex);
 }
 
 void ai_lex_close(Lexer* lex) {
@@ -248,7 +240,7 @@ GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
 
 static a_i32 l_skip_line(Lexer* lex) {
     loop {
-		switch (l_poll(lex)) {
+		switch (l_poll_unchecked(lex)) {
 			case ALO_EEMPTY:
 				return TK_EOF;
 			case ALO_EOUTER:
@@ -269,7 +261,7 @@ static a_i32 l_skip_line(Lexer* lex) {
 
 static a_i32 l_scan_ident(Lexer* lex, Token* tk) {
     while (c_isibody(l_peek(lex))) {
-        l_bput(lex, l_poll(lex));
+        l_bput(lex, l_poll_unchecked(lex));
     }
     GStr* str = l_to_str(lex);
     tk->_str = str;
@@ -657,7 +649,7 @@ error_no_gap:
 }
 
 static a_i32 l_scan_xdigit(Lexer* lex) {
-    a_i32 i = c_xdigit(l_poll_checked(lex));
+    a_i32 i = c_xdigit(l_poll(lex));
     if (i < 0) ai_lex_error(lex, "bad escape character.");
     return i;
 }
@@ -672,7 +664,7 @@ static a_none l_error_unclosed(Lexer* lex, a_u32 line) {
 }
 
 static void l_scan_sqchr(Lexer* lex, a_u32 line) {
-	a_i32 ch = l_poll_checked(lex);
+	a_i32 ch = l_poll(lex);
 	switch (ch) {
 		case '\r': {
 			l_test_skip(lex, '\n');
@@ -718,13 +710,13 @@ static a_bool l_test_tesc_head(Lexer* lex) {
 }
 
 static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
-    a_i32 ch = l_poll_checked(lex);
+    a_i32 ch = l_poll(lex);
 	switch (ch) {
 		case ALO_EEMPTY: {
 			l_error_unclosed(lex, line);
 		}
 		case '\\': {
-			switch (ch = l_poll_checked(lex)) {
+			switch (ch = l_poll(lex)) {
 				case 'b': {
 					l_bput(lex, '\b');
 					break;
@@ -858,7 +850,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
 	tk->_line = lex->_line;
     loop {
         a_i32 ch;
-        switch (ch = l_poll_checked(lex)) {
+        switch (ch = l_poll(lex)) {
             case ALO_EEMPTY: {
                 return TK_EOF;
             }
@@ -925,8 +917,8 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
                 if (l_test_skip(lex, '+')) {
 					return TK_BPLUS;
 				}
-				else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
-                    return l_scan_number(lex, tk, 1, l_poll(lex));
+                else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
+                    return l_scan_number(lex, tk, 1, l_poll_unchecked(lex));
                 }
                 return TK_PLUS;
             }
@@ -936,7 +928,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
                     break;
                 }
                 else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
-                    return l_scan_number(lex, tk, -1, l_poll(lex));
+                    return l_scan_number(lex, tk, -1, l_poll_unchecked(lex));
                 }
                 return TK_MINUS;
             }
