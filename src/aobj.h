@@ -425,6 +425,8 @@ always_inline a_u32 v_as_stub(Value v) {
     return cast(a_u32, v._);
 }
 
+#define type_size(e) pad_to_raw(sizeof(GType) + (e), sizeof(a_usize))
+
 /*=========================================================*
  * String
  *=========================================================*/

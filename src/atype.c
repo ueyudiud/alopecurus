@@ -22,7 +22,7 @@
 static VTable const type_vtable;
 
 GType* ai_type_new(a_henv env, GStr* name, GLoader* loader, a_usize extra) {
-    a_usize size = pad_to(sizeof(GType) + extra, sizeof(a_usize));
+    a_usize size = type_size(extra);
 
     GType* self = ai_mem_gnew(env, GType, size);
     memclr(self, size);
