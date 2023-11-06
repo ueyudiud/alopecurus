@@ -662,7 +662,6 @@ typedef void* a_rctx;
 
 struct alo_Env {
 	GOBJ_STRUCT_HEADER;
-    void* _dummy;
 	Global* _g;
 	a_rctx _rctx;
 	void* _rctx_alloc;
@@ -677,16 +676,17 @@ struct alo_Env {
 	Frame _base_frame;
 };
 
+/* Some offset used in assembly, make sure the value is correct. */
 #if ALO_M64
-static_assert(offsetof(GRoute, _rctx) == 0x20);
-static_assert(offsetof(GRoute, _rctx_alloc) == 0x28);
-static_assert(offsetof(GRoute, _from) == 0x30);
-static_assert(offsetof(GRoute, _stack._base) == 0x40);
+static_assert(offsetof(GRoute, _rctx) == 0x18);
+static_assert(offsetof(GRoute, _rctx_alloc) == 0x20);
+static_assert(offsetof(GRoute, _from) == 0x28);
+static_assert(offsetof(GRoute, _stack._base) == 0x38);
 #else
-static_assert(offsetof(GRoute, _rctx) == 0x10);
-static_assert(offsetof(GRoute, _rctx_alloc) == 0x14);
-static_assert(offsetof(GRoute, _from) == 0x18);
-static_assert(offsetof(GRoute, _stack._base) == 0x20);
+static_assert(offsetof(GRoute, _rctx) == 0x0C);
+static_assert(offsetof(GRoute, _rctx_alloc) == 0x10);
+static_assert(offsetof(GRoute, _from) == 0x14);
+static_assert(offsetof(GRoute, _stack._base) == 0x1C);
 #endif
 
 #define G(env) ((env)->_g)
