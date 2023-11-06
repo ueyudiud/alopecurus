@@ -145,7 +145,7 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 
 	self = buff;
 	/* Complete all fields. */
-	self->_vptr = g_type(env, _str)->_vptr;
+	self->_vptr = &str_vtable;
 	self->_len = len;
 	self->_hash = hash;
 	self->_ptr[len] = '\0';
