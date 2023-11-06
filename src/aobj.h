@@ -66,8 +66,8 @@ typedef struct TypeCache TypeCache;
 
 #define T_FLOAT u32c(16)
 
-#define g_cast(t,e) from_member(t, _obj_head_mark, &(e)->_obj_head_mark)
-#define gobj_cast(e) cast(a_hobj, (e)->_obj_head_mark)
+#define g_cast(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)
+#define gobj_cast(o) cast(a_hobj, (o)->_obj_head_mark)
 
 typedef struct { a_u64 _; } Value;
 
@@ -269,15 +269,9 @@ struct GObj {
     a_usize _type_ref /* null for no type object. */
 
 #define VTABLE_METHOD_LIST(_) \
-	_( 0, drop  ,    void, Global* g                                      ) \
-	_( 1, mark  ,    void, Global* g                                      ) \
-	_( 2, close ,    void, a_henv env                                     ) \
-	                                                                        \
-	_( 3, len   ,  a_uint, a_henv env                                     ) \
-	_( 4, get   ,   Value, a_henv env, Value key                          ) \
-	_( 5, set   ,    void, a_henv env, Value key, Value val               ) \
-	_( 6,uget   ,   a_msg, a_henv env, Value key, Value* pval             ) \
-	_( 7,uset   ,   a_msg, a_henv env, Value key, Value val               )
+	_( 0, drop  ,    void, Global* gbl                                      ) \
+	_( 1, mark  ,    void, Global* gbl                                      ) \
+	_( 2, close ,    void, a_henv env                                       )
 
 /* Method Slot Index Table. */
 union MSIT {
@@ -310,35 +304,33 @@ struct VTable {
 
 #define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
 
-#define a_vfp(f) typeof(cast(MST*, null)->f)
-
 #define g_vfetch(p,f) (cast(MST*, (p)->_vptr->_slots)->f)
 
 #define g_vcheck(p,f) ({ \
-	a_vfp(f) _f2 = g_vfetch(p, f); \
+	__auto_type _f2 = g_vfetch(p, f); \
 	assume(_f2 != null, "method '"#f"' is null."); \
 	_f2;                    \
 })
 
 #define g_vcallp(r,p,fp,a...) (*(fp))(r, gobj_cast(p), ##a)
-#define g_vcall(r,p,f,a...) ({ typeof(p) _p = p; a_vfp(f) _fp = g_vcheck(_p,f); g_vcallp(r, _p, _fp, ##a); })
+#define g_vcall(r,p,f,a...) ({ __auto_type _p = p; __auto_type _fp = g_vcheck(_p,f); g_vcallp(r, _p, _fp, ##a); })
 #define v_vcall(r,v,f,a...) g_vcall(r, v_as_obj(v), f, ##a)
 
 #define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
 
-always_inline GObj* v_as_obj(Value v) {
+always_inline a_hobj v_as_obj(Value v) {
     assume(v_is_obj(v), "not object.");
     return int2ptr(GObj, v_get_payload(v));
 }
 
-always_inline Value v_of_obj(a_hobj v) {
-    return v_new(v->_vptr->_stencil | ptr2int(v));
+always_inline Value v_of_obj(a_hobj o) {
+    return v_new(o->_vptr->_stencil | ptr2int(o));
 }
 
-#define v_of_obj(v) v_of_obj(gobj_cast(v))
+#define v_of_obj(o) v_of_obj(gobj_cast(o))
 
-always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
-    v_set(env, d, v_of_obj(v));
+always_inline void v_set_obj(a_henv env, Value* d, a_hobj o) {
+    v_set(env, d, v_of_obj(o));
 }
 
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
@@ -347,8 +339,8 @@ always_inline a_hobj g_biased(void* p, a_usize bias) {
     return cast(void*, p) + sizeof(GcHead) + bias;
 }
 
-always_inline void* g_unbiased(a_hobj p, a_usize bias) {
-    return cast(void*, p) - sizeof(GcHead) - bias;
+always_inline void* g_unbiased(a_hobj o, a_usize bias) {
+    return cast(void*, o) - sizeof(GcHead) - bias;
 }
 
 #define g_biased_(p,bias,...) g_biased(p, bias)
@@ -662,7 +654,7 @@ typedef void* a_rctx;
 
 struct alo_Env {
 	GOBJ_STRUCT_HEADER;
-	Global* _g;
+	Global* _global;
 	a_rctx _rctx;
 	void* _rctx_alloc;
 	GRoute* _from;
@@ -689,7 +681,7 @@ static_assert(offsetof(GRoute, _from) == 0x14);
 static_assert(offsetof(GRoute, _stack._base) == 0x1C);
 #endif
 
-#define G(env) ((env)->_g)
+#define G(env) ((env)->_global)
 
 /*=========================================================*
  * Global
@@ -702,7 +694,7 @@ typedef struct {
 } StrCache;
 
 typedef void (*a_fp_gexecpt)(a_henv env, void* ctx, a_msg msg);
-typedef void (*a_fp_gmark)(Global* g, void* ctx);
+typedef void (*a_fp_gmark)(Global* gbl, void* ctx);
 
 struct Global {
 	Alloc _af;
@@ -760,21 +752,21 @@ struct Global {
 
 always_inline void gbl_protect(a_henv env, a_fp_gmark mark, a_fp_gexecpt except, void* ctx) {
 	assume(mark != null || except != null, "no protect function given.");
-	Global* g = G(env);
-	g->_gmark = mark;
-	g->_gexecpt = except;
-	g->_gctx = ctx;
+	Global* gbl = G(env);
+	gbl->_gmark = mark;
+	gbl->_gexecpt = except;
+	gbl->_gctx = ctx;
 }
 
 always_inline void gbl_unprotect(a_henv env) {
-	Global* g = G(env);
-	g->_gmark = null;
-	g->_gexecpt = null;
-	g->_gctx = null;
+	Global* gbl = G(env);
+	gbl->_gmark = null;
+	gbl->_gexecpt = null;
+	gbl->_gctx = null;
 }
 
-always_inline a_usize gbl_mem_total(Global* g) {
-	return g->_mem_base + cast(a_usize, g->_mem_debt);
+always_inline a_usize gbl_mem_total(Global* gbl) {
+	return gbl->_mem_base + cast(a_usize, gbl->_mem_debt);
 }
 
 always_inline GStr* g_str(a_henv env, a_u32 tag) {

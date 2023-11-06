@@ -99,15 +99,15 @@ static void str_init(GStr* self, void const* src, a_usize len, a_hash hash) {
 }
 
 static GStr* str_get_or_null_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
-    Global* g = G(env);
-    StrCache* cache = &g->_str_cache;
+    Global* gbl = G(env);
+    StrCache* cache = &gbl->_str_cache;
 
     /* Try lookup string in intern table. */
     for (GStr* str = cache->_table[hash & cache->_hmask]; str != null; str = str->_snext) {
         if (str->_hash == hash && likely(str->_len == len && memcmp(str->_ptr, src, len) == 0)) {
             /* Revive string object if it is dead. */
-            if (unlikely(g_has_other_color(g, str))) {
-                str->_tnext = white_color(g);
+            if (unlikely(g_has_other_color(gbl, str))) {
+                str->_tnext = white_color(gbl);
             }
             return str;
         }
@@ -219,8 +219,8 @@ a_bool ai_str_requals(GStr* self, void const* dat, a_usize len) {
     return self->_len == len && memcmp(self->_ptr, dat, len) == 0;
 }
 
-static void str_mark(Global* g, GStr* self) {
-    ai_gc_trace_work(g, str_size(self->_len));
+static void str_mark(Global* gbl, GStr* self) {
+    ai_gc_trace_work(gbl, str_size(self->_len));
 }
 
 static void cache_remove(StrCache* cache, GStr* str) {
@@ -238,15 +238,15 @@ static void cache_remove(StrCache* cache, GStr* str) {
     cache->_len -= 1;
 }
 
-static void str_drop(Global* g, GStr* self) {
-    cache_remove(&g->_str_cache, self);
-    ai_mem_gdel(g, self, str_size(self->_len));
+static void str_drop(Global* gbl, GStr* self) {
+    cache_remove(&gbl->_str_cache, self);
+    ai_mem_gdel(gbl, self, str_size(self->_len));
 }
 
 void ai_str_boost(a_henv env, void* block) {
-    Global* g = G(env);
+    Global* gbl = G(env);
     
-    StrCache* cache = &g->_str_cache;
+    StrCache* cache = &gbl->_str_cache;
 
 	run {
 		cache->_table = ai_mem_vnew(env, GStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
@@ -255,8 +255,8 @@ void ai_str_boost(a_henv env, void* block) {
 	}
 
 	run {
-		g->_nomem_error = ai_str_newl(env, "out of memory.");
-		ai_gc_fix_object(env, g->_nomem_error);
+		gbl->_nomem_error = ai_str_newl(env, "out of memory.");
+		ai_gc_fix_object(env, gbl->_nomem_error);
 	}
 
 	run {
@@ -283,17 +283,17 @@ void ai_str_boost(a_henv env, void* block) {
 
 			cache_emplace_in_place(cache, self);
 
-			g->_names[i] = self;
+			gbl->_names[i] = self;
 			block += sizeof(GcHead) + str_size(len);
 			src += len + 1;
 		}
 	}
 }
 
-void ai_str_clean(Global* g) {
-    StrCache* cache = &g->_str_cache;
+void ai_str_clean(Global* gbl) {
+    StrCache* cache = &gbl->_str_cache;
     assume(cache->_len == STR__COUNT, "string size not matched.");
-    ai_mem_vdel(g, cache->_table, cache->_hmask + 1);
+    ai_mem_vdel(gbl, cache->_table, cache->_hmask + 1);
 }
 
 static VTable const str_vtable = {

@@ -1,5 +1,5 @@
 /**
- *@file atuple.c=
+ *@file atuple.c
  */
 
 #define atuple_c_
@@ -80,16 +80,16 @@ a_msg ai_tuple_uget(a_henv env, GTuple* self, Value vk, Value* pv) {
     return ai_tuple_ugeti(env, self, v_as_int(vk), pv);
 }
 
-static void tuple_drop(Global* g, GTuple* self) {
-    ai_mem_gdel(g, self, tuple_size(self->_len));
+static void tuple_drop(Global* gbl, GTuple* self) {
+    ai_mem_gdel(gbl, self, tuple_size(self->_len));
 }
 
-static void tuple_mark(Global* g, GTuple* self) {
+static void tuple_mark(Global* gbl, GTuple* self) {
     a_u32 len = self->_len;
     for (a_u32 i = 0; i < len; ++i) {
-        ai_gc_trace_mark_val(g, self->_ptr[i]);
+        ai_gc_trace_mark_val(gbl, self->_ptr[i]);
     }
-    ai_gc_trace_work(g, tuple_size(self->_len));
+    ai_gc_trace_work(gbl, tuple_size(self->_len));
 }
 
 static VTable const tuple_vtable = {

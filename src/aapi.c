@@ -62,8 +62,8 @@ a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
  *@param f the panic function.
  */
 void alo_setpanic(a_henv env, a_cfun f) {
-	Global* g = G(env);
-	g->_panic = f;
+	Global* gbl = G(env);
+	gbl->_panic = f;
 }
 
 /**
@@ -74,7 +74,7 @@ void alo_setpanic(a_henv env, a_cfun f) {
  *@param mask the hook mask.
  */
 void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
-	Global* g = G(env);
+	Global* gbl = G(env);
 
 	/* Make sure null safe. */
 	if (kf == null || mask == 0) {
@@ -82,12 +82,12 @@ void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
 		mask = 0;
 	}
 
-	ai_vm_lock_hook(g);
+	ai_vm_lock_hook(gbl);
 
-	g->_hookf = kf;
-	g->_hookc = kc;
+	gbl->_hookf = kf;
+	gbl->_hookc = kc;
 
-	g->_hookm = mask;
+	gbl->_hookm = mask;
 }
 
 /**
@@ -510,7 +510,7 @@ a_msg alo_rawget(a_henv env, a_isize id) {
 	Value v = api_elem(env, id);
 	Value vk = api_decr_stack(env);
 
-	try(ai_vm_uget(env, v, vk, &v));
+	try (ai_vm_uget(env, v, vk, &v));
 
 	v_set(env, api_incr_stack(env), v);
 	return tag_of(env, v);

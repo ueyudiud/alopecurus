@@ -51,7 +51,7 @@ GBuf* ai_buf_new(a_henv env) {
 	return self;
 }
 
-a_none ai_buf_error(a_henv env, a_msg msg, char const* what) {
+a_noret ai_buf_error(a_henv env, a_msg msg, char const* what) {
 	if (msg == ALO_EINVAL) {
 		ai_err_raisef(env, msg, "too many %s.", what);
 	}
@@ -61,15 +61,15 @@ a_none ai_buf_error(a_henv env, a_msg msg, char const* what) {
 	}
 }
 
-static void buf_mark(Global* g, a_hobj raw_self) {
+static void buf_mark(Global* gbl, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	ai_gc_trace_work(g, sizeof(GBuf) + self->_cap);
+	ai_gc_trace_work(gbl, sizeof(GBuf) + self->_cap);
 }
 
-static void buf_drop(Global* g, a_hobj raw_self) {
+static void buf_drop(Global* gbl, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	at_buf_deinit(g, *self);
-	ai_mem_gdel(g, self, sizeof(GBuf));
+	at_buf_deinit(gbl, *self);
+	ai_mem_gdel(gbl, self, sizeof(GBuf));
 }
 
 static VTable const buf_vtable = {

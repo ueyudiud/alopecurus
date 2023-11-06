@@ -31,30 +31,30 @@ static void l_call_hook(a_henv env, a_msg msg, a_hfun fun, a_hctx ctx) {
 	(*fun)(env, msg, ctx);
 }
 
-a_u32 ai_vm_lock_hook(Global* g) {
-	atomic_uint_fast8_t mask = g->_hookm;
-	while (((mask & ALO_HMSWAP) != 0) | !atomic_compare_exchange_weak(&g->_hookm, &mask, ALO_HMSWAP));
+a_u32 ai_vm_lock_hook(Global* gbl) {
+	atomic_uint_fast8_t mask = gbl->_hookm;
+	while (((mask & ALO_HMSWAP) != 0) | !atomic_compare_exchange_weak(&gbl->_hookm, &mask, ALO_HMSWAP));
 	return mask;
 }
 
 void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
-	Global* g = env->_g;
+	Global* gbl = G(env);
 
-	a_u32 mask = ai_vm_lock_hook(g);
+	a_u32 mask = ai_vm_lock_hook(gbl);
 
 	/* Load hook closure. */
-	a_hfun fun = g->_hookf;
-	a_hctx ctx = g->_hookc;
+	a_hfun fun = gbl->_hookf;
+	a_hctx ctx = gbl->_hookc;
 
 	/* Reset mask. */
-	g->_hookm = mask;
+	gbl->_hookm = mask;
 
 	if (fun != null && (mask & test)) {
 		l_call_hook(env, msg, fun, ctx);
 	}
 }
 
-static a_none l_div_0_err(a_henv env) {
+static a_noret l_div_0_err(a_henv env) {
 	ai_err_raisef(env, ALO_EINVAL, "attempt to divide by 0.");
 }
 
@@ -203,12 +203,6 @@ a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3) {
         case T_TYPE: {
             return ai_type_uset(env, v_as_type(v1), v2, v3);
         }
-		case T_USER: {
-			GUser* p = v_as_user(v1);
-			a_vfp(uset) uset = g_vfetch(p, uset);
-			if (uset == null) return ALO_EXIMPL;
-			return g_vcallp(env, p, uset, v2, v3);
-		}
         default: {
             return ALO_EXIMPL;
         }

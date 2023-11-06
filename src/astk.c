@@ -117,7 +117,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 
 #define STACK_GROW_OVERFLOW isizec(2)
 
-a_none ai_stk_overflow(a_henv env, a_isize diff) {
+a_noret ai_stk_overflow(a_henv env, a_isize diff) {
 	if (diff & STACK_GROW_OVERFLOW) {
 		GStr* err = ai_str_newl(env, "stack overflow");
 		v_set_obj(env, &env->_error, err);
@@ -160,11 +160,11 @@ void ai_stk_shrink(a_henv env) {
 	}
 }
 
-void ai_stk_deinit(Global* g, Stack* stack) {
+void ai_stk_deinit(Global* gbl, Stack* stack) {
 #if ALO_STACK_INNER
-	ai_mem_dealloc(g, stack->_base, stack->_alloc_size);
+	ai_mem_dealloc(gbl, stack->_base, stack->_alloc_size);
 #else
-	quiet(g);
+	quiet(gbl);
 	ai_mem_nrelease(stack->_base, MAX_OVERFLOWED_STACK_SIZE);
 #endif
 }

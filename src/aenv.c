@@ -25,8 +25,8 @@ typedef struct MRoute {
 	a_byte _reserved[];
 } MRoute;
 
-static MRoute* g_mroute(Global* g) {
-	return from_member(MRoute, _global, g);
+static MRoute* g_mroute(Global* gbl) {
+	return from_member(MRoute, _global, gbl);
 }
 
 static a_bool route_is_main(a_henv env) {
@@ -39,12 +39,12 @@ static a_bool route_is_active(a_henv env) {
 
 static VTable const route_vtable;
 
-static void route_new(GRoute* self, Global* g) {
+static void route_new(GRoute* self, Global* gbl) {
     init(self) {
         ._vptr = &route_vtable,
         ._status = ALO_SYIELD,
         ._flags = 0,
-        ._g = g,
+        ._global = gbl,
         ._error = v_of_nil(),
         ._frame = &self->_base_frame,
         ._base_frame = { }
@@ -57,8 +57,8 @@ static a_bool route_init(a_henv env, GRoute* self) {
 	return false;
 }
 
-static void route_close(Global* g, GRoute* self) {
-	a_henv env = ai_env_mroute(g);
+static void route_close(Global* gbl, GRoute* self) {
+	a_henv env = ai_env_mroute(gbl);
 	RcCap* caps = self->_open_caps;
 	RcCap* cap;
 	while ((cap = caps) != null) {
@@ -67,49 +67,49 @@ static void route_close(Global* g, GRoute* self) {
 	}
 }
 
-static void route_destroy(Global* g, GRoute* self) {
-	route_close(g, self);
-	ai_stk_deinit(g, &self->_stack);
+static void route_destroy(Global* gbl, GRoute* self) {
+	route_close(gbl, self);
+	ai_stk_deinit(gbl, &self->_stack);
 }
 
-static void route_mark_stack(Global* g, GRoute* self) {
+static void route_mark_stack(Global* gbl, GRoute* self) {
 	Stack* stack = &self->_stack;
 	Value* from = stack->_base;
 	Value* const to =
 			/* Mark object conservative in increasing GC: assume all object in the last frame will be freed. */
-			g->_gcstep == GCSTEP_PROPAGATE_ATOMIC ?
+			gbl->_gcstep == GCSTEP_PROPAGATE_ATOMIC ?
 			stack->_top :
 			stk2val(self, self->_frame->_stack_bot);
 	for (Value const* v = from; v < to; ++v) {
-		ai_gc_trace_mark_val(g, *v);
+		ai_gc_trace_mark_val(gbl, *v);
 	}
-	if (g->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
+	if (gbl->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
 		v_set_nil_ranged(stack->_top, stack->_limit); /* Clear no-marked stack slice. */
 	}
-	else if (!(g->_flags & GLOBAL_FLAG_EMERGENCYGC)) {
+	else if (!(gbl->_flags & GLOBAL_FLAG_EMERGENCYGC)) {
 		ai_stk_shrink(self);
 	}
 #if ALO_STACK_INNER
-	ai_gc_trace_work(g, stack->_alloc_size);
+	ai_gc_trace_work(gbl, stack->_alloc_size);
 #endif
 }
 
-static void route_mark(Global* g, GRoute* self) {
-	ai_gc_trace_work(g, sizeof(GcHead) + route_size());
+static void route_mark(Global* gbl, GRoute* self) {
+	ai_gc_trace_work(gbl, sizeof(GcHead) + route_size());
 
-	route_mark_stack(g, self);
+	route_mark_stack(gbl, self);
 	if (self->_from != null) {
-		ai_gc_trace_mark(g, self->_from);
+		ai_gc_trace_mark(gbl, self->_from);
 	}
 
-	join_trace(&g->_tr_regray, self);
+	join_trace(&gbl->_tr_regray, self);
 }
 
-static void route_drop(Global* g, GRoute* self) {
+static void route_drop(Global* gbl, GRoute* self) {
 	assume(self->_status != ALO_SOK, "route is running.");
 	ai_ctx_close(self);
-	route_destroy(g, self);
-	ai_mem_gdel(g, self, route_size());
+	route_destroy(gbl, self);
+	ai_mem_gdel(gbl, self, route_size());
 }
 
 static VTable const route_vtable = {
@@ -141,7 +141,7 @@ a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx) {
 	return ai_ctx_catch(env, pfun, pctx);
 }
 
-a_none ai_env_raise(a_henv env, a_msg msg) {
+a_noret ai_env_raise(a_henv env, a_msg msg) {
 	ai_ctx_raise(env, msg);
 }
 
@@ -192,10 +192,10 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	MRoute* mr = ai_mem_valloc(af, ac, size);
 	if (mr == null) return ALO_ENOMEM;
 
-	Global* g = &mr->_global;
+	Global* gbl = &mr->_global;
 	GRoute* env = &mr->_route;
 
-    init(g) {
+    init(gbl) {
         ._af = *af,
         ._ac = ac,
         ._active = env,
@@ -209,7 +209,7 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
         ._hookm = ALO_HMNONE
     };
 	
-	route_new(env, g);
+	route_new(env, gbl);
 
 	/* Initialize context and stack of route. */
 	if (route_init(env, env)) return ALO_ENOMEM;
@@ -227,8 +227,8 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 }
 
 void alo_destroy(a_henv env) {
-	Global* g = G(env);
-	MRoute* mroute = g_mroute(g);
+	Global* gbl = G(env);
+	MRoute* mroute = g_mroute(gbl);
 
 	if (!route_is_main(env)) {
 		a_henv menv = &mroute->_route;
@@ -240,16 +240,16 @@ void alo_destroy(a_henv env) {
 	}
 
 	/* Clean resources. */
-	route_close(g, &mroute->_route);
-	ai_gc_clean(g);
-	ai_str_clean(g);
-    ai_type_clean(g);
-	ai_cap_clean(g);
+	route_close(gbl, &mroute->_route);
+	ai_gc_clean(gbl);
+	ai_str_clean(gbl);
+    ai_type_clean(gbl);
+	ai_cap_clean(gbl);
 
-	assume(gbl_mem_total(g) == sizeof_MRoute(), "memory leak.");
-	ai_mem_vdealloc(&g->_af, g->_ac, mroute, sizeof_MRoute());
+	assume(gbl_mem_total(gbl) == sizeof_MRoute(), "memory leak.");
+	ai_mem_vdealloc(&gbl->_af, gbl->_ac, mroute, sizeof_MRoute());
 }
 
-a_henv ai_env_mroute(Global* g) {
-	return &g_mroute(g)->_route;
+a_henv ai_env_mroute(Global* gbl) {
+	return &g_mroute(gbl)->_route;
 }

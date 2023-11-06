@@ -15,7 +15,7 @@
 
 #include <stdio.h>
 
-a_none ai_dbg_panic(char const* fmt, ...) {
+a_noret ai_dbg_panic(char const* fmt, ...) {
 	va_list varg;
 	va_start(varg, fmt);
 	vfprintf(stderr, fmt, varg);

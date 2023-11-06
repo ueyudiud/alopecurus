@@ -322,102 +322,102 @@ void ai_type_cache(a_henv env, GLoader* loader, GType* type) {
     type->_loader = loader;
 }
 
-void ai_type_cache_mark(Global* g, TypeCache* cache) {
+void ai_type_cache_mark(Global* gbl, TypeCache* cache) {
 	for (a_u32 i = 0; i <= cache->_hmask; ++i) {
 		GType** slot = &cache->_ptr[i];
 		GType* type;
 		while ((type = *slot) != null) {
-			ai_gc_trace_mark(g, type);
+			ai_gc_trace_mark(gbl, type);
             slot = &type->_mnext;
 		}
 	}
 }
 
-static void cache_drop(Global* g, TypeCache* cache) {
+static void cache_drop(Global* gbl, TypeCache* cache) {
 	if (cache->_ptr != null) {
-		ai_mem_vdel(g, cache->_ptr, cache->_hmask + 1);
+		ai_mem_vdel(gbl, cache->_ptr, cache->_hmask + 1);
 	}
 }
 
-static void type_clean(Global* g, GType* self) {
+static void type_clean(Global* gbl, GType* self) {
     run {
         Metas* metas = &self->_metas;
         if (metas->_ptr != null) {
-            ai_mem_vdel(g, metas->_ptr, metas->_hmask + 1);
+            ai_mem_vdel(gbl, metas->_ptr, metas->_hmask + 1);
         }
     }
 }
 
 void ai_type_boost(a_henv env) {
-    Global* g = G(env);
+    Global* gbl = G(env);
 
-    g->_types._nil = (GType) {
+    gbl->_types._nil = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TNIL,
         ._sig = g_str(env, STR_nil)
     };
-    g->_types._bool = (GType) {
+    gbl->_types._bool = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TBOOL,
         ._sig = g_str(env, STR_bool)
     };
-    g->_types._int = (GType) {
+    gbl->_types._int = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TINT,
         ._sig = g_str(env, STR_int)
     };
-    g->_types._float = (GType) {
+    gbl->_types._float = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TFLOAT,
         ._sig = g_str(env, STR_float)
     };
-    g->_types._ptr = (GType) {
+    gbl->_types._ptr = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TPTR,
         ._sig = g_str(env, STR_ptr)
     };
-    g->_types._str = (GType) {
+    gbl->_types._str = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TSTR,
         ._sig = g_str(env, STR_str)
     };
-    g->_types._tuple = (GType) {
+    gbl->_types._tuple = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTUPLE,
         ._sig = g_str(env, STR_tuple)
     };
-    g->_types._list = (GType) {
+    gbl->_types._list = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TLIST,
         ._sig = g_str(env, STR_list)
     };
-    g->_types._table = (GType) {
+    gbl->_types._table = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTABLE,
         ._sig = g_str(env, STR_table)
     };
-    g->_types._func = (GType) {
+    gbl->_types._func = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TFUNC,
         ._sig = g_str(env, STR_func)
     };
-    g->_types._route = (GType) {
+    gbl->_types._route = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TROUTE,
         ._sig = g_str(env, STR_route)
     };
-    g->_types._type = (GType) {
+    gbl->_types._type = (GType) {
         ._vptr = &type_vtable,
         ._flags = TYPE_FLAG_NONE,
         ._tag = ALO_TTYPE,
@@ -425,49 +425,49 @@ void ai_type_boost(a_henv env) {
     };
 }
 
-void ai_type_clean(Global* g) {
-    type_clean(g, &g->_types._nil);
-    type_clean(g, &g->_types._bool);
-    type_clean(g, &g->_types._int);
-    type_clean(g, &g->_types._float);
-    type_clean(g, &g->_types._ptr);
-    type_clean(g, &g->_types._tuple);
-    type_clean(g, &g->_types._list);
-    type_clean(g, &g->_types._table);
-    type_clean(g, &g->_types._func);
-    type_clean(g, &g->_types._route);
-    type_clean(g, &g->_types._type);
-    cache_drop(g, &g->_type_cache);
+void ai_type_clean(Global* gbl) {
+    type_clean(gbl, &gbl->_types._nil);
+    type_clean(gbl, &gbl->_types._bool);
+    type_clean(gbl, &gbl->_types._int);
+    type_clean(gbl, &gbl->_types._float);
+    type_clean(gbl, &gbl->_types._ptr);
+    type_clean(gbl, &gbl->_types._tuple);
+    type_clean(gbl, &gbl->_types._list);
+    type_clean(gbl, &gbl->_types._table);
+    type_clean(gbl, &gbl->_types._func);
+    type_clean(gbl, &gbl->_types._route);
+    type_clean(gbl, &gbl->_types._type);
+    cache_drop(gbl, &gbl->_type_cache);
 }
 
-static void type_drop(Global* g, GType* self) {
-    type_clean(g, self);
-    ai_mem_gdel(g, self, self->_size);
+static void type_drop(Global* gbl, GType* self) {
+    type_clean(gbl, self);
+    ai_mem_gdel(gbl, self, self->_size);
 }
 
-static void metas_mark(Global* g, Metas* metas) {
+static void metas_mark(Global* gbl, Metas* metas) {
     if (metas->_ptr != null) {
         a_u32 cap = metas->_hmask + 1;
         for (a_u32 i = 0; i < cap; ++i) {
             Meta* meta = &metas->_ptr[i];
             if (meta->_key > dead_key) {
-                ai_gc_trace_mark(g, meta->_key);
-                ai_gc_trace_mark_val(g, meta->_value);
+                ai_gc_trace_mark(gbl, meta->_key);
+                ai_gc_trace_mark_val(gbl, meta->_value);
             }
         }
-        ai_gc_trace_work(g, sizeof(Meta) * cap);
+        ai_gc_trace_work(gbl, sizeof(Meta) * cap);
     }
 }
 
-static void type_mark(Global* g, GType* self) {
+static void type_mark(Global* gbl, GType* self) {
     if (self->_loader != null) {
-        ai_gc_trace_mark(g, self->_loader);
+        ai_gc_trace_mark(gbl, self->_loader);
     }
     if (self->_sig != null) {
-        ai_gc_trace_mark(g, self->_sig);
+        ai_gc_trace_mark(gbl, self->_sig);
     }
-    metas_mark(g, &self->_metas);
-    ai_gc_trace_work(g, self->_size);
+    metas_mark(gbl, &self->_metas);
+    ai_gc_trace_work(gbl, self->_size);
 }
 
 static VTable const type_vtable = {

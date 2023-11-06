@@ -87,7 +87,7 @@
 #define unused __attribute__((__unused__))
 
 /* Types. */
-#define a_none ALO_NORETURN void
+#define a_noret ALO_NORETURN void
 
 typedef struct {
 	char const* _ptr;
@@ -150,21 +150,21 @@ typedef a_u32 a_insn;
 
 #define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
-#define bit_cast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
+#define bit_cast(t,e) ({ __auto_type _e = e; t _t; static_assert(sizeof(_e) == sizeof(t)); __builtin_memcpy(&_t, &_e, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
-#define ptr2int(p) ({ void* _p = (p); cast(a_usize, _p); })
+#define ptr2int(p) ((a_usize) (void const*) {p})
 #define addr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
-#define int2ptr(t,a) ({ a_usize _a = (a); cast(typeof(t)*, _a); })
+#define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
 #define ref_of(t,a) (*int2ptr(t, a))
 #define ptr_disp(t,p,d) int2ptr(t, ptr2int(p) + (d))
-#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == &((t*) 0)->f); int2ptr(t, ptr2int(_v) - offsetof(t, f)); })
+#define from_member(t,f,v) ({ __auto_type _v = v; quiet(_v == &((t*) 0)->f); int2ptr(t, ptr2int(_v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
 
 /* Utility functions. */
 
 #define max(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a >= _b ? _a : _b; })
 #define min(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a <= _b ? _a : _b; })
-#define swap(a,b) ({ typeof(a)* _a = &(a); typeof(b)* _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
+#define swap(a,b) ({ __auto_type _a = &(a); __auto_type _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
 #define expect(e,v) __builtin_expect(e, v)
 #define likely(e) expect(!!(e), true)
 #define unlikely(e) expect(!!(e), false)
@@ -173,13 +173,13 @@ typedef a_u32 a_insn;
 
 /* Error handling functions. */
 
-#define M_catch0(e,n,...) for (typeof(e) n = (e); unlikely(n); n = 0)
-#define catch(e,n...) M_catch0(e, ##n, _e)
+#define catch_(e,n,...) for (__auto_type n = (e); unlikely(n); n = 0)
+#define catch(e,n...) catch_(e, ##n, _e)
 #define try(e) catch(e) { return _e; }
 
 #if ALO_DEBUG && defined(ALO_LIB)
 
-intern a_none ai_dbg_panic(char const* fmt, ...);
+intern a_noret ai_dbg_panic(char const* fmt, ...);
 # define panic(m...) ai_dbg_panic(""m)
 
 intern void ai_dbg_debug(char const* fmt, ...);

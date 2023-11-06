@@ -139,10 +139,10 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 }
 
 static RcCap* cap_nalloc(a_henv env) {
-	Global* g = G(env);
-	RcCap* cap = g->_cap_cache;
+	Global* gbl = G(env);
+	RcCap* cap = gbl->_cap_cache;
 	if (cap != null) {
-		g->_cap_cache = cap->_next;
+		gbl->_cap_cache = cap->_next;
 		return cap;
 	}
 	return ai_mem_nalloc(env, sizeof(RcCap));
@@ -238,22 +238,22 @@ static a_bool cap_is_closed(RcCap* self) {
 	return self->_ptr == &self->_slot;
 }
 
-static void cap_mark(Global* g, RcCap* self) {
-	if (cap_is_closed(self) || g->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
-		ai_gc_trace_mark_val(g, *self->_ptr);
+static void cap_mark(Global* gbl, RcCap* self) {
+	if (cap_is_closed(self) || gbl->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
+		ai_gc_trace_mark_val(gbl, *self->_ptr);
 	}
 	else {
 		self->_ftouch = true;
 	}
 }
 
-void ai_cap_really_drop(Global* g, RcCap* self) {
-	ai_mem_dealloc(g, self, sizeof(RcCap));
+void ai_cap_really_drop(Global* gbl, RcCap* self) {
+	ai_mem_dealloc(gbl, self, sizeof(RcCap));
 }
 
-static void cap_drop(Global* g, RcCap* self) {
-	self->_next = g->_cap_cache;
-	g->_cap_cache = self;
+static void cap_drop(Global* gbl, RcCap* self) {
+	self->_next = gbl->_cap_cache;
+	gbl->_cap_cache = self;
 }
 
 static void cap_close_value(a_henv env, RcCap* self) {
@@ -263,11 +263,11 @@ static void cap_close_value(a_henv env, RcCap* self) {
 	}
 }
 
-static void cap_release(Global* g, RcCap* self) {
+static void cap_release(Global* gbl, RcCap* self) {
 	assume(self->_rc > 0);
 	if (--self->_rc == 0 && cap_is_closed(self)) {
-		cap_close_value(ai_env_mroute(g), self);
-		cap_drop(g, self);
+		cap_close_value(ai_env_mroute(gbl), self);
+		cap_drop(gbl, self);
 	}
 }
 
@@ -302,65 +302,65 @@ void ai_cap_close_above(a_henv env, Value* pv) {
 	env->_open_caps = cap;
 }
 
-void ai_cap_clean(Global* g) {
-	RcCap* cap = g->_cap_cache;
-	g->_cap_cache = null;
+void ai_cap_clean(Global* gbl) {
+	RcCap* cap = gbl->_cap_cache;
+	gbl->_cap_cache = null;
 	while (cap != null) {
 		RcCap* next = cap->_next;
-		ai_cap_really_drop(g, cap);
+		ai_cap_really_drop(gbl, cap);
 		cap = next;
 	}
 }
 
-static void afun_drop(Global* g, GFun* self) {
+static void afun_drop(Global* gbl, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
-		cap_release(g, self->_caps[i]);
+		cap_release(gbl, self->_caps[i]);
 	}
-    ai_mem_gdel(g, self, fun_size(self->_len));
+    ai_mem_gdel(gbl, self, fun_size(self->_len));
 }
 
-static void afun_mark(Global* g, GFun* self) {
-	ai_gc_trace_mark(g, self->_proto);
+static void afun_mark(Global* gbl, GFun* self) {
+	ai_gc_trace_mark(gbl, self->_proto);
 	a_u32 len = self->_len;
 	for (a_u32 i = 0; i < len; ++i) {
-		cap_mark(g, self->_caps[i]);
+		cap_mark(gbl, self->_caps[i]);
 	}
-	ai_gc_trace_work(g, fun_size(self->_len));
+	ai_gc_trace_work(gbl, fun_size(self->_len));
 }
 
-static void cfun_drop(Global* g, GFun* self) {
-    ai_mem_gdel(g, self, fun_size(self->_len));
+static void cfun_drop(Global* gbl, GFun* self) {
+    ai_mem_gdel(gbl, self, fun_size(self->_len));
 }
 
-static void cfun_mark(Global* g, GFun* self) {
+static void cfun_mark(Global* gbl, GFun* self) {
 	a_u32 len = self->_len;
 	for (a_u32 i = 0; i < len; ++i) {
-		ai_gc_trace_mark_val(g, self->_vals[i]);
+		ai_gc_trace_mark_val(gbl, self->_vals[i]);
 	}
-	ai_gc_trace_work(g, fun_size(len));
+	ai_gc_trace_work(gbl, fun_size(len));
 }
 
-void ai_proto_drop(Global* g, GProto* self) {
-	ai_mem_gdel(g, self, self->_size);
+void ai_proto_drop(Global* gbl, GProto* self) {
+	ai_mem_gdel(gbl, self, self->_size);
 }
 
-static void proto_mark(Global* g, GProto* self) {
+static void proto_mark(Global* gbl, GProto* self) {
 	for (a_u32 i = 0; i < self->_nconst; ++i) {
-		ai_gc_trace_mark_val(g, self->_consts[i]);
+		ai_gc_trace_mark_val(gbl, self->_consts[i]);
 	}
 	if (self->_dbg_file != null) {
-		ai_gc_trace_mark(g, self->_dbg_file);
+		ai_gc_trace_mark(gbl, self->_dbg_file);
 	}
 	if (self->_dbg_locals != null) {
 		for (a_u32 i = 0; i < self->_nlocal; ++i) {
-			ai_gc_trace_mark(g, self->_dbg_locals[i]._name);
+			ai_gc_trace_mark(gbl, self->_dbg_locals[i]._name);
 		}
 		assume(self->_dbg_cap_names != null);
 		for (a_u32 i = 0; i < self->_ncap; ++i) {
-			ai_gc_trace_mark(g, self->_dbg_cap_names[i]);
+			ai_gc_trace_mark(gbl, self->_dbg_cap_names[i]);
 		}
 	}
-	ai_gc_trace_work(g, self->_size);
+	ai_gc_trace_work(gbl, self->_size);
 }
 
 static VTable const afun_vtable = {

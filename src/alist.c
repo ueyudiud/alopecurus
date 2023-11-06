@@ -134,18 +134,18 @@ a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v) {
     return ai_list_useti(env, self, v_as_int(vk), v);
 }
 
-static void list_mark(Global* g, GList* self) {
+static void list_mark(Global* gbl, GList* self) {
     for (a_u32 i = 0; i < self->_len; ++i) {
-        ai_gc_trace_mark_val(g, self->_ptr[i]);
+        ai_gc_trace_mark_val(gbl, self->_ptr[i]);
     }
-    ai_gc_trace_work(g, sizeof(GcHead) + list_size() + sizeof(Value) * self->_cap);
+    ai_gc_trace_work(gbl, sizeof(GcHead) + list_size() + sizeof(Value) * self->_cap);
 }
 
-static void list_drop(Global* g, GList* self) {
+static void list_drop(Global* gbl, GList* self) {
     if (self->_ptr != null) {
-        ai_mem_vdel(g, self->_ptr, self->_cap);
+        ai_mem_vdel(gbl, self->_ptr, self->_cap);
     }
-    ai_mem_gdel(g, self, list_size());
+    ai_mem_gdel(gbl, self, list_size());
 }
 
 static VTable const list_vtable = {

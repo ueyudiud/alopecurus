@@ -65,7 +65,7 @@ char const* ai_par_file(Parser* par) {
     return par->_file != null ? str2ntstr(par->_file) : "<in>";
 }
 
-a_none ai_par_report(Parser* par, char const* fmt, ...) {
+a_noret ai_par_report(Parser* par, char const* fmt, ...) {
     va_list varg;
     va_start(varg, fmt);
     ai_err_raisevf(par->_env, ALO_ECHUNK, fmt, varg);
@@ -3118,14 +3118,14 @@ static void parser_close(Parser* par) {
 	gbl_unprotect(par->_env);
 }
 
-static void parser_mark(Global* g, void* ctx) {
+static void parser_mark(Global* gbl, void* ctx) {
 	Parser* par = ctx;
 	run {
 		StrSet* set = &par->_lex._strs;
 		for (a_u32 i = 0; i <= set->_hmask; ++i) {
             GStr* str = set->_ptr[i];
 			if (str != null) {
-				ai_gc_trace_mark(g, str);
+				ai_gc_trace_mark(gbl, str);
 			}
 		}
 	}
@@ -3861,7 +3861,7 @@ static GStr* lex_check_ident(Parser* par) {
 	return ident;
 }
 
-static a_none lex_error_bracket(Parser* par, a_i32 ltk, a_i32 rtk, a_line line) {
+static a_noret lex_error_bracket(Parser* par, a_i32 ltk, a_i32 rtk, a_line line) {
 	if (lex_line(par) == line) {
 		lex_error_got(par, "%s expected to match %s",
                       ai_lex_tagname(rtk),

@@ -20,7 +20,7 @@ intern a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr**
 intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
 intern a_bool ai_str_requals(GStr* self, void const* dat, a_usize len);
 intern void ai_str_boost(a_henv env, void* block);
-intern void ai_str_clean(Global* g);
+intern void ai_str_clean(Global* gbl);
 
 #define ai_str_newl(env,src) ai_str_new(env, ""src, sizeof(src) - sizeof(char))
 #define ai_str_newc(env,src) ai_str_new(env, src, strlen(src))

@@ -30,7 +30,7 @@ typedef Buf* a_hbuf;
 intern a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...);
 intern a_msg ai_buf_nputvfs_(a_henv env, a_hbuf buf, char const* fmt, va_list varg);
 intern GBuf* ai_buf_new(a_henv env);
-intern a_none ai_buf_error(a_henv env, a_msg msg, char const* what);
+intern a_noret ai_buf_error(a_henv env, a_msg msg, char const* what);
 
 always_inline void ai_buf_init(a_hbuf buf) {
 	buf->_ptr = null;
@@ -40,13 +40,13 @@ always_inline void ai_buf_init(a_hbuf buf) {
 
 #define at_buf_init(b) ai_buf_init(at_buf_cast(b))
 
-always_inline void ai_buf_deinit(Global* g, a_hbuf buf, a_usize size) {
-	ai_mem_dealloc(g, buf->_ptr, buf->_cap * size);
+always_inline void ai_buf_deinit(Global* gbl, a_hbuf buf, a_usize size) {
+	ai_mem_dealloc(gbl, buf->_ptr, buf->_cap * size);
 	buf->_ptr = null;
 	buf->_cap = 0;
 }
 
-#define at_buf_deinit(g,b) ai_buf_deinit(g, at_buf_cast(b), at_buf_elem_size(b))
+#define at_buf_deinit(gbl,b) ai_buf_deinit(gbl, at_buf_cast(b), at_buf_elem_size(b))
 
 #define at_buf_for(b,v) for ( \
 	typeof(at_buf_elem_type(b)*) v = (b)._ptr, \

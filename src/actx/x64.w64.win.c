@@ -185,7 +185,7 @@ EXCEPTION_DISPOSITION ai_ctx_start_catch(
 	trap();
 }
 
-a_none ai_ctx_raise(unused a_henv env, a_msg msg) {
+a_noret ai_ctx_raise(unused a_henv env, a_msg msg) {
 	RaiseException(EXCEPTION_CODE_PREFIX | cast(DWORD, msg & 0xff), EXCEPTION_NONCONTINUABLE, 0, null);
 	unreachable();
 }
@@ -199,9 +199,9 @@ static EXCEPTION_DISPOSITION catch_except_hook(
 	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
 	a_henv env = int2ptr(GRoute, DispatcherContext->ContextRecord->Rsi);
-	Global* g = G(env);
-	if (g->_gexecpt != null) {
-		(*g->_gexecpt)(env, g->_gctx, msg);
+	Global* gbl = G(env);
+	if (gbl->_gexecpt != null) {
+		(*gbl->_gexecpt)(env, gbl->_gctx, msg);
 	}
 
 	a_usize target_ip = DispatcherContext->ImageBase + *((a_u32*) DispatcherContext->HandlerData);

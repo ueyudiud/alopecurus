@@ -7,15 +7,15 @@
 
 #include "aobj.h"
 
-intern a_none ai_mem_nomem(a_henv env);
+intern a_noret ai_mem_nomem(a_henv env);
 
 intern void* ai_mem_alloc(a_henv env, a_usize sz);
 intern void* ai_mem_realloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new);
-intern void ai_mem_dealloc(Global* g, void* blk, a_usize sz);
+intern void ai_mem_dealloc(Global* gbl, void* blk, a_usize sz);
 
 intern void* ai_mem_nalloc(a_henv env, a_usize sz);
 intern void* ai_mem_nrealloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new);
-intern void ai_mem_ndealloc(Global* g, void* blk, a_usize sz);
+intern void ai_mem_ndealloc(Global* gbl, void* blk, a_usize sz);
 
 always_inline void* ai_mem_valloc(alo_Alloc const* af, void* ac, a_usize sz) {
 	assume(sz > 0);
@@ -35,14 +35,14 @@ always_inline void ai_mem_vdealloc(alo_Alloc const* af, void* ac, void* blk, a_u
 
 #define ai_mem_vnnew(env,type,size) cast(typeof(type)*, ai_mem_nalloc(env, sizeof(type) * (size)))
 #define ai_mem_vngrow(env,vec,size_old,size_new) cast(typeof(vec), ai_mem_nrealloc(env, vec, sizeof((vec)[0]) * (size_old), sizeof((vec)[0]) * (size_new)))
-#define ai_mem_vndel(g,vec,size) ai_mem_xdealloc(g, vec, sizeof((vec)[0]) * (size))
+#define ai_mem_vndel(gbl,vec,size) ai_mem_xdealloc(gbl, vec, sizeof((vec)[0]) * (size))
 
 #define ai_mem_vnew(env,type,size) cast(typeof(type)*, ai_mem_alloc(env, sizeof(type) * (size)))
 #define ai_mem_vgrow(env,vec,size_old,size_new) cast(typeof(vec), ai_mem_realloc(env, vec, sizeof((vec)[0]) * (size_old), sizeof((vec)[0]) * (size_new)))
-#define ai_mem_vdel(g,vec,size) ai_mem_dealloc(g, vec, sizeof((vec)[0]) * (size))
+#define ai_mem_vdel(gbl,vec,size) ai_mem_dealloc(gbl, vec, sizeof((vec)[0]) * (size))
 
 #define ai_mem_gnew(env,type,size,bias...) g_cast(type, g_biased(ai_mem_alloc(env, sizeof(GcHead) + (size)), ##bias))
-#define ai_mem_gdel(g,obj,size,bias...) ai_mem_dealloc(g, g_unbiased(obj, ##bias), sizeof(GcHead) + (size))
+#define ai_mem_gdel(gbl,obj,size,bias...) ai_mem_dealloc(gbl, g_unbiased(obj, ##bias), sizeof(GcHead) + (size))
 
 /* Direct memory support. */
 

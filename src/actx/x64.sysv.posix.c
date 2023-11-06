@@ -18,9 +18,9 @@ a_msg ai_ctx_init(void) {
 }
 
 a_none ai_ctx_raise(a_henv env, a_msg msg) {
-    Global* g = G(env);
-    if (g->_gexecpt != null) {
-        (*g->_gexecpt)(env, g->_gctx, msg);
+    Global* gbl = G(env);
+    if (gbl->_gexecpt != null) {
+        (*gbl->_gexecpt)(env, gbl->_gctx, msg);
     }
     if (env->_pctx._stub != null) {
         longjmp(env->_pctx._stub->_jbuf, msg);
@@ -31,7 +31,7 @@ a_none ai_ctx_raise(a_henv env, a_msg msg) {
         trap();
     }
     else {
-        a_cfun panic = g->_panic;
+        a_cfun panic = gbl->_panic;
         if (panic != null) {
             (*panic)(env);
         }

@@ -18,8 +18,8 @@ intern a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv);
 
 intern GType* ai_type_look(a_henv env, GLoader* loader, GStr* name, a_bool load);
 intern void ai_type_cache(a_henv env, GLoader* loader, GType* type);
-intern void ai_type_cache_mark(Global* g, TypeCache* cache);
+intern void ai_type_cache_mark(Global* gbl, TypeCache* cache);
 intern void ai_type_boost(a_henv env);
-intern void ai_type_clean(Global* g);
+intern void ai_type_clean(Global* gbl);
 
 #endif /* atype_h_ */

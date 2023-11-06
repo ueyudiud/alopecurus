@@ -32,8 +32,8 @@ static TNode* bucket_alloc(a_henv env, a_u32 cap) {
     return p + 1;
 }
 
-static void bucket_dealloc(Global* g, TNode* bucket, a_u32 cap) {
-    ai_mem_vdel(g, bucket - 1, cap + 1);
+static void bucket_dealloc(Global* gbl, TNode* bucket, a_u32 cap) {
+    ai_mem_vdel(gbl, bucket - 1, cap + 1);
 }
 
 GTable* ai_table_new(a_henv env) {
@@ -383,25 +383,25 @@ a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
 
 }
 
-static void table_drop(Global* g, GTable* self) {
+static void table_drop(Global* gbl, GTable* self) {
     if (self->_ptr != null) {
-        bucket_dealloc(g, self->_ptr, self->_hmask + 1);
+        bucket_dealloc(gbl, self->_ptr, self->_hmask + 1);
     }
-    ai_mem_gdel(g, self, table_size());
+    ai_mem_gdel(gbl, self, table_size());
 }
 
-static void table_mark(Global* g, GTable* self) {
+static void table_mark(Global* gbl, GTable* self) {
 	if (self->_ptr != null) {
 		for (a_u32 i = 0; i <= self->_hmask; ++i) {
 			TNode* node = &self->_ptr[i];
 			if (!v_is_nil(node->_key)) {
-				ai_gc_trace_mark_val(g, node->_key);
-				ai_gc_trace_mark_val(g, node->_value);
+				ai_gc_trace_mark_val(gbl, node->_key);
+				ai_gc_trace_mark_val(gbl, node->_value);
 			}
 		}
-		ai_gc_trace_work(g, sizeof(TNode) * (self->_hmask + 2));
+		ai_gc_trace_work(gbl, sizeof(TNode) * (self->_hmask + 2));
 	}
-	ai_gc_trace_work(g, sizeof(GcHead) + table_size());
+	ai_gc_trace_work(gbl, sizeof(GcHead) + table_size());
 }
 
 static VTable const table_vtable = {

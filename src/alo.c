@@ -267,7 +267,7 @@ static a_msg l_pread_eval(a_henv env) {
 	return ALO_SOK;
 }
 
-static a_none l_run_repl(a_henv env) {
+static a_noret l_run_repl(a_henv env) {
 	loop {
 		a_msg msg = l_pread_eval(env);
 		l_print_result(env, msg);

@@ -144,21 +144,21 @@ static a_msg l_load(InCtx* ic) {
     return ALO_SOK;
 }
 
-static void l_splash(Global* g, void* ctx) {
+static void l_splash(Global* gbl, void* ctx) {
     InCtx* ic = ctx;
 	rq_for(obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
 		for (a_u32 i = 0; i < meta->_nconst; ++i) {
-			ai_gc_trace_mark_val(g, meta->_consts[i]);
+			ai_gc_trace_mark_val(gbl, meta->_consts[i]);
 		}
 	}
 }
 
 static void l_release(InCtx* ic) {
-    Global* g = G(ic->_env);
+    Global* gbl = G(ic->_env);
 	rq_for(obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
-		ai_mem_ndealloc(g, meta, meta->_size);
+		ai_mem_ndealloc(gbl, meta, meta->_size);
 	}
 }
 

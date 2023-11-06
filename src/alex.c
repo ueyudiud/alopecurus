@@ -16,7 +16,7 @@
 
 #include "alex.h"
 
-static a_none l_foreign_error(Lexer* lex) {
+static a_noret l_foreign_error(Lexer* lex) {
 	ai_err_raise(lex->_env, ALO_EOUTER, v_of_int(lex->_in._err));
 }
 
@@ -654,7 +654,7 @@ static a_i32 l_scan_xdigit(Lexer* lex) {
     return i;
 }
 
-static a_none l_error_unclosed(Lexer* lex, a_u32 line) {
+static a_noret l_error_unclosed(Lexer* lex, a_u32 line) {
 	if (lex->_line == line) {
 		ai_lex_error(lex, "unclosed string.");
 	}

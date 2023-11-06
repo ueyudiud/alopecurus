@@ -7,7 +7,7 @@
 
 #include "aenv.h"
 
-intern a_u32 ai_vm_lock_hook(Global* g);
+intern a_u32 ai_vm_lock_hook(Global* gbl);
 intern void ai_vm_hook(a_henv env, a_msg msg, a_u32 test);
 intern a_hash ai_vm_hash(a_henv env, Value v);
 intern a_bool ai_vm_equals(a_henv env, Value v1, Value v2);
