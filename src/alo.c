@@ -35,7 +35,7 @@
 
 typedef char* LinePtr;
 
-#  define aloi_readline(env,b,l,p) ({ quiet(env); ((b) = readline(p)) != null ? ((l) = strlen(b), ALO_SYIELD) : ALO_EIO; })
+#  define aloi_readline(env,b,l,p) ({ quiet(env); ((b) = readline(p)) != null ? ((l) = strlen(b), ALO_SYIELD) : ALO_EOUTER; })
 #  define aloi_saveline(env,l) (quiet(env), add_history(l))
 #  define aloi_freeline(b) free(b)
 

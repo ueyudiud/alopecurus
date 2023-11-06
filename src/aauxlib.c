@@ -147,7 +147,7 @@ char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
-a_msg aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
+a_msg aloL_resultcx(a_henv env, a_bool stat, int err, char const* what) {
 	if (stat) {
 		alo_pushbool(env, true);
 		return 1;
@@ -180,7 +180,7 @@ a_msg aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
 
 a_msg aloL_resulte(a_henv env, a_i32 stat) {
 	char const* what = "exit";
-	errno_t err = errno;
+	int err = errno;
 	if (stat != 0 && err != 0) {
 		return aloL_resultcx(env, false, err, null);
 	}
