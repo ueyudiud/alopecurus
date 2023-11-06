@@ -15,7 +15,7 @@
 #include "afmt.h"
 #include "aenv.h"
 #include "agc.h"
-#include "ameta.h"
+#include "atm.h"
 #include "aerr.h"
 #include "aapi.h"
 
@@ -73,7 +73,7 @@ a_hash ai_vm_hash(a_henv env, Value v) {
     }
 
     a_hash hash;
-    if (!ai_meta_hash(env, v, &hash)) return hash;
+    if (!ai_tm_hash(env, v, &hash)) return hash;
 
     return v_trivial_hash_unchecked(v);
 }
@@ -95,7 +95,7 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 	}
 
     a_bool z;
-    if (!ai_meta_equals(env, v1, v2, &z)) return z;
+    if (!ai_tm_equals(env, v1, v2, &z)) return z;
 
     return v_trivial_equals_unchecked(v1, v2);
 }
@@ -104,26 +104,20 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 #define v_is_call(v) v_is_empty(v)
 
 static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
-    a_msg msg;
     Value vm;
 
-    msg = ai_obj_ulook(env, v, k, &vm);
+    catch (ai_tm_look(env, v, k, &vm)) {
+        catch (ai_vm_uget(env, v, v_of_obj(k), &vm)) {
+            ai_err_bad_look(env, v_nameof(env, v), k); //TODO
+        }
 
-    if (msg == ALO_SOK) {
-        v_set(env, &pv[0], vm);
-        v_set(env, &pv[1], v);
-        return;
-    }
-
-    msg = ai_vm_uget(env, v, v_of_obj(k), &vm);
-
-    if (msg == ALO_SOK) {
-        v_set_raw(&pv[0], v_of_call());
+        v_set(env, &pv[0], v_of_call());
         v_set(env, &pv[1], vm);
         return;
     }
 
-    ai_err_bad_look(env, v_nameof(env, v), k); //TODO
+    v_set(env, &pv[0], vm);
+    v_set(env, &pv[1], v);
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
@@ -143,7 +137,7 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
         }
 		case T_USER: {
             Value v;
-            if (!ai_meta_get(env, v1, v2, &v)) {
+            if (!ai_tm_get(env, v1, v2, &v)) {
                 return v;
             }
             fallthrough;
@@ -187,7 +181,7 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
             return ai_type_set(env, v_as_type(v1), v2, v3);
         }
         case T_USER: {
-            if (!ai_meta_set(env, v1, v2, v3)) {
+            if (!ai_tm_set(env, v1, v2, v3)) {
                 return;
             }
             fallthrough;
@@ -237,7 +231,7 @@ static Value vm_len(a_henv env, Value v) {
         }
         case T_USER: {
             a_uint i;
-            if (!ai_meta_len(env, v, &i)) {
+            if (!ai_tm_len(env, v, &i)) {
                 return v_of_int(i);
             }
             fallthrough;
@@ -348,7 +342,7 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
 static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
     Value vr;
 
-    if (ai_meta_unary(env, tm, v1, &vr)) {
+    if (ai_tm_unary(env, tm, v1, &vr)) {
         ai_err_bad_tm(env, tm);
     }
 
@@ -358,7 +352,7 @@ static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 	Value vr;
 
-	if (ai_meta_binary(env, tm, v1, v2, &vr)) {
+	if (ai_tm_binary(env, tm, v1, v2, &vr)) {
 		ai_err_bad_tm(env, tm);
 	}
 
@@ -368,7 +362,7 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
     a_bool r;
 
-    catch (ai_meta_relation(env, tm, v1, v2, &r)) {
+    catch (ai_tm_relation(env, tm, v1, v2, &r)) {
         ai_err_bad_tm(env, tm);
     }
 
@@ -416,7 +410,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				case T_TYPE: {
                     GStr* str;
 					StkPtr bptr = val2stk(env, base);
-                    if (!ai_meta_str(env, v, &str)) {
+                    if (!ai_tm_str(env, v, &str)) {
                         ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
                     }
 					base = stk2val(env, bptr);
@@ -506,7 +500,7 @@ tail_call:
             vf = R[0];
         }
         while (unlikely(!v_is_func(vf))) {
-            catch (ai_obj_ulooktm(env, vf, TM___call__, &vf)) {
+            catch (ai_tm_precall(env, vf, &vf)) {
                 ai_err_bad_tm(env, TM___call__);
             }
 

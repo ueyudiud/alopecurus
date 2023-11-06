@@ -11,7 +11,7 @@
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
-#include "ameta.h"
+#include "atm.h"
 #include "avm.h"
 #include "aerr.h"
 
@@ -163,7 +163,7 @@ static Value type_gets(a_henv env, GType* self, GStr* key) {
     }
 
     Value v;
-    catch (ai_meta_get(env, v_of_obj(self), v_of_obj(key), &v)) {
+    catch (ai_tm_get(env, v_of_obj(self), v_of_obj(key), &v)) {
         goto invalid;
     }
 
@@ -185,7 +185,7 @@ static void type_sets(a_henv env, GType* self, GStr* key, Value value) {
         ai_gc_barrier_forward_val(env, self, value);
     }
     else {
-        catch (ai_meta_set(env, v_of_obj(self), v_of_obj(key), value)) {
+        catch (ai_tm_set(env, v_of_obj(self), v_of_obj(key), value)) {
             metas_set(env, &self->_metas, key, value);
             self->_mver += 1;
 
@@ -237,16 +237,6 @@ a_msg ai_type_usets(a_henv env, GType* self, GStr* k, Value vv) {
 
     self->_mver += 1;
 
-    return ALO_SOK;
-}
-
-a_msg ai_obj_ulook(a_henv env, Value v, GStr* k, Value* pv) {
-    GType* type = v_typeof(env, v);
-
-    Meta* meta = metas_get(&type->_metas, k);
-    if (meta == null) return ALO_EEMPTY;
-
-    v_cpy(env, pv, &meta->_value);
     return ALO_SOK;
 }
 
