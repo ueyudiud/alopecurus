@@ -504,8 +504,6 @@ always_inline GTable* v_as_table(Value v) {
 	return g_cast(GTable, v_as_obj(v));
 }
 
-#define tn_nokey (~u32c(0))
-
 /*=========================================================*
  * Function & Prototype
  *=========================================================*/

@@ -49,7 +49,7 @@ GTable* ai_table_new(a_henv env) {
 }
 
 static TNode* table_node(GTable* self, a_i32 index) {
-    assume(index == ctrl_index || index >= 0 && index <= cast(a_i32, self->_hmask), "bad table node index");
+    assume(index == ctrl_index || (index >= 0 && index <= cast(a_i32, self->_hmask)), "bad table node index");
     return &self->_ptr[index];
 }
 
