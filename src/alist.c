@@ -15,7 +15,7 @@
 static VTable const list_vtable;
 
 GList* ai_list_new(a_henv env) {
-    GList* self = ai_mem_gnew(env, GList, sizeof(GList));
+    GList* self = ai_mem_gnew(env, GList, list_size());
 
     self->_vptr = &list_vtable;
     self->_ptr = null;
@@ -138,14 +138,14 @@ static void list_mark(Global* g, GList* self) {
     for (a_u32 i = 0; i < self->_len; ++i) {
         ai_gc_trace_mark_val(g, self->_ptr[i]);
     }
-    ai_gc_trace_work(g, sizeof(GList) + sizeof(Value) * self->_cap);
+    ai_gc_trace_work(g, sizeof(GcHead) + list_size() + sizeof(Value) * self->_cap);
 }
 
 static void list_drop(Global* g, GList* self) {
     if (self->_ptr != null) {
         ai_mem_vdel(g, self->_ptr, self->_cap);
     }
-    ai_mem_gdel(g, self, sizeof(GList));
+    ai_mem_gdel(g, self, list_size());
 }
 
 static VTable const list_vtable = {

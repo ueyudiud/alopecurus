@@ -21,7 +21,7 @@ static a_usize fun_size(a_usize ncap) {
 }
 
 static a_usize proto_size(ProtoDesc* desc) {
-	a_usize size = sizeof(GcHead) + sizeof(GProto) +
+	a_usize size = sizeof(GProto) +
 				   sizeof(Value) * desc->_nconst +
 				   sizeof(a_insn) * desc->_ninsn +
 				   sizeof(CapInfo) * desc->_ncap +
@@ -44,7 +44,7 @@ static a_usize proto_size(ProtoDesc* desc) {
 GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	a_usize total_size = proto_size(desc);
 
-    void* blk = ai_mem_nalloc(env, total_size);
+    void* blk = ai_mem_nalloc(env, sizeof(GcHead) + total_size);
     if (blk == null) return null;
     memclr(blk, total_size);
 
@@ -117,7 +117,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	self->_code = int2ptr(a_insn, addr);
 	addr += sizeof(a_insn) * self->_ninsn;
 
-	assume(g_unbiased(self) + total_size == int2ptr(void, addr));
+	assume(ptr2int(self) + total_size == addr);
 
 	return self;
 }
@@ -341,7 +341,7 @@ static void cfun_mark(Global* g, GFun* self) {
 }
 
 void ai_proto_drop(Global* g, GProto* self) {
-	ai_mem_gdel(g, self, self->_size - sizeof(GcHead));
+	ai_mem_gdel(g, self, self->_size);
 }
 
 static void proto_mark(Global* g, GProto* self) {

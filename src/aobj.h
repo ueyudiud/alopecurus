@@ -444,7 +444,7 @@ always_inline GStr* v_as_str(Value v) {
 	return g_cast(GStr, v_as_obj(v));
 }
 
-#define sizeof_GStr(l) pad_to_raw(sizeof(GStr) + (l) + 1, sizeof(a_usize))
+#define str_size(l) pad_to_raw(sizeof(GStr) + (l) + 1, sizeof(a_usize))
 
 always_inline char const* str2ntstr(GStr* self) {
 	return cast(char const*, self->_ptr);
@@ -468,7 +468,7 @@ always_inline GTuple* v_as_tuple(Value v) {
 	return g_cast(GTuple, v_as_obj(v));
 }
 
-#define sizeof_GTuple(l) (sizeof(GTuple) + sizeof(Value) * (l))
+#define tuple_size(l) (sizeof(GTuple) + sizeof(Value) * (l))
 
 /*=========================================================*
  * List
@@ -487,6 +487,8 @@ always_inline GList* v_as_list(Value v) {
 	assume(v_is_list(v), "not list.");
 	return g_cast(GList, v_as_obj(v));
 }
+
+#define list_size() sizeof(GList)
 
 /*=========================================================*
  * Table
@@ -525,6 +527,8 @@ always_inline GTable* v_as_table(Value v) {
 }
 
 #define tn_nokey (~u32c(0))
+
+#define table_size() sizeof(GTable)
 
 /*=========================================================*
  * Function & Prototype
@@ -779,6 +783,8 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
 
 #define g_type(env,f) (&G(env)->_types.f)
 #define g_type_ref(f) offsetof(Global, _types.f)
+
+#define route_size() sizeof(GRoute)
 
 /*=========================================================*/
 

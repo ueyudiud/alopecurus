@@ -87,7 +87,7 @@ static void cache_emplace_in_place(StrCache* cache, GStr* self) {
 }
 
 static GStr* str_alloc(a_henv env, a_usize len) {
-	return ai_mem_gnew(env, GStr, sizeof_GStr(len));
+	return ai_mem_gnew(env, GStr, str_size(len));
 }
 
 static void str_init(GStr* self, void const* src, a_usize len, a_hash hash) {
@@ -139,7 +139,7 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	GStr* self = str_get_or_null_with_hash(env, buff->_ptr, len, hash);
 	
 	if (self != null) {
-		ai_mem_gdel(G(env), buff, sizeof_GStr(len));
+		ai_mem_gdel(G(env), buff, str_size(len));
 		return self;
 	}
 
@@ -181,7 +181,7 @@ a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) 
 		a_msg msg = (*fun)(ctx, buff->_ptr, len);
 		
 		if (unlikely(msg != ALO_SOK)) {
-			ai_mem_gdel(G(env), buff, sizeof_GStr(len));
+			ai_mem_gdel(G(env), buff, str_size(len));
 			return msg;
 		}
 		
@@ -220,7 +220,7 @@ a_bool ai_str_requals(GStr* self, void const* dat, a_usize len) {
 }
 
 static void str_mark(Global* g, GStr* self) {
-    ai_gc_trace_work(g, sizeof_GStr(self->_len));
+    ai_gc_trace_work(g, str_size(self->_len));
 }
 
 static void cache_remove(StrCache* cache, GStr* str) {
@@ -240,7 +240,7 @@ static void cache_remove(StrCache* cache, GStr* str) {
 
 static void str_drop(Global* g, GStr* self) {
     cache_remove(&g->_str_cache, self);
-    ai_mem_gdel(g, self, sizeof_GStr(self->_len));
+    ai_mem_gdel(g, self, str_size(self->_len));
 }
 
 void ai_str_boost(a_henv env, void* block) {
@@ -284,7 +284,7 @@ void ai_str_boost(a_henv env, void* block) {
 			cache_emplace_in_place(cache, self);
 
 			g->_names[i] = self;
-			block += sizeof(GcHead) + sizeof_GStr(len);
+			block += sizeof(GcHead) + str_size(len);
 			src += len + 1;
 		}
 	}
