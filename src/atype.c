@@ -24,7 +24,7 @@ static VTable const type_vtable;
 GType* ai_type_new(a_henv env, GStr* name, GLoader* loader, a_usize extra) {
     a_usize size = pad_to(sizeof(GType) + extra, sizeof(a_usize));
 
-    GType* self = ai_mem_alloc(env, size);
+    GType* self = ai_mem_gnew(env, GType, size);
     memclr(self, size);
 
     self->_vptr = &type_vtable;
@@ -452,7 +452,7 @@ void ai_type_clean(Global* g) {
 
 static void type_drop(Global* g, GType* self) {
     type_clean(g, self);
-    ai_mem_dealloc(g, self, self->_size);
+    ai_mem_gdel(g, self, self->_size);
 }
 
 static void metas_mark(Global* g, Metas* metas) {

@@ -244,9 +244,15 @@ always_inline void v_set_ptr(Value* d, void* v) {
  * Object & Metadata
  *=========================================================*/
 
-typedef struct { a_usize _; } ObjHeadMark[0];
+typedef struct GcHead GcHead;
 
-#define GOBJ_STRUCT_HEADER ObjHeadMark _obj_head_mark; VTable const* _vptr; a_gcnext _gnext; a_trmark _tnext
+struct GcHead {
+    a_gcnext _next;
+};
+
+#define GOBJ_STRUCT_HEADER GcHead _obj_head_mark[0]; VTable const* _vptr; a_trmark _tnext
+
+#define _gnext _obj_head_mark[-1]._next
 
 struct GObj {
 	GOBJ_STRUCT_HEADER;
@@ -336,6 +342,20 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj v) {
 }
 
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
+
+always_inline a_hobj g_biased(void* p, a_usize bias) {
+    return cast(void*, p) + sizeof(GcHead) + bias;
+}
+
+always_inline void* g_unbiased(a_hobj p, a_usize bias) {
+    return cast(void*, p) - sizeof(GcHead) - bias;
+}
+
+#define g_biased_(p,bias,...) g_biased(p, bias)
+#define g_biased(p,bias...) g_biased_(p, ##bias, 0)
+
+#define g_unbiased_(p,bias,...) g_unbiased(gobj_cast(p), bias)
+#define g_unbiased(p,bias...) g_unbiased_(p, ##bias, 0)
 
 /*=========================================================*
  * Type
@@ -638,6 +658,7 @@ typedef void* a_rctx;
 
 struct alo_Env {
 	GOBJ_STRUCT_HEADER;
+    void* _dummy;
 	Global* _g;
 	a_rctx _rctx;
 	void* _rctx_alloc;

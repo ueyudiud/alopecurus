@@ -109,7 +109,7 @@ static void route_drop(Global* g, GRoute* self) {
 	assume(self->_status != ALO_SOK, "route is running.");
 	ai_ctx_close(self);
 	route_destroy(g, self);
-	ai_mem_dealloc(g, self, sizeof(GRoute));
+	ai_mem_vdel(g, self, sizeof(GRoute));
 }
 
 static VTable const route_vtable = {
@@ -146,14 +146,17 @@ a_none ai_env_raise(a_henv env, a_msg msg) {
 }
 
 GRoute* ai_env_new(a_henv env, a_usize stack_size) {
-	GRoute* self = ai_mem_alloc(env, sizeof(GRoute));
+	GRoute* self = ai_mem_gnew(env, GRoute, sizeof(GRoute));
+
 	route_new(self, G(env));
-	a_msg msg = ai_ctx_open(self, stack_size);
+
+    a_msg msg = ai_ctx_open(self, stack_size);
 	if (msg != ALO_SOK)
 		goto nomem1;
 	if (route_init(env, self))
 		goto nomem2;
-	ai_gc_register_object(env, self);
+
+    ai_gc_register_object(env, self);
 	return self;
 
 nomem2:
@@ -174,8 +177,8 @@ static void global_init(a_henv env, unused void* ctx) {
 }
 
 static a_usize sizeof_MRoute() {
-	a_usize size = sizeof(MRoute) + sizeof_GStr(0)
-#define STRDEF(n) + sizeof_GStr(sizeof(#n) - 1)
+	a_usize size = sizeof(MRoute) + sizeof(GcHead) + sizeof_GStr(0)
+#define STRDEF(n) + sizeof(GcHead) + sizeof_GStr(sizeof(#n) - 1)
 # include "asym/kw.h"
 # include "asym/tm.h"
 # include "asym/pt.h"

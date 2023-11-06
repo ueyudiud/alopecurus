@@ -41,6 +41,9 @@ always_inline void ai_mem_vdealloc(alo_Alloc const* af, void* ac, void* blk, a_u
 #define ai_mem_vgrow(env,vec,size_old,size_new) cast(typeof(vec), ai_mem_realloc(env, vec, sizeof((vec)[0]) * (size_old), sizeof((vec)[0]) * (size_new)))
 #define ai_mem_vdel(g,vec,size) ai_mem_dealloc(g, vec, sizeof((vec)[0]) * (size))
 
+#define ai_mem_gnew(env,type,size,bias...) g_cast(type, g_biased(ai_mem_alloc(env, sizeof(GcHead) + (size)), ##bias))
+#define ai_mem_gdel(g,obj,size,bias...) ai_mem_dealloc(g, g_unbiased(obj, ##bias), sizeof(GcHead) + (size))
+
 /* Direct memory support. */
 
 #if ALO_OS_WINDOWS

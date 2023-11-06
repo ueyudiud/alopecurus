@@ -15,7 +15,7 @@
 static VTable const list_vtable;
 
 GList* ai_list_new(a_henv env) {
-    GList* self = ai_mem_alloc(env, sizeof(GList));
+    GList* self = ai_mem_gnew(env, GList, sizeof(GList));
 
     self->_vptr = &list_vtable;
     self->_ptr = null;
@@ -145,7 +145,7 @@ static void list_drop(Global* g, GList* self) {
     if (self->_ptr != null) {
         ai_mem_vdel(g, self->_ptr, self->_cap);
     }
-    ai_mem_dealloc(g, self, sizeof(GList));
+    ai_mem_gdel(g, self, sizeof(GList));
 }
 
 static VTable const list_vtable = {

@@ -21,7 +21,7 @@ static a_usize fun_size(a_usize ncap) {
 }
 
 static a_usize proto_size(ProtoDesc* desc) {
-	a_usize size = sizeof(GProto) +
+	a_usize size = sizeof(GcHead) + sizeof(GProto) +
 				   sizeof(Value) * desc->_nconst +
 				   sizeof(a_insn) * desc->_ninsn +
 				   sizeof(CapInfo) * desc->_ncap +
@@ -44,10 +44,11 @@ static a_usize proto_size(ProtoDesc* desc) {
 GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	a_usize total_size = proto_size(desc);
 
-    GProto* self = ai_mem_nalloc(env, total_size);
-    if (self == null) return null;
-    memclr(self, total_size);
+    void* blk = ai_mem_nalloc(env, total_size);
+    if (blk == null) return null;
+    memclr(blk, total_size);
 
+    GProto* self = g_cast(GProto, g_biased(blk));
 	self->_vptr = &proto_vtable;
     self->_size = total_size;
     self->_nconst = desc->_nconst;
@@ -116,13 +117,13 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	self->_code = int2ptr(a_insn, addr);
 	addr += sizeof(a_insn) * self->_ninsn;
 
-	assume(ptr2int(self) + total_size == addr);
+	assume(g_unbiased(self) + total_size == int2ptr(void, addr));
 
 	return self;
 }
 
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
-	GFun* self = ai_mem_alloc(env, fun_size(ncap));
+	GFun* self = ai_mem_gnew(env, GFun, fun_size(ncap));
 
 	self->_vptr = &cfun_vtable;
 	self->_len = ncap;
@@ -214,7 +215,7 @@ GFun *ai_fun_new(a_henv env, GProto *proto) {
 
 	a_u32 len = proto->_ncap;
 
-	GFun* self = ai_mem_alloc(env, fun_size(len));
+	GFun* self = ai_mem_gnew(env, GFun, fun_size(len));
 
 	self->_vptr = &afun_vtable;
 	self->_proto = proto;
@@ -315,7 +316,7 @@ static void afun_drop(Global* g, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
 		cap_release(g, self->_caps[i]);
 	}
-	ai_mem_dealloc(g, self, fun_size(self->_len));
+    ai_mem_gdel(g, self, fun_size(self->_len));
 }
 
 static void afun_mark(Global* g, GFun* self) {
@@ -328,7 +329,7 @@ static void afun_mark(Global* g, GFun* self) {
 }
 
 static void cfun_drop(Global* g, GFun* self) {
-	ai_mem_dealloc(g, self, fun_size(self->_len));
+    ai_mem_gdel(g, self, fun_size(self->_len));
 }
 
 static void cfun_mark(Global* g, GFun* self) {
@@ -340,7 +341,7 @@ static void cfun_mark(Global* g, GFun* self) {
 }
 
 void ai_proto_drop(Global* g, GProto* self) {
-	ai_mem_dealloc(g, self, self->_size);
+	ai_mem_gdel(g, self, self->_size - sizeof(GcHead));
 }
 
 static void proto_mark(Global* g, GProto* self) {
