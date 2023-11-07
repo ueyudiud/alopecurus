@@ -49,54 +49,54 @@ always_inline a_trmark other_color(Global* gbl) {
     return white_color(gbl) ^ (WHITE1_COLOR | WHITE2_COLOR);
 }
 
-always_inline a_bool g_has_black_color(a_hobj v) {
-    return (v->_tnext & BLACK_COLOR) != 0;
+always_inline a_bool g_has_black_color(a_hobj o) {
+    return (o->_tnext & BLACK_COLOR) != 0;
 }
 
-#define g_has_black_color(v) g_has_black_color(gobj_cast(v))
+#define g_has_black_color(o) g_has_black_color(gobj_cast(o))
 
-always_inline a_bool g_has_gray_color(a_hobj v) {
-    return (v->_tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
+always_inline a_bool g_has_gray_color(a_hobj o) {
+    return (o->_tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
 
-#define g_has_gray_color(v) g_has_gray_color(gobj_cast(v))
+#define g_has_gray_color(o) g_has_gray_color(gobj_cast(o))
 
-always_inline a_bool g_has_white_color(Global* gbl, a_hobj v) {
-    return (v->_tnext & white_color(gbl)) != 0;
+always_inline a_bool g_has_white_color(Global* gbl, a_hobj o) {
+    return (o->_tnext & white_color(gbl)) != 0;
 }
 
-#define g_has_white_color(gbl,v) g_has_white_color(gbl, gobj_cast(v))
+#define g_has_white_color(gbl,o) g_has_white_color(gbl, gobj_cast(o))
 
-always_inline a_bool g_has_other_color(Global* gbl, a_hobj v) {
-    return (v->_tnext & other_color(gbl)) != 0;
+always_inline a_bool g_has_other_color(Global* gbl, a_hobj o) {
+    return (o->_tnext & other_color(gbl)) != 0;
 }
 
 #define g_has_other_color(gbl,v) g_has_other_color(gbl, gobj_cast(v))
 
-always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_hobj v) {
-	assume(g_has_white_color(gbl, v));
-	return (v->_tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
+always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_hobj o) {
+	assume(!g_has_other_color(gbl, o));
+	return (o->_tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
 
-#define g_has_white_color_within_assume_alive(gbl,v) g_has_white_color_within_assume_alive(gbl, gobj_cast(v))
+#define g_has_white_color_within_assume_alive(gbl,o) g_has_white_color_within_assume_alive(gbl, gobj_cast(o))
 
-always_inline void g_set_white(Global* gbl, a_hobj v) {
-	v->_tnext = white_color(gbl);
+always_inline void g_set_white(Global* gbl, a_hobj o) {
+    o->_tnext = white_color(gbl);
 }
 
-#define g_set_white(gbl,v) g_set_white(gbl, gobj_cast(v))
+#define g_set_white(gbl,o) g_set_white(gbl, gobj_cast(o))
 
 always_inline void g_set_gray(a_hobj v) {
 	v->_tnext = GRAY_NULL;
 }
 
-#define g_set_gray(v) g_set_gray(gobj_cast(v))
+#define g_set_gray(o) g_set_gray(gobj_cast(o))
 
-always_inline void g_set_black(a_hobj v) {
-	v->_tnext = BLACK_COLOR;
+always_inline void g_set_black(a_hobj o) {
+    o->_tnext = BLACK_COLOR;
 }
 
-#define g_set_black(v) g_set_black(gobj_cast(v))
+#define g_set_black(o) g_set_black(gobj_cast(o))
 
 always_inline void v_check_alive(a_henv env, Value v) {
 	if (v_is_obj(v)) {
@@ -106,17 +106,17 @@ always_inline void v_check_alive(a_henv env, Value v) {
 	}
 }
 
-always_inline void join_trace(a_trmark* list, a_hobj elem) {
-	elem->_tnext = *list;
-	*list = ptr2int(elem);
+always_inline void join_trace(a_trmark* list, a_hobj o) {
+    o->_tnext = *list;
+	*list = ptr2int(o);
 }
 
-#define join_trace(list,elem) join_trace(list, gobj_cast(elem))
+#define join_trace(list,o) join_trace(list, gobj_cast(o))
 
 always_inline a_hobj strip_trace(a_trmark* list) {
-    a_hobj elem = int2ptr(GObj, *list);
-	*list = elem->_tnext;
-	return elem;
+    a_hobj o = int2ptr(GObj, *list);
+	*list = o->_tnext;
+	return o;
 }
 
 intern void ai_gc_register_object_(a_henv env, a_hobj obj);
@@ -145,12 +145,13 @@ always_inline void ai_gc_trace_mark_val(Global* gbl, Value v) {
 
 #define ai_gc_should_run(gbl) unlikely((gbl)->_mem_debt >= 0)
 
-#if ALO_STRICT_MEMORY_CHECK
-# define ai_gc_trigger_ext(env,pre,post) ({ ai_gc_set_debt(G(env), 0); pre; ai_gc_incr_gc(env); post; })
+#ifdef ALOI_CHECK_GC
+# define ai_gc_trigger_(env,pre,post) ({ ai_gc_set_debt(G(env), 0); pre; ai_gc_incr_gc(env); post; })
 #else
-# define ai_gc_trigger_ext(env,pre,post)  ({ if (ai_gc_should_run(G(env))) { pre; ai_gc_incr_gc(env); post; } })
+# define ai_gc_trigger_(env,pre,post)  ({ if (ai_gc_should_run(G(env))) { pre; ai_gc_incr_gc(env); post; } })
 #endif
-#define ai_gc_trigger(env) ai_gc_trigger_ext(env, (void) 0, (void) 0)
+
+#define ai_gc_trigger(env) ai_gc_trigger_(env, (void) 0, (void) 0)
 
 always_inline void ai_gc_trace_work(Global* gbl, a_usize size) {
 	gbl->_mem_work -= cast(a_isize, size);

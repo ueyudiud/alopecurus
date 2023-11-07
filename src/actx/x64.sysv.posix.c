@@ -17,7 +17,7 @@ a_msg ai_ctx_init(void) {
     return ALO_SOK;
 }
 
-a_none ai_ctx_raise(a_henv env, a_msg msg) {
+a_noret ai_ctx_raise(a_henv env, a_msg msg) {
     Global* gbl = G(env);
     if (gbl->_gexecpt != null) {
         (*gbl->_gexecpt)(env, gbl->_gctx, msg);

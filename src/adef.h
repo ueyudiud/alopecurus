@@ -23,54 +23,6 @@
 #define ALO_COMP_OPT_LOSSEN 0x1000000
 #define ALO_COMP_OPT_EVAL 0x2000000
 
-/**
- ** Debug mode. If enabled, all assumption will be checked and panic if failed.
- */
-#ifdef ALOI_DEBUG
-# define ALO_DEBUG M_true
-#else
-# define ALO_DEBUG M_false
-#endif
-
-/**
- ** Dump more information in compilation pass.
- */
-#if ALO_DEBUG && defined(ALOI_DEBUG_COMPILE)
-# define ALO_DEBUG_COMPILE M_true
-#else
-# define ALO_DEBUG_COMPILE M_false
-#endif
-
-/**
- ** Check memory related function in strict mode.
- ** If enabled, the following strategy will be used:
- ** - the stack will be force to reallocate for each grow.
- ** - the full GC will be triggered in each allocation.
- */
-#ifdef ALOI_STRICT_MEMORY_CHECK
-# define ALO_STRICT_MEMORY_CHECK M_true
-#else
-# define ALO_STRICT_MEMORY_CHECK M_false
-#endif
-
-/**
- ** Check stack limit in C API.
- */
-#ifdef ALOI_STRICT_STACK_CHECK
-# define ALO_STRICT_STACK_CHECK M_true
-#else
-# define ALO_STRICT_STACK_CHECK M_false
-#endif
-
-/**
- ** Add valgrind support if enable this option.
- */
-#ifdef ALOI_USE_VALGRIND
-# define ALO_USE_VALGRIND M_true
-#else
-# define ALO_USE_VALGRIND M_false
-#endif
-
 /* Special attributes. */
 
 #undef intern
@@ -177,17 +129,12 @@ typedef a_u32 a_insn;
 #define catch(e,n...) catch_(e, ##n, _e)
 #define try(e) catch(e) { return _e; }
 
-#if ALO_DEBUG && defined(ALO_LIB)
-
 intern a_noret ai_dbg_panic(char const* fmt, ...);
+
+#if defined(ALOI_CHECK_ASSUME) && defined(ALO_LIB)
 # define panic(m...) ai_dbg_panic(""m)
-
-intern void ai_dbg_debug(char const* fmt, ...);
-# define debug(m...) ai_dbg_debug(""m)
-
 #else
 # define panic(...) unreachable()
-# define debug(...) quiet()
 #endif
 
 #define assume(e,m...) ((void) (!!(e) || (panic(m), false)))

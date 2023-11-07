@@ -11,7 +11,7 @@
 
 #include "adbg.h"
 
-#if ALO_DEBUG
+#if defined(ALOI_CHECK_ASSUME) || defined(ALOI_CHECK_API)
 
 #include <stdio.h>
 
@@ -22,14 +22,6 @@ a_noret ai_dbg_panic(char const* fmt, ...) {
 	fflush(stderr);
 	va_end(varg);
 	trap();
-}
-
-void ai_dbg_debug(char const* fmt, ...) {
-	va_list varg;
-	va_start(varg, fmt);
-	vfprintf(stdout, fmt, varg);
-	fflush(stdout);
-	va_end(varg);
 }
 
 #endif

@@ -103,20 +103,24 @@ a_usize alo_stacksize(a_henv env) {
  ** Reserve enough slots of stack to carry values.
  *@param env the runtime environment.
  *@param n the number of reserved slots.
- *@return true if reserved success and false for otherwise.
+ *@return false if reserved success and true for otherwise.
  */
 a_bool alo_ensure(a_henv env, a_usize n) {
 	Value* const expect = env->_stack._top + n;
-	Value* const limit = env->_stack._limit;
+	Value* const limit = api_stack_limit(env);
 	if (expect > limit) {
-		a_isize diff = ai_stk_grow(env, expect);
+#ifdef ALOI_CHECK_API
+        if (expect > env->_stack._limit) {
+#endif
+            a_isize diff = ai_stk_grow(env, expect);
 
-		if (diff & STACK_GROW_FAILED) {
-			return false;
-		}
+            if (diff & STACK_GROW_FAILED) {
+                return true;
+            }
+#ifdef ALOI_CHECK_API
+        }
 
-#if ALO_STRICT_STACK_CHECK
-		env->_frame->_bound = ptr_disp(Value, expect, diff);
+        env->_frame->_stack_limit = val2stk(env, expect);
 #endif
 	}
 	return false;

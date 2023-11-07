@@ -51,9 +51,9 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 		._alloc_size = alloc_size
 	};
 
-# if ALO_STRICT_STACK_CHECK
-	self->_base_frame._bound = stack->_base + ALOI_INIT_CFRAMESIZE;
-# endif
+#ifdef ALOI_CHECK_API
+    env->_base_frame._stack_limit = val2stk(env, base + ALOI_INIT_CFRAME_STACKSIZE);
+#endif
 
 	return false;
 }
@@ -81,7 +81,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	a_usize size_old = stack->_alloc_size;
 	Value* stack_old = stack->_base;
 	Value* stack_new;
-#if ALO_STRICT_MEMORY_CHECK
+#if ALOI_MEMORY_CHECK
 	stack_new = ai_mem_alloc(env, size_new);
 	memcpy(stack_new, stack_old, addr_diff(stack->_top, stack->_base));
 	ai_mem_dealloc(G(env), stack_old, size_old);

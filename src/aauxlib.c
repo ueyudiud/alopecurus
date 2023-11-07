@@ -381,9 +381,12 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 
 void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
-	api_check(v_is_type(v), "tp expected.");
+	api_check(v_is_type(v), "type expected.");
 
-	GType* tp = v_as_type(v);
+	GType* type = v_as_type(v);
+
+    /* Reserve for GC. */
+    Value* p = api_incr_stack(env);
 
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
@@ -392,13 +395,17 @@ void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 		GStr* key = ai_str_newc(env, b->name);
 		Value value = v_of_nil();
 
+        v_set_obj(env, p, key);
+
 		if (b->fptr != null) {
 			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
 			value = v_of_obj(fun);
 		}
 
-        ai_type_set(env, tp, v_of_obj(key), value);
+        ai_type_set(env, type, v_of_obj(key), value);
 	}
+
+    api_decr_stack(env);
 
 	ai_gc_trigger(env);
 }
@@ -410,9 +417,9 @@ typedef struct {
 
 static void l_open_lib(a_henv env, LibEntry const* entry) {
 	(*entry->_init)(env);
-	GType* tp = v_as_type(api_elem(env, -1));
-    ai_type_cache(env, null, tp);
-	ai_vm_set(env, G(env)->_global, v_of_obj(tp->_sig), v_of_obj(tp));
+	GType* type = v_as_type(api_elem(env, -1));
+    ai_type_cache(env, null, type);
+	ai_vm_set(env, G(env)->_global, v_of_obj(type->_sig), v_of_obj(type));
 	api_decr_stack(env);
 }
 

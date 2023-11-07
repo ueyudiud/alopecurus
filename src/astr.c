@@ -251,7 +251,7 @@ void ai_str_boost(a_henv env, void* block) {
 	run {
 		cache->_table = ai_mem_vnew(env, GStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
 		cache->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
-		memset(cache->_table, 0, sizeof(GStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+		memclr(cache->_table, sizeof(GStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
 	}
 
 	run {

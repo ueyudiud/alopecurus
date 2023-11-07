@@ -643,11 +643,11 @@ struct Frame {
 	a_insn const* _pc;
 	Value* _stack_bot;
     Value* _stack_dst;
-#if ALO_STRICT_STACK_CHECK
-	StkPtr _bound; /* In strict stack checking mode, the API will use frame bound to check index range. */
-#endif
     a_u32 _num_ret;
     a_u8 _flags;
+#ifdef ALOI_CHECK_API
+    StkPtr _stack_limit;
+#endif
 };
 
 typedef void* a_rctx;

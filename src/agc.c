@@ -54,14 +54,15 @@ void ai_gc_register_object_(a_henv env, a_hobj obj) {
 
 void ai_gc_register_objects(a_henv env, RefQueue* rq) {
 	Global* gbl = G(env);
-	*rq->_tail = gbl->_gc_normal;
-	gbl->_gc_normal = rq->_head;
 
-#if ALO_DEBUG
-	rq_for(obj, rq) {
+#ifdef ALOI_CHECK_ASSUME
+    rq_for(obj, rq) {
 		assume(!g_has_other_color(gbl, obj), "object is already dead.");
 	}
 #endif
+
+	*rq->_tail = gbl->_gc_normal;
+	gbl->_gc_normal = rq->_head;
 }
 
 void ai_gc_fix_object_(a_henv env, a_hobj obj) {
@@ -221,7 +222,7 @@ static void propagate_atomic(Global* gbl) {
 	/* Mark volatile root. */
 	ai_gc_trace_mark(gbl, gbl->_active);
 	if (v_is_obj(gbl->_global)) {
-		join_trace(&gbl->_tr_gray, v_as_obj(gbl->_global));
+		ai_gc_trace_mark(gbl, v_as_obj(gbl->_global));
 	}
     ai_type_cache_mark(gbl, &gbl->_type_cache);
 	if (gbl->_gmark != null) {

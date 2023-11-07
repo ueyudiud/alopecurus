@@ -189,6 +189,13 @@ static void type_sets(a_henv env, GType* self, GStr* key, Value value) {
             metas_set(env, &self->_metas, key, value);
             self->_mver += 1;
 
+            if (str_istm(key)) {
+                a_enum tm = str_totm(key);
+                if (tm < TM__FAST_MAX) {
+                    self->_flags |= TYPE_FLAG_FAST_TM(tm);
+                }
+            }
+
             ai_gc_barrier_forward(env, self, key);
             ai_gc_barrier_forward_val(env, self, value);
             break;
@@ -323,14 +330,16 @@ void ai_type_cache(a_henv env, GLoader* loader, GType* type) {
 }
 
 void ai_type_cache_mark(Global* gbl, TypeCache* cache) {
-	for (a_u32 i = 0; i <= cache->_hmask; ++i) {
-		GType** slot = &cache->_ptr[i];
-		GType* type;
-		while ((type = *slot) != null) {
-			ai_gc_trace_mark(gbl, type);
-            slot = &type->_mnext;
-		}
-	}
+    if (cache->_len > 0) {
+        for (a_u32 i = 0; i <= cache->_hmask; ++i) {
+            GType** slot = &cache->_ptr[i];
+            GType* type;
+            while ((type = *slot) != null) {
+                ai_gc_trace_mark(gbl, type);
+                slot = &type->_mnext;
+            }
+        }
+    }
 }
 
 static void cache_drop(Global* gbl, TypeCache* cache) {
@@ -431,6 +440,7 @@ void ai_type_clean(Global* gbl) {
     type_clean(gbl, &gbl->_types._int);
     type_clean(gbl, &gbl->_types._float);
     type_clean(gbl, &gbl->_types._ptr);
+    type_clean(gbl, &gbl->_types._str);
     type_clean(gbl, &gbl->_types._tuple);
     type_clean(gbl, &gbl->_types._list);
     type_clean(gbl, &gbl->_types._table);

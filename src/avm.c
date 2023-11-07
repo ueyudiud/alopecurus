@@ -470,7 +470,7 @@ static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_u32 num_ret, a_u32 fl
 # define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); assume(_d == 0, "stack moved."); reload_stack(); })
 # define reload_stack() ((void) 0)
 #endif
-#define check_gc() ai_gc_trigger_ext(env, (void) 0, reload_stack())
+#define check_gc() ai_gc_trigger_(env, (void) 0, reload_stack())
 #define adjust_top() quiet(env->_stack._top = &R[fun->_proto->_nstack])
 
     frame->_prev = env->_frame;

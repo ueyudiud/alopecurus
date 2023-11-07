@@ -5,6 +5,8 @@
 #define atm_c_
 #define ALO_LIB
 
+#include <string.h>
+
 #include "atype.h"
 #include "agc.h"
 #include "aerr.h"
@@ -83,9 +85,15 @@ a_bool ai_tm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vf;
     try (type_lookft(env, g_typeof(env, p), TM___look__, &vf));
 
-    Value vr = vm_call1(env, vf, v, v_of_obj(k));
-    v_set(env, pv, vr);
-    return false;
+    if (v_is_func(vf)) {
+        Value vr = vm_call1(env, vf, v, v_of_obj(k));
+        v_set(env, pv, vr);
+        return false;
+    }
+    else {
+        v_set(env, pv, ai_vm_get(env, vf, v_of_obj(k)));
+        return false;
+    }
 }
 
 a_bool ai_tm_str(a_henv env, Value v, GStr** ps) {

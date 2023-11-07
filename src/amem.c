@@ -17,7 +17,7 @@ a_noret ai_mem_nomem(a_henv env) {
 }
 
 void* ai_mem_alloc(a_henv env, a_usize sz) {
-#if ALO_STRICT_MEMORY_CHECK
+#ifdef ALOI_CHECK_GC
 	ai_gc_full_gc(env, true);
 #endif
 	void* blk = ai_mem_nalloc(env, sz);
@@ -32,7 +32,7 @@ void* ai_mem_alloc(a_henv env, a_usize sz) {
 }
 
 void* ai_mem_realloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new) {
-#if ALO_STRICT_MEMORY_CHECK
+#ifdef ALOI_CHECK_GC
 	ai_gc_full_gc(env, true);
 #endif
 	void* blk_new = ai_mem_nrealloc(env, blk_old, sz_old, sz_new);

@@ -221,7 +221,7 @@ void ai_table_grow(a_henv env, GTable* self, a_usize add) {
 }
 
 void ai_table_hint(a_henv env, GTable* self, a_usize add) {
-    if (unlikely(add > self->_hmask + 1 - self->_len)) {
+    if (unlikely(add > ((self->_hmask + 1) & ~u32c(1)) - self->_len)) {
         ai_table_grow(env, self, add);
     }
 }

@@ -246,7 +246,10 @@ void alo_destroy(a_henv env) {
     ai_type_clean(gbl);
 	ai_cap_clean(gbl);
 
+#ifndef ALOI_USE_VALGRIND
+    /* Avoid used memory check if foreign memcheck tools is enabled. */
 	assume(gbl_mem_total(gbl) == sizeof_MRoute(), "memory leak.");
+#endif
 	ai_mem_vdealloc(&gbl->_af, gbl->_ac, mroute, sizeof_MRoute());
 }
 
