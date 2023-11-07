@@ -113,7 +113,7 @@ static a_bool strs_put(StrSet* set, GStr* str) {
             return true;
         }
         perturb >>= 5;
-        index = index * 5 + 1 + perturb;
+        index = (index * 5 + 1 + perturb) & set->_hmask;
     }
 }
 
