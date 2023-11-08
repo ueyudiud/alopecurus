@@ -157,6 +157,7 @@ ALO_EXPORT char const* (alo_pushstr)(a_henv env, void const* src, a_usize len);
 ALO_EXPORT char const* (alo_pushntstr)(a_henv env, char const* src);
 ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);
 ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg);
+ALO_EXPORT void (alo_pushptype)(a_henv env, a_msg tag);
 
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_usize n);

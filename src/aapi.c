@@ -389,6 +389,64 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 	return str2ntstr(val);
 }
 
+void alo_pushptype(a_henv env, a_msg tag) {
+    GType* t;
+
+    switch (tag) {
+        case ALO_TNIL: {
+            t = g_type(env, _nil);
+            break;
+        }
+        case ALO_TBOOL: {
+            t = g_type(env, _bool);
+            break;
+        }
+        case ALO_TINT: {
+            t = g_type(env, _int);
+            break;
+        }
+        case ALO_TFLOAT: {
+            t = g_type(env, _float);
+            break;
+        }
+        case ALO_TPTR: {
+            t = g_type(env, _ptr);
+            break;
+        }
+        case ALO_TSTR: {
+            t = g_type(env, _str);
+            break;
+        }
+        case ALO_TTUPLE: {
+            t = g_type(env, _tuple);
+            break;
+        }
+        case ALO_TLIST: {
+            t = g_type(env, _list);
+            break;
+        }
+        case ALO_TTABLE: {
+            t = g_type(env, _table);
+            break;
+        }
+        case ALO_TFUNC: {
+            t = g_type(env, _func);
+            break;
+        }
+        case ALO_TTYPE: {
+            t = g_type(env, _type);
+            break;
+        }
+        case ALO_TROUTE: {
+            t = g_type(env, _route);
+            break;
+        }
+        default: api_panic("Bad type tag.");
+    }
+
+    v_set_obj(env, api_incr_stack(env), t);
+}
+
 void alo_pushroute(a_henv env) {
 	v_set_obj(env, api_incr_stack(env), env);
 }

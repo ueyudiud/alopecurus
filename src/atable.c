@@ -392,14 +392,15 @@ static void table_drop(Global* gbl, GTable* self) {
 
 static void table_mark(Global* gbl, GTable* self) {
 	if (self->_ptr != null) {
-		for (a_u32 i = 0; i <= self->_hmask; ++i) {
+        a_u32 cap = self->_hmask + 1;
+		for (a_u32 i = 0; i < cap; ++i) {
 			TNode* node = &self->_ptr[i];
 			if (!v_is_nil(node->_key)) {
 				ai_gc_trace_mark_val(gbl, node->_key);
 				ai_gc_trace_mark_val(gbl, node->_value);
 			}
 		}
-		ai_gc_trace_work(gbl, sizeof(TNode) * (self->_hmask + 2));
+		ai_gc_trace_work(gbl, sizeof(TNode) * (cap + 1));
 	}
 	ai_gc_trace_work(gbl, sizeof(GcHead) + table_size());
 }

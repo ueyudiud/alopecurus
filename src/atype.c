@@ -205,16 +205,15 @@ static void type_sets(a_henv env, GType* self, GStr* key, Value value) {
 
 Value ai_type_get(a_henv env, GType* self, Value vk) {
     if (!v_is_str(vk)) {
-        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
+        ai_err_bad_key(env, "type", v_nameof(env, vk));
     }
     return type_gets(env, self, v_as_str(vk));
 }
 
 void ai_type_set(a_henv env, GType* self, Value vk, Value vv) {
     if (!v_is_str(vk)) {
-        ai_err_bad_key(env, g_nameof(env, self), v_nameof(env, vk));
+        ai_err_bad_key(env, "type", v_nameof(env, vk));
     }
-
     type_sets(env, self, v_as_str(vk), vv);
 }
 

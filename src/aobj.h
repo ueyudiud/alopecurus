@@ -489,7 +489,6 @@ always_inline GList* v_as_list(Value v) {
  *=========================================================*/
 
 typedef struct TNode TNode;
-typedef struct Key Key;
 
 /**
  ** Linked hash table.
