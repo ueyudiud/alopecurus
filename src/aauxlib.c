@@ -378,13 +378,23 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 	return ALO_EINVAL;
 }
 
+void aloL_puts(a_henv env, a_isize id, char const* s) {
+    Value v = api_elem(env, id);
+    api_check(v_is_table(v), "table expected.");
+
+    GTable* o = v_as_table(v);
+
+    Value* slot = ai_table_refls(env, o, s, strlen(s));
+    v_set(env, slot, api_decr_stack(env));
+
+    ai_gc_trigger(env);
+}
+
 void aloL_putalls_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
 	api_check(v_is_table(v), "table expected.");
 
 	GTable* o = v_as_table(v);
-
-    ai_table_hint(env, o, nb);
 
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
