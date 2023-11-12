@@ -23,54 +23,6 @@
 #define ALO_COMP_OPT_LOSSEN 0x1000000
 #define ALO_COMP_OPT_EVAL 0x2000000
 
-/**
- ** Debug mode. If enabled, all assumption will be checked and panic if failed.
- */
-#ifdef ALOI_DEBUG
-# define ALO_DEBUG M_true
-#else
-# define ALO_DEBUG M_false
-#endif
-
-/**
- ** Dump more information in compilation pass.
- */
-#if ALO_DEBUG && defined(ALOI_DEBUG_COMPILE)
-# define ALO_DEBUG_COMPILE M_true
-#else
-# define ALO_DEBUG_COMPILE M_false
-#endif
-
-/**
- ** Check memory related function in strict mode.
- ** If enabled, the following strategy will be used:
- ** - the stack will be force to reallocate for each grow.
- ** - the full GC will be triggered in each allocation.
- */
-#ifdef ALOI_STRICT_MEMORY_CHECK
-# define ALO_STRICT_MEMORY_CHECK M_true
-#else
-# define ALO_STRICT_MEMORY_CHECK M_false
-#endif
-
-/**
- ** Check stack limit in C API.
- */
-#ifdef ALOI_STRICT_STACK_CHECK
-# define ALO_STRICT_STACK_CHECK M_true
-#else
-# define ALO_STRICT_STACK_CHECK M_false
-#endif
-
-/**
- ** Add valgrind support if enable this option.
- */
-#ifdef ALOI_USE_VALGRIND
-# define ALO_USE_VALGRIND M_true
-#else
-# define ALO_USE_VALGRIND M_false
-#endif
-
 /* Special attributes. */
 
 #undef intern
@@ -87,22 +39,14 @@
 #define unused __attribute__((__unused__))
 
 /* Types. */
-#define a_none ALO_NORETURN void
-
-#if ALO_M64
-typedef __int128_t a_isize2;
-typedef __uint128_t a_usize2;
-#else
-typedef int64_t a_isize2;
-typedef uint64_t a_usize2;
-#endif
+#define a_noret ALO_NORETURN void
 
 typedef struct {
 	char const* _ptr;
 	a_usize _len;
 } a_lstr;
 
-typedef struct { a_i32 _; } a_x32;
+typedef a_u32 a_uint;
 
 typedef a_u32 a_hash;
 typedef a_u32 a_insn;
@@ -118,8 +62,13 @@ typedef a_u32 a_insn;
 #define i32c INT32_C
 #define i64c INT64_C
 
-#define usizec u64c
-#define isizec i64c
+#if ALO_M64
+# define usizec u64c
+# define isizec i64c
+#elif ALO_M32
+# define usizec u32c
+# define isizec i32c
+#endif
 
 #define ISIZE_MAX PTRDIFF_MAX
 #define ISIZE_MIN PTRDIFF_MIN
@@ -128,8 +77,7 @@ typedef a_u32 a_insn;
 
 #define null NULL
 #define false ((a_bool) M_false)
-#define true  (!false)
-#define zero(t) ((t) {0})
+#define true ((a_bool) !false)
 
 #if __STDC_VERSION__ >= 201112L
 # define ALO_C11 M_true
@@ -152,44 +100,23 @@ typedef a_u32 a_insn;
 
 /* Special generic functors. */
 
-#define new(t) (t)
+#define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
-#define bit_cast(t,e) ({ typeof(e) _e[sizeof(e) == sizeof(t) ? 1 : -1] = {e}; t _t; __builtin_memcpy(&_t, _e, sizeof(t)); _t; })
+#define bit_cast(t,e) ({ __auto_type _e = e; t _t; static_assert(sizeof(_e) == sizeof(t)); __builtin_memcpy(&_t, &_e, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
-#define null_of(t) ((typeof(t)*) 0)
-#define dangling_of(t) ((t*) sizeof(t))
-#define addr_of(p) cast(a_usize, p)
-#define ptr_of(t,a) ({ a_usize _a = (a); cast(typeof(t)*, _a); })
-#define ref_of(t,a) (*ptr_of(t, a))
-#define ptr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
-#define ptr_disp(t,p,d) ptr_of(t, addr_of(p) + (d))
-#define from_member(t,f,v) ({ typeof(v) _v = (v); quiet(_v == null_of(typeof(((t*) 0)->f))); ptr_of(t, addr_of(_v) - offsetof(t, f)); })
+#define ptr2int(p) ((a_usize) (void const*) {p})
+#define addr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
+#define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
+#define ref_of(t,a) (*int2ptr(t, a))
+#define ptr_disp(t,p,d) int2ptr(t, ptr2int(p) + (d))
+#define from_member(t,f,v) ({ __auto_type _v = v; quiet(_v == &((t*) 0)->f); int2ptr(t, ptr2int(_v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
-
-/**
- ** Optional index type support.
- */
-
-/**
- ** Internal used `nil` literal.
- ** Used in optional array based table reference to
- ** represent a empty value.
- */
-#define x32c(l) wrap(i32c(l))
-
-#define nil x32c(0)
-
-#define unwrap_unsafe(e) ((e)._)
-#define unwrap(e) ({ a_x32 _x = (e); assume(!is_nil(_x)); unwrap_unsafe(_x); })
-#define wrap(v)  (new(a_x32) { v })
-
-#define is_nil(e) (unwrap_unsafe(e) == unwrap_unsafe(nil))
 
 /* Utility functions. */
 
 #define max(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a >= _b ? _a : _b; })
 #define min(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a <= _b ? _a : _b; })
-#define swap(a,b) ({ typeof(a)* _a = &(a); typeof(b)* _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
+#define swap(a,b) ({ __auto_type _a = &(a); __auto_type _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
 #define expect(e,v) __builtin_expect(e, v)
 #define likely(e) expect(!!(e), true)
 #define unlikely(e) expect(!!(e), false)
@@ -198,20 +125,16 @@ typedef a_u32 a_insn;
 
 /* Error handling functions. */
 
-#define catch(e,f,a...) ({ typeof(e) _e = (e); if (unlikely(_e)) { f(_e, ##a); } })
-#define try(e) catch(e, return)
+#define catch_(e,n,...) for (__auto_type n = (e); unlikely(n); n = 0)
+#define catch(e,n...) catch_(e, ##n, _e)
+#define try(e) catch(e) { return _e; }
 
-#if ALO_DEBUG && defined(ALO_LIB)
+intern a_noret ai_dbg_panic(char const* fmt, ...);
 
-intern a_none ai_dbg_panic(char const* fmt, ...);
+#if defined(ALOI_CHECK_ASSUME) && defined(ALO_LIB)
 # define panic(m...) ai_dbg_panic(""m)
-
-intern void ai_dbg_debug(char const* fmt, ...);
-# define debug(m...) ai_dbg_debug(""m)
-
 #else
 # define panic(...) unreachable()
-# define debug(...) quiet()
 #endif
 
 #define assume(e,m...) ((void) (!!(e) || (panic(m), false)))
@@ -225,10 +148,6 @@ intern void ai_dbg_debug(char const* fmt, ...);
  ** Fill memory with zero bits.
  */
 #define memclr(dst,len) __builtin_memset(dst, 0, len)
-
-always_inline a_usize2 mul_usize(a_usize a, a_usize b) {
-    return cast(a_usize2, a) * b;
-}
 
 #define NUM_TYPE_LIST(_) \
     _(i8) \
@@ -261,8 +180,8 @@ always_inline a_u32 clz_usize(a_usize a) {
 #endif
 }
 
-always_inline a_usize ceil_pow2m1_usize(a_usize a) {
-    return likely(a != 0) ? ~usizec(0) >> clz_usize(a) : 0;
+always_inline a_usize ceil_pow2_usize(a_usize a) {
+    return (~usizec(0) >> clz_usize(a)) + 1;
 }
 
 #define pad_to_raw(s,g) (((s) + (g) - 1) & ~((g) - 1))

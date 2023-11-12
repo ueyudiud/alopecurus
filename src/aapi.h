@@ -7,8 +7,13 @@
 
 #include "aenv.h"
 
-#define api_panic(m...) panic(m)
-#define api_check(e,m...) assume(e, "API: "m)
+#ifdef ALOI_CHECK_API
+# define api_panic(m...) ai_dbg_panic("API: "m)
+#else
+# define api_panic(...) unreachable()
+#endif
+
+#define api_check(e,m...) ((e) || (api_panic(m), false))
 
 intern Value const* api_roslot(a_henv env, a_isize id);
 intern Value const* api_rdslot(a_henv env, a_isize id);
@@ -17,9 +22,9 @@ intern Value api_elem(a_henv env, a_isize id);
 
 intern char const ai_api_tagname[][8];
 
-always_inline Value const* api_stack_limit(a_henv env) {
-#if ALO_STRICT_STACK_CHECK
-	return env->_frame->_bound;
+always_inline Value* api_stack_limit(a_henv env) {
+#ifdef ALOI_CHECK_API
+    return stk2val(env, env->_frame->_stack_limit);
 #else
     return env->_stack._limit;
 #endif
@@ -35,7 +40,9 @@ always_inline void api_check_elem(a_henv env, a_usize size) {
 
 always_inline Value* api_incr_stack(a_henv env) {
     api_check_slot(env, 1);
-    return env->_stack._top++;
+    Value* p = env->_stack._top++;
+    v_check_alive(env, *p); /* Aliveness check. */
+    return p;
 }
 
 always_inline Value api_pre_decr_stack(a_henv env) {

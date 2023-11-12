@@ -12,7 +12,7 @@
 #include "aio.h"
 
 void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in) {
-    *in = new(ZIn) {
+    init(in) {
         ._env = env,
         ._fun = fun,
         ._ctx = ctx,

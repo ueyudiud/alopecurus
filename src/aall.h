@@ -23,7 +23,7 @@
 #include "alo.h"
 #include "aload.h"
 #include "amem.h"
-#include "ameta.h"
+#include "atype.h"
 #include "aobj.h"
 #include "aop.h"
 #include "aparse.h"

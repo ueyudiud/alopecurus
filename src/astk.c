@@ -44,16 +44,16 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	}
 #endif
 
-	*stack = new(Stack) {
+    init(stack) {
 		._base = base,
 		._limit = ptr_disp(Value, base, INIT_STACK_SIZE) - RESERVED_STACK_SIZE,
 		._top = base,
 		._alloc_size = alloc_size
 	};
 
-# if ALO_STRICT_STACK_CHECK
-	self->_base_frame._bound = stack->_base + ALOI_INIT_CFRAMESIZE;
-# endif
+#ifdef ALOI_CHECK_API
+    env->_base_frame._stack_limit = val2stk(env, base + ALOI_INIT_CFRAME_STACKSIZE);
+#endif
 
 	return false;
 }
@@ -81,14 +81,14 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 	a_usize size_old = stack->_alloc_size;
 	Value* stack_old = stack->_base;
 	Value* stack_new;
-#if ALO_STRICT_MEMORY_CHECK
+#if ALOI_MEMORY_CHECK
 	stack_new = ai_mem_alloc(env, size_new);
-	memcpy(stack_new, stack_old, ptr_diff(stack->_top, stack->_base));
+	memcpy(stack_new, stack_old, addr_diff(stack->_top, stack->_base));
 	ai_mem_dealloc(G(env), stack_old, size_old);
 #else
 	stack_new = ai_mem_realloc(env, stack_old, size_old, size_new);
 #endif
-	diff = ptr_diff(stack_new, stack_old);
+	diff = addr_diff(stack_new, stack_old);
 	stack->_base = stack_new;
 	stack->_alloc_size = size_new;
 
@@ -117,9 +117,9 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 
 #define STACK_GROW_OVERFLOW isizec(2)
 
-a_none ai_stk_overflow(a_henv env, a_isize diff) {
+a_noret ai_stk_overflow(a_henv env, a_isize diff) {
 	if (diff & STACK_GROW_OVERFLOW) {
-		GStr* err = ai_str_newl(env, "stack overflow");
+		GStr* err = ai_str_from_ntstr(env, "stack overflow");
 		v_set_obj(env, &env->_error, err);
 		ai_env_raise(env, ALO_ESTKOF);
 	}
@@ -131,8 +131,8 @@ a_none ai_stk_overflow(a_henv env, a_isize diff) {
 a_isize ai_stk_grow(a_henv env, Value* top) {
 	Stack* stack = &env->_stack;
 	assume(top > stack->_limit);
-	a_usize current_size = ptr_diff(stack->_limit, stack->_base);
-	a_usize expect_size = ptr_diff(top, stack->_base);
+	a_usize current_size = addr_diff(stack->_limit, stack->_base);
+	a_usize expect_size = addr_diff(top, stack->_base);
 	assume(expect_size > current_size);
 	if (unlikely(expect_size > MAX_STACK_SIZE)) {
 		if (current_size == MAX_OVERFLOWED_STACK_SIZE) {
@@ -160,11 +160,11 @@ void ai_stk_shrink(a_henv env) {
 	}
 }
 
-void ai_stk_deinit(Global* g, Stack* stack) {
+void ai_stk_deinit(Global* gbl, Stack* stack) {
 #if ALO_STACK_INNER
-	ai_mem_dealloc(g, stack->_base, stack->_alloc_size);
+	ai_mem_dealloc(gbl, stack->_base, stack->_alloc_size);
 #else
-	quiet(g);
+	quiet(gbl);
 	ai_mem_nrelease(stack->_base, MAX_OVERFLOWED_STACK_SIZE);
 #endif
 }

@@ -1,5 +1,5 @@
 /**
- *@file atuple.c=
+ *@file atuple.c
  */
 
 #define atuple_c_
@@ -15,7 +15,9 @@
 static VTable const tuple_vtable;
 
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
-    GTuple* self = ai_mem_alloc(env, sizeof_GTuple(len));
+    if (len > INT32_MAX) ai_err_raisef(env, ALO_EINVAL, "tuple size too large.");
+
+    GTuple* self = ai_mem_gnew(env, GTuple, tuple_size(len));
 
 	self->_vptr = &tuple_vtable;
     self->_len = len;
@@ -78,22 +80,23 @@ a_msg ai_tuple_uget(a_henv env, GTuple* self, Value vk, Value* pv) {
     return ai_tuple_ugeti(env, self, v_as_int(vk), pv);
 }
 
-static void tuple_drop(Global* g, GTuple* self) {
-    ai_mem_dealloc(g, self, sizeof_GTuple(self->_len));
+static void tuple_drop(Global* gbl, GTuple* self) {
+    ai_mem_gdel(gbl, self, tuple_size(self->_len));
 }
 
-static void tuple_mark(Global* g, GTuple* self) {
+static void tuple_mark(Global* gbl, GTuple* self) {
     a_u32 len = self->_len;
     for (a_u32 i = 0; i < len; ++i) {
-        ai_gc_trace_mark_val(g, self->_ptr[i]);
+        ai_gc_trace_mark_val(gbl, self->_ptr[i]);
     }
-    ai_gc_trace_work(g, sizeof_GTuple(self->_len));
+    ai_gc_trace_work(gbl, tuple_size(self->_len));
 }
 
 static VTable const tuple_vtable = {
     ._stencil = V_STENCIL(T_TUPLE),
+    ._tag = ALO_TTUPLE,
     ._flags = VTABLE_FLAG_NONE,
-    ._type_ref = g_type_ref(_tuple),
+    ._type_ref = g_type_ref(ALO_TTUPLE),
     ._slots = {
         [vfp_slot(drop)] = tuple_drop,
         [vfp_slot(mark)] = tuple_mark

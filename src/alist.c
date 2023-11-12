@@ -6,7 +6,6 @@
 #define ALO_LIB
 
 #include "aop.h"
-#include "avec.h"
 #include "amem.h"
 #include "agc.h"
 #include "aerr.h"
@@ -16,39 +15,71 @@
 static VTable const list_vtable;
 
 GList* ai_list_new(a_henv env) {
-    GList* self = ai_mem_alloc(env, sizeof(GList));
+    GList* self = ai_mem_gnew(env, GList, list_size());
 
     self->_vptr = &list_vtable;
-
-    ai_vec_init(env, &self->_vec);
+    self->_ptr = null;
+    self->_cap = 0;
+    self->_len = 0;
 
     ai_gc_register_object(env, self);
 
     return self;
 }
 
-void ai_list_hint(a_henv env, GList* self, a_usize len) {
-    ai_vec_hint(env, &self->_vec, len);
+static a_bool list_grow(a_henv env, GList* self, a_usize add) {
+    a_usize need;
+    try (checked_add_usize(self->_len, add, &need));
+
+    assume(need >= self->_cap, "not need to grow.");
+
+    a_usize old_cap = self->_cap;
+    a_usize new_cap = max(old_cap * 2, need + 4);
+
+    if (unlikely(need > INT32_MAX)) {
+        return true;
+    }
+    else if (unlikely(new_cap > INT32_MAX)) {
+        new_cap = INT32_MAX; /* Trim to maximum capacity. */
+    }
+
+    self->_ptr = ai_mem_vgrow(env, self->_ptr, old_cap, new_cap);
+    self->_cap = new_cap;
+
+    return false;
+}
+
+void ai_list_grow(a_henv env, GList* self, a_usize add) {
+    catch (list_grow(env, self, add)) {
+        ai_err_raisef(env, ALO_EINVAL, "too many elements.");
+    }
+}
+
+void ai_list_hint(a_henv env, GList* self, a_usize add) {
+    if (unlikely(add > self->_cap - self->_len)) {
+        ai_list_grow(env, self, add);
+    }
 }
 
 void ai_list_push(a_henv env, GList* self, Value v) {
-    ai_vec_push(env, &self->_vec, v);
+    ai_list_hint(env, self, 1);
+
+    v_set(env, &self->_ptr[self->_len], v);
+    self->_len += 1;
 
 	ai_gc_barrier_backward_val(env, self, v);
 }
 
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
-    ai_vec_push_all(env, &self->_vec, src, len);
+    ai_list_hint(env, self, len);
 
-	/* We assume the elements in source has white value. */
+    v_cpy_all(env, &self->_ptr[self->_len], src, len);
+    self->_len += len;
+
+    /* We assume the elements in source has white value. */
 	if (g_has_black_color(self)) {
 		join_trace(&G(env)->_tr_regray, self);
 	}
-}
-
-static Value* list_refi(GList *self, a_int key) {
-    a_uint i = obj_idx(key, self->_len, null);
-    return &self->_ptr[i];
 }
 
 Value ai_list_get(a_henv env, GList* self, Value vk) {
@@ -59,8 +90,8 @@ Value ai_list_get(a_henv env, GList* self, Value vk) {
 }
 
 Value ai_list_geti(unused a_henv env, GList* self, a_int k) {
-	Value* ref = list_refi(self, k);
-	return ref ? *ref : v_of_nil();
+    a_u32 i = obj_idx(k, self->_len, v_of_nil());
+	return self->_ptr[i];
 }
 
 void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
@@ -71,11 +102,10 @@ void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
 }
 
 void ai_list_seti(a_henv env, GList* self, a_int key, Value value) {
-	Value* ref = list_refi(self, key);
-	if (unlikely(ref == null)) {
-		ai_err_raisef(env, ALO_EINVAL, "list index out of bound.");
-	}
-	v_set(env, ref, value);
+    a_u32 i = obj_idx(key, self->_len,
+        ai_err_raisef(env, ALO_EINVAL, "list index out of bound.")
+    );
+	v_set(env, &self->_ptr[i], value);
 	ai_gc_barrier_forward_val(env, self, value);
 }
 
@@ -104,19 +134,24 @@ a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v) {
     return ai_list_useti(env, self, v_as_int(vk), v);
 }
 
-static void list_mark(Global* g, GList* self) {
-    ai_vec_mark(g, &self->_vec);
-    ai_gc_trace_work(g, sizeof(GList));
+static void list_mark(Global* gbl, GList* self) {
+    for (a_u32 i = 0; i < self->_len; ++i) {
+        ai_gc_trace_mark_val(gbl, self->_ptr[i]);
+    }
+    ai_gc_trace_work(gbl, sizeof(GcHead) + list_size() + sizeof(Value) * self->_cap);
 }
 
-static void list_drop(Global* g, GList* self) {
-    ai_vec_deinit(g, &self->_vec);
-    ai_mem_dealloc(g, self, sizeof(GList));
+static void list_drop(Global* gbl, GList* self) {
+    if (self->_ptr != null) {
+        ai_mem_vdel(gbl, self->_ptr, self->_cap);
+    }
+    ai_mem_gdel(gbl, self, list_size());
 }
 
 static VTable const list_vtable = {
 	._stencil = V_STENCIL(T_LIST),
-    ._type_ref = g_type_ref(_list),
+    ._tag = ALO_TLIST,
+    ._type_ref = g_type_ref(ALO_TLIST),
 	._slots = {
         [vfp_slot(drop)] = list_drop,
         [vfp_slot(mark)] = list_mark

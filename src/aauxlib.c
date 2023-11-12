@@ -14,7 +14,6 @@
 #include "astr.h"
 #include "atable.h"
 #include "afun.h"
-#include "ameta.h"
 #include "aenv.h"
 #include "agc.h"
 #include "avm.h"
@@ -37,7 +36,7 @@ static void aux_dealloc(unused void* ctx, void* blk, unused a_usize sz) {
 }
 
 a_henv aloL_create(void) {
-	a_alloc af = {
+	alo_Alloc af = {
 		.allocate = aux_alloc,
 		.reallocate = aux_realloc,
 		.deallocate = aux_dealloc
@@ -147,7 +146,7 @@ char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
-a_msg aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
+a_msg aloL_resultcx(a_henv env, a_bool stat, int err, char const* what) {
 	if (stat) {
 		alo_pushbool(env, true);
 		return 1;
@@ -180,7 +179,7 @@ a_msg aloL_resultcx(a_henv env, a_bool stat, errno_t err, char const* what) {
 
 a_msg aloL_resulte(a_henv env, a_i32 stat) {
 	char const* what = "exit";
-	errno_t err = errno;
+	int err = errno;
 	if (stat != 0 && err != 0) {
 		return aloL_resultcx(env, false, err, null);
 	}
@@ -225,7 +224,7 @@ static a_i32 l_read_file(unused a_henv env, void* rctx, void const** pdst, size_
 
 a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options) {
 	a_lstr str = {src, len };
-	alo_pushstr(env, fname, strlen(fname));
+	alo_pushntstr(env, fname);
 	a_msg msg = alo_compile(env, l_read_str, &str, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
 	return msg;
@@ -233,12 +232,12 @@ a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname,
 
 a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
 	a_fno handle = open(fname, O_RDONLY);
-	if (handle < 0) return ALO_EIO;
+	if (handle < 0) return ALO_EOUTER;
 
 	FileReadCtx ctx;
 	ctx._handle = handle;
 
-	alo_pushstr(env, fname, strlen(fname));
+	alo_pushntstr(env, fname);
 	a_msg msg = alo_compile(env, l_read_file, &ctx, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
 
@@ -362,7 +361,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
         }
     }
 
-	GStr* str = ai_str_new(env, buf->_ptr, buf->_len);
+	GStr* str = ai_str_get_or_new(env, buf->_ptr, buf->_len);
 	v_set_obj(env, err, str);
 	return ALO_SOK;
 }
@@ -379,25 +378,24 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 	return ALO_EINVAL;
 }
 
-void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
+void aloL_putalls_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
-	api_check(v_is_meta(v), "meta expected.");
+	api_check(v_is_table(v), "table expected.");
 
-	GMeta* meta = v_as_meta(v);
+	GTable* o = v_as_table(v);
+
+    ai_table_hint(env, o, nb);
 
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
 		assume(b->name != null, "missing field name.");
 
-		GStr* key = ai_str_new(env, b->name, strlen(b->name));
-		Value value = v_of_nil();
+        Value* slot = ai_table_refls(env, o, b->name, strlen(b->name));
 
 		if (b->fptr != null) {
 			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
-			value = v_of_obj(fun);
+            v_set_obj(env, slot, fun);
 		}
-
-        ai_meta_set(env, meta, v_of_obj(key), value);
 	}
 
 	ai_gc_trigger(env);
@@ -409,11 +407,9 @@ typedef struct {
 } LibEntry;
 
 static void l_open_lib(a_henv env, LibEntry const* entry) {
+    alo_pushntstr(env, entry->_name);
 	(*entry->_init)(env);
-	GMeta* meta = v_as_meta(api_elem(env, -1));
-    ai_meta_cache(env, null, meta);
-	ai_vm_set(env, G(env)->_global, v_of_obj(meta->_name), v_of_obj(meta));
-	api_decr_stack(env);
+    alo_set(env, ALO_STACK_INDEX_GLOBAL);
 }
 
 void aloL_openlibs(a_henv env) {

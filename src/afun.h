@@ -9,13 +9,13 @@
 
 intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
-intern GFun *ai_fun_new(a_henv env, GProto *proto);
-intern void ai_proto_drop(Global* g, GProto* self);
+intern GFun* ai_fun_new(a_henv env, GProto *proto);
+intern void ai_proto_drop(Global* gbl, GProto* self);
 intern void ai_cap_mark_tbc(a_henv env, Value* pv);
-intern void ai_cap_really_drop(Global* g, RcCap* self);
+intern void ai_cap_really_drop(Global* gbl, RcCap* self);
 intern void ai_cap_close(a_henv env, RcCap* self);
 intern void ai_cap_close_above(a_henv env, Value* pv);
-intern void ai_cap_clean(Global* g);
+intern void ai_cap_clean(Global* gbl);
 
 #define FUN_FLAG_VARARG u16c(0x0001)
 #define FUN_FLAG_NATIVE u16c(0x0002)

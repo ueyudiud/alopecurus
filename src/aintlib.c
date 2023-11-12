@@ -7,7 +7,7 @@
 
 #include <stdlib.h>
 
-#include "ameta.h"
+#include "atable.h"
 #include "agc.h"
 #include "avm.h"
 #include "aapi.h"

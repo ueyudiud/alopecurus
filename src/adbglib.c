@@ -158,6 +158,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_MUL:
 			case BC_DIV:
 			case BC_MOD:
+            case BC_POW:
 			case BC_SHL:
 			case BC_SHR:
 			case BC_BAND:
@@ -201,6 +202,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_MULI:
 			case BC_DIVI:
 			case BC_MODI:
+            case BC_POWI:
 			case BC_SHLI:
 			case BC_SHRI:
 			case BC_BANDI:
@@ -335,6 +337,6 @@ void aloopen_debug(a_henv env) {
 		{ "dump", debug_dump }
 	};
 
-	alo_newmod(env, ALO_LIB_DEBUG_NAME, ALO_NEWMOD_FLAG_STATIC);
-	aloL_putfields(env, -1, bindings);
+    alo_newtype(env, ALO_LIB_DEBUG_NAME, ALO_NEWMOD_FLAG_STATIC);
+    aloL_putall(env, -1, bindings);
 }

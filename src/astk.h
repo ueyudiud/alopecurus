@@ -10,8 +10,8 @@
 intern a_bool ai_stk_init(a_henv env, Stack* stack);
 intern a_isize ai_stk_grow(a_henv env, Value* top);
 intern void ai_stk_shrink(a_henv env);
-intern a_none ai_stk_overflow(a_henv env, a_isize diff);
-intern void ai_stk_deinit(Global* g, Stack* stack);
+intern a_noret ai_stk_overflow(a_henv env, a_isize diff);
+intern void ai_stk_deinit(Global* gbl, Stack* stack);
 
 #define STACK_GROW_FAILED isizec(1)
 

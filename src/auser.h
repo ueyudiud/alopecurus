@@ -7,6 +7,4 @@
 
 #include "aobj.h"
 
-intern GUser* ai_rec_new(a_henv env, GUserType* type);
-
 #endif /* auser_h_ */

@@ -2,8 +2,8 @@
  *@file astrs.h
  */
 
-#ifndef aname_h_
-#define aname_h_
+#ifndef astrs_h_
+#define astrs_h_
 
 #include "adef.h"
 #include "aop.h"
@@ -47,4 +47,4 @@ enum {
 	STR_POS__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
 };
 
-#endif /* aname_h_ */
+#endif /* astrs_h_ */

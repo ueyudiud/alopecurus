@@ -11,11 +11,11 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "auser.h"
-#include "ameta.h"
+#include "atype.h"
 #include "afmt.h"
 #include "aenv.h"
 #include "agc.h"
+#include "atm.h"
 #include "aerr.h"
 #include "aapi.h"
 
@@ -31,59 +31,51 @@ static void l_call_hook(a_henv env, a_msg msg, a_hfun fun, a_hctx ctx) {
 	(*fun)(env, msg, ctx);
 }
 
-a_u32 ai_vm_lock_hook(Global* g) {
-	atomic_uint_fast8_t mask = g->_hookm;
-	while (((mask & ALO_HMSWAP) != 0) | !atomic_compare_exchange_weak(&g->_hookm, &mask, ALO_HMSWAP));
+a_u32 ai_vm_lock_hook(Global* gbl) {
+	atomic_uint_fast8_t mask = gbl->_hookm;
+	while (((mask & ALO_HMSWAP) != 0) | !atomic_compare_exchange_weak(&gbl->_hookm, &mask, ALO_HMSWAP));
 	return mask;
 }
 
 void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
-	Global* g = env->_g;
+	Global* gbl = G(env);
 
-	a_u32 mask = ai_vm_lock_hook(g);
+	a_u32 mask = ai_vm_lock_hook(gbl);
 
 	/* Load hook closure. */
-	a_hfun fun = g->_hookf;
-	a_hctx ctx = g->_hookc;
+	a_hfun fun = gbl->_hookf;
+	a_hctx ctx = gbl->_hookc;
 
 	/* Reset mask. */
-	g->_hookm = mask;
+	gbl->_hookm = mask;
 
 	if (fun != null && (mask & test)) {
 		l_call_hook(env, msg, fun, ctx);
 	}
 }
 
-static a_none l_div_0_err(a_henv env) {
+static a_noret l_div_0_err(a_henv env) {
 	ai_err_raisef(env, ALO_EINVAL, "attempt to divide by 0.");
 }
 
 a_hash ai_vm_hash(a_henv env, Value v) {
-	if (likely(v_has_trivial_hash(v))) {
-		return v_trivial_hash(v);
-	}
-	else if (likely(v_is_str(v))) {
-		return v_as_str(v)->_hash;
-	}
-	else if (likely(v_is_tuple(v))) {
-		return ai_tuple_hash(env, v_as_tuple(v));
-	}
+    if (likely(v_has_trivial_hash(v))) {
+        return v_trivial_hash(v);
+    }
+    else if (likely(v_is_str(v))) {
+        return v_as_str(v)->_hash;
+    }
+    else if (likely(v_is_tuple(v))) {
+        return ai_tuple_hash(env, v_as_tuple(v));
+    }
     else if (unlikely(v_is_float(v))) {
         return v_float_hash(v);
     }
-    else {
-        Value vf = ai_obj_vlookftm(env, v, TM___hash__);
 
-        if (v_is_nil(vf)) {
-            return v_trivial_hash_unchecked(v);
-        }
+    a_hash hash;
+    if (!ai_tm_hash(env, v, &hash)) return hash;
 
-        Value* base = vm_push_args(env, vf, v);
-
-        Value vr = ai_vm_call_meta(env, base);
-        if (!v_is_int(vr)) ai_err_raisef(env, ALO_EINVAL, "result for '__hash__' should be int.");
-        return cast(a_hash, v_as_int(vr));
-    }
+    return v_trivial_hash_unchecked(v);
 }
 
 a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
@@ -102,41 +94,30 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 		return ai_op_eq_float(v_as_num(v1), v_as_num(v2));
 	}
 
-	Value vf = ai_obj_vlookftm(env, v1, TM___eq__);
+    a_bool z;
+    if (!ai_tm_equals(env, v1, v2, &z)) return z;
 
-	if (v_is_nil(vf)) {
-		return v_trivial_equals_unchecked(v1, v2);
-	}
-
-	Value* base = vm_push_args(env, vf, v1, v2);
-	return v_to_bool(ai_vm_call_meta(env, base));
+    return v_trivial_equals_unchecked(v1, v2);
 }
 
 #define v_of_call() v_of_empty()
 #define v_is_call(v) v_is_empty(v)
 
 static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
-    a_msg msg;
-    Value vv;
-    GType* type = v_typeof(env, v);
+    Value vm;
 
-    msg = ai_meta_ugets(env, g_cast(GMeta, type), k, &vv);
+    catch (ai_tm_look(env, v, k, &vm)) {
+        catch (ai_vm_uget(env, v, v_of_obj(k), &vm)) {
+            ai_err_bad_look(env, v_nameof(env, v), k); //TODO
+        }
 
-    if (msg == ALO_SOK) {
-        v_set(env, &pv[0], vv);
-        v_set(env, &pv[1], v);
-        return;
-    }
-
-    msg = ai_vm_uget(env, v, v_of_obj(k), &vv);
-
-    if (msg == ALO_SOK) {
         v_set(env, &pv[0], v_of_call());
-        v_set(env, &pv[1], vv);
+        v_set(env, &pv[1], vm);
         return;
     }
 
-    ai_err_bad_tm(env, TM___get__); //TODO
+    v_set(env, &pv[0], vm);
+    v_set(env, &pv[1], v);
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
@@ -148,13 +129,18 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
             return ai_list_get(env, v_as_list(v1), v2);
         }
 		case T_TABLE: {
-            return ai_table_get(env, v_as_table(v1), v2);
-        }
-		case T_META: {
-            return ai_meta_get(env, v_as_meta(v1), v2);
+            Value v;
+            catch (ai_table_get(env, v_as_table(v1), v2, &v)) {
+                return v_of_nil();
+            }
+            return v;
         }
 		case T_USER: {
-            return v_vcall(env, v1, get, v2);
+            Value v;
+            if (!ai_tm_get(env, v1, v2, &v)) {
+                return v;
+            }
+            fallthrough;
         }
         default: {
             ai_err_bad_tm(env, TM___get__);
@@ -171,19 +157,10 @@ a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
             return ai_list_uget(env, v_as_list(v1), v2, pv);
         }
         case T_TABLE: {
-            return ai_table_uget(env, v_as_table(v1), v2, pv);
-        }
-        case T_META: {
-            return ai_meta_uget(env, v_as_meta(v1), v2, pv);
-        }
-        case T_USER: {
-            GUser* p = v_as_user(v1);
-            a_vfp(uget) uget = g_vfetch(p, uget);
-            if (uget == null) return ALO_EBADOP;
-            return g_vcallp(env, p, uget, v2, pv);
+            return !ai_table_get(env, v_as_table(v1), v2, pv) ? ALO_SOK : ALO_EEMPTY;
         }
         default: {
-            return ALO_EBADOP;
+            return ALO_EXIMPL;
         }
     }
 }
@@ -194,17 +171,14 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
             return ai_list_set(env, v_as_list(v1), v2, v3);
         }
         case T_TABLE: {
-            return ai_table_set(env, v_as_table(v1), v2, v3);
-        }
-        case T_META: {
-            return ai_meta_set(env, v_as_meta(v1), v2, v3);
+            ai_table_set(env, v_as_table(v1), v2, v3);
+            break;
         }
         case T_USER: {
-            GUser* p = v_as_user(v1);
-            a_vfp(set) set = g_vfetch(p, set);
-            if (set == null) ai_err_bad_tm(env, TM___set__);
-            g_vcallp(env, p, set, v2, v3);
-            return;
+            if (!ai_tm_set(env, v1, v2, v3)) {
+                return;
+            }
+            fallthrough;
         }
         default: {
             ai_err_bad_tm(env, TM___set__);
@@ -212,7 +186,7 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
     }
 }
 
-a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
+a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3) {
     switch (v_get_tag(v1)) {
         case T_LIST: {
             return ai_list_uset(env, v_as_list(v1), v2, v3);
@@ -220,17 +194,8 @@ a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3, a_isize* pctx) {
         case T_TABLE: {
             return ai_table_uset(env, v_as_table(v1), v2, v3);
         }
-        case T_META: {
-            return ai_meta_uset(env, v_as_meta(v1), v2, v3);
-        }
-		case T_USER: {
-			GUser* p = v_as_user(v1);
-			a_vfp(uset) uset = g_vfetch(p, uset);
-			if (uset == null) return ALO_EBADOP;
-			return g_vcallp(env, p, uset, v2, v3);
-		}
         default: {
-            return ALO_EBADOP;
+            return ALO_EXIMPL;
         }
     }
 }
@@ -250,7 +215,11 @@ static Value vm_len(a_henv env, Value v) {
             return v_of_int(v_as_table(v)->_len);
         }
         case T_USER: {
-            return v_of_int(v_vcall(env, v, len));
+            a_uint i;
+            if (!ai_tm_len(env, v, &i)) {
+                return v_of_int(i);
+            }
+            fallthrough;
         }
         default: {
             ai_err_bad_tm(env, TM___len__);
@@ -275,11 +244,6 @@ static void vm_iter(a_henv env, Value* restrict vs, Value v) {
             v_set_int(&vs[2], 0);
             break;
         }
-        case T_META: {
-            v_set(env, &vs[0], v);
-            v_set_int(&vs[2], 0);
-            break;
-        }
         default: {
             //TODO
             ai_err_bad_tm(env, TM___iter__);
@@ -295,56 +259,40 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             GTuple* p = v_as_tuple(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (i >= p->_len)
-                return new(ValueSlice) { null, 0 };
+                return (ValueSlice) { null, 0 };
             
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, p->_ptr[i]);
-            return new(ValueSlice) { vd, 1 };
+            return (ValueSlice) { vd, 1 };
         }
         case T_LIST: {
             GList* p = v_as_list(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
             if (i >= p->_len)
-                return new(ValueSlice) { null, 0 };
+                return (ValueSlice) { null, 0 };
             
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, p->_ptr[i]);
-            return new(ValueSlice) { vd, 1 };
+            return (ValueSlice) { vd, 1 };
         }
         case T_TABLE: {
             GTable* p = v_as_table(vc);
             a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (p->_len == 0 || unwrap_unsafe(p->_ptr->_link._prev) == cast(a_i32, i))
-                return new(ValueSlice) { };
+            if (i == 0 && p->_len == 0)
+                return (ValueSlice) { };
 
-            i = unwrap(p->_ptr[i]._link._next);
+            i = p->_ptr[i]._lnext;
+            if (i > p->_hmask)
+                return (ValueSlice) { };
+
             TNode* n = &p->_ptr[i];
 
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, n->_key, n->_value);
-            return new(ValueSlice) { vd, 2 };
-        }
-        case T_META: {
-            GMeta* p = v_as_meta(vc);
-            a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (p->_fields._len == 0)
-                return new(ValueSlice) { };
-
-            DNode* n;
-            while (i <= p->_fields._hmask && (n = &p->_fields._ptr[i])->_key == null) {
-                i += 1;
-            }
-
-            if (i > p->_fields._hmask)
-                return new(ValueSlice) { };
-
-            v_set_int(pi, cast(a_i32, i + 1));
-            env->_stack._top = vs;
-            Value* vd = vm_push_args(env, v_of_obj(n->_key), n->_value);
-            return new(ValueSlice) { vd, 2 };
+            return (ValueSlice) { vd, 2 };
         }
         default: {
             //TODO
@@ -354,36 +302,33 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
 }
 
 static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
-	Value vf = ai_obj_vlooktm(env, v1, tm);
+    Value vr;
 
-	if (v_is_nil(vf)) {
-		ai_err_bad_tm(env, tm);
-	}
+    if (ai_tm_unary(env, tm, v1, &vr)) {
+        ai_err_bad_tm(env, tm);
+    }
 
-	Value* base = vm_push_args(env, vf, v1);
-	return ai_vm_call_meta(env, base);
+    return vr;
 }
 
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlooktm(env, v1, tm);
+	Value vr;
 
-	if (v_is_nil(vf)) {
+	if (ai_tm_binary(env, tm, v1, v2, &vr)) {
 		ai_err_bad_tm(env, tm);
 	}
 
-	Value* base = vm_push_args(env, vf, v1, v2);
-	return ai_vm_call_meta(env, base);
+    return vr;
 }
 
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vf = ai_obj_vlooktm(env, v1, tm);
+    a_bool r;
 
-	if (v_is_nil(vf)) {
-		ai_err_bad_tm(env, tm);
-	}
+    catch (ai_tm_relation(env, tm, v1, v2, &r)) {
+        ai_err_bad_tm(env, tm);
+    }
 
-	Value* base = vm_push_args(env, vf, v1, v2);
-	return v_to_bool(ai_vm_call_meta(env, base));
+    return r;
 }
 
 static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
@@ -418,29 +363,18 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 					at_fmt_putp(env, buf, v_as_ptr(v));
 					break;
 				}
-				case T_STR: {
-					GStr* str = v_as_str(v);
-					at_buf_putls(env, buf, str->_ptr, str->_len);
-					break;
-				}
+				case T_STR: unreachable();
 				case T_TUPLE:
 				case T_LIST:
 				case T_TABLE:
 				case T_FUNC:
-				case T_USER:
-				case T_META: {
-					Value vf = ai_obj_vlooktm(env, v, TM___str__);
-					if (v_is_nil(vf)) {
-						ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
-					}
-					Value* args = vm_push_args(env, vf, v);
+				case T_USER: {
+                    GStr* str;
 					StkPtr bptr = val2stk(env, base);
-					Value vs = ai_vm_call_meta(env, args);
+                    if (!ai_tm_str(env, v, &str)) {
+                        ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+                    }
 					base = stk2val(env, bptr);
-					if (!v_is_str(vs)) {
-						ai_err_raisef(env, ALO_EINVAL, "result for '__str__' should be string.");
-					}
-					GStr* str = v_as_str(v);
 					at_buf_putls(env, buf, str->_ptr, str->_len);
 					break;
 				}
@@ -490,8 +424,7 @@ static a_u32 vm_fetch_ex(a_insn const** pc) {
 static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_u32 num_ret, a_u32 flags) {
 	GFun* fun;
 	Value const* K;
-    Frame frame_ = {};
-    Frame* const frame = &frame_;
+    Frame frame[1] = {};
 
 #define pc (frame->_pc)
 #if ALO_STACK_RELOC
@@ -504,7 +437,7 @@ static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_u32 num_ret, a_u32 fl
 # define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); assume(_d == 0, "stack moved."); reload_stack(); })
 # define reload_stack() ((void) 0)
 #endif
-#define check_gc() ai_gc_trigger_ext(env, (void) 0, reload_stack())
+#define check_gc() ai_gc_trigger_(env, (void) 0, reload_stack())
 #define adjust_top() quiet(env->_stack._top = &R[fun->_proto->_nstack])
 
     frame->_prev = env->_frame;
@@ -528,8 +461,7 @@ tail_call:
             vf = R[0];
         }
         while (unlikely(!v_is_func(vf))) {
-            vf = ai_obj_vlooktm(env, vf, TM___call__);
-            if (v_is_nil(vf)) {
+            catch (ai_tm_precall(env, vf, &vf)) {
                 ai_err_bad_tm(env, TM___call__);
             }
 
@@ -763,7 +695,9 @@ tail_call:
 
                 GTable* val = ai_table_new(env);
                 v_set_obj(env, &R[a], val);
-                ai_table_hint(env, val, b);
+                if (b > 0) {
+                    ai_table_grow(env, val, b);
+                }
 
                 check_gc();
                 break;
@@ -1033,13 +967,13 @@ tail_call:
                 if (v_is_tuple(vb)) {
                     GTuple* val = v_as_tuple(vb);
                     check_stack(&R[a] + val->_len);
-					v_mov_all(env, &R[a], val->_ptr, val->_len);
+                    v_cpy_all(env, &R[a], val->_ptr, val->_len);
                     env->_stack._top = &R[a + val->_len];
                 }
                 else if (v_is_list(vb)) {
                     GList* val = v_as_list(vb);
                     check_stack(&R[a] + val->_len);
-					v_mov_all(env, &R[a], val->_ptr, val->_len);
+					v_cpy_all(env, &R[a], val->_ptr, val->_len);
                     env->_stack._top = &R[a + val->_len];
                 }
                 else {
@@ -1090,6 +1024,25 @@ tail_call:
                     v_set_int(&R[a], val);
                 }
                 else if (v_is_num(vb) && v_is_num(vc)) {
+                    a_float val = ai_op_bin_float(v_as_num(vb), v_as_num(vc), op);
+                    v_set_float(&R[a], val);
+                }
+                else {
+                    Value vt = vm_meta_bin(env, vb, vc, ai_op_bin2tm(op));
+                    reload_stack();
+                    v_set(env, &R[a], vt);
+                }
+                break;
+            }
+            case BC_POW: {
+                loadB();
+                loadC();
+
+                a_u32 op = bc - BC_ADD + OP_ADD;
+                Value vb = R[b];
+                Value vc = R[c];
+
+                if (v_is_num(vb) && v_is_num(vc)) {
                     a_float val = ai_op_bin_float(v_as_num(vb), v_as_num(vc), op);
                     v_set_float(&R[a], val);
                 }
@@ -1164,6 +1117,25 @@ tail_call:
                     v_set_int(&R[a], val);
                 }
                 else if (v_is_float(vb)) {
+                    a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
+                    v_set_float(&R[a], val);
+                }
+                else {
+                    Value vt = vm_meta_bin(env, vb, v_of_int(ic), ai_op_bin2tm(op));
+                    reload_stack();
+                    v_set(env, &R[a], vt);
+                }
+                break;
+            }
+            case BC_POWI: {
+                loadB();
+                loadsC();
+
+                a_u32 op = bc - BC_ADDI + OP_ADD;
+                Value vb = R[b];
+                a_int ic = cast(a_int, c);
+
+                if (v_is_float(vb)) {
                     a_float val = ai_op_bin_float(v_as_float(vb), ic, op);
                     v_set_float(&R[a], val);
                 }
