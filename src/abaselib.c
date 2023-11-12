@@ -214,7 +214,7 @@ void aloopen_base(a_henv env) {
     aloL_putalls(env, -1, bindings);
 
     alo_pushint(env, ALO_VERSION_NUMBER);
-    aloL_puts(env, -1, "_VER");
+    aloL_puts(env, -2, "_VER");
 
 	ai_gc_trigger(env);
 }
