@@ -162,11 +162,14 @@ ALO_EXPORT void (alo_pushptype)(a_henv env, a_msg tag);
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_usize n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_isize id);
+ALO_EXPORT a_isize (alo_rotate)(a_henv env, a_isize id, a_usize n);
 ALO_EXPORT void (alo_newtuple)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newlist)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newtable)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_usize n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
+
+#define alo_insert(env,id) alo_rotate(env, id, 1)
 
 ALO_EXPORT void (alo_set)(a_henv env, a_isize id);
 ALO_EXPORT a_msg (alo_rawlen)(a_henv env, a_isize id);

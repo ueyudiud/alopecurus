@@ -157,9 +157,13 @@ GStr* ai_str_get_or_null_with_hash(a_henv env, void const* src, a_usize len, a_h
     return str_get_or_null_with_hash(env, src, len, hash);
 }
 
+GStr* ai_str_get_or_new_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
+    return ai_str_get_or_null_with_hash(env, src, len, hash) ?: ai_str_new_with_hash(env, src, len, hash);
+}
+
 GStr* ai_str_get_or_new(a_henv env, void const* src, a_usize len) {
     a_hash hash = ai_str_hashof(env, src, len);
-    return ai_str_get_or_null_with_hash(env, src, len, hash) ?: ai_str_new_with_hash(env, src, len, hash);
+    return ai_str_get_or_new_with_hash(env, src, len, hash);
 }
 
 #define MAX_STACK_BUFFER_SIZE 255
@@ -285,14 +289,14 @@ void ai_str_boost2(a_henv env) {
     }
 
     run {
-        gbl->_nomem_error = ai_str_from_ntstr(env, "out of memory.");
-        ai_gc_fix_object(env, gbl->_nomem_error);
-    }
-
-    run {
         for (a_u32 i = 0; i < STR__COUNT; ++i) {
             cache_emplace_in_place(cache, gbl->_names[i]);
         }
+    }
+
+    run {
+        gbl->_nomem_error = ai_str_from_ntstr(env, "out of memory.");
+        ai_gc_fix_object(env, gbl->_nomem_error);
     }
 }
 

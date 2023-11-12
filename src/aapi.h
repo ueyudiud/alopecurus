@@ -18,7 +18,9 @@
 intern Value const* api_roslot(a_henv env, a_isize id);
 intern Value const* api_rdslot(a_henv env, a_isize id);
 intern Value* api_wrslot(a_henv env, a_isize id);
+intern Value* api_stack(a_henv env, a_isize id);
 intern Value api_elem(a_henv env, a_isize id);
+intern a_msg api_tagof(a_henv env, Value v);
 
 intern char const ai_api_tagname[][8];
 

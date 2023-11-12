@@ -312,6 +312,11 @@ static a_bool table_find(a_henv env, GTable* self, Value vk, a_hash* phash, a_i3
     }
 }
 
+static a_bool table_find_lstr(a_henv env, GTable* self, char const* ptr, a_usize len, a_hash hash, a_i32* pindex) {
+    GStr* k = ai_str_get_or_null_with_hash(env, ptr, len, hash);
+    return k == null || table_find_with_trivial_equality(self, v_of_obj(k), hash, pindex);
+}
+
 a_bool ai_table_get(a_henv env, GTable* self, Value vk, Value* pv) {
     a_i32 index;
     a_hash hash;
@@ -331,6 +336,17 @@ a_bool ai_table_geti(a_henv env, GTable* self, a_int k, Value* pv) {
 
     TNode* node = table_node(self, index);
     v_cpy(env, pv, &node->_value);
+    return false;
+}
+
+a_bool ai_table_getls(a_henv env, GTable* self, char const* ptr, a_usize len, Value* pv) {
+    a_i32 index;
+    a_hash hash = ai_str_hashof(env, ptr, len);
+
+    try (table_find_lstr(env, self, ptr, len, hash, &index));
+
+    TNode* node = table_node(self, index);
+    v_set(env, pv, node->_value);
     return false;
 }
 
@@ -368,25 +384,21 @@ a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
     }
 }
 
-static a_bool table_find_lstr(a_henv env, GTable* self, char const* ptr, a_usize len, a_hash hash, a_i32* pindex) {
-    GStr* o = ai_str_get_or_null_with_hash(env, ptr, len, hash);
-    return o == null || table_find_with_trivial_equality(self, v_of_obj(o), hash, pindex);
-}
-
 Value* ai_table_refls(a_henv env, GTable* self, char const* ptr, a_usize len) {
     a_i32 index;
     a_hash hash = ai_str_hashof(env, ptr, len);
 
     catch (table_find_lstr(env, self, ptr, len, hash, &index)) {
         ai_table_hint(env, self, 1);
-        GStr* o = ai_str_new_with_hash(env, ptr, len, hash);
-        index = table_emplace_backward(env, self, v_of_obj(o), hash, v_of_nil());
+
+        GStr* key = ai_str_get_or_new_with_hash(env, ptr, len, hash);
+        index = table_emplace_backward(env, self, v_of_obj(key), hash, v_of_nil());
 
         self->_len += 1;
         self->_vid = 0;
         self->_tmz = 0;
 
-        ai_gc_barrier_backward(env, self, o);
+        ai_gc_barrier_backward(env, self, key);
 
         break;
     }

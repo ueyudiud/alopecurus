@@ -497,6 +497,9 @@ tail_call:
 
 	if (fun->_flags & FUN_FLAG_NATIVE) {
 		check_stack(R + ALOI_INIT_CFRAME_STACKSIZE);
+#ifdef ALOI_CHECK_API
+        frame->_stack_limit = val2stk(env, R + ALOI_INIT_CFRAME_STACKSIZE);
+#endif
 
 		a_msg n = (*fun->_fptr)(env);
 		if (unlikely(n < 0))

@@ -34,7 +34,7 @@ static a_msg int_new(a_henv env) {
             break;
         }
         case T_INT: {
-            alo_settop(env, 2);
+            alo_settop(env, 1);
             break;
         }
         case T_STR: {
@@ -46,11 +46,15 @@ static a_msg int_new(a_henv env) {
             if (isspace(p[0]))
                 goto einval;
 
+            int old_err = errno;
             errno = 0;
             a_int i = strtol(p, &q, radix);
+            int the_err = errno;
+            errno = old_err;
+
             if (q != p + str->_len)
                 goto einval;
-            if (errno == ERANGE)
+            if (the_err == ERANGE)
                 goto erange;
             alo_pushint(env, i);
             break;
@@ -78,6 +82,7 @@ void aloopen_int(a_henv env) {
 	};
 
     alo_pushptype(env, ALO_TINT);
+    aloL_putalls(env, -1, bindings);
 
     alo_pushint(env, INT32_MAX);
     aloL_puts(env, -2, "MAX");

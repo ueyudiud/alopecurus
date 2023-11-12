@@ -60,6 +60,8 @@ typedef struct Global Global;
 #define T__MAX_NHH T_USER
 #define T__MAX_FAST u32c(15)
 
+#define T_OBJ T__MIN_OBJ ... T__MAX_OBJ
+
 #define T_FLOAT u32c(16)
 
 #define g_cast(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)

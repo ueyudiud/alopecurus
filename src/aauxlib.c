@@ -378,6 +378,35 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 	return ALO_EINVAL;
 }
 
+a_msg aloL_gets(a_henv env, a_isize id, char const* s) {
+    Value v = api_elem(env, id);
+    api_check(v_is_table(v), "table expected.");
+
+    GTable* o = v_as_table(v);
+
+    catch (ai_table_getls(env, o, s, strlen(s), &v)) {
+        return ALO_EEMPTY;
+    }
+
+    v_set(env, api_incr_stack(env), v);
+
+    return api_tagof(env, v);
+}
+
+a_msg aloL_gettm(a_henv env, a_isize id, char const* s) {
+    Value v = api_elem(env, id);
+
+    GType* o = v_typeof(env, v);
+
+    catch (ai_table_getls(env, type2mt(o), s, strlen(s), &v)) {
+        return ALO_EEMPTY;
+    }
+
+    v_set(env, api_incr_stack(env), v);
+
+    return api_tagof(env, v);
+}
+
 void aloL_puts(a_henv env, a_isize id, char const* s) {
     Value v = api_elem(env, id);
     api_check(v_is_table(v), "table expected.");

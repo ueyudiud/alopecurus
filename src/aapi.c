@@ -20,6 +20,24 @@
 
 #include "aapi.h"
 
+a_msg api_tagof(unused a_henv env, Value v) {
+    switch (v_get_tag(v)) {
+        case T_NIL:
+            return ALO_TNIL;
+        case T_FALSE:
+        case T_TRUE:
+            return ALO_TBOOL;
+        case T_INT:
+            return ALO_TINT;
+        case T_PTR:
+            return ALO_TPTR;
+        case T_OBJ:
+            return v_as_obj(v)->_vptr->_tag;
+        default:
+            return ALO_TFLOAT;
+    }
+}
+
 /**
  ** Initialize library context, the function should be called before use library.
  ** This function returns initialization result message.
@@ -194,13 +212,8 @@ Value api_elem(a_henv env, a_isize id) {
 
 Value* api_wrslot(a_henv env, a_isize id) {
 	Value* v;
-	if (id >= 0) {
-		v = ai_stk_bot(env) + id;
-		api_check(v < env->_stack._top);
-	}
-	else if (id >= MIN_NEG_STACK_INDEX) {
-		v = env->_stack._top + id;
-		api_check(v >= ai_stk_bot(env));
+	if (id >= MIN_NEG_STACK_INDEX) {
+		v = api_stack(env, id);
 	}
 	else if (id == ALO_STACK_INDEX_ERROR) {
 		v = &env->_error;
@@ -213,27 +226,22 @@ Value* api_wrslot(a_henv env, a_isize id) {
 	}
 	else {
 		v = null;
-		api_panic("bad stack index.");
+		api_panic("bad slot index.");
 	}
 	return v;
 }
 
-static a_msg tag_of(unused a_henv env, Value v) {
-	switch (v_get_tag(v)) {
-		case T_NIL: 
-			return ALO_TNIL;
-		case T_FALSE:
-		case T_TRUE: 
-			return ALO_TBOOL;
-		case T_INT:
-			return ALO_TINT;
-		case T_PTR:
-			return ALO_TPTR;
-		case T__MIN_OBJ ... T__MAX_OBJ:
-			return v_as_obj(v)->_vptr->_tag;
-		default:
-			return ALO_TFLOAT;
-	}
+Value* api_stack(a_henv env, a_isize id) {
+    Value* v;
+    if (id >= 0) {
+        v = ai_stk_bot(env) + id;
+        api_check(v < env->_stack._top, "stack index out of bound.");
+    }
+    else if (id >= MIN_NEG_STACK_INDEX) {
+        v = env->_stack._top + id;
+        api_check(v >= ai_stk_bot(env), "stack index out of bound.");
+    }
+    return v;
 }
 
 void alo_push(a_henv env, a_isize id) {
@@ -300,7 +308,7 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 		switch (*(sp++)) {
 			case '\0': { /* Terminate character. */
 				v_set(env, api_incr_stack(env), v);
-				return tag_of(env, v);
+				return api_tagof(env, v);
 			}
 			case 'i': { /* Integer index. */
 				a_int k = va_arg(varg, a_int);
@@ -417,6 +425,34 @@ void alo_pop(a_henv env, a_isize id) {
 	v_set(env, d, s);
 }
 
+static void v_swap(a_henv env, Value* v1, Value* v2) {
+    Value v;
+    v_cpy(env, &v, v1);
+    v_cpy(env, v1, v2);
+    v_cpy(env, v2, &v);
+}
+
+static void v_reverse(a_henv env, Value* vl, Value* vh) {
+    vh -= 1;
+    while (vl < vh) {
+        v_swap(env, vl, vh);
+        vl += 1;
+        vh -= 1;
+    }
+}
+
+a_isize alo_rotate(a_henv env, a_isize id, a_usize n) {
+    Value* p = api_stack(env, id);
+    Value* r = env->_stack._top;
+    api_check(n <= cast(a_usize, r - p), "rotate range out of bound");
+
+    Value* q = r - n;
+    v_reverse(env, p, q);
+    v_reverse(env, q, r);
+    v_reverse(env, p, r);
+    return r - p;
+}
+
 void alo_newtuple(a_henv env, a_usize n) {
 	api_check_elem(env, n);
 	GTuple* val = ai_tuple_new(env, env->_stack._top - n, n);
@@ -524,7 +560,7 @@ a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
 	}
 
 	v_set(env, api_incr_stack(env), v);
-	return tag_of(env, v);
+	return api_tagof(env, v);
 }
 
 a_msg alo_rawget(a_henv env, a_isize id) {
@@ -536,7 +572,7 @@ a_msg alo_rawget(a_henv env, a_isize id) {
 	try (ai_vm_uget(env, v, vk, &v));
 
 	v_set(env, api_incr_stack(env), v);
-	return tag_of(env, v);
+	return api_tagof(env, v);
 }
 
 a_msg alo_rawset(a_henv env, a_isize id) {
@@ -637,7 +673,7 @@ a_bool alo_fattrz(a_henv env, a_enum n) {
 
 a_msg alo_tagof(a_henv env, a_isize id) {
 	Value const* slot = api_roslot(env, id);
-	return slot != null ? tag_of(env, *slot) : ALO_EEMPTY;
+	return slot != null ? api_tagof(env, *slot) : ALO_EEMPTY;
 }
 
 a_bool alo_tobool(a_henv env, a_isize id) {
