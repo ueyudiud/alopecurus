@@ -44,5 +44,5 @@ void aloopen_type(a_henv env) {
     };
 
     alo_pushptype(env, ALO_TTYPE);
-    aloL_putall(env, -1, bindings);
+    aloL_putalls(env, -1, bindings);
 }

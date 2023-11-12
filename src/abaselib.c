@@ -211,11 +211,10 @@ void aloopen_base(a_henv env) {
 	};
 
     alo_push(env, ALO_STACK_INDEX_GLOBAL);
-    aloL_putall(env, -1, bindings);
+    aloL_putalls(env, -1, bindings);
 
-	GTable* o = v_as_table(api_elem(env, -1));
-
-    ai_table_set(env, o, v_of_obj(ai_str_from_ntstr(env, "_VER")), v_of_int(ALO_VERSION_NUMBER));
+    alo_pushint(env, ALO_VERSION_NUMBER);
+    aloL_puts(env, -2, "_VER");
 
 	ai_gc_trigger(env);
 }

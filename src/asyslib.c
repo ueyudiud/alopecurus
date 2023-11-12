@@ -73,5 +73,5 @@ void aloopen_sys(a_henv env) {
 	};
 
     alo_newtype(env, ALO_LIB_SYS_NAME, ALO_NEWMOD_FLAG_STATIC);
-    aloL_putall(env, -1, bindings);
+    aloL_putalls(env, -1, bindings);
 }
