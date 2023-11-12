@@ -77,13 +77,13 @@ void aloopen_int(a_henv env) {
         { "MIN", null },
 	};
 
-    GMeta* type = g_cast(GMeta, g_type(env, _int));
+    alo_pushptype(env, ALO_TINT);
 
-    v_set_obj(env, api_incr_stack(env), type);
-	aloL_putfields(env, -1, bindings);
+    alo_pushint(env, INT32_MAX);
+    aloL_puts(env, -2, "MAX");
 
-    ai_meta_usets(env, type, ai_str_newl(env, "MAX"), v_of_int(INT32_MAX));
-    ai_meta_usets(env, type, ai_str_newl(env, "MIN"), v_of_int(INT32_MIN));
+    alo_pushint(env, INT32_MIN);
+    aloL_puts(env, -2, "MIN");
 
     ai_gc_trigger(env);
 }
