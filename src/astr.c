@@ -228,7 +228,7 @@ static void cache_remove(StrCache* cache, GStr* str) {
             *slot = str->_snext;
             break;
         }
-        slot = &str->_snext;
+        slot = &str1->_snext;
     }
     cache->_len -= 1;
 }
