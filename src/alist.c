@@ -150,7 +150,8 @@ static void list_drop(Global* gbl, GList* self) {
 
 static VTable const list_vtable = {
 	._stencil = V_STENCIL(T_LIST),
-    ._type_ref = g_type_ref(_list),
+    ._tag = ALO_TLIST,
+    ._type_ref = g_type_ref(ALO_TLIST),
 	._slots = {
         [vfp_slot(drop)] = list_drop,
         [vfp_slot(mark)] = list_mark

@@ -40,7 +40,9 @@ always_inline void api_check_elem(a_henv env, a_usize size) {
 
 always_inline Value* api_incr_stack(a_henv env) {
     api_check_slot(env, 1);
-    return env->_stack._top++;
+    Value* p = env->_stack._top++;
+    v_check_alive(env, *p); /* Aliveness check. */
+    return p;
 }
 
 always_inline Value api_pre_decr_stack(a_henv env) {

@@ -226,7 +226,7 @@ GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
 	a_henv env = lex->_env;
 	StrSet* set = &lex->_strs;
 
-    GStr* str = ai_str_new(env, src, len);
+    GStr* str = ai_str_get_or_new(env, src, len);
 
     if (strs_put(set, str)) {
         set->_len += 1;

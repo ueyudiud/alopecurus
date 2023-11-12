@@ -365,7 +365,8 @@ static void proto_mark(Global* gbl, GProto* self) {
 
 static VTable const afun_vtable = {
 	._stencil = V_STENCIL(T_FUNC),
-    ._type_ref = g_type_ref(_func),
+    ._tag = ALO_TFUNC,
+    ._type_ref = g_type_ref(ALO_TFUNC),
 	._slots = {
         [vfp_slot(drop)] = afun_drop,
         [vfp_slot(mark)] = afun_mark
@@ -374,7 +375,8 @@ static VTable const afun_vtable = {
 
 static VTable const cfun_vtable = {
 	._stencil = V_STENCIL(T_FUNC),
-    ._type_ref = g_type_ref(_func),
+    ._tag = ALO_TFUNC,
+    ._type_ref = g_type_ref(ALO_TFUNC),
 	._slots = {
         [vfp_slot(drop)] = cfun_drop,
         [vfp_slot(mark)] = cfun_mark

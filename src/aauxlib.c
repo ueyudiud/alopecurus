@@ -14,7 +14,6 @@
 #include "astr.h"
 #include "atable.h"
 #include "afun.h"
-#include "atype.h"
 #include "aenv.h"
 #include "agc.h"
 #include "avm.h"
@@ -362,7 +361,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
         }
     }
 
-	GStr* str = ai_str_new(env, buf->_ptr, buf->_len);
+	GStr* str = ai_str_get_or_new(env, buf->_ptr, buf->_len);
 	v_set_obj(env, err, str);
 	return ALO_SOK;
 }
@@ -379,33 +378,25 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 	return ALO_EINVAL;
 }
 
-void aloL_putfields_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
+void aloL_putalls_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
-	api_check(v_is_type(v), "type expected.");
+	api_check(v_is_table(v), "table expected.");
 
-	GType* type = v_as_type(v);
+	GTable* o = v_as_table(v);
 
-    /* Reserve for GC. */
-    Value* p = api_incr_stack(env);
+    ai_table_hint(env, o, nb);
 
 	for (a_usize i = 0; i < nb; ++i) {
 		aloL_Entry const* b = &bs[i];
 		assume(b->name != null, "missing field name.");
 
-		GStr* key = ai_str_newc(env, b->name);
-		Value value = v_of_nil();
-
-        v_set_obj(env, p, key);
+        Value* slot = ai_table_refls(env, o, b->name, strlen(b->name));
 
 		if (b->fptr != null) {
 			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
-			value = v_of_obj(fun);
+            v_set_obj(env, slot, fun);
 		}
-
-        ai_type_set(env, type, v_of_obj(key), value);
 	}
-
-    api_decr_stack(env);
 
 	ai_gc_trigger(env);
 }
@@ -416,11 +407,9 @@ typedef struct {
 } LibEntry;
 
 static void l_open_lib(a_henv env, LibEntry const* entry) {
+    alo_pushntstr(env, entry->_name);
 	(*entry->_init)(env);
-	GType* type = v_as_type(api_elem(env, -1));
-    ai_type_cache(env, null, type);
-	ai_vm_set(env, G(env)->_global, v_of_obj(type->_sig), v_of_obj(type));
-	api_decr_stack(env);
+    alo_set(env, ALO_STACK_INDEX_GLOBAL);
 }
 
 void aloL_openlibs(a_henv env) {

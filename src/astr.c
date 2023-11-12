@@ -116,20 +116,15 @@ static GStr* str_get_or_null_with_hash(a_henv env, void const* src, a_usize len,
 	return null;
 }
 
-static GStr* str_get_or_new_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
-	GStr* self = str_get_or_null_with_hash(env, src, len, hash);
+GStr* ai_str_new_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
+    /* String not found, create new string. */
+    StrCache* cache = &G(env)->_str_cache;
+    cache_hint(env, cache);
 
-	if (self != null)
-		return self;
-
-	/* String not found, create new string. */
-	StrCache* cache = &G(env)->_str_cache;
-	cache_hint(env, cache);
-	
-	self = str_alloc(env, len);
+    GStr* self = str_alloc(env, len);
     str_init(self, src, len, hash);
 
-	cache_emplace_in_place(cache, self);
+    cache_emplace_in_place(cache, self);
     ai_gc_register_object(env, self);
     return self;
 }
@@ -158,13 +153,13 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	return self;
 }
 
-static GStr* str_get_or_new(a_henv env, void const* src, a_usize len) {
-	a_hash hash = ai_str_hashof(env, src, len);
-	return str_get_or_new_with_hash(env, src, len, hash);
+GStr* ai_str_get_or_null_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
+    return str_get_or_null_with_hash(env, src, len, hash);
 }
 
-GStr* ai_str_new(a_henv env, void const* src, a_usize len) {
-	return str_get_or_new(env, src, len);
+GStr* ai_str_get_or_new(a_henv env, void const* src, a_usize len) {
+    a_hash hash = ai_str_hashof(env, src, len);
+    return ai_str_get_or_null_with_hash(env, src, len, hash) ?: ai_str_new_with_hash(env, src, len, hash);
 }
 
 #define MAX_STACK_BUFFER_SIZE 255
@@ -173,7 +168,7 @@ a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) 
 	char buf[MAX_STACK_BUFFER_SIZE + 1];
 	if (likely(len < MAX_STACK_BUFFER_SIZE)) {
 		try((*fun)(ctx, buf, len));
-		*pstr = ai_str_new(env, buf, len);
+		*pstr = ai_str_get_or_new(env, buf, len);
 		return ALO_SOK;
 	}
 	else {
@@ -202,7 +197,7 @@ GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
 	va_end(varg2);
 
     if (len <= MAX_STACK_BUFFER_SIZE) {
-        return str_get_or_new(env, buf, len);
+        return ai_str_get_or_new(env, buf, len);
     }
     else {
         GStr* buff = str_alloc(env, len);
@@ -243,51 +238,62 @@ static void str_drop(Global* gbl, GStr* self) {
     ai_mem_gdel(gbl, self, str_size(self->_len));
 }
 
-void ai_str_boost(a_henv env, void* block) {
+void ai_str_boost1(a_henv env, void* block) {
     Global* gbl = G(env);
-    
-    StrCache* cache = &gbl->_str_cache;
 
-	run {
-		cache->_table = ai_mem_vnew(env, GStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
-		cache->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
-		memclr(cache->_table, sizeof(GStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
-	}
+    run {
+        /* Initialize builtin string first, but not put them into the cache. */
 
-	run {
-		gbl->_nomem_error = ai_str_newl(env, "out of memory.");
-		ai_gc_fix_object(env, gbl->_nomem_error);
-	}
-
-	run {
-		static a_u8 const l_str_len[STR__COUNT] = {
-			0, /* Intern empty string. */
+        static a_u8 const l_str_len[STR__COUNT] = {
+            0, /* Intern empty string. */
 #define STRDEF(n) sizeof(#n)-1,
 # include "asym/kw.h"
 # include "asym/tm.h"
 # include "asym/pt.h"
 #undef STRDEF
-		};
+        };
 
-		char const* src = ai_str_interns;
-		for (a_u32 i = 0; i < STR__COUNT; ++i) {
-			a_u32 len = l_str_len[i];
+        char const* src = ai_str_interns;
 
-			GStr* self = g_cast(GStr, g_biased(block));
-			a_hash hash = ai_str_hashof(env, src, len);
+        for (a_u32 i = 0; i < STR__COUNT; ++i) {
+            a_u32 len = l_str_len[i];
 
-			g_set_gray(self);
+            GStr* self = g_cast(GStr, g_biased(block));
+            a_hash hash = ai_str_hashof(env, src, len);
+
+            g_set_gray(self);
 
             str_init(self, src, len, hash);
-			str_id_set(self, i);
+            str_id_set(self, i);
 
-			cache_emplace_in_place(cache, self);
+            gbl->_names[i] = self;
+            block += sizeof(GcHead) + str_size(len);
+            src += len + 1;
+        }
+    }
+}
 
-			gbl->_names[i] = self;
-			block += sizeof(GcHead) + str_size(len);
-			src += len + 1;
-		}
-	}
+void ai_str_boost2(a_henv env) {
+    Global* gbl = G(env);
+
+    StrCache* cache = &gbl->_str_cache;
+
+    run {
+        cache->_table = ai_mem_vnew(env, GStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+        cache->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
+        memclr(cache->_table, sizeof(GStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+    }
+
+    run {
+        gbl->_nomem_error = ai_str_from_ntstr(env, "out of memory.");
+        ai_gc_fix_object(env, gbl->_nomem_error);
+    }
+
+    run {
+        for (a_u32 i = 0; i < STR__COUNT; ++i) {
+            cache_emplace_in_place(cache, gbl->_names[i]);
+        }
+    }
 }
 
 void ai_str_clean(Global* gbl) {
@@ -298,8 +304,9 @@ void ai_str_clean(Global* gbl) {
 
 static VTable const str_vtable = {
     ._stencil = V_STENCIL(T_STR),
-    ._flags = VTABLE_FLAG_NONE,
-    ._type_ref = g_type_ref(_str),
+    ._tag = ALO_TTABLE,
+    ._flags = VTABLE_FLAG_GREEDY_MARK,
+    ._type_ref = g_type_ref(ALO_TSTR),
     ._slots = {
         [vfp_slot(drop)] = str_drop,
         [vfp_slot(mark)] = str_mark

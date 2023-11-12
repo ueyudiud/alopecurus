@@ -218,7 +218,7 @@ Value* api_wrslot(a_henv env, a_isize id) {
 	return v;
 }
 
-static a_msg tag_of(a_henv env, Value v) {
+static a_msg tag_of(unused a_henv env, Value v) {
 	switch (v_get_tag(v)) {
 		case T_NIL: 
 			return ALO_TNIL;
@@ -230,7 +230,7 @@ static a_msg tag_of(a_henv env, Value v) {
 		case T_PTR:
 			return ALO_TPTR;
 		case T__MIN_OBJ ... T__MAX_OBJ:
-			return v_typeof(env, v)->_tag;
+			return v_as_obj(v)->_vptr->_tag;
 		default:
 			return ALO_TFLOAT;
 	}
@@ -314,7 +314,7 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 						break;
 					}
 					case T_TABLE: {
-						try(ai_table_ugeti(env, v_as_table(v), k, &v));
+						try(ai_table_geti(env, v_as_table(v), k, &v));
 						break;
 					}
 					default: {
@@ -363,7 +363,7 @@ void alo_pushptr(a_henv env, void* val) {
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
     api_check(src != null || len == 0, "bad string.");
-	GStr* val = ai_str_new(env, src, len);
+	GStr* val = ai_str_get_or_new(env, src, len);
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	return str2ntstr(val);
@@ -390,60 +390,9 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 }
 
 void alo_pushptype(a_henv env, a_msg tag) {
-    GType* t;
+    api_check(tag < TYPE__COUNT, "not primitive type tag: %d", tag);
 
-    switch (tag) {
-        case ALO_TNIL: {
-            t = g_type(env, _nil);
-            break;
-        }
-        case ALO_TBOOL: {
-            t = g_type(env, _bool);
-            break;
-        }
-        case ALO_TINT: {
-            t = g_type(env, _int);
-            break;
-        }
-        case ALO_TFLOAT: {
-            t = g_type(env, _float);
-            break;
-        }
-        case ALO_TPTR: {
-            t = g_type(env, _ptr);
-            break;
-        }
-        case ALO_TSTR: {
-            t = g_type(env, _str);
-            break;
-        }
-        case ALO_TTUPLE: {
-            t = g_type(env, _tuple);
-            break;
-        }
-        case ALO_TLIST: {
-            t = g_type(env, _list);
-            break;
-        }
-        case ALO_TTABLE: {
-            t = g_type(env, _table);
-            break;
-        }
-        case ALO_TFUNC: {
-            t = g_type(env, _func);
-            break;
-        }
-        case ALO_TTYPE: {
-            t = g_type(env, _type);
-            break;
-        }
-        case ALO_TROUTE: {
-            t = g_type(env, _route);
-            break;
-        }
-        default: api_panic("Bad type tag.");
-    }
-
+    GType* t = g_type(env, tag);
     v_set_obj(env, api_incr_stack(env), t);
 }
 
@@ -507,6 +456,18 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 	return val;
 }
 
+void alo_set(a_henv env, a_isize id) {
+    api_check_elem(env, 2);
+
+    Value v = api_elem(env, id);
+    Value vv = env->_stack._top[-1];
+    Value vk = env->_stack._top[-2];
+
+    ai_vm_set(env, v, vk, vv);
+
+    env->_stack._top -= 2;
+}
+
 /**
  ** Get length of value without call meta method.
  **
@@ -554,7 +515,7 @@ a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
 		}
 		case T_TABLE: {
 			GTable* p = v_as_table(v);
-			try(ai_table_ugeti(env, p, key, &v));
+			try(ai_table_geti(env, p, key, &v));
 			break;
 		}
 		default: {
@@ -582,10 +543,12 @@ a_msg alo_rawset(a_henv env, a_isize id) {
 	api_check_elem(env, 2);
 
 	Value v = api_elem(env, id);
-	Value vv = api_decr_stack(env);
-	Value vk = api_decr_stack(env);
+	Value vv = env->_stack._top[-1];
+	Value vk = env->_stack._top[-2];
 
-	try(ai_vm_uset(env, v, vk, vv));
+	try (ai_vm_uset(env, v, vk, vv));
+
+    env->_stack._top -= 2;
 
 	return ALO_SOK;
 }
@@ -743,10 +706,10 @@ void alo_newtype(a_henv env, char const* n, a_flags flags) {
 
     Value* pv = api_incr_stack(env);
 
-    GStr* name = ai_str_newc(env, n);
+    GStr* name = ai_str_from_ntstr(env, n);
     v_set_obj(env, pv, name);
 
-	GType* self = ai_type_new(env, name, null, 0);
+	GType* self = ai_type_new(env, name);
 	v_set_obj(env, pv, self);
 
 	ai_gc_trigger(env);

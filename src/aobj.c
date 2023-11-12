@@ -18,7 +18,6 @@ char const ai_obj_type_names[][8] = {
 	[T_LIST] = "list",
 	[T_TABLE] = "table",
 	[T_FUNC] = "func",
-	[T_TYPE] = "type",
 	[T_USER] = "user",
 	[T_NAN] = "float",
 	[T_FLOAT] = "float"

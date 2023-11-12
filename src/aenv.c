@@ -114,8 +114,9 @@ static void route_drop(Global* gbl, GRoute* self) {
 
 static VTable const route_vtable = {
 	._stencil = V_STENCIL(T_USER),
+    ._tag = ALO_TROUTE,
 	._flags = VTABLE_FLAG_NONE,
-    ._type_ref = g_type_ref(_route),
+    ._type_ref = g_type_ref(ALO_TROUTE),
 	._slots = {
         [vfp_slot(drop)] = route_drop,
         [vfp_slot(mark)] = route_mark
@@ -169,10 +170,11 @@ nomem1:
 static void global_init(a_henv env, unused void* ctx) {
 	MRoute* m = from_member(MRoute, _route, env);
 
-    ai_str_boost(env, m->_reserved);
+    ai_str_boost1(env, m->_reserved);
     ai_type_boost(env);
+    ai_str_boost2(env);
 
-    GType* gbl = ai_type_new(env, g_str(env, STR_EMPTY), null, 0);
+    GTable* gbl = ai_table_new(env);
     v_set_obj(env, &G(env)->_global, gbl);
 }
 

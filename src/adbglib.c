@@ -338,5 +338,5 @@ void aloopen_debug(a_henv env) {
 	};
 
     alo_newtype(env, ALO_LIB_DEBUG_NAME, ALO_NEWMOD_FLAG_STATIC);
-	aloL_putfields(env, -1, bindings);
+    aloL_putall(env, -1, bindings);
 }

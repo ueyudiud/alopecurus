@@ -39,9 +39,9 @@ ALO_EXPORT a_msg (aloL_compilef)(a_henv env, char const* fname, a_u32 options);
 ALO_EXPORT void (aloL_raisef)(a_henv env, char const* fmt, ...);
 ALO_EXPORT a_msg (aloL_traceerror)(a_henv env, a_isize id, a_usize level, a_usize limit);
 
-ALO_EXPORT void (aloL_putfields_)(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb);
+ALO_EXPORT void (aloL_putalls_)(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb);
 
-#define aloL_putfields(env,id,bs) aloL_putfields_(env, id, bs, sizeof(bs) / sizeof(aloL_Entry))
+#define aloL_putall(env,id,bs) aloL_putalls_(env, id, bs, sizeof(bs) / sizeof(aloL_Entry))
 
 struct aloL_Entry {
 	char const* name; /* Entry name. */

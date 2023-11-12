@@ -105,14 +105,16 @@ static void propagate_once(Global* gbl, a_trmark* list) {
 	really_mark_object(gbl, obj);
 }
 
-static a_bool sweep_once(Global* gbl, a_usize white) {
-    a_hobj obj = strip_gc(gbl->_gc_sweep);
+static a_bool sweep_once(Global* gbl) {
+    a_hobj obj = *gbl->_gc_sweep;
 	if (g_has_other_color(gbl, obj)) {
+        *gbl->_gc_sweep = obj->_gnext;
 		drop_object(gbl, obj);
 		return true;
 	}
 	else {
-		obj->_tnext |= white;
+        gbl->_gc_sweep = &obj->_gnext;
+        g_set_white(gbl, obj);
 		return false;
 	}
 }
@@ -124,9 +126,14 @@ static void close_once(Global* gbl) {
 }
 
 static a_bool sweep_till_alive(Global* gbl) {
-	a_usize color = white_color(gbl);
-	while (*gbl->_gc_sweep != null && !sweep_once(gbl, color));
-	return *gbl->_gc_sweep != null;
+    do {
+        if (*gbl->_gc_sweep == null) {
+            return false;
+        }
+    }
+    while (sweep_once(gbl));
+
+	return true;
 }
 
 static a_bool propagate_work(Global* gbl, a_trmark* list) {
@@ -139,7 +146,7 @@ static a_bool propagate_work(Global* gbl, a_trmark* list) {
 
 static a_bool sweep_work(Global* gbl) {
 	while (*gbl->_gc_sweep != null) {
-		if (sweep_once(gbl, white_color(gbl))) {
+		if (sweep_once(gbl)) {
 			gbl->_mem_work -= ALOI_SWEEP_COST;
 			if (gbl->_mem_work < 0)
 				return false;
@@ -165,9 +172,8 @@ static void propagate_all(Global* gbl, a_trmark* list) {
 }
 
 static void sweep_all(Global* gbl) {
-	a_usize color = white_color(gbl);
 	while (*gbl->_gc_sweep != null) {
-		sweep_once(gbl, color);
+        sweep_once(gbl);
 	}
 }
 
@@ -197,6 +203,9 @@ static void begin_propagate(Global* gbl) {
 	if (v_is_obj(gbl->_global)) {
 		join_trace(&gbl->_tr_gray, v_as_obj(gbl->_global));
 	}
+    for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
+        join_trace(&gbl->_tr_gray, gbl->_types[i]);
+    }
 	gbl->_gcstep = GCSTEP_PROPAGATE;
 }
 
@@ -224,7 +233,6 @@ static void propagate_atomic(Global* gbl) {
 	if (v_is_obj(gbl->_global)) {
 		ai_gc_trace_mark(gbl, v_as_obj(gbl->_global));
 	}
-    ai_type_cache_mark(gbl, &gbl->_type_cache);
 	if (gbl->_gmark != null) {
 		(*gbl->_gmark)(gbl, gbl->_gctx);
 	}

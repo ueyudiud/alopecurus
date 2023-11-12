@@ -168,6 +168,7 @@ ALO_EXPORT void (alo_newtable)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_usize n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 
+ALO_EXPORT void (alo_set)(a_henv env, a_isize id);
 ALO_EXPORT a_msg (alo_rawlen)(a_henv env, a_isize id);
 ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_isize id, a_int key);
 ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_isize id);

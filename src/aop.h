@@ -11,6 +11,7 @@ enum {
 #define STRDEF(n) TM_##n,
 # include "asym/tm.h"
 #undef STRDEF
+    TM__LIMIT,
 	TM__FAST_MAX = TM___eq__
 };
 

@@ -262,8 +262,8 @@ static a_msg l_pcomp_reps(a_henv env) {
 }
 
 static a_msg l_pread_eval(a_henv env) {
-	try(l_pcomp_reps(env));
-	try(alo_pcall(env, 0, -1, 0));
+	try (l_pcomp_reps(env));
+	try (alo_pcall(env, 0, -1, 0));
 	return ALO_SOK;
 }
 

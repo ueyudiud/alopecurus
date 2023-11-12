@@ -94,8 +94,9 @@ static void tuple_mark(Global* gbl, GTuple* self) {
 
 static VTable const tuple_vtable = {
     ._stencil = V_STENCIL(T_TUPLE),
+    ._tag = ALO_TTUPLE,
     ._flags = VTABLE_FLAG_NONE,
-    ._type_ref = g_type_ref(_tuple),
+    ._type_ref = g_type_ref(ALO_TTUPLE),
     ._slots = {
         [vfp_slot(drop)] = tuple_drop,
         [vfp_slot(mark)] = tuple_mark

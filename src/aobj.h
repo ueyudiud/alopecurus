@@ -23,7 +23,6 @@ typedef struct alo_Env GRoute;
 typedef struct GType GType;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
-typedef struct GLoader GLoader;
 
 /* Object pointer. */
 typedef GObj* a_hobj;
@@ -39,7 +38,6 @@ typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Stack Stack;
 typedef struct Global Global;
-typedef struct TypeCache TypeCache;
 
 #define T_NIL u32c(0)
 #define T_FALSE u32c(1)
@@ -47,12 +45,10 @@ typedef struct TypeCache TypeCache;
 #define T_PTR u32c(3)
 #define T_LIST u32c(4)
 #define T_TABLE u32c(5)
-#define T_TYPE u32c(6)
-#define T_FUNC u32c(7)
-#define T_STR u32c(8)
+#define T_FUNC u32c(6)
+#define T_STR u32c(7)
 #define T_TUPLE u32c(10)
 #define T_USER u32c(11)
-#define T_STUB u32c(13)
 #define T_INT u32c(14)
 #define T_NAN u32c(15)
 
@@ -263,10 +259,12 @@ struct GObj {
     a_u64 _stencil;          \
     /* The type variant index. */               \
     a_u32 _vid;              \
+    /* The API tag of object. */                \
+    a_u16 _tag;              \
     /* The flags for virtual table. */          \
-    a_u32 _flags;            \
-    /* The handle of type object. */            \
-    a_usize _type_ref /* null for no type object. */
+    a_u16 _flags;            \
+    /* The handle of type object (optional). */ \
+    a_usize _type_ref
 
 #define VTABLE_METHOD_LIST(_) \
 	_( 0, drop  ,    void, Global* gbl                                      ) \
@@ -350,76 +348,6 @@ always_inline void* g_unbiased(a_hobj o, a_usize bias) {
 #define g_unbiased(p,bias...) g_unbiased_(p, ##bias, 0)
 
 /*=========================================================*
- * Type
- *=========================================================*/
-
-typedef struct {
-    GStr* _key;
-    Value _value;
-} Meta;
-
-typedef struct {
-    Meta* _ptr;
-    a_u32 _len;
-    a_u32 _hmask;
-} Metas;
-
-/**
- ** Type.
- */
-struct GType {
-	GOBJ_STRUCT_HEADER;
-    a_u32 _size;
-    a_u32 _mver; /* Method version, changed when the order of existed fields changed. */
-    a_u32 _flags;
-    a_u8 _tag; /* The type tag. */
-
-    GType* _mnext; /* Used for linked list in loader. */
-    GLoader* _loader; /* The loader of metadata, null for builtin loader. */
-    GStr* _sig; /* The metadata identifier. */
-
-    Metas _metas;
-
-    /* Type slots below. */
-};
-
-struct TypeCache {
-    GType** _ptr;
-    a_u32 _hmask;
-    a_u32 _len;
-};
-
-struct GLoader {
-    GOBJ_STRUCT_HEADER;
-    GLoader* _parent;
-    TypeCache _cache;
-};
-
-#define TYPE_FLAG_NONE u16c(0)
-#define TYPE_FLAG_FAST_TM(tm) (u16c(1) << (tm))
-
-#define v_is_type(v) v_is(v, T_TYPE)
-
-#define type_has_flag(t,f) (((t)->_flags & (f)) != 0)
-#define type_has_ftm(t,tm) type_has_flag(t, TYPE_FLAG_FAST_TM(tm))
-
-always_inline GType* v_as_type(Value v) {
-    assume(v_is_type(v), "not type.");
-    return g_cast(GType, v_as_obj(v));
-}
-
-#define v_of_stub(v) v_box_nan(T_STUB, v)
-
-#define v_is_stub(v) v_is(v, T_STUB)
-
-always_inline a_u32 v_as_stub(Value v) {
-    assume(v_is_stub(v), "not stub.");
-    return cast(a_u32, v._);
-}
-
-#define type_size(e) pad_to_raw(sizeof(GType) + (e), sizeof(a_usize))
-
-/*=========================================================*
  * String
  *=========================================================*/
 
@@ -488,16 +416,21 @@ always_inline GList* v_as_list(Value v) {
  * Table
  *=========================================================*/
 
+#define GTABLE_STRUCT_HEADER \
+    GOBJ_STRUCT_HEADER;      \
+    a_u32 _len;              \
+    a_u32 _hmask;            \
+    TNode* _ptr;             \
+    a_u32 _vid;              \
+    a_u32 _tmz
+
 typedef struct TNode TNode;
 
 /**
  ** Linked hash table.
  */
 struct GTable {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_u32 _hmask;
-	TNode* _ptr; /* Data pointer. */
+	GTABLE_STRUCT_HEADER;
 };
 
 /**
@@ -520,6 +453,29 @@ always_inline GTable* v_as_table(Value v) {
 }
 
 #define table_size() sizeof(GTable)
+
+/*=========================================================*
+ * Type
+ *=========================================================*/
+
+/**
+ ** Type.
+ */
+struct GType {
+    GTABLE_STRUCT_HEADER;
+    /* Type metadata (Optional). */
+    GStr* _name;
+};
+
+#define FTM_BIT(tm) (u16c(1) << (tm))
+
+#define tm_has_no_ftm(t,tm) (((t)->_tmz & FTM_BIT(tm)) == 0)
+
+always_inline GTable* type2mt(GType* o) {
+    return g_cast(GTable, o);
+}
+
+#define type_size(e) pad_to_raw(sizeof(GType) + (e), sizeof(a_usize))
 
 /*=========================================================*
  * Function & Prototype
@@ -695,6 +651,8 @@ typedef struct {
 typedef void (*a_fp_gexecpt)(a_henv env, void* ctx, a_msg msg);
 typedef void (*a_fp_gmark)(Global* gbl, void* ctx);
 
+enum { TYPE__COUNT = ALO_TUSER };
+
 struct Global {
 	Alloc _af;
 	void* _ac;
@@ -719,7 +677,6 @@ struct Global {
 	a_trmark _tr_gray;
 	a_trmark _tr_regray;
 	GStr* _nomem_error;
-	TypeCache _type_cache;
 	StrCache _str_cache;
 	a_hash _seed;
 	a_u16 _gcpausemul;
@@ -729,20 +686,7 @@ struct Global {
 	a_u8 _gcstep;
 	volatile atomic_uint_fast8_t _hookm;
 	GStr* _names[STR__COUNT];
-	struct {
-		GType _nil;
-		GType _bool;
-		GType _int;
-        GType _float;
-		GType _ptr;
-		GType _str;
-		GType _tuple;
-		GType _list;
-		GType _table;
-		GType _func;
-		GType _type;
-		GType _route;
-	} _types;
+    GType _types[TYPE__COUNT][1];
 };
 
 #define RFLAG_COUNT_VARARG UINT8_MAX
@@ -772,8 +716,8 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
 	return G(env)->_names[tag];
 }
 
-#define g_type(env,f) (&G(env)->_types.f)
-#define g_type_ref(f) offsetof(Global, _types.f)
+#define g_type(env,f) (G(env)->_types[f])
+#define g_type_ref(f) offsetof(Global, _types[f])
 
 #define route_size() sizeof(GRoute)
 
@@ -829,26 +773,26 @@ always_inline GType* g_typeof(a_henv env, a_hobj p) {
 #define g_typeof(env,p) g_typeof(env, gobj_cast(p))
 
 always_inline char const* g_nameof(a_henv env, a_hobj p) {
-	return str2ntstr(g_typeof(env, p)->_sig);
+	return str2ntstr(g_typeof(env, p)->_name);
 }
 
 #define g_nameof(env,p) g_nameof(env, gobj_cast(p))
 
 always_inline GType* v_typeof(a_henv env, Value v) {
 	if (v_is_float(v)) {
-		return g_type(env, _float);
+		return g_type(env, ALO_TFLOAT);
 	}
 	else if (!v_is_obj(v)) {
 		switch (v_get_tag(v)) {
 			case T_NIL:
-				return g_type(env, _nil);
+				return g_type(env, ALO_TNIL);
 			case T_FALSE:
 			case T_TRUE:
-				return g_type(env, _bool);
+				return g_type(env, ALO_TBOOL);
 			case T_INT:
-				return g_type(env, _int);
+				return g_type(env, ALO_TINT);
 			case T_PTR:
-				return g_type(env, _ptr);
+				return g_type(env, ALO_TPTR);
 			default:
 				panic("bad type tag.");
 		}
@@ -869,6 +813,9 @@ always_inline char const* v_nameof(a_henv env, Value v) {
 		return g_nameof(env, v_as_obj(v));
 	}
 }
+
+#define g_mtof(env,p) type2mt(g_typeof(env, p))
+#define v_mtof(env,p) type2mt(v_typeof(env, p))
 
 #define obj_idx(k,l,f) ({ \
     a_int _k = k; a_uint _l = l; \

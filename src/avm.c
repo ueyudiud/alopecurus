@@ -130,10 +130,10 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
         }
 		case T_TABLE: {
             Value v;
-            return ai_table_get(env, v_as_table(v1), v2, &v) ? v : v_of_nil();
-        }
-		case T_TYPE: {
-            return ai_type_get(env, v_as_type(v1), v2);
+            catch (ai_table_get(env, v_as_table(v1), v2, &v)) {
+                return v_of_nil();
+            }
+            return v;
         }
 		case T_USER: {
             Value v;
@@ -157,10 +157,7 @@ a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
             return ai_list_uget(env, v_as_list(v1), v2, pv);
         }
         case T_TABLE: {
-            return ai_table_get(env, v_as_table(v1), v2, pv) ? ALO_SOK : ALO_EEMPTY;
-        }
-        case T_TYPE: {
-            return ai_type_uget(env, v_as_type(v1), v2, pv);
+            return !ai_table_get(env, v_as_table(v1), v2, pv) ? ALO_SOK : ALO_EEMPTY;
         }
         default: {
             return ALO_EXIMPL;
@@ -176,9 +173,6 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
         case T_TABLE: {
             ai_table_set(env, v_as_table(v1), v2, v3);
             break;
-        }
-        case T_TYPE: {
-            return ai_type_set(env, v_as_type(v1), v2, v3);
         }
         case T_USER: {
             if (!ai_tm_set(env, v1, v2, v3)) {
@@ -199,9 +193,6 @@ a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3) {
         }
         case T_TABLE: {
             return ai_table_uset(env, v_as_table(v1), v2, v3);
-        }
-        case T_TYPE: {
-            return ai_type_uset(env, v_as_type(v1), v2, v3);
         }
         default: {
             return ALO_EXIMPL;
@@ -249,11 +240,6 @@ static void vm_iter(a_henv env, Value* restrict vs, Value v) {
             break;
         }
         case T_TABLE: {
-            v_set(env, &vs[0], v);
-            v_set_int(&vs[2], 0);
-            break;
-        }
-        case T_TYPE: {
             v_set(env, &vs[0], v);
             v_set_int(&vs[2], 0);
             break;
@@ -306,24 +292,6 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
             Value* vd = vm_push_args(env, n->_key, n->_value);
-            return (ValueSlice) { vd, 2 };
-        }
-        case T_TYPE: {
-            GType* p = v_as_type(vc);
-            a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (p->_metas._len == 0 || i <= p->_metas._hmask)
-                return (ValueSlice) { };
-
-            Meta* n;
-            while (ptr2int((n = &p->_metas._ptr[i])->_key) <= 8) {
-                i += 1;
-                if (i > p->_metas._hmask)
-                    return (ValueSlice) { };
-            }
-
-            v_set_int(pi, cast(a_i32, i + 1));
-            env->_stack._top = vs;
-            Value* vd = vm_push_args(env, v_of_obj(n->_key), n->_value);
             return (ValueSlice) { vd, 2 };
         }
         default: {
@@ -400,8 +368,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				case T_LIST:
 				case T_TABLE:
 				case T_FUNC:
-				case T_USER:
-				case T_TYPE: {
+				case T_USER: {
                     GStr* str;
 					StkPtr bptr = val2stk(env, base);
                     if (!ai_tm_str(env, v, &str)) {
