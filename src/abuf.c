@@ -41,7 +41,7 @@ a_msg ai_buf_nputvfs_(a_henv env, a_hbuf buf, char const* fmt, va_list varg) {
 }
 
 GBuf* ai_buf_new(a_henv env) {
-	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
+	GBuf* self = ai_mem_gnew(env, GBuf, sizeof(GBuf));
 
 	self->_vptr = &buf_vtable;
 	at_buf_init(*self);
@@ -51,7 +51,7 @@ GBuf* ai_buf_new(a_henv env) {
 	return self;
 }
 
-a_none ai_buf_error(a_msg msg, a_henv env, char const* what) {
+a_noret ai_buf_error(a_henv env, a_msg msg, char const* what) {
 	if (msg == ALO_EINVAL) {
 		ai_err_raisef(env, msg, "too many %s.", what);
 	}
@@ -61,19 +61,20 @@ a_none ai_buf_error(a_msg msg, a_henv env, char const* what) {
 	}
 }
 
-static void buf_mark(Global* g, a_hobj raw_self) {
+static void buf_mark(Global* gbl, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	ai_gc_trace_work(g, sizeof(GBuf) + self->_cap);
+	ai_gc_trace_work(gbl, sizeof(GBuf) + self->_cap);
 }
 
-static void buf_drop(Global* g, a_hobj raw_self) {
+static void buf_drop(Global* gbl, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	at_buf_deinit(g, *self);
-	ai_mem_dealloc(g, self, sizeof(GBuf));
+	at_buf_deinit(gbl, *self);
+	ai_mem_gdel(gbl, self, sizeof(GBuf));
 }
 
 static VTable const buf_vtable = {
 	._stencil = V_STENCIL(T_USER),
+    ._tag = ALO_TUSER,
 	._slots = {
         [vfp_slot(drop)] = buf_drop,
         [vfp_slot(mark)] = buf_mark

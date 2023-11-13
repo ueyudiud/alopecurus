@@ -6,7 +6,8 @@
 #define ALO_LIB
 
 #include "aobj.h"
-#include "ameta.h"
+#include "atype.h"
+#include "atable.h"
 #include "agc.h"
 #include "aapi.h"
 
@@ -17,23 +18,14 @@
 static a_msg type___call__(a_henv env) { /* Should this function write in script? */
     aloL_checktag(env, 0, ALO_TTYPE);
 
-    GMeta* self = v_as_meta(api_elem(env, 0));
-    Value v;
-
-    a_msg msg = ai_meta_ugets(env, self, ai_str_newl(env, "__new__"), &v);
-    if (msg == ALO_SOK) {
-        Value* p = env->_frame->_stack_bot;
-        a_usize n = env->_stack._top - p;
-
-        v_set(env, p, v);
-
-        alo_call(env, n - 1, 1);
-    }
-    else {
-        //TODO No constructor, try default initializer.
+    if (aloL_gets(env, 0, "__new__") == ALO_EEMPTY) {
+        GType* self = g_cast(GType, v_as_obj(api_elem(env, 0)));
         aloL_raisef(env, "no entry for '%s.__new__'", str2ntstr(self->_name));
     }
 
+    alo_pop(env, 0);
+    a_usize n = alo_stacksize(env);
+    alo_call(env, n - 1, 1);
     return 1;
 }
 
@@ -42,6 +34,6 @@ void aloopen_type(a_henv env) {
         {"__call__", type___call__ }
     };
 
-    v_set_obj(env, api_incr_stack(env), g_type(env, _type));
-    aloL_putfields(env, -1, bindings);
+    alo_pushptype(env, ALO_TTYPE);
+    aloL_putalls(env, -1, bindings);
 }

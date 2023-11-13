@@ -7,7 +7,7 @@
 
 #include "aenv.h"
 #include "afun.h"
-#include "ameta.h"
+#include "atype.h"
 #include "amem.h"
 
 #include "agc.h"
@@ -41,324 +41,351 @@ always_inline a_hobj strip_gc(a_gclist* list) {
 	return elem;
 }
 
-always_inline void flip_color(Global* g) {
-	g->_white_color = cast(a_u8, other_color(g));
+always_inline void flip_color(Global* gbl) {
+	gbl->_white_color = cast(a_u8, other_color(gbl));
 }
 
 void ai_gc_register_object_(a_henv env, a_hobj obj) {
 	g_vcheck(obj, drop); /* Only collectable object need be registered. */
-	Global* g = G(env);
-	join_gc(&g->_gc_normal, obj);
-	g_set_white(g, obj);
+	Global* gbl = G(env);
+	join_gc(&gbl->_gc_normal, obj);
+	g_set_white(gbl, obj);
 }
 
 void ai_gc_register_objects(a_henv env, RefQueue* rq) {
-	Global* g = G(env);
-	*rq->_tail = g->_gc_normal;
-	g->_gc_normal = rq->_head;
+	Global* gbl = G(env);
 
-#if ALO_DEBUG
-	rq_for(obj, rq) {
-		assume(!g_has_other_color(g, obj), "object is already dead.");
+#ifdef ALOI_CHECK_ASSUME
+    rq_for(obj, rq) {
+		assume(!g_has_other_color(gbl, obj), "object is already dead.");
 	}
 #endif
+
+	*rq->_tail = gbl->_gc_normal;
+	gbl->_gc_normal = rq->_head;
 }
 
 void ai_gc_fix_object_(a_henv env, a_hobj obj) {
-	Global* g = G(env);
-	assume(g->_gc_normal == obj, "object not registered.");
-	strip_gc(&g->_gc_normal);
-	join_gc(&g->_gc_fixed, obj);
+	Global* gbl = G(env);
+	assume(gbl->_gc_normal == obj, "object not registered.");
+	strip_gc(&gbl->_gc_normal);
+	join_gc(&gbl->_gc_fixed, obj);
 }
 
-static void really_mark_object(Global* g, a_hobj obj) {
+static void really_mark_object(Global* gbl, a_hobj obj) {
 	/* Color object to black. */
 	g_set_black(obj);
 	/* Call mark virtual method. */
-	g_vcall(g, obj, mark);
+	g_vcall(gbl, obj, mark);
 }
 
-void ai_gc_trace_mark_(Global* g, a_hobj obj) {
+void ai_gc_trace_mark_(Global* gbl, a_hobj obj) {
 	/* Tested in inline function. */
-	assume(g_has_white_color(g, obj));
+	assume(g_has_white_color(gbl, obj));
 	/* Mark object lazily or greedily. */
 	VTable const* vptr = obj->_vptr;
 	if (vtable_has_flag(vptr, VTABLE_FLAG_GREEDY_MARK)) {
 		g_set_gray(obj); /* Mark object to gray before propagation. */
-		really_mark_object(g, obj);
+		really_mark_object(gbl, obj);
 		/* Else keep object as gray since it has no mark function to remark. */
 	}
 	else {
 		g_vcheck(obj, mark);
-		join_trace(&g->_tr_gray, obj);
+		join_trace(&gbl->_tr_gray, obj);
 	}
 }
 
-static void drop_object(Global* g, a_hobj obj) {
+static void drop_object(Global* gbl, a_hobj obj) {
 	/* Call drop virtual method */
-	g_vcall(g, obj, drop);
+	g_vcall(gbl, obj, drop);
 }
 
-static void propagate_once(Global* g, a_trmark* list) {
+static void propagate_once(Global* gbl, a_trmark* list) {
 	a_hobj obj = strip_trace(list);
-	really_mark_object(g, obj);
+	really_mark_object(gbl, obj);
 }
 
-static a_bool sweep_once(Global* g, a_usize white) {
-	GObj* obj = strip_gc(g->_gc_sweep);
-	if (g_has_other_color(g, obj)) {
-		drop_object(g, obj);
+static a_bool sweep_once(Global* gbl) {
+    a_hobj obj = *gbl->_gc_sweep;
+	if (g_has_other_color(gbl, obj)) {
+        *gbl->_gc_sweep = obj->_gnext;
+		drop_object(gbl, obj);
 		return true;
 	}
 	else {
-		obj->_tnext |= white;
+        gbl->_gc_sweep = &obj->_gnext;
+        g_set_white(gbl, obj);
 		return false;
 	}
 }
 
-static void close_once(Global* g) {
-	GObj* obj = strip_gc(&g->_gc_toclose);
-	g_vcall(g->_active, obj, close);
-	join_gc(&g->_gc_normal, obj);
+static void close_once(Global* gbl) {
+    a_hobj obj = strip_gc(&gbl->_gc_toclose);
+	g_vcall(gbl->_active, obj, close);
+	join_gc(&gbl->_gc_normal, obj);
 }
 
-static a_bool sweep_till_alive(Global* g) {
-	a_usize color = white_color(g);
-	while (*g->_gc_sweep != null && !sweep_once(g, color));
-	return *g->_gc_sweep != null;
+static a_bool sweep_till_alive(Global* gbl) {
+    do {
+        if (*gbl->_gc_sweep == null) {
+            return false;
+        }
+    }
+    while (sweep_once(gbl));
+
+	return true;
 }
 
-static a_bool propagate_work(Global* g, a_trmark* list) {
+static a_bool propagate_work(Global* gbl, a_trmark* list) {
 	while (*list != trmark_null) {
-		propagate_once(g, list);
-		if (g->_mem_work < 0) return false;
+		propagate_once(gbl, list);
+		if (gbl->_mem_work < 0) return false;
 	}
 	return true;
 }
 
-static a_bool sweep_work(Global* g) {
-	while (*g->_gc_sweep != null) {
-		if (sweep_once(g, white_color(g))) {
-			g->_mem_work -= ALOI_SWEEP_COST;
-			if (g->_mem_work < 0)
+static a_bool sweep_work(Global* gbl) {
+	while (*gbl->_gc_sweep != null) {
+		if (sweep_once(gbl)) {
+			gbl->_mem_work -= ALOI_SWEEP_COST;
+			if (gbl->_mem_work < 0)
 				return false;
 		}
 	}
 	return true;
 }
 
-static a_bool close_work(Global* g) {
-	while (g->_gc_toclose != null) {
-		close_once(g);
-		g->_mem_work -= ALOI_CLOSE_COST;
-		if (g->_mem_work < 0) 
+static a_bool close_work(Global* gbl) {
+	while (gbl->_gc_toclose != null) {
+		close_once(gbl);
+		gbl->_mem_work -= ALOI_CLOSE_COST;
+		if (gbl->_mem_work < 0)
 			return false;
 	}
 	return true;
 }
 
-static void propagate_all(Global* g, a_trmark* list) {
+static void propagate_all(Global* gbl, a_trmark* list) {
 	while (*list != trmark_null) {
-		propagate_once(g, list);
+		propagate_once(gbl, list);
 	}
 }
 
-static void sweep_all(Global* g) {
-	a_usize color = white_color(g);
-	while (*g->_gc_sweep != null) {
-		sweep_once(g, color);
+static void sweep_all(Global* gbl) {
+	while (*gbl->_gc_sweep != null) {
+        sweep_once(gbl);
 	}
 }
 
-static void drop_all(Global* g, GObj** list) {
+static void drop_all(Global* gbl, a_hobj* list) {
 	while (*list != null) {
-		GObj* obj = strip_gc(list);
-		drop_object(g, obj);
+		a_hobj obj = strip_gc(list);
+		drop_object(gbl, obj);
 	}
 }
 
-static void halt_propagate(Global* g, GObj** list) {
-	a_trmark white = white_color(g);
+static void halt_propagate(Global* gbl, a_hobj* list) {
+	a_trmark white = white_color(gbl);
 	while (*list != null) {
-		GObj* obj = *list;
+		a_hobj obj = *list;
 		list = &obj->_gnext;
-		if (g_has_other_color(g, obj)) {
+		if (g_has_other_color(gbl, obj)) {
 			obj->_tnext = white;
 		}
 	}
 }
 
-static void begin_propagate(Global* g) {
-	g->_tr_gray = trmark_null;
-	g->_tr_regray = trmark_null;
+static void begin_propagate(Global* gbl) {
+	gbl->_tr_gray = trmark_null;
+	gbl->_tr_regray = trmark_null;
 	/* Mark nonvolatile root. */
-	join_trace(&g->_tr_gray, ai_env_mroute(g));
-	if (v_is_obj(g->_global)) {
-		join_trace(&g->_tr_gray, v_as_obj(g->_global));
+	join_trace(&gbl->_tr_gray, ai_env_mroute(gbl));
+	if (v_is_obj(gbl->_global)) {
+		join_trace(&gbl->_tr_gray, v_as_obj(gbl->_global));
 	}
-	g->_gcstep = GCSTEP_PROPAGATE;
+    for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
+        join_trace(&gbl->_tr_gray, gbl->_types[i]);
+    }
+	gbl->_gcstep = GCSTEP_PROPAGATE;
 }
 
-static void begin_sweep(Global* g) {
-	g->_gc_sweep = &g->_gc_normal;
-	sweep_till_alive(g);
-	g->_gcstep = GCSTEP_SWEEP_NORMAL;
+static void begin_sweep(Global* gbl) {
+	gbl->_gc_sweep = &gbl->_gc_normal;
+	sweep_till_alive(gbl);
+	gbl->_gcstep = GCSTEP_SWEEP_NORMAL;
 }
 
-static a_bool begin_close(Global* g) {
-	if (g->_gc_toclose == null) {
-		g->_gcstep = GCSTEP_PAUSE;
+static a_bool begin_close(Global* gbl) {
+	if (gbl->_gc_toclose == null) {
+		gbl->_gcstep = GCSTEP_PAUSE;
 		return true;
 	}
 	else {
-		g->_gcstep = GCSTEP_CLOSE;
+		gbl->_gcstep = GCSTEP_CLOSE;
 		return false;
 	}
 }
 
-static void propagate_atomic(Global* g) {
-	g->_gcstep = GCSTEP_PROPAGATE_ATOMIC;
+static void propagate_atomic(Global* gbl) {
+	gbl->_gcstep = GCSTEP_PROPAGATE_ATOMIC;
 	/* Mark volatile root. */
-	ai_gc_trace_mark(g, g->_active);
-	if (v_is_obj(g->_global)) {
-		join_trace(&g->_tr_gray, v_as_obj(g->_global));
+	ai_gc_trace_mark(gbl, gbl->_active);
+	if (v_is_obj(gbl->_global)) {
+		ai_gc_trace_mark(gbl, v_as_obj(gbl->_global));
 	}
-    ai_meta_cache_mark(g, &g->_meta_cache);
-	if (g->_gmark != null) {
-		(*g->_gmark)(g, g->_gctx);
+	if (gbl->_gmark != null) {
+		(*gbl->_gmark)(gbl, gbl->_gctx);
 	}
-	propagate_all(g, &g->_tr_gray);
+	propagate_all(gbl, &gbl->_tr_gray);
 
-	a_isize old_work = g->_mem_work;
-	a_trmark list = g->_tr_regray;
-	g->_tr_regray = trmark_null;
-	propagate_all(g, &list);
+	a_isize old_work = gbl->_mem_work;
+	a_trmark list = gbl->_tr_regray;
+	gbl->_tr_regray = trmark_null;
+	propagate_all(gbl, &list);
 
-	propagate_all(g, &g->_tr_gray);
+	propagate_all(gbl, &gbl->_tr_gray);
 
-	g->_mem_estimate = gbl_mem_total(g);
-	flip_color(g);
-	g->_mem_work = old_work;
+	gbl->_mem_estimate = gbl_mem_total(gbl);
+	flip_color(gbl);
+	gbl->_mem_work = old_work;
 }
 
-static void sweep_atomic(Global* g) {
-	g->_gcstep = GCSTEP_SWEEP_ATOMIC;
-	ai_cap_clean(g);
+static void sweep_atomic(Global* gbl) {
+	gbl->_gcstep = GCSTEP_SWEEP_ATOMIC;
+	ai_cap_clean(gbl);
 }
 
-static a_bool run_incr_gc(Global* g) {
-	switch (g->_gcstep) {
+static a_bool run_incr_gc(Global* gbl) {
+	switch (gbl->_gcstep) {
 		case GCSTEP_PAUSE: {
-			begin_propagate(g);
+			begin_propagate(gbl);
 			fallthrough;
 		}
 		case GCSTEP_PROPAGATE: {
-			if (!propagate_work(g, &g->_tr_gray)) 
+			if (!propagate_work(gbl, &gbl->_tr_gray))
 				return false;
 			fallthrough;
 		}
 		case GCSTEP_PROPAGATE_ATOMIC: {
-			propagate_atomic(g);
-			begin_sweep(g);
+			propagate_atomic(gbl);
+			begin_sweep(gbl);
 			fallthrough;
 		}
 		case GCSTEP_SWEEP_NORMAL: {
-			if (!sweep_work(g)) 
+			if (!sweep_work(gbl))
 				return false;
 			fallthrough;
 		}
 		case GCSTEP_SWEEP_ATOMIC: {
-			sweep_atomic(g);
-			if (begin_close(g)) 
+			sweep_atomic(gbl);
+			if (begin_close(gbl))
 				return true;
 			fallthrough;
 		}
 		case GCSTEP_CLOSE: {
-			return close_work(g);
+			return close_work(gbl);
 		}
 		default: unreachable();
 	}
 }
 
-static void run_full_gc(Global* g) {
-	switch (g->_gcstep) {
+static void run_full_gc(Global* gbl) {
+	switch (gbl->_gcstep) {
 		case GCSTEP_PROPAGATE: {
-			flip_color(g);
+			flip_color(gbl);
 			fallthrough;
 		}
 		case GCSTEP_SWEEP_NORMAL: {
-			halt_propagate(g, &g->_gc_normal);
+			halt_propagate(gbl, &gbl->_gc_normal);
 			fallthrough;
 		}
 		default: {
-			begin_propagate(g);
-			propagate_atomic(g);
-			begin_sweep(g);
-			sweep_all(g);
-			sweep_atomic(g);
+			begin_propagate(gbl);
+			propagate_atomic(gbl);
+			begin_sweep(gbl);
+			sweep_all(gbl);
+			sweep_atomic(gbl);
 			break;
 		}
 	}
 }
 
-void ai_gc_set_debt(Global* g, a_isize debt) {
-	a_usize total = gbl_mem_total(g);
-	g->_mem_base = total - debt;
-	g->_mem_debt = debt;
+void ai_gc_set_debt(Global* gbl, a_isize debt) {
+	a_usize total = gbl_mem_total(gbl);
+	gbl->_mem_base = total - debt;
+	gbl->_mem_debt = debt;
 }
 
-static void compute_work(Global* g) {
-	a_usize2 work = mul_usize(cast(a_usize, g->_mem_work) + cast(a_usize, g->_mem_debt), g->_gcstepmul) / GCUNIT;
-	a_isize truncated_work = likely(work < ISIZE_MAX) ? cast(a_isize, work) : ISIZE_MAX;
-	g->_mem_work = max(truncated_work, cast(a_isize, ALOI_MIN_MEM_WORK));
+static void compute_work(Global* gbl) {
+#if ALO_M64
+    a_usize work = (gbl->_mem_work + gbl->_mem_debt) * gbl->_gcstepmul / GCUNIT;
+    /* We assume address space only use 47-bits, so maximum work will never overflow. */
+    assume(work <= ISIZE_MAX);
+#elif ALO_M32
+    a_isize work;
+    if (checked_mul_isize(gbl->_mem_work + gbl->_mem_debt, gbl->_gcstepmul, &work)) {
+        work = ISIZE_MAX;
+    }
+    work /= GCUNIT;
+#endif
+	gbl->_mem_work = cast(a_isize, max(work, ALOI_MIN_MEM_WORK));
 }
 
-static void compute_step_debt(Global* g, a_isize work) {
+static void compute_step_debt(Global* gbl, a_isize work) {
 	if (unlikely(checked_mul_isize(work, 2, &work))) {
 		work = ISIZE_MAX;
 	}
-	g->_mem_work = work;
-	ai_gc_set_debt(g, -work);
+	gbl->_mem_work = work;
+	ai_gc_set_debt(gbl, -work);
 }
 
-static void compute_pause_debt(Global* g) {
-	a_usize2 debt = mul_usize(g->_mem_estimate, g->_gcpausemul) / GCUNIT;
-	a_isize truncated_debt = likely(debt < ISIZE_MAX) ? cast(a_isize, debt) : ISIZE_MAX;
-	g->_mem_work = truncated_debt;
-	ai_gc_set_debt(g, truncated_debt);
+static void compute_pause_debt(Global* gbl) {
+#if ALO_M64
+    a_usize debt = gbl->_mem_estimate * gbl->_gcpausemul / GCUNIT;
+    /* We assume address space only use 47-bits, so maximum work will never overflow. */
+    assume(debt <= ISIZE_MAX);
+#elif ALO_M32
+    a_isize debt;
+    if (checked_mul_isize(gbl->_mem_estimate, gbl->_gcpausemul, &work)) {
+        work = ISIZE_MAX;
+    }
+    debt /= GCUNIT;
+#endif
+	gbl->_mem_work = cast(a_isize, debt);
+	ai_gc_set_debt(gbl, cast(a_isize, debt));
 }
 
 void ai_gc_incr_gc(a_henv env) {
-	Global* g = G(env);
-	assume(g->_mem_debt >= 0);
-	assume(!(g->_flags & GLOBAL_FLAG_INCRGC));
-	if (g->_flags & GLOBAL_FLAG_DISABLE_GC) return;
-	a_isize work = g->_mem_work;
-	g->_flags |= GLOBAL_FLAG_INCRGC;
-	compute_work(g);
-	g->_flags &= ~GLOBAL_FLAG_INCRGC;
-	a_bool finish = run_incr_gc(g);
+	Global* gbl = G(env);
+	assume(gbl->_mem_debt >= 0);
+	assume(!(gbl->_flags & GLOBAL_FLAG_INCRGC));
+	if (gbl->_flags & GLOBAL_FLAG_DISABLE_GC) return;
+	a_isize work = gbl->_mem_work;
+	gbl->_flags |= GLOBAL_FLAG_INCRGC;
+	compute_work(gbl);
+	gbl->_flags &= ~GLOBAL_FLAG_INCRGC;
+	a_bool finish = run_incr_gc(gbl);
 	if (finish) {
-		compute_pause_debt(g);
+		compute_pause_debt(gbl);
 	}
 	else {
-		compute_step_debt(g, work);
+		compute_step_debt(gbl, work);
 	}
 }
 
 void ai_gc_full_gc(a_henv env, a_bool emergency) {
-	Global* g = G(env);
-	a_u16 old_flags = g->_flags;
-	g->_flags |= GLOBAL_FLAG_FULLGC;
-	if (emergency) g->_flags |= GLOBAL_FLAG_EMERGENCYGC;
-	run_full_gc(g);
-	compute_pause_debt(g);
-	g->_flags = old_flags;
+	Global* gbl = G(env);
+	a_u16 old_flags = gbl->_flags;
+	gbl->_flags |= GLOBAL_FLAG_FULLGC;
+	if (emergency) gbl->_flags |= GLOBAL_FLAG_EMERGENCYGC;
+	run_full_gc(gbl);
+	compute_pause_debt(gbl);
+	gbl->_flags = old_flags;
 }
 
-void ai_gc_clean(Global* g) {
-	drop_all(g, &g->_gc_closable);
-	drop_all(g, &g->_gc_toclose);
-	drop_all(g, &g->_gc_normal);
-	drop_all(g, &g->_gc_fixed);
+void ai_gc_clean(Global* gbl) {
+	drop_all(gbl, &gbl->_gc_closable);
+	drop_all(gbl, &gbl->_gc_toclose);
+	drop_all(gbl, &gbl->_gc_normal);
+	drop_all(gbl, &gbl->_gc_fixed);
 }

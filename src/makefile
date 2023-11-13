@@ -6,12 +6,62 @@ MINVER=1
 PATVAR=0
 
 ##############################################################
-# Build configuration.
+# Build level.
 ##############################################################
+# The default level is release.
+#
 LEVEL=release
+#LEVEL=debug
+##############################################################
+
+##############################################################
+# Build mode.
+##############################################################
+# The default level is mixed.
+#
 BUILDMODE=mixed
-DEBUGMODE=gdb
-OUT=.
+#BUILDMODE=static
+#BUILDMODE=dynamic
+##############################################################
+
+##############################################################
+# Build mode.
+##############################################################
+# The default level is mixed.
+#
+BUILDMODE=mixed
+#BUILDMODE=static
+#BUILDMODE=dynamic
+##############################################################
+
+##############################################################
+# Third party libraries.
+##############################################################
+READLINE=enable
+##############################################################
+
+##############################################################
+# Common Features.
+##############################################################
+XCFLAGS=
+
+##############################################################
+
+##############################################################
+# Debug Features.
+##############################################################
+ifeq ($(LEVEL),debug)
+
+XCFLAGS+= -D ALOI_CHECK_ASSUME
+
+XCFLAGS+= -D ALOI_CHECK_API
+
+XCFLAGS+= -D ALOI_CHECK_GC
+
+XCFLAGS+= -D ALOI_USE_VALGRIND
+
+endif
+##############################################################
 
 ##############################################################
 # Build tools.
@@ -60,7 +110,6 @@ CCOPT=
 CCDEBUG=
 CCWARN= -Wall -Wextra
 CCDEF=
-CCFLAGS=
 LIBS= -lm
 
 ifeq (release,$(LEVEL))
@@ -75,7 +124,7 @@ else
 endif
 
 BASE_CC= $(CC)
-BASE_CCFLAGS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(CCDEF) $(CCFLAGS)
+BASE_CCFLAGS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(CCDEF) $(XCFLAGS) $(CFLAGS)
 BASE_LDFLAGS= $(CCDEBUG) $(LDFLAGS)
 BASE_XLIBS= $(LIBS)
 
@@ -138,8 +187,8 @@ else
 ifeq (Darwin,$(TARGET_OS))
 	TARGET_STRIP+= -x
 endif
-	TARGET_CCDEF+= -DALOI_USE_READLINE
-	TARGET_LIBS+= -lreadline
+	TARGET_CCDEF+= -D ALOI_USE_READLINE
+	TARGET_XLIBS+= -lreadline
 endif
 
 ##############################################################
@@ -170,7 +219,7 @@ ifeq (Windows,$(TARGET_OS))
 	TARGET_DYCC= $(STATIC_CC)
 	ifneq (static,$(BUILDMODE))
 		BUILDMODE= dynamic
-		TARGET_XCCFLAGS+= -DALO_BUILD_AS_DLL
+		TARGET_XCCFLAGS+= -D ALO_BUILD_AS_DLL
 	endif
 endif
 
@@ -192,10 +241,11 @@ ifeq (debug,$(LEVEL))
 endif
 
 KER_O= aapi.o aparse.o alex.o adbg.o aerr.o aload.o asave.o avm.o \
-afmt.o agc.o amem.o aenv.o astk.o auser.o ameta.o afun.o atable.o \
-alist.o atuple.o astr.o adict.o abuf.o avec.o aio.o aobj.o abc.o \
-actx.o ajmp.o
-LIB_O= asyslib.o adbglib.o atypelib.o alistlib.o abaselib.o aauxlib.o
+atm.o afmt.o agc.o amem.o aenv.o astk.o auser.o atype.o afun.o \
+atable.o alist.o atuple.o astr.o abuf.o aio.o aobj.o abc.o actx.o \
+ajmp.o
+LIB_O= asyslib.o adbglib.o atypelib.o alistlib.o aintlib.o abaselib.o \
+aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
 
 ifeq (Windows,$(TARGET_OS))
@@ -233,7 +283,6 @@ clean:
 echo:
 	$(Q) "    LEVEL=$(LEVEL)"
 	$(Q) "BUILDMODE=$(BUILDMODE)"
-	$(Q) "DEBUGMODE=$(DEBUGMODE)"
 	$(Q) "       OS=$(TARGET_OS)"
 
 depend:

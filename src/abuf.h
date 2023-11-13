@@ -30,7 +30,7 @@ typedef Buf* a_hbuf;
 intern a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...);
 intern a_msg ai_buf_nputvfs_(a_henv env, a_hbuf buf, char const* fmt, va_list varg);
 intern GBuf* ai_buf_new(a_henv env);
-intern a_none ai_buf_error(a_msg msg, a_henv env, char const *what);
+intern a_noret ai_buf_error(a_henv env, a_msg msg, char const* what);
 
 always_inline void ai_buf_init(a_hbuf buf) {
 	buf->_ptr = null;
@@ -40,13 +40,13 @@ always_inline void ai_buf_init(a_hbuf buf) {
 
 #define at_buf_init(b) ai_buf_init(at_buf_cast(b))
 
-always_inline void ai_buf_deinit(Global* g, a_hbuf buf, a_usize size) {
-	ai_mem_dealloc(g, buf->_ptr, buf->_cap * size);
+always_inline void ai_buf_deinit(Global* gbl, a_hbuf buf, a_usize size) {
+	ai_mem_dealloc(gbl, buf->_ptr, buf->_cap * size);
 	buf->_ptr = null;
 	buf->_cap = 0;
 }
 
-#define at_buf_deinit(g,b) ai_buf_deinit(g, at_buf_cast(b), at_buf_elem_size(b))
+#define at_buf_deinit(gbl,b) ai_buf_deinit(gbl, at_buf_cast(b), at_buf_elem_size(b))
 
 #define at_buf_for(b,v) for ( \
 	typeof(at_buf_elem_type(b)*) v = (b)._ptr, \
@@ -117,7 +117,9 @@ always_inline a_msg ai_buf_nputv(a_henv env, a_hbuf buf, void const* src, a_usiz
 #define at_buf_put(env,b,v,w) ({ \
 	typeof(b)* _pb = &(b);       \
     a_usize _bid = _pb->_len;    \
-	catch(at_buf_nput(env, *_pb, v), ai_buf_error, env, w); \
+	catch (at_buf_nput(env, *_pb, v), _msg) { \
+        ai_buf_error(env, _msg, w);       \
+    }                            \
     _bid;                        \
 })
 
@@ -127,9 +129,9 @@ always_inline a_msg ai_buf_nputv(a_henv env, a_hbuf buf, void const* src, a_usiz
     _pb->_ptr[--_pb->_len];  \
 })
 
-#define at_buf_putls(env,b,s,l) catch(ai_buf_nputls(env, b, s, l), ai_buf_error, env, "char")
+#define at_buf_putls(env,b,s,l) catch (ai_buf_nputls(env, b, s, l), _msg) { ai_buf_error(env, _msg, "char"); }
 #define at_buf_puts(env,b,s) at_buf_putls(env, b, s, strlen(s))
-#define at_buf_tostr(env,b) ai_str_new(env, (b)->_ptr, (b)->_len)
+#define at_buf_tostr(env,b) ai_str_get_or_new(env, (b)->_ptr, (b)->_len)
 
 #define at_buf_clear(b) quiet((b)._len = 0)
 

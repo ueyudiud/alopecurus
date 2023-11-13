@@ -35,7 +35,7 @@
 
 typedef char* LinePtr;
 
-#  define aloi_readline(env,b,l,p) ({ quiet(env); ((b) = readline(p)) != null ? ((l) = strlen(b), ALO_SYIELD) : ALO_EIO; })
+#  define aloi_readline(env,b,l,p) ({ quiet(env); ((b) = readline(p)) != null ? ((l) = strlen(b), ALO_SYIELD) : ALO_EOUTER; })
 #  define aloi_saveline(env,l) (quiet(env), add_history(l))
 #  define aloi_freeline(b) free(b)
 
@@ -50,7 +50,7 @@ static a_msg aloi_readline(a_henv env, LinePtr buf, a_usize* plen, char const* p
 		aloi_show_flush();
 	}
 	if (fgets(buf, sizeof(LinePtr), stdin) == null)
-		return ALO_EIO;
+		return ALO_EOUTER;
 	a_usize len = strlen(buf);
 	*plen = len;
 	return likely(buf[len - 1] == '\n') ? ALO_SYIELD : ALO_SOK;
@@ -80,7 +80,10 @@ typedef struct {
 static InLines l_lines;
 
 static void l_init_lines(void) {
-	l_lines = new(InLines) { ._head = null, ._tail = &l_lines._head };
+    init(&l_lines) {
+        ._head = null,
+        ._tail = &l_lines._head
+    };
 }
 
 static void l_deinit_lines(void) {
@@ -157,7 +160,7 @@ static a_i32 l_source_input(unused a_henv env, void* rctx, void const** pdst, a_
 	return 0;
 }
 
-#define EOF_MARK ", got <EOF>"
+#define EOF_MARK ", got <eof>"
 
 static a_bool l_is_eof_error(a_henv env) {
 	a_usize len;
@@ -235,8 +238,8 @@ again:
 }
 
 static a_msg l_comp_reps(a_henv env, a_bool* peval) {
-	alo_pushlstr(env, "__main__");
-	alo_pushlstr(env, "stdin");
+    alo_pushntstr(env, "__main__");
+    alo_pushntstr(env, "stdin");
 
 	try(l_try_comp_reps(env, "> ", peval));
 	loop try(l_try_comp_reps(env, ">> ", peval));
@@ -259,12 +262,12 @@ static a_msg l_pcomp_reps(a_henv env) {
 }
 
 static a_msg l_pread_eval(a_henv env) {
-	try(l_pcomp_reps(env));
-	try(alo_pcall(env, 0, -1, 0));
+	try (l_pcomp_reps(env));
+	try (alo_pcall(env, 0, -1, 0));
 	return ALO_SOK;
 }
 
-static a_none l_run_repl(a_henv env) {
+static a_noret l_run_repl(a_henv env) {
 	loop {
 		a_msg msg = l_pread_eval(env);
 		l_print_result(env, msg);

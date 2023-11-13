@@ -80,17 +80,17 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
 }
 
 static a_msg l_load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
-	*info = new(ProtoDesc) {
-		._nconst = l_getvi(ic, a_u32),
-		._ninsn = l_getvi(ic, a_u32),
-		._nsub = l_getvi(ic, a_u32),
-		._nlocal = l_getvi(ic, a_u16),
-		._nline = l_getvi(ic, a_u16),
-		._ncap = l_get(ic, a_u8),
-		._nstack = l_get(ic, a_u8),
-		._flags = l_get(ic, ProtoFlags)
-	};
-	if (info->_flags._froot != root)
+    init(info) {
+        ._nconst = l_getvi(ic, a_u32),
+        ._ninsn = l_getvi(ic, a_u32),
+        ._nsub = l_getvi(ic, a_u32),
+        ._nlocal = l_getvi(ic, a_u16),
+        ._nline = l_getvi(ic, a_u16),
+        ._ncap = l_get(ic, a_u8),
+        ._nstack = l_get(ic, a_u8),
+        ._flags = l_get(ic, ProtoFlags)
+    };
+	if (info->_flags._funiq != root)
 		return ALO_EINVAL;
     return ALO_SOK;
 }
@@ -115,12 +115,12 @@ static a_msg l_load_meta(InCtx* ic, ProtoDesc const* info, GProto* meta) {
 static a_msg l_load_sub(InCtx* ic, GProto** pf) {
     /* Load function header */
     ProtoDesc info;
-    try(l_load_info(ic, &info, false));
+    try (l_load_info(ic, &info, false));
 
     GProto* meta = ai_proto_xalloc(ic->_env, &info);
     if (meta == null) return ALO_ENOMEM;
 
-    try(l_load_meta(ic, &info, meta));
+    try (l_load_meta(ic, &info, meta));
     *pf = meta;
     return ALO_SOK;
 }
@@ -128,37 +128,37 @@ static a_msg l_load_sub(InCtx* ic, GProto** pf) {
 static a_msg l_load_root(InCtx* ic) {
     /* Load function header */
     ProtoDesc info;
-    try(l_load_info(ic, &info, true));
+    try (l_load_info(ic, &info, true));
 
 	GProto* meta = ai_proto_xalloc(ic->_env, &info);
 	if (meta == null) return ALO_ENOMEM;
 
-    try(l_load_meta(ic, &info, meta));
+    try (l_load_meta(ic, &info, meta));
     
     return ALO_SOK;
 }
 
 static a_msg l_load(InCtx* ic) {
-    try(l_load_root(ic));
+    try (l_load_root(ic));
 	ai_gc_register_objects(ic->_in._env, &ic->_rq);
     return ALO_SOK;
 }
 
-static void l_splash(Global* g, void* ctx) {
+static void l_splash(Global* gbl, void* ctx) {
     InCtx* ic = ctx;
-	rq_for(obj, &ic->_rq) {
+	rq_for (obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
 		for (a_u32 i = 0; i < meta->_nconst; ++i) {
-			ai_gc_trace_mark_val(g, meta->_consts[i]);
+			ai_gc_trace_mark_val(gbl, meta->_consts[i]);
 		}
 	}
 }
 
 static void l_release(InCtx* ic) {
-    Global* g = G(ic->_env);
-	rq_for(obj, &ic->_rq) {
+    Global* gbl = G(ic->_env);
+	rq_for (obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
-		ai_mem_ndealloc(g, meta, meta->_size);
+		ai_mem_ndealloc(gbl, meta, meta->_size);
 	}
 }
 

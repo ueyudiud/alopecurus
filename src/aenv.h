@@ -15,11 +15,11 @@
 #define GLOBAL_FLAG_DISABLE_GC u16c(0x0008)
 
 intern GRoute* ai_env_new(a_henv env, a_usize stack_size);
-intern a_henv ai_env_mroute(Global* g);
+intern a_henv ai_env_mroute(Global* gbl);
 intern a_msg ai_env_resume(a_henv env, GRoute* self);
 intern void ai_env_yield(a_henv env);
 intern a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx);
-intern a_none ai_env_raise(a_henv env, a_msg msg);
+intern a_noret ai_env_raise(a_henv env, a_msg msg);
 
 #ifndef ALOI_DFL_GCSTEPMUL
 # define ALOI_DFL_GCSTEPMUL usizec(384)
@@ -40,7 +40,7 @@ always_inline void check_in_stack(a_henv env, Value* v) {
 always_inline StkPtr val2stk(a_henv env, Value* v) {
 	check_in_stack(env, v);
 #if ALO_STACK_RELOC
-	return ptr_diff(v, env->_stack._impl);
+	return addr_diff(v, env->_stack._impl);
 #else
 	quiet(env);
 	return v;

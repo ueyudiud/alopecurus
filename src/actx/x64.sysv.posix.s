@@ -15,14 +15,14 @@ ai_ctx_jump:
     movq %r15, -0x030(%rsp)
 
     /* save context */
-    movq %rsp, 0x20(%rsi)
+    movq %rsp, 0x18(%rsi)
 
     /* move result message */
     movq %rdx, %rax
 
 ai_ctx_return:
     /* load context */
-    movq 0x20(%rdi), %rsp
+    movq 0x18(%rdi), %rsp
 
     /* load GPR */
     movq -0x008(%rsp), %rbp
@@ -49,13 +49,13 @@ ai_ctx_start:
     movq %rdi, %rbx
 
     /* do vm call */
-    movq 0x40(%rdi), %rsi
+    movq 0x38(%rdi), %rsi
     movq $-1, %rdx
     call ai_vm_call
 
     /* do half jump */
     movq %rbx, %rsi
-    movq 0x30(%rsi), %rdi
+    movq 0x28(%rsi), %rdi
     xorq %rax, %rax
     jmp ai_ctx_return
 

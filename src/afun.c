@@ -13,8 +13,10 @@
 #include "afun.h"
 
 static VTable const afun_vtable;
+static VTable const uniq_afun_vtable;
 static VTable const cfun_vtable;
 static VTable const proto_vtable;
+static VTable const uniq_proto_vtable;
 
 static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
@@ -34,9 +36,8 @@ static a_usize proto_size(ProtoDesc* desc) {
 	else {
 		size += sizeof(LineInfo);
 	}
-	if (desc->_flags._froot) {
-		assume(desc->_ncap <= 1, "bad capture count.");
-		size += fun_size(desc->_ncap) + desc->_ncap * sizeof(RcCap);
+	if (desc->_flags._funiq) {
+		size += fun_size(desc->_ncap);
 	}
 	return size;
 }
@@ -44,11 +45,12 @@ static a_usize proto_size(ProtoDesc* desc) {
 GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	a_usize total_size = proto_size(desc);
 
-    GProto* self = ai_mem_nalloc(env, total_size);
-    if (self == null) return null;
-    memclr(self, total_size);
+    void* blk = ai_mem_nalloc(env, sizeof(GcHead) + total_size);
+    if (blk == null) return null;
+    memclr(blk, total_size);
 
-	self->_vptr = &proto_vtable;
+    GProto* self = g_cast(GProto, g_biased(blk));
+	self->_vptr = desc->_flags._funiq ? &uniq_proto_vtable : &proto_vtable;
     self->_size = total_size;
     self->_nconst = desc->_nconst;
     self->_ninsn = desc->_ninsn;
@@ -59,67 +61,62 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
     self->_nstack = desc->_nstack;
 	self->_nparam = desc->_nparam;
 
-	a_usize addr = addr_of(self) + sizeof(GProto);
+	a_usize addr = ptr2int(self) + sizeof(GProto);
 
-	/* self->_subs = ptr_of(GProto*, addr); */
+	/* self->_subs = int2ptr(GProto*, addr); */
 	addr += sizeof(GProto*) * desc->_nsub;
 
-	self->_consts = ptr_of(Value, addr);
+	self->_consts = int2ptr(Value, addr);
 	addr += sizeof(Value) * desc->_nconst;
 
 	if (desc->_flags._fdebug) {
-		self->_dbg_lines = ptr_of(LineInfo, addr);
+		self->_dbg_lines = int2ptr(LineInfo, addr);
 		addr += sizeof(LineInfo) * desc->_nline;
 
-		self->_dbg_locals = ptr_of(LocalInfo, addr);
+		self->_dbg_locals = int2ptr(LocalInfo, addr);
 		addr += sizeof(LocalInfo) * desc->_nlocal;
 
-		self->_dbg_cap_names = ptr_of(GStr*, addr);
+		self->_dbg_cap_names = int2ptr(GStr*, addr);
 		addr += sizeof(GStr*) * desc->_ncap;
 	}
 	else {
 		self->_dbg_lndef = self->_dbg_lnldef = 0;
 
-		self->_dbg_lines = ptr_of(LineInfo, addr);
+		self->_dbg_lines = int2ptr(LineInfo, addr);
 		addr += sizeof(LineInfo);
 
-		self->_dbg_lines[0] = new(LineInfo) { ._end = UINT32_MAX, ._lineno = 0 };
+        init(&self->_dbg_lines[0]) {
+            ._end = UINT32_MAX,
+            ._lineno = 0
+        };
 	}
 
-	if (desc->_flags._froot) {
-		GFun* fun = ptr_of(GFun, addr);
+	if (desc->_flags._funiq) {
+        /* Initialize unique function for this prototype. */
+
+		GFun* fun = int2ptr(GFun, addr);
 		addr += fun_size(desc->_ncap);
 
-		fun->_vptr = &afun_vtable;
+		fun->_vptr = &uniq_afun_vtable;
 		fun->_proto = self;
 		fun->_len = desc->_ncap;
-		if (desc->_ncap > 0) {
-			RcCap* cap = ptr_of(RcCap, addr);
-			addr += sizeof(RcCap);
-
-			cap->_ptr = &cap->_slot;
-			v_set_nil(&cap->_slot);
-			cap->_rc = 2; /* Mark capture always be referenced. */
-
-			fun->_caps[0] = cap;
-		}
 
 		self->_cache = fun;
 	}
 
-	self->_caps = ptr_of(CapInfo, addr);
+	self->_caps = int2ptr(CapInfo, addr);
 	addr += sizeof(CapInfo) * self->_ncap;
 
-	self->_code = ptr_of(a_insn, addr);
+	self->_code = int2ptr(a_insn, addr);
 	addr += sizeof(a_insn) * self->_ninsn;
 
-	assume(addr_of(self) + total_size == addr);
+	assume(ptr2int(self) + total_size == addr);
 
 	return self;
 }
 
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
-	GFun* self = ai_mem_alloc(env, fun_size(ncap));
+	GFun* self = ai_mem_gnew(env, GFun, fun_size(ncap));
 
 	self->_vptr = &cfun_vtable;
 	self->_len = ncap;
@@ -135,10 +132,10 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 }
 
 static RcCap* cap_nalloc(a_henv env) {
-	Global* g = G(env);
-	RcCap* cap = g->_cap_cache;
+	Global* gbl = G(env);
+	RcCap* cap = gbl->_cap_cache;
 	if (cap != null) {
-		g->_cap_cache = cap->_next;
+		gbl->_cap_cache = cap->_next;
 		return cap;
 	}
 	return ai_mem_nalloc(env, sizeof(RcCap));
@@ -160,7 +157,6 @@ static RcCap* cap_nload_from_stack(a_henv env, Value* pv) {
 		RcCap* self = cap_nalloc(env);
 
         if (self == null) return null;
-
 
 		self->_ptr = pv;
 		self->_rc = 1;
@@ -192,6 +188,17 @@ static void v_close(a_henv env, Value v) {
     v_vcall(env, v, close);
 }
 
+RcCap* ai_cap_new(a_henv env) {
+    RcCap* self = cap_nalloc(env);
+
+    if (unlikely(self == null)) ai_mem_nomem(env);
+
+    self->_ptr = &self->_slot;
+    self->_rc = 1;
+
+    return self;
+}
+
 void ai_cap_mark_tbc(a_henv env, Value* pv) {
 	RcCap* cap = cap_nload_from_stack(env, pv);
     if (!cap->_ftbc) {
@@ -204,14 +211,14 @@ void ai_cap_mark_tbc(a_henv env, Value* pv) {
     }
 }
 
-GFun *ai_fun_new(a_henv env, GProto *proto) {
+GFun* ai_fun_new(a_henv env, GProto* proto) {
 	Value* base = ai_stk_bot(env);
 	GFun* parent = v_as_func(base[-1]);
 	CapInfo* infos = proto->_caps;
 
 	a_u32 len = proto->_ncap;
 
-	GFun* self = ai_mem_alloc(env, fun_size(len));
+	GFun* self = ai_mem_gnew(env, GFun, fun_size(len));
 
 	self->_vptr = &afun_vtable;
 	self->_proto = proto;
@@ -234,22 +241,22 @@ static a_bool cap_is_closed(RcCap* self) {
 	return self->_ptr == &self->_slot;
 }
 
-static void cap_mark(Global* g, RcCap* self) {
-	if (cap_is_closed(self) || g->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
-		ai_gc_trace_mark_val(g, *self->_ptr);
+static void cap_mark(Global* gbl, RcCap* self) {
+	if (cap_is_closed(self) || gbl->_gcstep == GCSTEP_PROPAGATE_ATOMIC) {
+		ai_gc_trace_mark_val(gbl, *self->_ptr);
 	}
 	else {
 		self->_ftouch = true;
 	}
 }
 
-void ai_cap_really_drop(Global* g, RcCap* self) {
-	ai_mem_dealloc(g, self, sizeof(RcCap));
+void ai_cap_really_drop(Global* gbl, RcCap* self) {
+	ai_mem_dealloc(gbl, self, sizeof(RcCap));
 }
 
-static void cap_drop(Global* g, RcCap* self) {
-	self->_next = g->_cap_cache;
-	g->_cap_cache = self;
+static void cap_drop(Global* gbl, RcCap* self) {
+	self->_next = gbl->_cap_cache;
+	gbl->_cap_cache = self;
 }
 
 static void cap_close_value(a_henv env, RcCap* self) {
@@ -259,11 +266,11 @@ static void cap_close_value(a_henv env, RcCap* self) {
 	}
 }
 
-static void cap_release(Global* g, RcCap* self) {
+static void cap_release(Global* gbl, RcCap* self) {
 	assume(self->_rc > 0);
 	if (--self->_rc == 0 && cap_is_closed(self)) {
-		cap_close_value(ai_env_mroute(g), self);
-		cap_drop(g, self);
+		cap_close_value(ai_env_mroute(gbl), self);
+		cap_drop(gbl, self);
 	}
 }
 
@@ -298,79 +305,109 @@ void ai_cap_close_above(a_henv env, Value* pv) {
 	env->_open_caps = cap;
 }
 
-void ai_cap_clean(Global* g) {
-	RcCap* cap = g->_cap_cache;
-	g->_cap_cache = null;
+void ai_cap_clean(Global* gbl) {
+	RcCap* cap = gbl->_cap_cache;
+	gbl->_cap_cache = null;
 	while (cap != null) {
 		RcCap* next = cap->_next;
-		ai_cap_really_drop(g, cap);
+		ai_cap_really_drop(gbl, cap);
 		cap = next;
 	}
 }
 
-static void afun_drop(Global* g, GFun* self) {
+static void afun_drop(Global* gbl, GFun* self) {
 	for (a_u32 i = 0; i < self->_len; ++i) {
-		cap_release(g, self->_caps[i]);
+		cap_release(gbl, self->_caps[i]);
 	}
-	ai_mem_dealloc(g, self, fun_size(self->_len));
+    ai_mem_gdel(gbl, self, fun_size(self->_len));
 }
 
-static void afun_mark(Global* g, GFun* self) {
-	ai_gc_trace_mark(g, self->_proto);
+static void afun_mark(Global* gbl, GFun* self) {
+	ai_gc_trace_mark(gbl, self->_proto);
 	a_u32 len = self->_len;
 	for (a_u32 i = 0; i < len; ++i) {
-		cap_mark(g, self->_caps[i]);
+		cap_mark(gbl, self->_caps[i]);
 	}
-	ai_gc_trace_work(g, fun_size(self->_len));
+	ai_gc_trace_work(gbl, fun_size(self->_len));
 }
 
-static void cfun_drop(Global* g, GFun* self) {
-	ai_mem_dealloc(g, self, fun_size(self->_len));
+static void uniq_afun_mark(Global* gbl, GFun* self) {
+    ai_gc_trace_mark(gbl, self->_proto);
+    a_u32 len = self->_len;
+    for (a_u32 i = 0; i < len; ++i) {
+        cap_mark(gbl, self->_caps[i]);
+    }
 }
 
-static void cfun_mark(Global* g, GFun* self) {
+static void cfun_drop(Global* gbl, GFun* self) {
+    ai_mem_gdel(gbl, self, fun_size(self->_len));
+}
+
+static void cfun_mark(Global* gbl, GFun* self) {
 	a_u32 len = self->_len;
 	for (a_u32 i = 0; i < len; ++i) {
-		ai_gc_trace_mark_val(g, self->_vals[i]);
+		ai_gc_trace_mark_val(gbl, self->_vals[i]);
 	}
-	ai_gc_trace_work(g, fun_size(len));
+	ai_gc_trace_work(gbl, fun_size(len));
 }
 
-void ai_proto_drop(Global* g, GProto* self) {
-	ai_mem_dealloc(g, self, self->_size);
+static void uniq_proto_drop(Global* gbl, GProto* self) {
+    GFun* func = self->_cache;
+    for (a_u32 i = 0; i < func->_len; ++i) {
+        cap_release(gbl, func->_caps[i]);
+    }
+    ai_mem_gdel(gbl, self, self->_size);
 }
 
-static void proto_mark(Global* g, GProto* self) {
+void ai_proto_drop(Global* gbl, GProto* self) {
+	ai_mem_gdel(gbl, self, self->_size);
+}
+
+static void proto_mark(Global* gbl, GProto* self) {
 	for (a_u32 i = 0; i < self->_nconst; ++i) {
-		ai_gc_trace_mark_val(g, self->_consts[i]);
+		ai_gc_trace_mark_val(gbl, self->_consts[i]);
 	}
+    for (a_u32 i = 0; i < self->_nsub; ++i) {
+        ai_gc_trace_mark(gbl, self->_subs[i]);
+    }
 	if (self->_dbg_file != null) {
-		ai_gc_trace_mark(g, self->_dbg_file);
+		ai_gc_trace_mark(gbl, self->_dbg_file);
 	}
 	if (self->_dbg_locals != null) {
 		for (a_u32 i = 0; i < self->_nlocal; ++i) {
-			ai_gc_trace_mark(g, self->_dbg_locals[i]._name);
+			ai_gc_trace_mark(gbl, self->_dbg_locals[i]._name);
 		}
 		assume(self->_dbg_cap_names != null);
 		for (a_u32 i = 0; i < self->_ncap; ++i) {
-			ai_gc_trace_mark(g, self->_dbg_cap_names[i]);
+			ai_gc_trace_mark(gbl, self->_dbg_cap_names[i]);
 		}
 	}
-	ai_gc_trace_work(g, self->_size);
+	ai_gc_trace_work(gbl, self->_size);
 }
 
 static VTable const afun_vtable = {
 	._stencil = V_STENCIL(T_FUNC),
-    ._type_ref = g_type_ref(_func),
+    ._tag = ALO_TFUNC,
+    ._type_ref = g_type_ref(ALO_TFUNC),
 	._slots = {
         [vfp_slot(drop)] = afun_drop,
         [vfp_slot(mark)] = afun_mark
 	}
 };
 
+static VTable const uniq_afun_vtable = {
+	._stencil = V_STENCIL(T_FUNC),
+    ._tag = ALO_TFUNC,
+    ._type_ref = g_type_ref(ALO_TFUNC),
+	._slots = {
+        [vfp_slot(mark)] = uniq_afun_mark
+	}
+};
+
 static VTable const cfun_vtable = {
 	._stencil = V_STENCIL(T_FUNC),
-    ._type_ref = g_type_ref(_func),
+    ._tag = ALO_TFUNC,
+    ._type_ref = g_type_ref(ALO_TFUNC),
 	._slots = {
         [vfp_slot(drop)] = cfun_drop,
         [vfp_slot(mark)] = cfun_mark
@@ -383,4 +420,12 @@ static VTable const proto_vtable = {
         [vfp_slot(drop)] = ai_proto_drop,
         [vfp_slot(mark)] = proto_mark
 	}
+};
+
+static VTable const uniq_proto_vtable = {
+    ._stencil = V_STENCIL(T_USER),
+    ._slots = {
+        [vfp_slot(drop)] = uniq_proto_drop,
+        [vfp_slot(mark)] = proto_mark
+    }
 };

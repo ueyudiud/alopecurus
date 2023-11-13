@@ -64,7 +64,7 @@ typedef double a_f64;
 
 typedef a_i32 a_msg;
 typedef a_u32 a_enum;
-typedef a_usize a_flags;
+typedef a_u32 a_flags;
 
 #define ALO_STACK_INDEX_ERROR (-1000)
 #define ALO_STACK_INDEX_CAPTURE_BASE (-2000)
@@ -73,14 +73,13 @@ typedef a_usize a_flags;
 
 #define ALO_STACK_INDEX_CAPTURE(n) (ALO_STACK_INDEX_CAPTURE_BASE + (n))
 
-#define ALO_EIO    (-9) /* Foreign IO Error */
 #define ALO_ERAISE (-8) /* User Raised Error */
 #define ALO_ECHUNK (-7) /* Text/Binary Chunk Error */
 #define ALO_EOUTER (-6) /* External Error */
 #define ALO_ESTKOF (-5) /* Stack Overflow */
 #define ALO_ENOMEM (-4) /* Out of Memory */
 #define ALO_EINVAL (-3) /* Invalid Argument */
-#define ALO_EBADOP (-2) /* Bad Operation */
+#define ALO_EXIMPL (-2) /* Not Implemented */
 #define ALO_EEMPTY (-1) /* Empty Value */
 
 #define ALO_SOK 0
@@ -109,18 +108,13 @@ typedef int a_bool;
 
 /* VM integer number type. */
 typedef a_i32 a_int;
-typedef a_u32 a_uint;
 /* VM float point number type. */
 typedef a_f64 a_float;
-/* Iterator for external used. */
-typedef a_u32 a_ritr[1];
 
 /* Allocation function table. */
-typedef struct alo_Alloc a_alloc;
+typedef struct alo_Alloc alo_Alloc;
 /* Environment handle. */
 typedef struct alo_Env* a_henv;
-/* Type handle. */
-typedef struct alo_Type* a_htype;
 
 struct alo_Alloc {
 	void* (*allocate)(void*, a_usize);
@@ -137,7 +131,7 @@ typedef a_i32 (*a_ofun)(a_henv env, void* ctx, a_byte const* src, a_usize len);
 typedef a_i32 (*a_ifun)(a_henv env, void* ctx, void const** pdst, a_usize* plen);
 
 ALO_EXPORT a_msg (alo_init)(void);
-ALO_EXPORT a_msg (alo_create)(a_alloc const* af, void* ac, a_henv* penv);
+ALO_EXPORT a_msg (alo_create)(alo_Alloc const* af, void* ac, a_henv* penv);
 ALO_EXPORT void (alo_destroy)(a_henv env);
 ALO_EXPORT void (alo_setpanic)(a_henv env, a_cfun f);
 ALO_EXPORT void (alo_sethook)(a_henv env, a_hfun kf, a_hctx kc, a_flags mask);
@@ -163,23 +157,25 @@ ALO_EXPORT char const* (alo_pushstr)(a_henv env, void const* src, a_usize len);
 ALO_EXPORT char const* (alo_pushntstr)(a_henv env, char const* src);
 ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);
 ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg);
-ALO_EXPORT void (alo_pushtype)(a_henv env, a_htype hnd);
+ALO_EXPORT void (alo_pushptype)(a_henv env, a_msg tag);
+
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_usize n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_isize id);
+ALO_EXPORT a_isize (alo_rotate)(a_henv env, a_isize id, a_usize n);
 ALO_EXPORT void (alo_newtuple)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newlist)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newtable)(a_henv env, a_usize n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_usize n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 
-#define alo_pushlstr(env,src) alo_pushstr(env, ""src, sizeof(src) - sizeof((src)[0]))
+#define alo_insert(env,id) alo_rotate(env, id, 1)
 
-ALO_EXPORT a_msg (alo_rawlen)(a_henv env, a_isize id, a_usize* plen);
+ALO_EXPORT void (alo_set)(a_henv env, a_isize id);
+ALO_EXPORT a_msg (alo_rawlen)(a_henv env, a_isize id);
 ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_isize id, a_int key);
 ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_isize id);
-ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_isize id, a_isize* pctx);
-ALO_EXPORT a_msg (alo_rawput)(a_henv env, a_isize id, a_isize* pctx);
+ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_put)(a_henv env, a_isize id);
 ALO_EXPORT void (alo_call)(a_henv env, a_usize narg, a_isize nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_usize narg, a_isize nres, a_usize nsav);
@@ -200,23 +196,16 @@ ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_isize id);
 ALO_EXPORT a_int (alo_toint)(a_henv env, a_isize id);
 ALO_EXPORT a_float (alo_tofloat)(a_henv env, a_isize id);
 ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_isize id, a_usize* plen);
+ALO_EXPORT void* (alo_toptr)(a_henv env, a_isize id);
 
 #define alo_tostr(env,id) alo_tolstr(env, id, NULL)
 
 #define ALO_NEWMOD_FLAG_STATIC 0x0001
 
-/* Type operations. */
-ALO_EXPORT void (alo_newmod)(a_henv env, char const* n, a_flags flags);
-ALO_EXPORT a_htype (alo_typeof)(a_henv env, a_isize id);
-ALO_EXPORT char const* (alo_modname)(a_henv env, a_htype mod);
-ALO_EXPORT a_htype (alo_loadmod)(a_henv env, char const* src, a_usize len);
-ALO_EXPORT a_htype (alo_openmod)(a_henv env, a_isize id);
-ALO_EXPORT void (alo_closemod)(a_henv env, a_htype mod);
+ALO_EXPORT void (alo_newtype)(a_henv env, char const* n, a_flags flags);
 
-/* Table operations. */
-ALO_EXPORT a_usize (alo_hnext)(a_henv env, a_isize id, a_ritr itr);
-ALO_EXPORT a_bool (alo_hinsert)(a_henv env, a_isize id, a_ritr itr);
-ALO_EXPORT a_bool (alo_hremove)(a_henv env, a_isize id, a_ritr itr);
+/* Type operations. */
+ALO_EXPORT void (alo_typeof)(a_henv env, a_isize id);
 
 ALO_EXPORT void (alo_fullgc)(a_henv env);
 
@@ -235,18 +224,17 @@ ALO_EXPORT a_msg (alo_compile)(a_henv env, a_ifun fun, void* ctx, a_isize id_env
 typedef struct {
 	unsigned char kind;
 	char const* file;
-	size_t line;
+	unsigned line;
 	char const* name;
-	void* _hnd;
+	void const* _frame;
 } alo_Debug;
 
-#define ALO_DEBUG_START 1
+#define ALO_DEBUG_THIS 0
+#define ALO_DEBUG_HEAD 1
+#define ALO_DEBUG_NEXT 2
 
-#define ALO_DEBUG_GET 2
-#define ALO_DEBUG_GET_FLAG_SOURCE 0x0001
-#define ALO_DEBUG_GET_FLAG_THEN_NEXT 0x10000
-
-#define ALO_DEBUG_NEXT 3
+#define ALO_DEBUG_FLAG_SOURCE 0x0001
+#define ALO_DEBUG_FLAG_THEN_NEXT 0x10000
 
 ALO_EXPORT a_bool (alo_debug)(a_henv env, alo_Debug* dbg, a_enum n, a_flags w);
 

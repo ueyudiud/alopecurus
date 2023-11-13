@@ -51,14 +51,14 @@ ai_ctx_jump:
     movaps %xmm15, -0x108(%rsp)
 
     /* save context */
-    movq %rsp, 0x20(%rdx)
+    movq %rsp, 0x18(%rdx)
 
     /* move result message */
     movq %r8, %rax
 
 ai_ctx_return:
     /* load context */
-    movq 0x20(%rcx), %rsp
+    movq 0x18(%rcx), %rsp
 
     /* load FPR */
     movaps -0x078(%rsp), %xmm6
@@ -121,13 +121,13 @@ ai_ctx_start:
     movq %rcx, %rbx
 
     /* do vm call */
-    movq 0x40(%rcx), %rdx
+    movq 0x38(%rcx), %rdx
     movq $-1, %r8
     call ai_vm_call
 
     /* do half jump */
     movq %rbx, %rdx
-    movq 0x30(%rbx), %rcx
+    movq 0x28(%rbx), %rcx
     xorq %rax, %rax
     jmp ai_ctx_return
 

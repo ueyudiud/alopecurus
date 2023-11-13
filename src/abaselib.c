@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "atuple.h"
-#include "ameta.h"
+#include "atable.h"
 #include "auser.h"
 #include "agc.h"
 #include "aapi.h"
@@ -101,7 +101,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 				aloi_show("{...}");
 			}
 			else {
-                GTable *val = v_as_table(v);
+                GTable* val = v_as_table(v);
                 if (val->_len == 0) {
                     aloi_show("{}");
                 }
@@ -109,9 +109,9 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
                     a_u32 n = MAX_SHOW_LEN;
                     aloi_show("{");
                     a_bool tail = false;
-                    TNode *node;
-                    for (a_x32 itr = val->_ptr->_link._next; !is_nil(itr); itr = node->_link._next) {
-                        node = &val->_ptr[unwrap(itr)];
+                    TNode* node;
+                    for (a_i32 itr = val->_ptr[-1]._lnext; itr >= 0; itr = node->_lnext) {
+                        node = &val->_ptr[itr];
                         if (tail) {
                             aloi_show(", ");
                         }
@@ -133,10 +133,6 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 		}
 		case T_FUNC: {
 			aloi_show("<func:%p>", v_as_obj(v));
-			break;
-		}
-		case T_META: {
-			aloi_show("<meta:%s>", str2ntstr(v_as_meta(v)->_name));
 			break;
 		}
 		case T_USER: {
@@ -190,7 +186,7 @@ static a_msg base_assert(a_henv env) {
 	}
 	else {
 		if (n == 1) {
-			alo_pushlstr(env, "assertion failed!");
+			alo_pushntstr(env, "assertion failed!");
 		}
 		alo_settop(env, 2);
         aloL_traceerror(env, 1, 1, 6);
@@ -215,11 +211,10 @@ void aloopen_base(a_henv env) {
 	};
 
     alo_push(env, ALO_STACK_INDEX_GLOBAL);
-	aloL_putfields(env, -1, bindings);
+    aloL_putalls(env, -1, bindings);
 
-	GMeta* meta = v_as_meta(api_elem(env, -1));
-
-	ai_meta_set(env, meta, v_of_obj(ai_str_newl(env, "_VER")), v_of_int(ALO_VERSION_NUMBER));
+    alo_pushint(env, ALO_VERSION_NUMBER);
+    aloL_puts(env, -2, "_VER");
 
 	ai_gc_trigger(env);
 }
