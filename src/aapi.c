@@ -113,7 +113,7 @@ void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
  *@param env the runtime environment.
  *@return the stack size.
  */
-a_usize alo_stacksize(a_henv env) {
+a_istk alo_stacksize(a_henv env) {
 	return env->_stack._top - ai_stk_bot(env);
 }
 
@@ -123,7 +123,7 @@ a_usize alo_stacksize(a_henv env) {
  *@param n the number of reserved slots.
  *@return false if reserved success and true for otherwise.
  */
-a_bool alo_ensure(a_henv env, a_usize n) {
+a_bool alo_ensure(a_henv env, a_ustk n) {
 	Value* const expect = env->_stack._top + n;
 	Value* const limit = api_stack_limit(env);
 	if (expect > limit) {
@@ -151,7 +151,7 @@ a_bool alo_ensure(a_henv env, a_usize n) {
  *@param env the runtime environment.
  *@param n the stack index of top, only valid stack index is available.
  */
-void alo_settop(a_henv env, a_isize n) {
+void alo_settop(a_henv env, a_istk n) {
 	Value* old_top = env->_stack._top;
 	Value* new_top = n >= 0 ? ai_stk_bot(env) + n : old_top + n;
 
@@ -163,7 +163,7 @@ void alo_settop(a_henv env, a_isize n) {
 
 #define MIN_NEG_STACK_INDEX (-255)
 
-a_isize alo_absindex(a_henv env, a_isize id) {
+a_istk alo_absindex(a_henv env, a_istk id) {
 	if (id < 0 && id >= MIN_NEG_STACK_INDEX) {
 		Value* v = env->_stack._top + id;
 		api_check(v >= ai_stk_bot(env));
@@ -172,7 +172,7 @@ a_isize alo_absindex(a_henv env, a_isize id) {
 	return id;
 }
 
-Value const* api_roslot(a_henv env, a_isize id) {
+Value const* api_roslot(a_henv env, a_istk id) {
 	if (id >= 0) {
 		Value const* bot = ai_stk_bot(env);
 		if (id >= env->_stack._top - bot) 
@@ -191,7 +191,7 @@ Value const* api_roslot(a_henv env, a_isize id) {
 	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
 		id -= ALO_STACK_INDEX_CAPTURE_BASE;
 		GFun* fun = v_as_func(*stk2val(env, env->_frame->_stack_bot - 1));
-		if (id >= fun->_len)
+		if (cast(a_u32, id) >= fun->_len)
 			return null;
 		return unlikely(fun->_flags & FUN_FLAG_NATIVE) ? &fun->_vals[id] : fun->_caps[id]->_ptr;
 	}
@@ -201,16 +201,16 @@ Value const* api_roslot(a_henv env, a_isize id) {
 	return null;
 }
 
-Value const* api_rdslot(a_henv env, a_isize id) {
+Value const* api_rdslot(a_henv env, a_istk id) {
 	static Value const v_nil = v_of_nil();
 	return api_roslot(env, id) ?: &v_nil;
 }
 
-Value api_elem(a_henv env, a_isize id) {
+Value api_elem(a_henv env, a_istk id) {
 	return *api_rdslot(env, id);
 }
 
-Value* api_wrslot(a_henv env, a_isize id) {
+Value* api_wrslot(a_henv env, a_istk id) {
 	Value* v;
 	if (id >= MIN_NEG_STACK_INDEX) {
 		v = api_stack(env, id);
@@ -221,7 +221,7 @@ Value* api_wrslot(a_henv env, a_isize id) {
 	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
 		id -= ALO_STACK_INDEX_CAPTURE_BASE;
 		GFun* fun = v_as_func(*stk2val(env, env->_frame->_stack_bot - 1));
-		api_check(id < fun->_len);
+		api_check(cast(a_u32, id) < fun->_len);
 		v = unlikely(fun->_flags & FUN_FLAG_NATIVE) ? &fun->_vals[id] : fun->_caps[id]->_ptr;
 	}
 	else {
@@ -231,7 +231,7 @@ Value* api_wrslot(a_henv env, a_isize id) {
 	return v;
 }
 
-Value* api_stack(a_henv env, a_isize id) {
+Value* api_stack(a_henv env, a_istk id) {
     Value* v;
     if (id >= 0) {
         v = ai_stk_bot(env) + id;
@@ -244,7 +244,7 @@ Value* api_stack(a_henv env, a_isize id) {
     return v;
 }
 
-void alo_push(a_henv env, a_isize id) {
+void alo_push(a_henv env, a_istk id) {
 	Value v = api_elem(env, id);
 	v_set(env, api_incr_stack(env), v);
 }
@@ -283,16 +283,9 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 			return ALO_EEMPTY;
 		}
 		case 'i': { /* Index addressing. */
-			Value const* p = api_roslot(env, va_arg(varg, a_isize));
+			Value const* p = api_roslot(env, va_arg(varg, a_istk));
 			if (p == null) return ALO_EEMPTY;
 			v_cpy(env, &v, p);
-			break;
-		}
-		case 'b': { /* Frame base addressing. */
-			a_usize i = va_arg(varg, a_usize);
-			Value const* bot = ai_stk_bot(env);
-			if (i >= cast(a_usize, env->_stack._top - bot)) return ALO_EEMPTY;
-			v_set(env, &v, bot[i]);
 			break;
 		}
 		case 'g': {
@@ -408,7 +401,7 @@ void alo_pushroute(a_henv env) {
 	v_set_obj(env, api_incr_stack(env), env);
 }
 
-void alo_xmove(a_henv src, a_henv dst, a_usize n) {
+void alo_xmove(a_henv src, a_henv dst, a_ustk n) {
 	api_check(src != dst, "same environment.");
 	api_check(G(src) == G(dst), "not in same global context.");
 	api_check_elem(src, n);
@@ -418,7 +411,7 @@ void alo_xmove(a_henv src, a_henv dst, a_usize n) {
 	dst->_stack._top += n;
 }
 
-void alo_pop(a_henv env, a_isize id) {
+void alo_pop(a_henv env, a_istk id) {
 	Value* d = api_wrslot(env, id);
 	api_check(env->_stack._top - 1 != d, "bad pop index.");
 	Value s = api_decr_stack(env);
@@ -441,7 +434,7 @@ static void v_reverse(a_henv env, Value* vl, Value* vh) {
     }
 }
 
-a_isize alo_rotate(a_henv env, a_isize id, a_usize n) {
+a_ustk alo_rotate(a_henv env, a_istk id, a_ustk n) {
     Value* p = api_stack(env, id);
     Value* r = env->_stack._top;
     api_check(n <= cast(a_usize, r - p), "rotate range out of bound");
@@ -450,10 +443,10 @@ a_isize alo_rotate(a_henv env, a_isize id, a_usize n) {
     v_reverse(env, p, q);
     v_reverse(env, q, r);
     v_reverse(env, p, r);
-    return r - p;
+    return cast(a_ustk, r - p);
 }
 
-void alo_newtuple(a_henv env, a_usize n) {
+void alo_newtuple(a_henv env, a_ustk n) {
 	api_check_elem(env, n);
 	GTuple* val = ai_tuple_new(env, env->_stack._top - n, n);
 	env->_stack._top -= n;
@@ -461,14 +454,14 @@ void alo_newtuple(a_henv env, a_usize n) {
 	ai_gc_trigger(env);
 }
 
-void alo_newlist(a_henv env, a_usize n) {
+void alo_newlist(a_henv env, a_ustk n) {
 	GList* val = ai_list_new(env);
 	v_set_obj(env, api_incr_stack(env), val);
     ai_list_hint(env, val, n);
     ai_gc_trigger(env);
 }
 
-void alo_newtable(a_henv env, a_usize n) {
+void alo_newtable(a_henv env, a_ustk n) {
 	GTable* val = ai_table_new(env);
 	v_set_obj(env, api_incr_stack(env), val);
 	if (n > 0) {
@@ -477,7 +470,7 @@ void alo_newtable(a_henv env, a_usize n) {
     ai_gc_trigger(env);
 }
 
-void alo_newcfun(a_henv env, a_cfun f, a_usize n) {
+void alo_newcfun(a_henv env, a_cfun f, a_ustk n) {
 	api_check_elem(env, n);
 	GFun* val = ai_cfun_create(env, f, n, env->_stack._top - n);
 	env->_stack._top -= n;
@@ -492,7 +485,20 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 	return val;
 }
 
-void alo_set(a_henv env, a_isize id) {
+a_msg alo_get(a_henv env, a_istk id) {
+    api_check_elem(env, 1);
+
+    Value v = api_elem(env, id);
+    Value vk = env->_stack._top[-1];
+
+    Value vv = ai_vm_get(env, v, vk);
+
+    v_set(env, &env->_stack._top[-1], vv);
+
+    return api_tagof(env, vv);
+}
+
+void alo_set(a_henv env, a_istk id) {
     api_check_elem(env, 2);
 
     Value v = api_elem(env, id);
@@ -509,31 +515,31 @@ void alo_set(a_henv env, a_isize id) {
  **
  *@param env the runtime environment.
  *@param id the value index.
- *@return a non-negative number for the length of object, or ALO_EXIMPL for method not implemented.
+ *@return a non-negative number for the length of object, or 0 for method not implemented.
  */
-a_msg alo_rawlen(a_henv env, a_isize id) {
+a_int alo_rawlen(a_henv env, a_istk id) {
 	Value v = api_elem(env, id);
 
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
 			GTuple* p = v_as_tuple(v);
-			return cast(a_msg, p->_len);
+			return cast(a_int, p->_len);
 		}
 		case T_LIST: {
 			GList* p = v_as_list(v);
-            return cast(a_msg, p->_len);
+            return cast(a_int, p->_len);
 		}
 		case T_TABLE: {
 			GTable* p = v_as_table(v);
-            return cast(a_msg, p->_len);
+            return cast(a_int, p->_len);
 		}
 		default: {
-			return ALO_EXIMPL;
+			return 0;
 		}
 	}
 }
 
-a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
+a_msg alo_rawgeti(a_henv env, a_istk id, a_int key) {
 	api_check_elem(env, 1);
 
 	Value v = api_elem(env, id);
@@ -541,17 +547,17 @@ a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
 			GTuple* p = v_as_tuple(v);
-			try(ai_tuple_ugeti(env, p, key, &v));
+			try (ai_tuple_ugeti(env, p, key, &v));
 			break;
 		}
 		case T_LIST: {
 			GList* p = v_as_list(v);
-			try(ai_list_ugeti(env, p, key, &v));
+			try (ai_list_ugeti(env, p, key, &v));
 			break;
 		}
 		case T_TABLE: {
 			GTable* p = v_as_table(v);
-			try(ai_table_geti(env, p, key, &v));
+			try (ai_table_geti(env, p, key, &v));
 			break;
 		}
 		default: {
@@ -563,7 +569,7 @@ a_msg alo_rawgeti(a_henv env, a_isize id, a_int key) {
 	return api_tagof(env, v);
 }
 
-a_msg alo_rawget(a_henv env, a_isize id) {
+a_msg alo_rawget(a_henv env, a_istk id) {
 	api_check_elem(env, 1);
 
 	Value v = api_elem(env, id);
@@ -575,7 +581,7 @@ a_msg alo_rawget(a_henv env, a_isize id) {
 	return api_tagof(env, v);
 }
 
-a_msg alo_rawset(a_henv env, a_isize id) {
+a_msg alo_rawset(a_henv env, a_istk id) {
 	api_check_elem(env, 2);
 
 	Value v = api_elem(env, id);
@@ -589,7 +595,7 @@ a_msg alo_rawset(a_henv env, a_isize id) {
 	return ALO_SOK;
 }
 
-void alo_put(a_henv env, a_isize id) {
+void alo_put(a_henv env, a_istk id) {
 	Value v1 = api_elem(env, id);
 	api_check(v_is_list(v1));
 	Value v2 = api_pre_decr_stack(env);
@@ -598,13 +604,13 @@ void alo_put(a_henv env, a_isize id) {
 	ai_gc_trigger(env);
 }
 
-static void l_call(a_henv env, a_u32 narg, a_i32 nres) {
+static void l_call(a_henv env, a_ustk narg, a_istk nres) {
 	Value* base = env->_stack._top - narg - 1;
 
 	ai_vm_call(env, base, nres);
 }
 
-void alo_call(a_henv env, a_usize narg, a_isize nres) {
+void alo_call(a_henv env, a_ustk narg, a_istk nres) {
 	api_check(nres < 256, "too much result expected.");
 	api_check_elem(env, narg + 1);
 	if (nres > 0) api_check_slot(env, nres);
@@ -621,7 +627,7 @@ static void l_pcall(a_henv env, void* rctx) {
 	l_call(env, ctx->_narg, ctx->_nres);
 }
 
-a_msg alo_pcall(a_henv env, a_usize narg, a_isize nres, a_usize nsav) {
+a_msg alo_pcall(a_henv env, a_ustk narg, a_istk nres, a_ustk nsav) {
 	api_check(nres < 256, "bad result count.");
 	api_check_elem(env, max(nsav + 1, narg + 1));
 
@@ -671,17 +677,17 @@ a_bool alo_fattrz(a_henv env, a_enum n) {
 	}
 }
 
-a_msg alo_tagof(a_henv env, a_isize id) {
+a_msg alo_tagof(a_henv env, a_istk id) {
 	Value const* slot = api_roslot(env, id);
 	return slot != null ? api_tagof(env, *slot) : ALO_EEMPTY;
 }
 
-a_bool alo_tobool(a_henv env, a_isize id) {
+a_bool alo_tobool(a_henv env, a_istk id) {
 	Value v = api_elem(env, id);
 	return v_to_bool(v);
 }
 
-a_int alo_toint(a_henv env, a_isize id) {
+a_int alo_toint(a_henv env, a_istk id) {
 	Value v = api_elem(env, id);
 	switch (expect(v_get_tag(v), T_INT)) {
 		case T_NIL:
@@ -698,7 +704,7 @@ a_int alo_toint(a_henv env, a_isize id) {
 	}
 }
 
-a_float alo_tofloat(a_henv env, a_isize id) {
+a_float alo_tofloat(a_henv env, a_istk id) {
 	Value v = api_elem(env, id);
 	switch (expect(v_get_tag(v), T_FLOAT)) {
 		case T_NIL:
@@ -715,7 +721,7 @@ a_float alo_tofloat(a_henv env, a_isize id) {
 	}
 }
 
-char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
+char const* alo_tolstr(a_henv env, a_istk id, a_usize* plen) {
 	Value v = api_elem(env, id);
 	api_check(v_is_str(v), "cannot cast to string");
 	GStr* p = v_as_str(v);
@@ -725,13 +731,13 @@ char const* alo_tolstr(a_henv env, a_isize id, a_usize* plen) {
 	return str2ntstr(p);
 }
 
-void* alo_toptr(a_henv env, a_isize id) {
+void* alo_toptr(a_henv env, a_istk id) {
     Value v = api_elem(env, id);
     api_check(v_is_ptr(v), "cannot cast to pointer");
     return v_as_ptr(v);
 }
 
-void alo_typeof(a_henv env, a_isize id) {
+void alo_typeof(a_henv env, a_istk id) {
     api_check_slot(env, 1);
     Value v = api_elem(env, id);
     v_set_obj(env, api_incr_stack(env), v_typeof(env, v));
@@ -761,7 +767,7 @@ static GStr* l_get_str(a_henv env, a_isize id) {
 }
 
 a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
-				  a_isize id_env, a_isize id_name, a_isize id_file,
+                  a_istk id_env, a_istk id_name, a_istk id_file,
 				  a_flags options) {
 	GFun* out;
 	api_check_slot(env, 1);
