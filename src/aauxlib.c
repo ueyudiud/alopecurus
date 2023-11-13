@@ -52,13 +52,13 @@ void aloL_argerror(a_henv env, a_ustk id, char const* what) {
 	return aloL_raisef(env, "bad argument #%tu to '%s', %s", id, name, what);
 }
 
-static char const* l_typename(a_henv env, a_ustk id) {
+static char const* l_typename(a_henv env, a_istk id) {
 	Value const* p = api_roslot(env, id);
 	return likely(p != null) ? v_nameof(env, *p) : "empty";
 }
 
 void aloL_typeerror(a_henv env, a_ustk id, char const* name) {
-	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, l_typename(env, cast(a_isize, id)));
+	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, l_typename(env, cast(a_istk, id)));
 	aloL_argerror(env, id, what);
 }
 
@@ -294,7 +294,7 @@ static Frame* l_frame_at(a_henv env, a_usize level) {
     }
 }
 
-static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, a_hbuf buf) {
+static a_msg l_wrap_error(a_henv env, a_istk id, a_usize level, a_usize limit, a_hbuf buf) {
     Trace trace;
 	Value* err = api_wrslot(env, id);
     Frame* frame = l_frame_at(env, level);
@@ -314,12 +314,12 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
     switch (v_get_tag(*err)) {
         case T_STR: {
             GStr* str = v_as_str(*err);
-            try(ai_buf_nputls(env, buf, str->_ptr, str->_len));
+            try (ai_buf_nputls(env, buf, str->_ptr, str->_len));
             break;
         }
         case T_INT: {
             a_u32 code = cast(a_u32, v_as_int(*err));
-            try(ai_buf_nputfs(env, buf, "error code: %08x", code));
+            try (ai_buf_nputfs(env, buf, "error code: %08x", code));
             break;
         }
         default: {
@@ -328,7 +328,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
     }
 
     if (limit > 0) {
-        try(ai_buf_nputs(env, buf, "\nstack trace:\n\t"));
+        try (ai_buf_nputs(env, buf, "\nstack trace:\n\t"));
         loop {
             if (trace._line != 0) {
                 try(ai_buf_nputfs(env, buf, "at %s:%u", trace._file, trace._line));
@@ -357,7 +357,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
                 break;
             trace_fill(env, frame, &trace);
 
-			try(ai_buf_nputs(env, buf, "\n\t"));
+			try (ai_buf_nputs(env, buf, "\n\t"));
         }
     }
 
@@ -366,11 +366,11 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
 	return ALO_SOK;
 }
 
-a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
+a_msg aloL_traceerror(a_henv env, a_istk id, a_usize level, a_usize limit) {
 	if (env->_frame->_prev != null) {
-		Buf buf;
+		Buf buf[1];
 		at_buf_init(buf);
-		a_msg msg = l_wrap_error(env, id, level, limit, at_buf_cast(buf));
+		a_msg msg = l_wrap_error(env, id, level, limit, buf_cast(buf));
 		at_buf_deinit(G(env), buf);
 		return msg;
 	}

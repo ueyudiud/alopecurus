@@ -20,6 +20,7 @@ intern void ai_cap_clean(Global* gbl);
 
 #define FUN_FLAG_VARARG u16c(0x0001)
 #define FUN_FLAG_NATIVE u16c(0x0002)
+#define FUN_FLAG_UNIQUE u16c(0x0004)
 
 /**
  ** The capture value using reference counter.
@@ -42,6 +43,10 @@ struct RcCap {
 
 typedef struct {
 	a_u8 _fdebug: 1;
+    /**
+     ** The prototype create with prototype flag will also create
+     ** a unique function.
+     */
 	a_u8 _funiq: 1;
 } ProtoFlags;
 

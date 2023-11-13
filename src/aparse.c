@@ -23,7 +23,7 @@ BUF_STRUCT_DECLARE(ConstBuf, Value);
 BUF_STRUCT_DECLARE(InsnBuf, a_insn);
 BUF_STRUCT_DECLARE(LineInfoBuf, LineInfo);
 BUF_STRUCT_DECLARE(LocalInfoBuf, LocalInfo);
-BUF_STRUCT_DECLARE(CapInfoBuf, RichCapInfo, CapInfoBuf* _last);
+BUF_STRUCT_DECLARE(CapInfoBuf, RichCapInfo);
 
 struct Parser {
     union {
@@ -31,7 +31,7 @@ struct Parser {
         a_henv _env;
     };
     union {
-        InsnBuf _insns;
+        InsnBuf _insns[1];
         struct {
             a_insn (*_code)[1];
             a_usize _head_label;
@@ -39,18 +39,18 @@ struct Parser {
     };
     a_u32 _options;
     a_u8 _scope_depth;
-    SymBuf _syms;
-    ConstBuf _consts; /* Constants. */
-    LocalInfoBuf _locals;
-    LineInfoBuf _lines;
-    Buf _secs;
+    SymBuf _syms[1];
+    ConstBuf _consts[1]; /* Constants. */
+    LocalInfoBuf _locals[1];
+    LineInfoBuf _lines[1];
+    Buf _secs[1];
+    Buf _sbuf[1];
     GStr* _file; /* Source file name. */
     GStr* _name;
 	GStr* _gname;
     Scope* _scope;
     FnScope* _fnscope;
     RefQueue _rq; /* Function prototype queue. */
-    QBuf* _qbq; /* Queued string buffer queue, used for concatenate expression. */
 };
 
 #define lex(par) (&(par)->_lex)
@@ -355,7 +355,7 @@ static void expr_dyn(OutExpr e, a_u32 label, a_line line) {
 
 struct ConExpr {
 	Expr _expr;
-	QBuf _buf;
+    a_usize _off;
 };
 
 typedef struct Pat Pat;
@@ -465,7 +465,7 @@ struct FnScope {
 	FnScope* _fn_up;
 	Scope* _top_scope;
 	GProto** _base_subs;
-	CapInfoBuf _caps;
+	CapInfoBuf _caps[1];
 	a_u32 _const_off;
 	a_u32 _line_off;
 	a_u32 _local_off;
@@ -531,7 +531,7 @@ enum {
  *@return the index of constant in constant pool.
  */
 static a_u32 const_index(Parser* par, Value val) {
-	ConstBuf* consts = &par->_consts;
+	ConstBuf* consts = par->_consts;
 	a_u32 off = par->_fnscope->_const_off;
 	for (a_u32 i = par->_fnscope->_const_off; i < consts->_len; ++i) {
 		/*
@@ -547,11 +547,11 @@ static a_u32 const_index(Parser* par, Value val) {
 		ai_par_report(par, "too many constants.", 0);
 	}
 
-	return at_buf_put(par->_env, *consts, val, "constant") - off;
+	return at_buf_push(par->_env, consts, val, "constant") - off;
 }
 
 static Value const_at(Parser* par, a_u32 index) {
-	return par->_consts._ptr[par->_fnscope->_const_off + index];
+	return par->_consts->_ptr[par->_fnscope->_const_off + index];
 }
 
 static a_bool const_is_str(Parser* par, a_u32 index) {
@@ -565,16 +565,16 @@ static a_insn* code_at(Parser* par, a_u32 label) {
 }
 
 static a_u32 code_put(Parser* par, a_insn i) {
-    return at_buf_put(par->_env, par->_insns, i, "code");
+    return at_buf_push(par->_env, par->_insns, i, "code");
 }
 
 static void l_emit_line(Parser* par, a_line line) {
 	FnScope* scope = par->_fnscope;
 	if (scope->_head_line != line) {
 		LineInfo info = {UINT32_MAX, line};
-		a_u32 index = at_buf_put(par->_env, par->_lines, info, "line");
+		a_u32 index = at_buf_push(par->_env, par->_lines, info, "line");
 		if (index > scope->_line_off) { /* Settle end label for last line info. */
-			par->_lines._ptr[index - 1]._end = par->_head_label;
+			par->_lines->_ptr[index - 1]._end = par->_head_label;
 		}
 		scope->_head_line = line;
 	}
@@ -1009,7 +1009,7 @@ static void l_capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo
 
 	switch (sym->_tag) {
 		case SYM_LOCAL: {
-			info->_src_index = par->_locals._ptr[sym->_index]._reg; /* Get variable index. */
+			info->_src_index = par->_locals->_ptr[sym->_index]._reg; /* Get variable index. */
 			break;
 		}
 		case SYM_CAPTURE: {
@@ -1022,8 +1022,8 @@ static void l_capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo
 
 static a_u32 l_lookup_capture_internal(Parser* par, FnScope* scope, Sym* sym, a_u32 depth) {
 	/* Find in captured values. */
-	for (a_u32 i = 0; i < scope->_caps._len; ++i) {
-		RichCapInfo* info = &scope->_caps._ptr[i];
+	for (a_u32 i = 0; i < scope->_caps->_len; ++i) {
+		RichCapInfo* info = &scope->_caps->_ptr[i];
 		if (info->_name == sym->_name) {
 			/* Already captured. */
 			return i;
@@ -1041,7 +1041,7 @@ static a_u32 l_lookup_capture_internal(Parser* par, FnScope* scope, Sym* sym, a_
 	else { /* Capture recursively. */
 		info._src_index = l_lookup_capture_internal(par, scope->_fn_up, sym,depth - 1);
 	}
-	return at_buf_put(par->_env, scope->_caps, info, "capture");
+	return at_buf_push(par->_env, scope->_caps, info, "capture");
 }
 
 static a_u32 l_lookup_capture(Parser* par, Sym* sym) {
@@ -1071,12 +1071,12 @@ static void expr_gvar(Parser* par, InoutExpr e) {
 }
 
 static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
-	Sym* sym = &par->_syms._ptr[id];
+	Sym* sym = &par->_syms->_ptr[id];
 	switch (sym->_tag) {
 		case SYM_LOCAL: {
 			if (par->_scope_depth == sym->_scope) {
 				expr_init(e, EXPR_REG,
-					._d1 = par->_locals._ptr[par->_fnscope->_local_off + sym->_index]._reg,
+					._d1 = par->_locals->_ptr[par->_fnscope->_local_off + sym->_index]._reg,
 					._d2 = id,
 					._fsym = true
 				);
@@ -1111,7 +1111,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 }
 
 static a_bool l_lookup_symbol(Parser* par, GStr* name, a_u32* pid) {
-	SymBuf* syms = &par->_syms;
+	SymBuf* syms = par->_syms;
 	for (a_u32 i = syms->_len; i > 0; --i) {
 		Sym* sym = &syms->_ptr[i - 1];
 		if (sym->_name == name) {
@@ -2172,19 +2172,19 @@ static a_u32 exprs_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_lin
 	}
 }
 
-static a_bool l_try_fold_append(Parser* par, QBuf* buf, InExpr e) {
+static a_bool l_try_fold_append(Parser* par, InExpr e) {
 	switch (e->_tag) {
 		case EXPR_INT: {
-			at_fmt_puti(par->_env, buf, e->_i);
+			at_fmt_puti(par->_env, par->_sbuf, e->_i);
 			return true;
 		}
 		case EXPR_FLOAT: {
-			at_fmt_putf(par->_env, buf, e->_n);
+			at_fmt_putf(par->_env, par->_sbuf, e->_n);
 			return true;
 		}
 		case EXPR_STR: {
 			GStr* str = e->_s;
-			at_buf_putls(par->_env, buf, str->_ptr, str->_len);
+			at_buf_putls(par->_env, par->_sbuf, str->_ptr, str->_len);
 			return true;
 		}
 		default: {
@@ -2193,46 +2193,40 @@ static a_bool l_try_fold_append(Parser* par, QBuf* buf, InExpr e) {
 	}
 }
 
-static GStr* buf_to_str(Parser* par, QBuf* buf) {
-	GStr* str = ai_lex_to_str(&par->_lex, buf->_ptr, buf->_len);
-	at_buf_clear(*buf);
+static GStr* buf_to_str(Parser* par, ConExpr* ce) {
+    Buf* buf = par->_sbuf;
+	GStr* str = ai_lex_to_str(lex(par), buf->_ptr + ce->_off, buf->_len - ce->_off);
+	at_buf_clear(buf);
 	return str;
 }
 
 static void expr_concat(Parser* par, ConExpr* ce, InExpr e, a_line line) {
-	if (l_try_fold_append(par, &ce->_buf, e)) {
-		if (par->_qbq != &ce->_buf) {
-			/* Link queue. */
-			ce->_buf._last = par->_qbq;
-			par->_qbq = &ce->_buf;
-		}
-	}
-	else if (ce->_buf._len > 0) {
-        expr_to_dyn(par, e); /* Drop used register. */
+    if (!l_try_fold_append(par, e)) {
+        if (par->_sbuf->_len > ce->_off) {
+            expr_to_dyn(par, e); /* Drop used register. */
 
-        exprs_to_top_tmps(par, ce->_expr);
+            exprs_to_top_tmps(par, ce->_expr);
 
-		a_u32 reg = stack_alloc_succ(par, 2, line);
-        expr_pin_reg(par, e, reg + 1);
+            a_u32 reg = stack_alloc_succ(par, 2, line);
+            expr_pin_reg(par, e, reg + 1);
 
-		GStr* str = buf_to_str(par, &ce->_buf);
-		l_emit_k(par, reg, v_of_obj(str), line);
-
-		at_buf_clear(ce->_buf);
-	}
-	else {
-		exprs_push(par, ce->_expr, e);
-	}
+            GStr* str = buf_to_str(par, ce);
+            l_emit_k(par, reg, v_of_obj(str), line);
+        }
+        else {
+            exprs_push(par, ce->_expr, e);
+        }
+    }
 }
 
 static void expr_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 	if (ce->_expr->_tag == EXPR_UNIT) {
-		expr_str(e, buf_to_str(par, &ce->_buf), line);
+		expr_str(e, buf_to_str(par, ce), line);
 	}
 	else {
         exprs_to_top_tmps(par, ce->_expr);
-		if (ce->_buf._len > 0) {
-			GStr* str = buf_to_str(par, &ce->_buf);
+		if (par->_sbuf->_len > ce->_off) {
+			GStr* str = buf_to_str(par, ce);
 			a_u32 reg = stack_alloc(par, line);
 			l_emit_k(par, reg, v_of_obj(str), line);
 		}
@@ -2240,12 +2234,6 @@ static void expr_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 		l_emit_idbc(par, BC_CAT, e, base, par->_scope->_top_reg - base, line);
         expr_drop(par, ce->_expr);
     }
-
-	/* Check and drop_object string buffer. */
-	if (par->_qbq == &ce->_buf) {
-		at_buf_deinit(G(par->_env), ce->_buf);
-		par->_qbq = ce->_buf._last;
-	}
 }
 
 static void expr_unpack(Parser* par, InoutExpr e, a_line line) {
@@ -2378,7 +2366,7 @@ static void expr_discard(Parser* par, InExpr e) {
 static void sym_check_writable(Parser* par, InExpr e, a_line line) {
 	if (e->_fsym) {
 		a_u32 id = e->_d2;
-		Sym* sym = &par->_syms._ptr[id];
+		Sym* sym = &par->_syms->_ptr[id];
 		if (sym->_mods._readonly) {
 			ai_par_error(par, "cannot assign to readonly variable %s.", line, str2ntstr(sym->_name));
 		}
@@ -2467,11 +2455,11 @@ static void expr_tbc(Parser* par, InExpr e, a_line line) {
 }
 
 static a_u32 syms_push(Parser* par, Sym sym) {
-	return at_buf_put(par->_env, par->_syms, sym, "symbol");
+	return at_buf_push(par->_env, par->_syms, sym, "symbol");
 }
 
 static void sec_start(Parser* par, SecRec rec) {
-    rec->_line_off = par->_lines._len;
+    rec->_line_off = par->_lines->_len;
     rec->_head_label = par->_head_label;
     rec->_head_line = par->_fnscope->_head_line;
     rec->_head_jump = par->_fnscope->_head_jump;
@@ -2496,8 +2484,8 @@ static a_u32 sec_record(Parser* par, SecRec rec) {
     }
 
     SecHead head = {
-        ._ninsn = par->_insns._len - rec->_head_label,
-        ._nline = par->_lines._len - rec->_head_line,
+        ._ninsn = par->_insns->_len - rec->_head_label,
+        ._nline = par->_lines->_len - rec->_head_line,
         ._rel_label = rec->_head_label,
         ._rel_reg_bot = rec->_reg_base,
         ._rel_reg_top = par->_fnscope->_max_reg
@@ -2513,24 +2501,24 @@ static a_u32 sec_record(Parser* par, SecRec rec) {
         ai_buf_error(par->_env, msg, "section");
     }
 
-    a_usize base = par->_secs._len;
+    a_usize base = par->_secs->_len;
 
-    void* addr = par->_secs._ptr + base;
+    void* addr = par->_secs->_ptr + base;
 
     memcpy(addr, &head, offsetof(SecHead, _code));
     addr += offsetof(SecHead, _code);
 
-    memcpy(addr, par->_insns._ptr + rec->_head_label, sizeof(a_insn) * head._ninsn);
+    memcpy(addr, par->_insns->_ptr + rec->_head_label, sizeof(a_insn) * head._ninsn);
     addr += sizeof(a_insn) * head._ninsn;
 
-    memcpy(addr, par->_lines._ptr + rec->_line_off, sizeof(LineInfo) * head._nline);
+    memcpy(addr, par->_lines->_ptr + rec->_line_off, sizeof(LineInfo) * head._nline);
     addr += sizeof(LineInfo) * head._nline;
 
-    assume(addr == par->_secs._ptr + base + size);
+    assume(addr == par->_secs->_ptr + base + size);
 
-    par->_secs._len += size;
+    par->_secs->_len += size;
 
-    par->_lines._len = rec->_line_off;
+    par->_lines->_len = rec->_line_off;
     par->_head_label = rec->_head_label;
     par->_fnscope->_head_line = rec->_head_line;
     par->_fnscope->_head_jump = rec->_head_jump;
@@ -2653,7 +2641,7 @@ static a_u32 sym_local(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, Sy
 		._reg = reg
 	};
 
-	a_u32 index = at_buf_put(par->_env, par->_locals, info, "local variable");
+	a_u32 index = at_buf_push(par->_env, par->_locals, info, "local variable");
 
 	stack_store(par, reg);
 
@@ -2699,7 +2687,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
         expr_test_nil(par, e, &label, pat->_line);
 
         if (pat->_sec_ref != NIL_SEC_REF) {
-            SecHead* sec = cast(SecHead*, par->_secs._ptr + pat->_sec_ref);
+            SecHead* sec = cast(SecHead*, par->_secs->_ptr + pat->_sec_ref);
             l_emit_section(par, pat->_expr, sec, reg, pat->_line);
         }
 
@@ -2922,7 +2910,7 @@ static void scope_push(Parser* par, Scope* scope, a_u32 reg, a_line line) {
         ._begin_line = line,
         ._begin_label = par->_head_label,
         ._end_label = NO_LABEL,
-        ._sym_off = par->_syms._len
+        ._sym_off = par->_syms->_len
     };
 	par->_scope = scope;
 }
@@ -2933,19 +2921,19 @@ static void scope_pop(Parser* par, a_line line) {
 	par->_scope = up;
 	run {
 		a_u32 bot = scope->_sym_off;
-		a_u32 top = par->_syms._len;
+		a_u32 top = par->_syms->_len;
 		a_u32 label = par->_head_label - par->_fnscope->_begin_label;
 		a_u32 local_off = par->_fnscope->_local_off;
 		for (a_u32 i = bot; i < top; ++i) {
-			Sym* sym = &par->_syms._ptr[i];
+			Sym* sym = &par->_syms->_ptr[i];
 			switch (sym->_tag) {
 				case SYM_LOCAL: {
-					par->_locals._ptr[sym->_index - local_off]._end_label = label;
+					par->_locals->_ptr[sym->_index - local_off]._end_label = label;
 					break;
 				}
 			}
 		}
-		par->_syms._len = bot;
+		par->_syms->_len = bot;
 	}
 	scope->_end_label = l_mark_label(par, scope->_end_label, line);
 	if (up != null && scope->_top_ntr != up->_top_ntr) {
@@ -2994,9 +2982,9 @@ static void fnscope_prologue(Parser* par, FnScope* fnscope, a_line line) {
     init(fnscope) {
         ._fn_up = par->_fnscope,
         ._base_subs = cast(GProto**, par->_rq._tail),
-        ._const_off = par->_consts._len,
-        ._line_off = par->_lines._len,
-        ._local_off = par->_locals._len,
+        ._const_off = par->_consts->_len,
+        ._line_off = par->_lines->_len,
+        ._local_off = par->_locals->_len,
         ._head_jump = NO_LABEL,
         ._head_land = NO_LABEL,
         ._fpass = true,
@@ -3018,14 +3006,14 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 	scope_pop(par, line);
 
 	ProtoDesc desc = {
-		._nconst = par->_consts._len - scope->_const_off,
+		._nconst = par->_consts->_len - scope->_const_off,
 		._ninsn = par->_head_label - scope->_begin_label,
 		._nsub = scope->_nsub,
-		._nlocal = par->_locals._len - scope->_local_off,
-		._ncap = scope->_caps._len,
+		._nlocal = par->_locals->_len - scope->_local_off,
+		._ncap = scope->_caps->_len,
 		._nstack = scope->_max_reg,
 		._nparam = scope->_nparam,
-		._nline = par->_lines._len - scope->_line_off,
+		._nline = par->_lines->_len - scope->_line_off,
 		._flags = {
 			._fdebug = (par->_options & ALO_COMP_OPT_STRIP_DEBUG) == 0,
 			._funiq = root
@@ -3037,17 +3025,17 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 		ai_mem_nomem(par->_env);
 	}
 
-	memcpy(proto->_consts, par->_consts._ptr + scope->_const_off, sizeof(Value) * desc._nconst);
+	memcpy(proto->_consts, par->_consts->_ptr + scope->_const_off, sizeof(Value) * desc._nconst);
 	memcpy(proto->_code, par->_code + scope->_begin_label, sizeof(a_insn) * desc._ninsn);
 	if (desc._flags._fdebug) {
 		proto->_dbg_lndef = scope->_begin_line;
 		proto->_dbg_lnldef = line;
-		memcpy(proto->_dbg_lines, par->_lines._ptr + scope->_line_off, sizeof(LineInfo) * desc._nline);
-		memcpy(proto->_dbg_locals, par->_locals._ptr + scope->_local_off, sizeof(LocalInfo) * desc._nlocal);
+		memcpy(proto->_dbg_lines, par->_lines->_ptr + scope->_line_off, sizeof(LineInfo) * desc._nline);
+		memcpy(proto->_dbg_locals, par->_locals->_ptr + scope->_local_off, sizeof(LocalInfo) * desc._nlocal);
 	}
 	run {
 		for (a_u32 i = 0; i < desc._ncap; ++i) {
-			RichCapInfo* cap_info = &scope->_caps._ptr[i];
+			RichCapInfo* cap_info = &scope->_caps->_ptr[i];
             init(&proto->_caps[i]) {
 				._reg = cap_info->_src_index,
 				._fup = cap_info->_scope != par->_scope_depth - 1
@@ -3090,8 +3078,8 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 	par->_scope = up_scope != null ? up_scope->_top_scope : null;
 	par->_scope_depth -= 1;
 	par->_head_label = scope->_begin_label - 1; /* Drop barrier. */
-	par->_locals._len = scope->_local_off;
-	par->_lines._len = scope->_line_off;
+	par->_locals->_len = scope->_local_off;
+	par->_lines->_len = scope->_line_off;
 	par->_rq._tail = cast(a_gclist*, scope->_base_subs);
 
 	rq_push(&par->_rq, proto);
@@ -3107,12 +3095,14 @@ static void proto_drop_recursive(a_henv env, GProto* proto) {
 }
 
 static void parser_close(Parser* par) {
-    at_buf_deinit(G(par->_env), par->_insns);
-	at_buf_deinit(G(par->_env), par->_consts);
-	at_buf_deinit(G(par->_env), par->_lines);
-	at_buf_deinit(G(par->_env), par->_locals);
-	at_buf_deinit(G(par->_env), par->_syms);
-    at_buf_deinit(G(par->_env), par->_secs);
+    Global* gbl = G(par->_env);
+    at_buf_deinit(gbl, par->_insns);
+	at_buf_deinit(gbl, par->_consts);
+	at_buf_deinit(gbl, par->_lines);
+	at_buf_deinit(gbl, par->_locals);
+	at_buf_deinit(gbl, par->_syms);
+    at_buf_deinit(gbl, par->_secs);
+    at_buf_deinit(gbl, par->_sbuf);
 	ai_lex_close(&par->_lex);
 
 	gbl_unprotect(par->_env);
@@ -3137,10 +3127,6 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 	/* Destroy queued prototypes. */
 	rq_for(obj, &par->_rq) {
         proto_drop_recursive(par->_env, g_cast(GProto, obj));
-	}
-	/* Close linked buffers. */
-	for (QBuf* qb = par->_qbq; qb != null; qb = qb->_last) {
-		at_buf_deinit(G(par->_env), *qb);
 	}
 	for (FnScope* scope = par->_fnscope; scope != null; scope = scope->_fn_up) {
 		at_buf_deinit(G(par->_env), scope->_caps);
@@ -3170,7 +3156,13 @@ static void parser_start(Parser* par) {
 
 static void proto_register_recursive(a_henv env, GProto* proto) {
 	assume(proto->_gnext == null, "duplicate root function.");
-	ai_gc_register_object(env, proto);
+    if (proto->_flags & FUN_FLAG_UNIQUE) {
+        assume(proto->_cache != null, "no unique instance given");
+        ai_gc_register_object(env, proto->_cache);
+    }
+    else {
+        ai_gc_register_object(env, proto);
+    }
 	for (a_u32 i = 0; i < proto->_nsub; ++i) {
         proto_register_recursive(env, proto->_subs[i]);
 	}
@@ -3905,7 +3897,7 @@ static void l_scan_stat(Parser* par);
 static void l_scan_stats(Parser* par);
 
 static void l_scan_tstring(Parser* par, OutExpr e) {
-	ConExpr ce = {};
+	ConExpr ce = { ._off = par->_sbuf->_len };
 	a_u32 line = lex_line(par);
 	lex_skip(par);
 

@@ -15,27 +15,33 @@
 static VTable const buf_vtable;
 
 a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...) {
-	va_list varg;
-	va_start(varg, fmt);
-	a_msg msg = ai_buf_nputvfs_(env, buf, fmt, varg);
-	va_end(varg);
-	return msg;
+    va_list varg;
+    va_start(varg, fmt);
+
+    a_msg msg = ai_buf_nputvfs_(env, buf, fmt, varg);
+
+    va_end(varg);
+    return msg;
 }
 
 a_msg ai_buf_nputvfs_(a_henv env, a_hbuf buf, char const* fmt, va_list varg) {
+    va_list varg2;
 	a_usize rem = buf->_cap - buf->_len;
-	va_list varg2;
+
 	va_copy(varg2, varg);
-	a_usize len = vsnprintf(buf->_ptr + buf->_len, rem, fmt, varg);
+
+	a_usize len = vsnprintf(buf_end( buf), rem, fmt, varg);
 	if (len + 1 > rem) {
 		a_msg msg = ai_buf_ncheck(env, buf, len + 1, 1, SIZE_MAX);
 		if (unlikely(msg != ALO_SOK)) {
 			va_end(varg2);
 			return msg;
 		}
-		vsnprintf(buf->_ptr + buf->_len, len + 1, fmt, varg2);
+		vsnprintf(buf_end( buf), len + 1, fmt, varg2);
 	}
+
 	va_end(varg2);
+
 	buf->_len += len;
 	return ALO_SOK;
 }
@@ -44,7 +50,7 @@ GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_gnew(env, GBuf, sizeof(GBuf));
 
 	self->_vptr = &buf_vtable;
-	at_buf_init(*self);
+	at_buf_init(self);
 
 	ai_gc_register_object(env, self);
 
@@ -68,7 +74,7 @@ static void buf_mark(Global* gbl, a_hobj raw_self) {
 
 static void buf_drop(Global* gbl, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	at_buf_deinit(gbl, *self);
+	at_buf_deinit(gbl, self);
 	ai_mem_gdel(gbl, self, sizeof(GBuf));
 }
 

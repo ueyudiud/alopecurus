@@ -253,13 +253,22 @@ static void dump_chunk(a_henv env, GProto* proto, a_u32 options) {
 			aloi_show("local info table <%p>\n", proto->_dbg_locals);
 			for (a_u32 i = 0; i < proto->_nlocal; ++i) {
 				LocalInfo* info = &proto->_dbg_locals[i];
-				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n", i, info->_reg, str2ntstr(info->_name), info->_begin_label, info->_end_label);
+				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n",
+                          i,
+                          info->_reg,
+                          info->_name ? str2ntstr(info->_name) : "?",
+                          info->_begin_label,
+                          info->_end_label);
 			}
 			printf("capture info table <%p>\n", proto->_caps);
 			for (a_u32 i = 0; i < proto->_ncap; ++i) {
 				CapInfo* info = &proto->_caps[i];
 				GStr* name = proto->_dbg_cap_names[i];
-				aloi_show("\t%5u\t%c[%u]\t%s\n", i, info->_fup ? 'C' : 'R', info->_reg, str2ntstr(name));
+				aloi_show("\t%5u\t%c[%u]\t%s\n",
+                          i,
+                          info->_fup ? 'C' : 'R',
+                          info->_reg,
+                          name != null ? str2ntstr(name) : "?");
 			}
 		}
 		else {

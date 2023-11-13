@@ -37,7 +37,7 @@ ALO_EXPORT a_msg (aloL_compiles)(a_henv env, char const* src, a_usize len, char 
 ALO_EXPORT a_msg (aloL_compilef)(a_henv env, char const* fname, a_u32 options);
 
 ALO_EXPORT void (aloL_raisef)(a_henv env, char const* fmt, ...);
-ALO_EXPORT a_msg (aloL_traceerror)(a_henv env, a_isize id, a_usize level, a_usize limit);
+ALO_EXPORT a_msg (aloL_traceerror)(a_henv env, a_istk id, a_usize level, a_usize limit);
 
 ALO_EXPORT a_msg (aloL_gets)(a_henv env, a_istk id, char const* s);
 
