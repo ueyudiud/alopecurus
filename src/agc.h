@@ -16,11 +16,12 @@ always_inline void rq_init(RefQueue* rq) {
 	rq->_tail = &rq->_head;
 }
 
-always_inline void rq_push(RefQueue* rq, void* ref) {
-	a_hobj obj = cast(a_hobj, ref);
-	*rq->_tail = obj;
-	rq->_tail = &obj->_gnext;
+always_inline void rq_push(RefQueue* rq, a_hobj p) {
+	*rq->_tail = p;
+	rq->_tail = &p->_gnext;
 }
+
+#define rq_push(rq,o) rq_push(rq, gobj_cast(o))
 
 #define rq_for(v,rq) for ( \
 	a_hobj *_p_##v = &(rq)->_head, v; \

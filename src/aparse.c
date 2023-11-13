@@ -3028,7 +3028,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 		._nline = par->_lines._len - scope->_line_off,
 		._flags = {
 			._fdebug = (par->_options & ALO_COMP_OPT_STRIP_DEBUG) == 0,
-			._froot = root
+			._funiq = root
 		}
 	};
 
@@ -3180,8 +3180,10 @@ static GFun* func_build(Parser* par) {
 	GProto* proto = g_cast(GProto, par->_rq._head); /* Get root prototype. */
     proto_register_recursive(par->_env, proto);
 	parser_close(par);
-	GFun* fun = proto->_cache;
+
+    GFun* fun = proto->_cache;
 	g_set_white(G(par->_env), fun);
+
 	return fun;
 }
 

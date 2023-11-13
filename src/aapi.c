@@ -773,8 +773,10 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	a_msg msg = ai_parse(env, fun, ctx, file, name, options, &out);
 	if (likely(msg == ALO_SOK)) {
 		v_set_obj(env, api_incr_stack(env), out);
-		if (out->_proto->_ncap > 0) {
-			v_cpy(env, out->_caps[0]->_ptr, api_rdslot(env, id_env));
+		if (out->_len > 0) {
+            RcCap* cap = ai_cap_new(env);
+            out->_caps[0] = cap;
+            v_cpy(env, cap->_ptr, api_rdslot(env, id_env));
 		}
 	}
 	else {

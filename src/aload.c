@@ -90,7 +90,7 @@ static a_msg l_load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
         ._nstack = l_get(ic, a_u8),
         ._flags = l_get(ic, ProtoFlags)
     };
-	if (info->_flags._froot != root)
+	if (info->_flags._funiq != root)
 		return ALO_EINVAL;
     return ALO_SOK;
 }

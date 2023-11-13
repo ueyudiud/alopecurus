@@ -13,8 +13,10 @@
 #include "afun.h"
 
 static VTable const afun_vtable;
+static VTable const uniq_afun_vtable;
 static VTable const cfun_vtable;
 static VTable const proto_vtable;
+static VTable const uniq_proto_vtable;
 
 static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
@@ -34,9 +36,8 @@ static a_usize proto_size(ProtoDesc* desc) {
 	else {
 		size += sizeof(LineInfo);
 	}
-	if (desc->_flags._froot) {
-		assume(desc->_ncap <= 1, "bad capture count.");
-		size += fun_size(desc->_ncap) + desc->_ncap * sizeof(RcCap);
+	if (desc->_flags._funiq) {
+		size += fun_size(desc->_ncap);
 	}
 	return size;
 }
@@ -49,7 +50,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
     memclr(blk, total_size);
 
     GProto* self = g_cast(GProto, g_biased(blk));
-	self->_vptr = &proto_vtable;
+	self->_vptr = desc->_flags._funiq ? &uniq_proto_vtable : &proto_vtable;
     self->_size = total_size;
     self->_nconst = desc->_nconst;
     self->_ninsn = desc->_ninsn;
@@ -90,23 +91,15 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
         };
 	}
 
-	if (desc->_flags._froot) {
+	if (desc->_flags._funiq) {
+        /* Initialize unique function for this prototype. */
+
 		GFun* fun = int2ptr(GFun, addr);
 		addr += fun_size(desc->_ncap);
 
-		fun->_vptr = &afun_vtable;
+		fun->_vptr = &uniq_afun_vtable;
 		fun->_proto = self;
 		fun->_len = desc->_ncap;
-		if (desc->_ncap > 0) {
-			RcCap* cap = int2ptr(RcCap, addr);
-			addr += sizeof(RcCap);
-
-			cap->_ptr = &cap->_slot;
-			v_set_nil(&cap->_slot);
-			cap->_rc = 2; /* Mark capture always be referenced. */
-
-			fun->_caps[0] = cap;
-		}
 
 		self->_cache = fun;
 	}
@@ -165,7 +158,6 @@ static RcCap* cap_nload_from_stack(a_henv env, Value* pv) {
 
         if (self == null) return null;
 
-
 		self->_ptr = pv;
 		self->_rc = 1;
 		self->_next = cap;
@@ -196,6 +188,17 @@ static void v_close(a_henv env, Value v) {
     v_vcall(env, v, close);
 }
 
+RcCap* ai_cap_new(a_henv env) {
+    RcCap* self = cap_nalloc(env);
+
+    if (unlikely(self == null)) ai_mem_nomem(env);
+
+    self->_ptr = &self->_slot;
+    self->_rc = 1;
+
+    return self;
+}
+
 void ai_cap_mark_tbc(a_henv env, Value* pv) {
 	RcCap* cap = cap_nload_from_stack(env, pv);
     if (!cap->_ftbc) {
@@ -208,7 +211,7 @@ void ai_cap_mark_tbc(a_henv env, Value* pv) {
     }
 }
 
-GFun *ai_fun_new(a_henv env, GProto *proto) {
+GFun* ai_fun_new(a_henv env, GProto* proto) {
 	Value* base = ai_stk_bot(env);
 	GFun* parent = v_as_func(base[-1]);
 	CapInfo* infos = proto->_caps;
@@ -328,6 +331,14 @@ static void afun_mark(Global* gbl, GFun* self) {
 	ai_gc_trace_work(gbl, fun_size(self->_len));
 }
 
+static void uniq_afun_mark(Global* gbl, GFun* self) {
+    ai_gc_trace_mark(gbl, self->_proto);
+    a_u32 len = self->_len;
+    for (a_u32 i = 0; i < len; ++i) {
+        cap_mark(gbl, self->_caps[i]);
+    }
+}
+
 static void cfun_drop(Global* gbl, GFun* self) {
     ai_mem_gdel(gbl, self, fun_size(self->_len));
 }
@@ -340,6 +351,14 @@ static void cfun_mark(Global* gbl, GFun* self) {
 	ai_gc_trace_work(gbl, fun_size(len));
 }
 
+static void uniq_proto_drop(Global* gbl, GProto* self) {
+    GFun* func = self->_cache;
+    for (a_u32 i = 0; i < func->_len; ++i) {
+        cap_release(gbl, func->_caps[i]);
+    }
+    ai_mem_gdel(gbl, self, self->_size);
+}
+
 void ai_proto_drop(Global* gbl, GProto* self) {
 	ai_mem_gdel(gbl, self, self->_size);
 }
@@ -348,6 +367,9 @@ static void proto_mark(Global* gbl, GProto* self) {
 	for (a_u32 i = 0; i < self->_nconst; ++i) {
 		ai_gc_trace_mark_val(gbl, self->_consts[i]);
 	}
+    for (a_u32 i = 0; i < self->_nsub; ++i) {
+        ai_gc_trace_mark(gbl, self->_subs[i]);
+    }
 	if (self->_dbg_file != null) {
 		ai_gc_trace_mark(gbl, self->_dbg_file);
 	}
@@ -373,6 +395,15 @@ static VTable const afun_vtable = {
 	}
 };
 
+static VTable const uniq_afun_vtable = {
+	._stencil = V_STENCIL(T_FUNC),
+    ._tag = ALO_TFUNC,
+    ._type_ref = g_type_ref(ALO_TFUNC),
+	._slots = {
+        [vfp_slot(mark)] = uniq_afun_mark
+	}
+};
+
 static VTable const cfun_vtable = {
 	._stencil = V_STENCIL(T_FUNC),
     ._tag = ALO_TFUNC,
@@ -389,4 +420,12 @@ static VTable const proto_vtable = {
         [vfp_slot(drop)] = ai_proto_drop,
         [vfp_slot(mark)] = proto_mark
 	}
+};
+
+static VTable const uniq_proto_vtable = {
+    ._stencil = V_STENCIL(T_USER),
+    ._slots = {
+        [vfp_slot(drop)] = uniq_proto_drop,
+        [vfp_slot(mark)] = proto_mark
+    }
 };
