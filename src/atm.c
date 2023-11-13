@@ -29,7 +29,7 @@ static a_bool type_lookt(a_henv env, GTable* mt, a_enum tm, Value* pv) {
 
 static a_bool type_lookft(a_henv env, GTable* mt, a_enum tm, Value* pv) {
     assume(tm <= TM__FAST_MAX, "cannot fast lookup tagged method.");
-    if (tm_has_no_ftm(mt, tm)) return true;
+    if (!mt_has_ftm(mt, tm)) return true;
     catch (type_lookt(env, mt, tm, pv)) {
         mt->_tmz |= FTM_BIT(tm);
         return true;
@@ -84,10 +84,8 @@ a_bool ai_tm_len(a_henv env, Value v, a_uint* pi) {
 }
 
 a_bool ai_tm_look(a_henv env, Value v, GStr* k, Value* pv) {
-    a_hobj p = v_as_obj(v);
-
     Value vf;
-    try (type_lookft(env, g_mtof(env, p), TM___look__, &vf));
+    try (type_lookft(env, v_mtof(env, v), TM___look__, &vf));
 
     if (v_is_func(vf)) {
         Value vr = vm_call1(env, vf, v, v_of_obj(k));
@@ -141,10 +139,8 @@ a_bool ai_tm_set(a_henv env, Value v1, Value v2, Value v3) {
 }
 
 a_bool ai_tm_unary(a_henv env, a_enum tm, Value v, Value* pv) {
-    a_hobj p = v_as_obj(v);
-
     Value vf;
-    try (type_lookt(env, g_mtof(env, p), tm, &vf));
+    try (type_lookt(env, v_mtof(env, v), tm, &vf));
 
     Value vr = vm_call1(env, vf, v);
     v_set(env, pv, vr);
@@ -152,10 +148,8 @@ a_bool ai_tm_unary(a_henv env, a_enum tm, Value v, Value* pv) {
 }
 
 a_bool ai_tm_binary(a_henv env, a_enum tm, Value v1, Value v2, Value* pv) {
-    a_hobj p = v_as_obj(v1);
-
     Value vf;
-    try (type_lookt(env, g_mtof(env, p), tm, &vf));
+    try (type_lookt(env, v_mtof(env, v1), tm, &vf));
 
     Value vr = vm_call1(env, vf, v1, v2);
     v_set(env, pv, vr);
@@ -163,10 +157,8 @@ a_bool ai_tm_binary(a_henv env, a_enum tm, Value v1, Value v2, Value* pv) {
 }
 
 a_bool ai_tm_relation(a_henv env, a_enum tm, Value v1, Value v2, a_bool* pz) {
-    a_hobj p = v_as_obj(v1);
-
     Value vf;
-    try (type_lookt(env, g_mtof(env, p), tm, &vf));
+    try (type_lookt(env, v_mtof(env, v1), tm, &vf));
 
     Value vr = vm_call1(env, vf, v1, v2);
     *pz = v_to_bool(vr);
@@ -174,10 +166,8 @@ a_bool ai_tm_relation(a_henv env, a_enum tm, Value v1, Value v2, a_bool* pz) {
 }
 
 a_bool ai_tm_precall(a_henv env, Value v, Value* pv) {
-    a_hobj p = v_as_obj(v);
-
     Value vf;
-    try (type_lookt(env, g_mtof(env, p), TM___call__, &vf));
+    try (type_lookt(env, v_mtof(env, v), TM___call__, &vf));
 
     v_set(env, pv, vf);
     return false;

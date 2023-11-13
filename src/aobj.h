@@ -471,7 +471,7 @@ struct GType {
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
 
-#define tm_has_no_ftm(t,tm) (((t)->_tmz & FTM_BIT(tm)) == 0)
+#define mt_has_ftm(t,tm) (((t)->_tmz & FTM_BIT(tm)) == 0)
 
 always_inline GTable* type2mt(GType* o) {
     return g_cast(GTable, o);
