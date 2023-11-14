@@ -371,7 +371,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 				case T_USER: {
                     GStr* str;
 					StkPtr bptr = val2stk(env, base);
-                    if (!ai_tm_str(env, v, &str)) {
+                    catch (ai_tm_str(env, v, &str)) {
                         ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
                     }
 					base = stk2val(env, bptr);
@@ -387,7 +387,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 	}
 
 	GStr* result = at_buf_tostr(env, buf);
-	at_buf_deinit(G(env), *buf);
+	at_buf_deinit(G(env), buf);
 
 	return result;
 }

@@ -89,15 +89,7 @@ static a_bool c_isibody(a_i32 ch) {
 }
 
 static void l_bput(Lexer* lex, a_i32 ch) {
-	a_msg msg = at_buf_nput(lex->_env, lex->_buf, ch);
-	if (unlikely(msg != ALO_SOK)) {
-		if (msg == ALO_EINVAL) {
-			ai_lex_error(lex, "token too long.");
-		}
-		else {
-			ai_mem_nomem(lex->_env);
-		}
-	}
+    at_buf_putc(lex->_env, lex->_buf, ch);
 }
 
 static a_bool strs_put(StrSet* set, GStr* str) {
@@ -154,7 +146,7 @@ static void strs_close(a_henv env, StrSet* strs) {
 }
 
 static GStr* l_to_str(Lexer* lex) {
-    ByteBuf* buf = &lex->_buf;
+    Buf* buf = lex->_buf;
     GStr* str = ai_lex_to_str(lex, buf->_ptr, buf->_len);
 	at_buf_clear(lex->_buf);
     return str;
@@ -805,7 +797,7 @@ static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
 		}
 		case '$': {
 			if (l_test_tesc_head(lex)) {
-				if (lex->_buf._len == 0) {
+				if (lex->_buf->_len == 0) {
 					return TK_TSESCAPE;
 				}
 				tk->_str = l_to_str(lex);
@@ -825,7 +817,7 @@ static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
 			break;
 		}
 		case '\"': {
-			if (lex->_buf._len == 0)
+			if (lex->_buf->_len == 0)
 				return TK_TSEND;
 
 			tk->_str = l_to_str(lex);

@@ -18,8 +18,8 @@ intern void ai_fmt_putf(a_henv env, a_hbuf buf, a_float v);
 intern a_usize ai_fmt_ptr2str(char* p, void* v);
 intern void ai_fmt_putp(a_henv env, a_hbuf buf, void* v);
 
-#define at_fmt_puti(env,b,v) ai_fmt_puti(env, at_buf_cast(*(b)), v)
-#define at_fmt_putf(env,b,v) ai_fmt_putf(env, at_buf_cast(*(b)), v)
-#define at_fmt_putp(env,b,v) ai_fmt_putp(env, at_buf_cast(*(b)), v)
+#define at_fmt_puti(env,b,v) ai_fmt_puti(env, buf_cast(b), v)
+#define at_fmt_putf(env,b,v) ai_fmt_putf(env, buf_cast(b), v)
+#define at_fmt_putp(env,b,v) ai_fmt_putp(env, buf_cast(b), v)
 
 #endif /* afmt_h_ */

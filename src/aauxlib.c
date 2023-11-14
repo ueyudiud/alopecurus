@@ -46,32 +46,32 @@ a_henv aloL_create(void) {
 	return msg == ALO_SOK ? env : null;
 }
 
-void aloL_argerror(a_henv env, a_usize id, char const* what) {
+void aloL_argerror(a_henv env, a_ustk id, char const* what) {
 	char const* name = ai_dbg_get_func_name(env, env->_frame);
 	if (name == null) return aloL_raisef(env, "bad argument #%tu, %s", id, what);
 	return aloL_raisef(env, "bad argument #%tu to '%s', %s", id, name, what);
 }
 
-static char const* l_typename(a_henv env, a_isize id) {
+static char const* l_typename(a_henv env, a_istk id) {
 	Value const* p = api_roslot(env, id);
 	return likely(p != null) ? v_nameof(env, *p) : "empty";
 }
 
-void aloL_typeerror(a_henv env, a_usize id, char const* name) {
-	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, l_typename(env, cast(a_isize, id)));
+void aloL_typeerror(a_henv env, a_ustk id, char const* name) {
+	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, l_typename(env, cast(a_istk, id)));
 	aloL_argerror(env, id, what);
 }
 
 #define aloL_tagof(env,id) alo_tagof(env, cast(a_isize, id))
 
-void aloL_checktag(a_henv env, a_usize id, a_msg tag) {
+void aloL_checktag(a_henv env, a_ustk id, a_msg tag) {
 	api_check(tag >= ALO_TNIL && tag <= ALO_TUSER, "bad type tag.");
 	if (aloL_tagof(env, id) != tag) {
 		aloL_typeerror(env, id, ai_api_tagname[tag]);
 	}
 }
 
-a_msg aloL_checkany(a_henv env, a_usize id) {
+a_msg aloL_checkany(a_henv env, a_ustk id) {
     a_msg tag = aloL_tagof(env, id);
     if (tag == ALO_EEMPTY) {
         aloL_argerror(env, id, "value expected");
@@ -79,7 +79,7 @@ a_msg aloL_checkany(a_henv env, a_usize id) {
     return tag;
 }
 
-a_int aloL_checkint(a_henv env, a_usize id) {
+a_int aloL_checkint(a_henv env, a_ustk id) {
 	Value v = api_elem(env, cast(a_isize, id));
 	if (!v_is_int(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TINT]);
@@ -87,7 +87,7 @@ a_int aloL_checkint(a_henv env, a_usize id) {
 	return v_as_int(v);
 }
 
-a_float aloL_checknum(a_henv env, a_usize id) {
+a_float aloL_checknum(a_henv env, a_ustk id) {
 	Value v = api_elem(env, cast(a_isize, id));
 	if (!v_is_num(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TFLOAT]);
@@ -95,7 +95,7 @@ a_float aloL_checknum(a_henv env, a_usize id) {
 	return v_as_num(v);
 }
 
-char const* aloL_checklstr(a_henv env, a_usize id, a_usize* plen) {
+char const* aloL_checklstr(a_henv env, a_ustk id, a_usize* plen) {
 	Value v = api_elem(env, cast(a_isize, id));
 	if (!v_is_str(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TSTR]);
@@ -107,7 +107,7 @@ char const* aloL_checklstr(a_henv env, a_usize id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
-a_bool aloL_optint_(a_henv env, a_usize id, a_int* pval) {
+a_bool aloL_optint_(a_henv env, a_ustk id, a_int* pval) {
 	Value v = api_elem(env, cast(a_usize, id));
 	if (!v_is_int(v)) {
 		if (v_is_nil(v)) {
@@ -119,7 +119,7 @@ a_bool aloL_optint_(a_henv env, a_usize id, a_int* pval) {
 	return true;
 }
 
-a_bool aloL_optnum_(a_henv env, a_usize id, a_float* pval) {
+a_bool aloL_optnum_(a_henv env, a_ustk id, a_float* pval) {
 	Value v = api_elem(env, cast(a_usize, id));
 	if (!v_is_num(v)) {
 		if (v_is_nil(v)) {
@@ -131,7 +131,7 @@ a_bool aloL_optnum_(a_henv env, a_usize id, a_float* pval) {
 	return true;
 }
 
-char const* aloL_optlstr(a_henv env, a_usize id, a_usize* plen) {
+char const* aloL_optlstr(a_henv env, a_ustk id, a_usize* plen) {
 	Value v = api_elem(env, cast(a_usize, id));
 	if (!v_is_str(v)) {
 		if (v_is_nil(v)) {
@@ -294,7 +294,7 @@ static Frame* l_frame_at(a_henv env, a_usize level) {
     }
 }
 
-static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, a_hbuf buf) {
+static a_msg l_wrap_error(a_henv env, a_istk id, a_usize level, a_usize limit, a_hbuf buf) {
     Trace trace;
 	Value* err = api_wrslot(env, id);
     Frame* frame = l_frame_at(env, level);
@@ -314,12 +314,12 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
     switch (v_get_tag(*err)) {
         case T_STR: {
             GStr* str = v_as_str(*err);
-            try(ai_buf_nputls(env, buf, str->_ptr, str->_len));
+            try (ai_buf_nputls(env, buf, str->_ptr, str->_len));
             break;
         }
         case T_INT: {
             a_u32 code = cast(a_u32, v_as_int(*err));
-            try(ai_buf_nputfs(env, buf, "error code: %08x", code));
+            try (ai_buf_nputfs(env, buf, "error code: %08x", code));
             break;
         }
         default: {
@@ -328,7 +328,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
     }
 
     if (limit > 0) {
-        try(ai_buf_nputs(env, buf, "\nstack trace:\n\t"));
+        try (ai_buf_nputs(env, buf, "\nstack trace:\n\t"));
         loop {
             if (trace._line != 0) {
                 try(ai_buf_nputfs(env, buf, "at %s:%u", trace._file, trace._line));
@@ -357,7 +357,7 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
                 break;
             trace_fill(env, frame, &trace);
 
-			try(ai_buf_nputs(env, buf, "\n\t"));
+			try (ai_buf_nputs(env, buf, "\n\t"));
         }
     }
 
@@ -366,11 +366,11 @@ static a_msg l_wrap_error(a_henv env, a_isize id, a_usize level, a_usize limit, 
 	return ALO_SOK;
 }
 
-a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
+a_msg aloL_traceerror(a_henv env, a_istk id, a_usize level, a_usize limit) {
 	if (env->_frame->_prev != null) {
-		Buf buf;
+		Buf buf[1];
 		at_buf_init(buf);
-		a_msg msg = l_wrap_error(env, id, level, limit, at_buf_cast(buf));
+		a_msg msg = l_wrap_error(env, id, level, limit, buf_cast(buf));
 		at_buf_deinit(G(env), buf);
 		return msg;
 	}
@@ -378,7 +378,7 @@ a_msg aloL_traceerror(a_henv env, a_isize id, a_usize level, a_usize limit) {
 	return ALO_EINVAL;
 }
 
-a_msg aloL_gets(a_henv env, a_isize id, char const* s) {
+a_msg aloL_gets(a_henv env, a_istk id, char const* s) {
     Value v = api_elem(env, id);
     api_check(v_is_table(v), "table expected.");
 
@@ -393,7 +393,7 @@ a_msg aloL_gets(a_henv env, a_isize id, char const* s) {
     return api_tagof(env, v);
 }
 
-a_msg aloL_gettm(a_henv env, a_isize id, char const* s) {
+a_msg aloL_gettm(a_henv env, a_istk id, char const* s) {
     Value v = api_elem(env, id);
 
     GType* o = v_typeof(env, v);
@@ -407,7 +407,7 @@ a_msg aloL_gettm(a_henv env, a_isize id, char const* s) {
     return api_tagof(env, v);
 }
 
-void aloL_puts(a_henv env, a_isize id, char const* s) {
+void aloL_puts(a_henv env, a_istk id, char const* s) {
     Value v = api_elem(env, id);
     api_check(v_is_table(v), "table expected.");
 
@@ -419,7 +419,7 @@ void aloL_puts(a_henv env, a_isize id, char const* s) {
     ai_gc_trigger(env);
 }
 
-void aloL_putalls_(a_henv env, a_isize id, aloL_Entry const* bs, a_usize nb) {
+void aloL_putalls_(a_henv env, a_istk id, aloL_Entry const* bs, a_usize nb) {
 	Value v = api_elem(env, id);
 	api_check(v_is_table(v), "table expected.");
 

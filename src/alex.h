@@ -69,7 +69,7 @@ struct Lexer {
 		ZIn _in;
 		a_henv _env;
 	};
-    ByteBuf _buf;
+    Buf _buf[1];
     a_line _line;
     a_i32 _char; /* Next character. */
     Token _ahead[2];

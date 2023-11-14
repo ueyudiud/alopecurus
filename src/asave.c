@@ -79,24 +79,20 @@ static a_msg l_save_const(OutCtx* oc, Value v) {
     return ALO_SOK;
 }
 
-static a_msg l_save(OutCtx* oc, GProto* proto, a_bool root) {
+static a_msg l_save(OutCtx* oc, GProto* proto) {
     l_putvi(oc, a_u32, proto->_nconst);
     l_putvi(oc, a_u32, proto->_ninsn);
     l_putvi(oc, a_u16, proto->_nsub);
     l_putvi(oc, a_u16, proto->_nlocal);
     l_put(oc, a_u8, proto->_ncap);
     l_put(oc, a_u8, proto->_nstack);
-	ProtoFlags flags = {
-		._fdebug = true,
-		._funiq = root
-	};
-	l_put(oc, ProtoFlags, flags);
+	l_put(oc, a_u16, proto->_flags);
     for (a_u32 i = 0; i < proto->_nconst; ++i) {
-        try(l_save_const(oc, proto->_consts[i]));
+        try (l_save_const(oc, proto->_consts[i]));
     }
     l_putv(oc, proto->_code, proto->_ninsn);
     for (a_u32 i = 0; i < proto->_nsub; ++i) {
-        try(l_save(oc, proto->_subs[i], false));
+        try (l_save(oc, proto->_subs[i]));
     }
     return ALO_SOK;
 }
@@ -104,5 +100,5 @@ static a_msg l_save(OutCtx* oc, GProto* proto, a_bool root) {
 a_msg ai_fun_save(a_henv env, GFun* val, a_ofun fun, void* ctx, a_flags flags) {
     OutCtx oc = { ._flags =  flags };
     ai_io_oinit(env, fun, ctx, &oc._out);
-    return l_save(&oc, val->_proto, true);
+    return l_save(&oc, val->_proto);
 }
