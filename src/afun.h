@@ -18,9 +18,10 @@ intern void ai_cap_close(a_henv env, RcCap* self);
 intern void ai_cap_close_above(a_henv env, Value* pv);
 intern void ai_cap_clean(Global* gbl);
 
-#define FUN_FLAG_VARARG u16c(0x0001)
-#define FUN_FLAG_NATIVE u16c(0x0002)
-#define FUN_FLAG_UNIQUE u16c(0x0004)
+#define FUN_FLAG_VARARG u32c(0x00000001)
+#define FUN_FLAG_NATIVE u32c(0x00000002)
+#define FUN_FLAG_UNIQUE u32c(0x00000004)
+#define FUN_FLAG_DEBUG  u32c(0x00010000)
 
 /**
  ** The capture value using reference counter.
@@ -56,13 +57,13 @@ typedef struct {
 struct ProtoDesc {
 	a_u32 _nconst;
 	a_u32 _ninsn;
+    a_flags _flags;
 	a_u16 _nsub;
 	a_u16 _nlocal;
 	a_u16 _nline;
 	a_u8 _ncap;
 	a_u8 _nstack;
 	a_u8 _nparam;
-	ProtoFlags _flags;
 };
 
 #endif /* afun_h_ */

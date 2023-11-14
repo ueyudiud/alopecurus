@@ -88,9 +88,9 @@ static a_msg l_load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
         ._nline = l_getvi(ic, a_u16),
         ._ncap = l_get(ic, a_u8),
         ._nstack = l_get(ic, a_u8),
-        ._flags = l_get(ic, ProtoFlags)
+        ._flags = l_get(ic, a_u16) | (ic->_flags << 16)
     };
-	if (info->_flags._funiq != root)
+	if (root && !(info->_flags & FUN_FLAG_UNIQUE))
 		return ALO_EINVAL;
     return ALO_SOK;
 }
@@ -163,7 +163,7 @@ static void l_release(InCtx* ic) {
 }
 
 a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags) {
-    InCtx ic = { ._flags =  flags };
+    InCtx ic = { ._flags = flags };
 	rq_init(&ic._rq);
     ai_io_iinit(env, fun, ctx, &ic._in);
 

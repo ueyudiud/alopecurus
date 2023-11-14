@@ -3014,10 +3014,9 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 		._nstack = scope->_max_reg,
 		._nparam = scope->_nparam,
 		._nline = par->_lines->_len - scope->_line_off,
-		._flags = {
-			._fdebug = (par->_options & ALO_COMP_OPT_STRIP_DEBUG) == 0,
-			._funiq = root
-		}
+		._flags =
+            (!(par->_options & ALO_COMP_OPT_STRIP_DEBUG) ? FUN_FLAG_DEBUG : 0) |
+            (root ? FUN_FLAG_UNIQUE : 0)
 	};
 
 	GProto* proto = ai_proto_xalloc(par->_env, &desc);
@@ -3027,7 +3026,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 
 	memcpy(proto->_consts, par->_consts->_ptr + scope->_const_off, sizeof(Value) * desc._nconst);
 	memcpy(proto->_code, par->_code + scope->_begin_label, sizeof(a_insn) * desc._ninsn);
-	if (desc._flags._fdebug) {
+	if (desc._flags & FUN_FLAG_DEBUG) {
 		proto->_dbg_lndef = scope->_begin_line;
 		proto->_dbg_lnldef = line;
 		memcpy(proto->_dbg_lines, par->_lines->_ptr + scope->_line_off, sizeof(LineInfo) * desc._nline);
@@ -3040,7 +3039,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 				._reg = cap_info->_src_index,
 				._fup = cap_info->_scope != par->_scope_depth - 1
 			};
-			if (desc._flags._fdebug) {
+			if (desc._flags & FUN_FLAG_DEBUG) {
 				proto->_dbg_cap_names[i] = cap_info->_name;
 			}
 		}
@@ -3064,7 +3063,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
 	}
 	
 	proto->_name = name;
-	if (desc._flags._fdebug) {
+	if (desc._flags & FUN_FLAG_DEBUG) {
 		proto->_dbg_file = par->_file;
 		proto->_dbg_lndef = scope->_begin_line;
 		proto->_dbg_lnldef = line;
@@ -3155,12 +3154,12 @@ static void parser_start(Parser* par) {
 }
 
 static void proto_register_recursive(a_henv env, GProto* proto) {
-	assume(proto->_gnext == null, "duplicate root function.");
     if (proto->_flags & FUN_FLAG_UNIQUE) {
         assume(proto->_cache != null, "no unique instance given");
         ai_gc_register_object(env, proto->_cache);
     }
     else {
+        assume(proto->_gnext == null, "children function not collected");
         ai_gc_register_object(env, proto);
     }
 	for (a_u32 i = 0; i < proto->_nsub; ++i) {
@@ -4921,21 +4920,22 @@ branch_standard:
 				break;
 			}
 			case TK_ASSIGN: {
-                lex_skip(par);
 				if (parent->_kind == PAT_VARG) {
 					return (*info->_con)(par, &info->_root, info->_ctx);
 				}
 				else if (pat->_fdfl) {
 					goto error;
 				}
-				else {
-					SecRec rec;
-					sec_start(par, rec);
-					l_scan_expr(par, pat->_expr);
-					pat->_sec_ref = sec_record(par, rec);
-					pat->_fdfl = true;
-					continue;
-				}
+                SecRec rec;
+
+                lex_skip(par);
+
+                sec_start(par, rec);
+                l_scan_expr(par, pat->_expr);
+
+                pat->_sec_ref = sec_record(par, rec);
+                pat->_fdfl = true;
+                continue;
 			}
 			default:
 			load_nils: {
@@ -5011,27 +5011,31 @@ static void l_scan_for_stat(Parser* par) {
 static void l_scan_let_stat2(Parser* par, Pat* p, a_usize c) {
 	a_line line = cast(a_line, c);
 
-	if (lex_test_skip(par, '=')) {
+	if (lex_test_skip(par, TK_ASSIGN)) {
 		Expr e;
 		Pat* pat = p->_child;
 
-		do {
+		loop {
 			l_scan_expr(par, e);
     	    pat_bind(par, pat, e);
 			
 			pat = pat->_sibling;
-		}
-		while (lex_test_skip(par, TK_COMMA) && pat != null);
+            p->_child = pat;
+            p->_nchild -= 1;
 
-		if (pat == null) {
-			/* If no pattern remains, discard remainding expressions */
-			expr_discard(par, e);
-			
-			do {
-				l_scan_expr(par, e);
-				expr_discard(par, e);
-			}
-			while (lex_test_skip(par, TK_COMMA));
+            if (!lex_test_skip(par, TK_COMMA))
+                break;
+
+            if (pat == null) {
+                do {
+                    l_scan_expr(par, e);
+                    expr_discard(par, e);
+                }
+                while (lex_test_skip(par, TK_COMMA));
+
+                stack_compact(par);
+                return;
+            }
 		}
 	}
 

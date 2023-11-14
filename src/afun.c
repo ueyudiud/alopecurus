@@ -29,7 +29,7 @@ static a_usize proto_size_with_head(ProtoDesc* desc) {
 				   sizeof(a_insn) * desc->_ninsn +
 				   sizeof(CapInfo) * desc->_ncap +
 				   sizeof(GProto*) * desc->_nsub;
-	if (desc->_flags._fdebug) {
+	if (desc->_flags & FUN_FLAG_DEBUG) {
 		size += sizeof(LineInfo) * desc->_nline +
 				sizeof(LocalInfo) * desc->_nlocal +
 				sizeof(GStr*) * desc->_ncap;
@@ -37,7 +37,7 @@ static a_usize proto_size_with_head(ProtoDesc* desc) {
 	else {
 		size += sizeof(LineInfo);
 	}
-	if (desc->_flags._funiq) {
+	if (desc->_flags & FUN_FLAG_UNIQUE) {
 		size += fun_size(desc->_ncap) - UNIQ_PROTO_OFFSET;
 	}
 	return pad_to(size, sizeof(a_usize));
@@ -49,7 +49,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
     void* blk;
     GProto* self;
 
-    if (desc->_flags._funiq) {
+    if (desc->_flags & FUN_FLAG_UNIQUE) {
         blk = ai_mem_nalloc(env, total_size);
         if (blk == null) return null;
         memclr(blk, total_size);
@@ -59,14 +59,14 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
     else {
         blk = ai_mem_nalloc(env, total_size);
         if (blk == null) return null;
-        memclr(blk, sizeof(GcHead) + total_size);
+        memclr(blk, total_size);
 
         self = g_cast(GProto, g_biased(blk));
         self->_vptr = &proto_vtable;
     }
 
     self->_size = total_size;
-    self->_flags = desc->_flags._funiq ? FUN_FLAG_UNIQUE : 0;
+    self->_flags = desc->_flags;
     self->_nconst = desc->_nconst;
     self->_ninsn = desc->_ninsn;
     self->_nsub = desc->_nsub;
@@ -84,7 +84,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 	self->_consts = int2ptr(Value, addr);
 	addr += sizeof(Value) * desc->_nconst;
 
-	if (desc->_flags._fdebug) {
+	if (desc->_flags & FUN_FLAG_DEBUG) {
 		self->_dbg_lines = int2ptr(LineInfo, addr);
 		addr += sizeof(LineInfo) * desc->_nline;
 
@@ -106,9 +106,8 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
         };
 	}
 
-	if (desc->_flags._funiq) {
+	if (desc->_flags & FUN_FLAG_UNIQUE) {
         /* Initialize unique function for this prototype. */
-
 		GFun* fun = int2ptr(GFun, addr);
 		addr += fun_size(desc->_ncap);
 
@@ -333,7 +332,7 @@ void ai_cap_clean(Global* gbl) {
 }
 
 static void proto_drop(Global* gbl, GProto* self) {
-    ai_mem_dealloc(gbl, self, self->_size);
+    ai_mem_dealloc(gbl, g_unbiased(self), self->_size);
 }
 
 static void proto_mark_body(Global* gbl, GProto* self) {
