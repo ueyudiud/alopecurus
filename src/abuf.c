@@ -14,7 +14,7 @@
 
 static VTable const buf_vtable;
 
-a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...) {
+a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...) {
     va_list varg;
     va_start(varg, fmt);
 
@@ -24,7 +24,7 @@ a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...) {
     return msg;
 }
 
-a_msg ai_buf_nputvfs_(a_henv env, a_hbuf buf, char const* fmt, va_list varg) {
+a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg) {
     va_list varg2;
 	a_usize rem = buf->_cap - buf->_len;
 

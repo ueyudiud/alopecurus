@@ -24,20 +24,18 @@ struct GBuf {
     BUF_STRUCT_BODY(a_byte);
 };
 
-typedef Buf* a_hbuf;
-
 #define buf_end(b) cast(void*, (b)->_ptr + (b)->_len)
 #define buf_cast(b) from_member(Buf, _buf_head_mark, &(b)->_buf_head_mark)
 #define buf_elem_type(b) typeof((b)->_ptr[0])
 #define buf_elem_size(b) sizeof((b)->_ptr[0])
 #define buf_max_len(b) (SIZE_MAX / buf_elem_size(b))
 
-intern a_msg ai_buf_nputfs_(a_henv env, a_hbuf buf, char const* fmt, ...);
-intern a_msg ai_buf_nputvfs_(a_henv env, a_hbuf buf, char const* fmt, va_list varg);
+intern a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...);
+intern a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg);
 intern GBuf* ai_buf_new(a_henv env);
 intern a_noret ai_buf_error(a_henv env, a_msg msg, char const* what);
 
-always_inline void ai_buf_init_(a_hbuf buf) {
+always_inline void ai_buf_init_(Buf* buf) {
 	buf->_ptr = null;
 	buf->_len = 0;
 	buf->_cap = 0;
@@ -45,7 +43,7 @@ always_inline void ai_buf_init_(a_hbuf buf) {
 
 #define at_buf_init(b) ai_buf_init_(buf_cast(b))
 
-always_inline void ai_buf_deinit_(Global* gbl, a_hbuf buf, a_usize size) {
+always_inline void ai_buf_deinit_(Global* gbl, Buf* buf, a_usize size) {
 	ai_mem_dealloc(gbl, buf->_ptr, buf->_cap * size);
 	buf->_ptr = null;
 	buf->_cap = 0;
@@ -62,7 +60,7 @@ always_inline void ai_buf_deinit_(Global* gbl, a_hbuf buf, a_usize size) {
 	v += 1                    \
 )
 
-always_inline a_msg ai_buf_ngrow(a_henv env, a_hbuf buf, a_usize new_cap, a_usize size) {
+always_inline a_msg ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize size) {
     a_usize old_cap = buf->_cap;
     assume(old_cap <= SIZE_MAX / size && new_cap <= SIZE_MAX / size, "invalid capacity.");
 
@@ -96,7 +94,7 @@ always_inline a_msg ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usiz
 	return ALO_SOK;
 }
 
-always_inline a_msg ai_buf_ncheck(a_henv env, a_hbuf buf, a_usize add, a_usize size, a_usize lim) {
+always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, a_usize lim) {
 	if (add > buf->_cap - buf->_len) {
 		a_usize cap = buf->_cap;
 		try (ai_buf_nhint(&cap, buf->_len, add, lim));
@@ -105,7 +103,7 @@ always_inline a_msg ai_buf_ncheck(a_henv env, a_hbuf buf, a_usize add, a_usize s
 	return ALO_SOK;
 }
 
-always_inline a_msg ai_buf_nappend(a_henv env, a_hbuf buf, void const* src, a_usize len, a_usize size, a_usize lim) {
+always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize len, a_usize size, a_usize lim) {
 	try (ai_buf_ncheck(env, buf, len, size, lim));
 	memcpy(buf->_ptr + size * buf->_len, src, len * size);
 	buf->_len += len;

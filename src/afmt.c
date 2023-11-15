@@ -38,7 +38,7 @@ a_usize ai_fmt_int2str(char* p, a_int v) {
 	return p - q;
 }
 
-void ai_fmt_puti(a_henv env, a_hbuf buf, a_int v) {
+void ai_fmt_puti(a_henv env, Buf* buf, a_int v) {
 	char cs[16];
 	a_usize len = ai_fmt_int2str(cs + 16, v);
 	catch (ai_buf_nputls(env, buf, cs + 16 - len, len)) {
@@ -52,7 +52,7 @@ a_usize ai_fmt_float2str(char* p, a_float v) {
 	return n;
 }
 
-void ai_fmt_putf(a_henv env, a_hbuf buf, a_float v) {
+void ai_fmt_putf(a_henv env, Buf* buf, a_float v) {
 	char cs[32];
 	a_usize len = ai_fmt_float2str(cs + 32, v);
 	a_msg msg = ai_buf_nputls(env, buf, cs + 32 - len, len);
@@ -78,7 +78,7 @@ a_usize ai_fmt_ptr2str(char* p, void* v) {
 	return BUFF_SIZE_FOR_PTR;
 }
 
-void ai_fmt_putp(a_henv env, a_hbuf buf, void* v) {
+void ai_fmt_putp(a_henv env, Buf* buf, void* v) {
 	a_msg msg = ai_buf_ncheck(env, buf, BUFF_SIZE_FOR_PTR, 1, SIZE_MAX);
 	if (unlikely(msg != ALO_SOK)) {
 		ai_mem_nomem(env);

@@ -294,7 +294,7 @@ static Frame* l_frame_at(a_henv env, a_usize level) {
     }
 }
 
-static a_msg l_wrap_error(a_henv env, a_istk id, a_usize level, a_usize limit, a_hbuf buf) {
+static a_msg l_wrap_error(a_henv env, a_istk id, a_usize level, a_usize limit, Buf* buf) {
     Trace trace;
 	Value* err = api_wrslot(env, id);
     Frame* frame = l_frame_at(env, level);
@@ -438,6 +438,44 @@ void aloL_putalls_(a_henv env, a_istk id, aloL_Entry const* bs, a_usize nb) {
 	}
 
 	ai_gc_trigger(env);
+}
+
+typedef struct {
+    GOBJ_STRUCT_HEADER;
+    a_usize _size;
+    a_byte _body[];
+} GBlock;
+
+#define block_size(s) pad_to(sizeof(GBlock) + (s), sizeof(a_usize))
+
+static void block_drop(Global* gbl, GBlock* self) {
+    ai_mem_gdel(gbl, self, block_size(self->_size));
+}
+
+static void block_mark(Global* gbl, GBlock* self) {
+    ai_gc_trace_work(gbl, sizeof(GcHead) + block_size(self->_size));
+}
+
+static VTable const block_vtable = {
+    ._stencil = V_STENCIL(T_USER),
+    ._tag = ALO_TUSER,
+    ._slots = {
+        [vfp_slot(drop)] = block_drop,
+        [vfp_slot(mark)] = block_mark
+    }
+};
+
+void* aloL_newblk(a_henv env, a_usize s) {
+    api_check_slot(env, 1);
+
+    GBlock* self = ai_mem_gnew(env, GBlock, block_size(s));
+    self->_vptr = &block_vtable;
+    self->_size = s;
+    ai_gc_register_object(env, self);
+
+    v_set_obj(env, api_incr_stack(env), self);
+
+    return self->_body;
 }
 
 typedef struct {

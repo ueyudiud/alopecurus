@@ -197,7 +197,7 @@ a_bool ai_vm_compare(a_henv env, Value v1, Value v2, a_enum op) {
     switch (op) {
         case OP_LT: {
             if (v_is_int(v1) && v_is_int(v1)) {
-                return ai_op_cmp_int(v_as_int(v1), v_as_int(v1), OP_LT);
+                return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), OP_LT);
             }
             else if (v_is_num(v1) && v_is_num(v2)) {
                 return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LT);
@@ -206,7 +206,7 @@ a_bool ai_vm_compare(a_henv env, Value v1, Value v2, a_enum op) {
         }
         case OP_LE: {
             if (v_is_int(v1) && v_is_int(v1)) {
-                return ai_op_cmp_int(v_as_int(v1), v_as_int(v1), OP_LE);
+                return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), OP_LE);
             }
             else if (v_is_num(v1) && v_is_num(v2)) {
                 return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LE);
@@ -223,18 +223,18 @@ a_bool ai_vm_compare(a_henv env, Value v1, Value v2, a_enum op) {
 static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vm;
 
-    catch (ai_tm_look(env, v, k, &vm)) {
-        catch (ai_vm_uget(env, v, v_of_obj(k), &vm)) {
-            ai_err_bad_look(env, v_nameof(env, v), k); //TODO
+    if (ai_tm_look(env, v, k, &vm)) {
+        catch (!v_is_table(v) || ai_table_gets(env, v_as_table(v), k, &vm)) { //TODO only table can dispatch?
+            ai_err_bad_look(env, v_nameof(env, v), k);
         }
 
         v_set(env, &pv[0], v_of_call());
         v_set(env, &pv[1], vm);
-        return;
     }
-
-    v_set(env, &pv[0], vm);
-    v_set(env, &pv[1], v);
+    else {
+        v_set(env, &pv[0], vm);
+        v_set(env, &pv[1], v);
+    }
 }
 
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
@@ -265,23 +265,6 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
 	}
 }
 
-a_msg ai_vm_uget(a_henv env, Value v1, Value v2, Value* pv) {
-    switch (v_get_tag(v1)) {
-        case T_TUPLE: {
-            return ai_tuple_uget(env, v_as_tuple(v1), v2, pv);
-        }
-        case T_LIST: {
-            return ai_list_uget(env, v_as_list(v1), v2, pv);
-        }
-        case T_TABLE: {
-            return !ai_table_get(env, v_as_table(v1), v2, pv) ? ALO_SOK : ALO_EEMPTY;
-        }
-        default: {
-            return ALO_EXIMPL;
-        }
-    }
-}
-
 void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
     switch (v_get_tag(v1)) {
         case T_LIST: {
@@ -299,20 +282,6 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
         }
         default: {
             ai_err_bad_tm(env, TM___set__);
-        }
-    }
-}
-
-a_msg ai_vm_uset(a_henv env, Value v1, Value v2, Value v3) {
-    switch (v_get_tag(v1)) {
-        case T_LIST: {
-            return ai_list_uset(env, v_as_list(v1), v2, v3);
-        }
-        case T_TABLE: {
-            return ai_table_uset(env, v_as_table(v1), v2, v3);
-        }
-        default: {
-            return ALO_EXIMPL;
         }
     }
 }
@@ -494,13 +463,6 @@ static void v_mov_all_with_nil(a_henv env, Value* dst, a_usize dst_len, Value co
 	}
 }
 
-static void v_mov_all(a_henv env, Value* dst, Value const* src, a_usize len) {
-	assume(dst < src || len == 0, "bad order.");
-	for (a_usize i = 0; i < len; ++i) {
-		v_cpy(env, &dst[i], &src[i]);
-	}
-}
-
 static a_u32 vm_fetch_ex(a_insn const** pc) {
 	a_insn const* ip = *pc;
 	*pc = ip + 1;
@@ -571,7 +533,7 @@ tail_call:
 		fun = v_as_func(vf);
         if (R > frame->_stack_dst) {
             a_usize len = env->_stack._top - R;
-            v_mov_all(env, frame->_stack_dst, R, len);
+            v_mov_all_fwd(env, frame->_stack_dst, R, len);
             env->_stack._top = frame->_stack_dst + len;
             frame->_stack_bot = frame->_stack_dst;
         }
@@ -597,7 +559,7 @@ tail_call:
         n = min(n, frame->_num_ret);
 
         ai_cap_close_above(env, frame->_stack_bot);
-        v_mov_all(env, frame->_stack_dst, p, n);
+        v_mov_all_fwd(env, frame->_stack_dst, p, n);
         frame->_num_ret -= n;
         frame->_stack_dst += n;
 		goto handle_return;
@@ -1463,7 +1425,7 @@ tail_call:
                 a_usize n = min(c, frame->_num_ret);
 
                 ai_cap_close_above(env, frame->_stack_bot);
-				v_mov_all(env, frame->_stack_dst, &R[a], n);
+                v_mov_all_fwd(env, frame->_stack_dst, &R[a], n);
                 frame->_stack_dst += n;
                 frame->_num_ret -= n;
 
@@ -1493,11 +1455,11 @@ tail_call:
 				a_u32 n = min(c, frame->_num_ret);
 
                 ai_cap_close_above(env, frame->_stack_bot);
-				v_mov_all(env, frame->_stack_dst, &R[a], n);
+                v_mov_all_fwd(env, frame->_stack_dst, &R[a], n);
                 frame->_stack_dst += n;
                 frame->_num_ret -= n;
 
-                v_mov_all(env, frame->_stack_dst, &R[a + c], b - c);
+                v_mov_all_fwd(env, frame->_stack_dst, &R[a + c], b - c);
 
                 env->_stack._top = &R[a + b];
                 frame->_stack_bot = &R[a + c];
@@ -1532,7 +1494,7 @@ tail_call:
                 a_usize n = min(b, frame->_num_ret);
 
                 ai_cap_close_above(env, frame->_stack_bot);
-                v_mov_all(env, frame->_stack_dst, p, n);
+                v_mov_all_fwd(env, frame->_stack_dst, p, n);
                 frame->_stack_dst += n;
                 frame->_num_ret -= n;
                 goto handle_return;
@@ -1543,7 +1505,7 @@ tail_call:
                 n = min(n, frame->_num_ret);
 
                 ai_cap_close_above(env, frame->_stack_bot);
-                v_mov_all(env, frame->_stack_dst, p, n);
+                v_mov_all_fwd(env, frame->_stack_dst, p, n);
                 frame->_stack_dst += n;
                 frame->_num_ret -= n;
 				goto handle_return;

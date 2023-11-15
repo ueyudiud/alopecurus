@@ -48,6 +48,8 @@ ALO_EXPORT void (aloL_putalls_)(a_henv env, a_istk id, aloL_Entry const* bs, a_u
 
 #define aloL_putalls(env,id,bs) aloL_putalls_(env, id, bs, sizeof(bs) / sizeof(aloL_Entry))
 
+ALO_EXPORT void* (aloL_newblk)(a_henv env, a_usize s);
+
 struct aloL_Entry {
 	char const* name; /* Entry name. */
 	a_cfun fptr; /* Function pointer, null for create entry only. */

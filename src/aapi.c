@@ -600,7 +600,26 @@ a_msg alo_rawget(a_henv env, a_istk id) {
 	Value v = api_elem(env, id);
 	Value vk = api_decr_stack(env);
 
-	try (ai_vm_uget(env, v, vk, &v));
+    switch (v_get_tag(v)) {
+        case T_TUPLE: {
+            GTuple* p = v_as_tuple(v);
+            try (ai_tuple_uget(env, p, vk, &v));
+            break;
+        }
+        case T_LIST: {
+            GList* p = v_as_list(v);
+            try (ai_list_uget(env, p, vk, &v));
+            break;
+        }
+        case T_TABLE: {
+            GTable* p = v_as_table(v);
+            try (ai_table_get(env, p, vk, &v));
+            break;
+        }
+        default: {
+            return ALO_EXIMPL;
+        }
+    }
 
 	v_set(env, api_incr_stack(env), v);
 	return api_tagof(env, v);
@@ -610,14 +629,27 @@ a_msg alo_rawset(a_henv env, a_istk id) {
 	api_check_elem(env, 2);
 
 	Value v = api_elem(env, id);
-	Value vv = env->_stack._top[-1];
 	Value vk = env->_stack._top[-2];
+    Value vv = env->_stack._top[-1];
 
-	try (ai_vm_uset(env, v, vk, vv));
+    switch (v_get_tag(v)) {
+        case T_LIST: {
+            GList* p = v_as_list(v);
+            try (ai_list_uset(env, p, vk, vv));
+            break;
+        }
+        case T_TABLE: {
+            GTable* p = v_as_table(v);
+            try (ai_table_uset(env, p, vk, vv));
+            break;
+        }
+        default: {
+            return ALO_EXIMPL;
+        }
+    }
 
     env->_stack._top -= 2;
-
-	return ALO_SOK;
+    return ALO_SOK;
 }
 
 void alo_put(a_henv env, a_istk id) {

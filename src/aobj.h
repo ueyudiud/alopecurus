@@ -128,13 +128,21 @@ always_inline void v_cpy(a_henv env, Value* restrict d, Value const* restrict s)
 }
 
 always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
+    assume(d + n < s || s + n < d, "copy regions overlapping.");
+    for (a_usize i = 0; i < n; ++i) {
+        v_cpy(env, &d[i], &s[i]);
+    }
+}
+
+always_inline void v_mov_all_fwd(a_henv env, Value* d, Value const* s, a_usize n) {
+    assume(d <= s || n == 0, "move regions violate contract.");
     for (a_usize i = 0; i < n; ++i) {
         v_cpy(env, &d[i], &s[i]);
     }
 }
 
 always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n) {
-    assume(d >= s, "not move backward.");
+    assume(d >= s || n == 0, "move regions violate contract.");
     for (a_usize i = n - 1; i < n; --i) {
         v_cpy(env, &d[i], &s[i]);
     }
@@ -784,8 +792,10 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 intern char const ai_obj_type_names[][8];
 
 always_inline GType* g_typeof(a_henv env, a_hobj p) {
-	assume(p->_vptr->_type_ref != 0, "no type mirror for object.");
-	return ptr_disp(GType, G(env), p->_vptr->_type_ref);
+    a_usize type_ref = p->_vptr->_type_ref;
+	return likely(type_ref) != 0 ?
+            ptr_disp(GType, G(env), p->_vptr->_type_ref) :
+            g_type(env, ALO_TPTR);
 }
 
 #define g_typeof(env,p) g_typeof(env, gobj_cast(p))
