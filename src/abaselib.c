@@ -151,7 +151,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
  *@param env the runtime environment.
  *@param id the slot id.
  */
-void aloB_show(a_henv env, a_isize id) {
+void aloB_show(a_henv env, a_istk id) {
 	Value const* v = api_roslot(env, id);
 	api_check(v != null, "bad slot id.");
 	l_show_impl(env, *v, 0);

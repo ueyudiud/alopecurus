@@ -14,6 +14,6 @@
 # define aloi_show_newline() quiet(fputc('\n', stdout), fflush(stdout))
 #endif
 
-ALO_EXPORT void aloB_show(a_henv env, a_isize id);
+ALO_EXPORT void aloB_show(a_henv env, a_istk id);
 
 #endif /* abaselib_h_ */

@@ -140,6 +140,22 @@ always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n
     }
 }
 
+always_inline void v_swap(a_henv env, Value* v1, Value* v2) {
+    Value v;
+    v_cpy(env, &v, v1);
+    v_cpy(env, v1, v2);
+    v_cpy(env, v2, &v);
+}
+
+always_inline void v_reverse(a_henv env, Value* vl, Value* vh) {
+    vh -= 1;
+    while (vl < vh) {
+        v_swap(env, vl, vh);
+        vl += 1;
+        vh -= 1;
+    }
+}
+
 /*=========================================================*
  * Nil & Control Values
  *=========================================================*/

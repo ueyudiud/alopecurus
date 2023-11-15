@@ -58,6 +58,36 @@ static a_noret l_div_0_err(a_henv env) {
 	ai_err_raisef(env, ALO_EINVAL, "attempt to divide by 0.");
 }
 
+static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
+    Value vr;
+
+    if (ai_tm_unary(env, tm, v1, &vr)) {
+        ai_err_bad_tm(env, tm);
+    }
+
+    return vr;
+}
+
+static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
+    Value vr;
+
+    if (ai_tm_binary(env, tm, v1, v2, &vr)) {
+        ai_err_bad_tm(env, tm);
+    }
+
+    return vr;
+}
+
+static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
+    a_bool r;
+
+    catch (ai_tm_relation(env, tm, v1, v2, &r)) {
+        ai_err_bad_tm(env, tm);
+    }
+
+    return r;
+}
+
 a_hash ai_vm_hash(a_henv env, Value v) {
     if (likely(v_has_trivial_hash(v))) {
         return v_trivial_hash(v);
@@ -98,6 +128,93 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
     if (!ai_tm_equals(env, v1, v2, &z)) return z;
 
     return v_trivial_equals_unchecked(v1, v2);
+}
+
+Value ai_vm_unary(a_henv env, Value v, a_enum op) {
+    switch (op) {
+        case OP_NEG: {
+            if (v_is_int(v)) {
+                a_int val = ai_op_neg_int(v_as_int(v));
+                return v_of_int(val);
+            }
+            else if (v_is_float(v)) {
+                a_float val = ai_op_neg_float(v_as_float(v));
+                return v_of_float(val);
+            }
+            return vm_meta_unr(env, v, TM___neg__);
+        }
+        case OP_BNOT: {
+            if (v_is_int(v)) {
+                a_int val = ai_op_bnot_int(v_as_int(v));
+                return v_of_int(val);
+            }
+            return vm_meta_unr(env, v, TM___bnot__);
+        }
+        default: unreachable();
+    }
+}
+
+Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op) {
+    switch (op) {
+        case OP_ADD ... OP_MUL: {
+            if (v_is_int(v1) && v_is_int(v2)) {
+                a_int val = ai_op_bin_int(v_as_int(v1), v_as_int(v2), op);
+                return v_of_int(val);
+            }
+            else if (v_is_num(v1) && v_is_num(v2)) {
+                a_float val = ai_op_bin_float(v_as_num(v1), v_as_num(v2), op);
+                return v_of_float(val);
+            }
+            return vm_meta_bin(env, v1, v2, ai_op_bin2tm(op));
+        }
+        case OP_DIV ... OP_MOD: {
+            if (v_is_int(v1) && v_is_int(v2)) {
+                a_int ic = v_as_int(v2);
+                if (unlikely(ic == 0)) {
+                    l_div_0_err(env);
+                }
+                a_int val = ai_op_bin_int(v_as_int(v1), ic, op);
+                return v_of_int(val);
+            }
+            else if (v_is_num(v1) && v_is_num(v2)) {
+                a_float val = ai_op_bin_float(v_as_num(v1), v_as_num(v2), op);
+                return v_of_float(val);
+            }
+            return vm_meta_bin(env, v1, v1, ai_op_bin2tm(op));
+        }
+        case OP_SHL ... OP_BIT_XOR: {
+            if (v_is_int(v1) && v_is_int(v2)) {
+                a_int val = ai_op_bin_int(v_as_int(v1), v_as_int(v2), op);
+                return v_of_int(val);
+            }
+            return vm_meta_bin(env, v1, v1, ai_op_bin2tm(op));
+        }
+        default: unreachable();
+    }
+}
+
+a_bool ai_vm_compare(a_henv env, Value v1, Value v2, a_enum op) {
+    switch (op) {
+        case OP_LT: {
+            if (v_is_int(v1) && v_is_int(v1)) {
+                return ai_op_cmp_int(v_as_int(v1), v_as_int(v1), OP_LT);
+            }
+            else if (v_is_num(v1) && v_is_num(v2)) {
+                return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LT);
+            }
+            return vm_meta_cmp(env, v1, v2, TM___lt__);
+        }
+        case OP_LE: {
+            if (v_is_int(v1) && v_is_int(v1)) {
+                return ai_op_cmp_int(v_as_int(v1), v_as_int(v1), OP_LE);
+            }
+            else if (v_is_num(v1) && v_is_num(v2)) {
+                return ai_op_cmp_float(v_as_num(v1), v_as_num(v2), OP_LE);
+            }
+            return vm_meta_cmp(env, v1, v2, TM___le__);
+        }
+        default: unreachable();
+    }
 }
 
 #define v_of_call() v_of_empty()
@@ -299,36 +416,6 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
             ai_err_bad_tm(env, TM___next__);
         }
     }
-}
-
-static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
-    Value vr;
-
-    if (ai_tm_unary(env, tm, v1, &vr)) {
-        ai_err_bad_tm(env, tm);
-    }
-
-    return vr;
-}
-
-static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
-	Value vr;
-
-	if (ai_tm_binary(env, tm, v1, v2, &vr)) {
-		ai_err_bad_tm(env, tm);
-	}
-
-    return vr;
-}
-
-static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
-    a_bool r;
-
-    catch (ai_tm_relation(env, tm, v1, v2, &r)) {
-        ai_err_bad_tm(env, tm);
-    }
-
-    return r;
 }
 
 static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
@@ -1209,6 +1296,7 @@ tail_call:
                 }
                 else {
                     z = vm_meta_cmp(env, va, vb, TM___lt__);
+                    adjust_top();
                 }
 
                 goto vm_test;
@@ -1228,6 +1316,7 @@ tail_call:
                 }
                 else {
                     z = vm_meta_cmp(env, va, vb, TM___le__);
+                    adjust_top();
                 }
 
                 goto vm_test;
@@ -1264,6 +1353,7 @@ tail_call:
                 }
                 else {
                     z = vm_meta_cmp(env, va, v_of_int(b), TM___lt__);
+                    adjust_top();
                 }
 
                 goto vm_test;
@@ -1282,6 +1372,7 @@ tail_call:
                 }
                 else {
                     z = vm_meta_cmp(env, va, v_of_int(b), TM___le__);
+                    adjust_top();
                 }
 
                 goto vm_test;
@@ -1300,6 +1391,7 @@ tail_call:
                 }
                 else {
                     z = vm_meta_cmp(env, v_of_int(b), va, TM___lt__); //TODO
+                    adjust_top();
                 }
 
                 goto vm_test;
@@ -1318,6 +1410,7 @@ tail_call:
                     }
                     else {
                         z = vm_meta_cmp(env, v_of_int(b), va, TM___le__); //TODO
+                        adjust_top();
                     }
 
                     goto vm_test;

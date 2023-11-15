@@ -418,22 +418,6 @@ void alo_pop(a_henv env, a_istk id) {
 	v_set(env, d, s);
 }
 
-static void v_swap(a_henv env, Value* v1, Value* v2) {
-    Value v;
-    v_cpy(env, &v, v1);
-    v_cpy(env, v1, v2);
-    v_cpy(env, v2, &v);
-}
-
-static void v_reverse(a_henv env, Value* vl, Value* vh) {
-    vh -= 1;
-    while (vl < vh) {
-        v_swap(env, vl, vh);
-        vl += 1;
-        vh -= 1;
-    }
-}
-
 a_ustk alo_rotate(a_henv env, a_istk id, a_ustk n) {
     Value* p = api_stack(env, id);
     Value* r = env->_stack._top;
@@ -483,6 +467,47 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	return val;
+}
+
+a_msg alo_compute(a_henv env, a_enum op) {
+    switch (op) {
+        case ALO_OPADD ... ALO_OPBXOR: {
+            api_check_elem(env, 2);
+            Value v1 = env->_stack._top[-2];
+            Value v2 = env->_stack._top[-1];
+
+            Value v = ai_vm_binary(env, v1, v2, op - ALO_OPADD + OP_ADD);
+            env->_stack._top -= 2;
+
+            v_set(env, api_incr_stack(env), v);
+            return api_tagof(env, v);
+        }
+        case ALO_OPNEG ... ALO_OPBNOT: {
+            api_check_elem(env, 1);
+            Value v1 = api_pre_decr_stack(env);
+
+            Value v = ai_vm_unary(env, v1, op - ALO_OPNEG + OP_NEG);
+            api_post_decr_stack(env);
+
+            v_set(env, api_incr_stack(env), v);
+            return api_tagof(env, v);
+        }
+        default: api_panic("bad opcode for alo_compute: %u", op);
+    }
+}
+
+a_bool alo_compare(a_henv env, a_istk id1, a_istk id2, a_enum op) {
+    Value v1 = api_elem(env, id1);
+    Value v2 = api_elem(env, id2);
+    switch (op) {
+        case ALO_OPEQ: {
+            return ai_vm_equals(env, v1, v2);
+        }
+        case ALO_OPLT ... ALO_OPLE: {
+            return ai_vm_compare(env, v1, v2, op - ALO_OPLT + OP_LT);
+        }
+        default: api_panic("bad opcode for alo_compare: %u", op);
+    }
 }
 
 a_msg alo_get(a_henv env, a_istk id) {

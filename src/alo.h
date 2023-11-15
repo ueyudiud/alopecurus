@@ -100,6 +100,23 @@ typedef a_u32 a_flags;
 #define ALO_TTYPE 11
 #define ALO_TUSER 12
 
+#define ALO_OPADD 0
+#define ALO_OPSUB 1
+#define ALO_OPMUL 2
+#define ALO_OPDIV 3
+#define ALO_OPMOD 4
+#define ALO_OPPOW 5
+#define ALO_OPSHL 6
+#define ALO_OPSHR 7
+#define ALO_OPBAND 8
+#define ALO_OPBOR 9
+#define ALO_OPBXOR 10
+#define ALO_OPNEG 11
+#define ALO_OPBNOT 12
+#define ALO_OPEQ 13
+#define ALO_OPLT 14
+#define ALO_OPLE 15
+
 /* Hook masks. */
 #define ALO_HMNONE  0x0000
 #define ALO_HMRAISE 0x0001 /* Raise Error */
@@ -178,6 +195,11 @@ ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 ALO_EXPORT void (alo_newtype)(a_henv env, char const* n, a_flags flags);
 
 #define alo_insert(env,id) alo_rotate(env, id, 1)
+
+ALO_EXPORT a_msg (alo_compute)(a_henv env, a_enum op);
+ALO_EXPORT a_bool (alo_compare)(a_henv env, a_istk id1, a_istk id2, a_enum op);
+
+#define alo_equals(env,id1,id2) alo_compare(env, id1, id2, ALO_OPEQ)
 
 ALO_EXPORT a_int (alo_rawlen)(a_henv env, a_istk id);
 ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_istk id, a_int key);

@@ -15,6 +15,10 @@ enum {
 	TM__FAST_MAX = TM___eq__
 };
 
+enum UnaryOp {
+    OP_NEG, OP_BNOT
+};
+
 enum BinaryOp {
 	OP__NOT_BIN,
 	/* Arithmetic operators */
