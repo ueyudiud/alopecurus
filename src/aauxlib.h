@@ -8,6 +8,7 @@
 #include "alo.h"
 
 typedef struct aloL_Entry aloL_Entry;
+typedef struct aloL_Buf aloL_Buf;
 
 ALO_EXPORT a_henv (aloL_create)(void);
 
@@ -49,6 +50,8 @@ ALO_EXPORT void (aloL_putalls_)(a_henv env, a_istk id, aloL_Entry const* bs, a_u
 #define aloL_putalls(env,id,bs) aloL_putalls_(env, id, bs, sizeof(bs) / sizeof(aloL_Entry))
 
 ALO_EXPORT void* (aloL_newblk)(a_henv env, a_usize s);
+ALO_EXPORT aloL_Buf* (aloL_newbuf)(a_henv env);
+ALO_EXPORT void (aloL_bufhint)(a_henv env, aloL_Buf* b, a_usize a);
 
 struct aloL_Entry {
 	char const* name; /* Entry name. */

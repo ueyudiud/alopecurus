@@ -387,59 +387,75 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
     }
 }
 
+static a_bool vm_append(a_henv env, Buf* buf, Value v) {
+    if (likely(v_is_str(v))) {
+        GStr* val = v_as_str(v);
+        at_buf_putls(env, buf, val->_ptr, val->_len);
+    }
+    else {
+        switch (v_get_tag(v)) {
+            case T_NIL: {
+                at_buf_puts(env, buf, "nil");
+                break;
+            }
+            case T_FALSE: {
+                at_buf_puts(env, buf, "false");
+                break;
+            }
+            case T_TRUE: {
+                at_buf_puts(env, buf, "true");
+                break;
+            }
+            case T_INT: {
+                at_fmt_puti(env, buf, v_as_int(v));
+                break;
+            }
+            case T_PTR: {
+                at_fmt_putp(env, buf, v_as_ptr(v));
+                break;
+            }
+            case T_STR: unreachable();
+            case T_TUPLE:
+            case T_LIST:
+            case T_TABLE:
+            case T_FUNC:
+            case T_USER: {
+                return true;
+            }
+            default: {
+                at_fmt_putf(env, buf, v_as_float(v));
+                break;
+            }
+        }
+    }
+    return false;
+}
+
+void ai_vm_append(a_henv env, GBuf* buf, Value v) {
+    if (vm_append(env, buf_cast(buf), v)) {
+        GStr* str;
+        catch (ai_tm_str(env, v, &str)) {
+            ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+        }
+        at_buf_putls(env, buf, str->_ptr, str->_len);
+    }
+}
+
 static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
 	GBuf* buf = ai_buf_new(env);
 	vm_push_args(env, v_of_obj(buf));
 
 	for (a_usize i = 0; i < n; ++i) {
 	    Value v = base[i];
-		if (likely(v_is_str(v))) {
-			GStr* val = v_as_str(v);
-			at_buf_putls(env, buf, val->_ptr, val->_len);
-		}
-		else {
-			switch (v_get_tag(v)) {
-				case T_NIL: {
-					at_buf_puts(env, buf, "nil");
-					break;
-				}
-				case T_FALSE: {
-					at_buf_puts(env, buf, "false");
-					break;
-				}
-				case T_TRUE: {
-					at_buf_puts(env, buf, "true");
-					break;
-				}
-				case T_INT: {
-					at_fmt_puti(env, buf, v_as_int(v));
-					break;
-				}
-				case T_PTR: {
-					at_fmt_putp(env, buf, v_as_ptr(v));
-					break;
-				}
-				case T_STR: unreachable();
-				case T_TUPLE:
-				case T_LIST:
-				case T_TABLE:
-				case T_FUNC:
-				case T_USER: {
-                    GStr* str;
-					StkPtr bptr = val2stk(env, base);
-                    catch (ai_tm_str(env, v, &str)) {
-                        ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
-                    }
-					base = stk2val(env, bptr);
-					at_buf_putls(env, buf, str->_ptr, str->_len);
-					break;
-				}
-				default: {
-					at_fmt_putf(env, buf, v_as_float(v));
-					break;
-				}
-			}
-		}
+        if (vm_append(env, buf_cast(buf), v)) {
+            GStr* str;
+            StkPtr bptr = val2stk(env, base);
+            catch (ai_tm_str(env, v, &str)) {
+                ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+            }
+            base = stk2val(env, bptr);
+            at_buf_putls(env, buf, str->_ptr, str->_len);
+        }
 	}
 
 	GStr* result = at_buf_tostr(env, buf);

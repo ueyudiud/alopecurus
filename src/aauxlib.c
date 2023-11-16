@@ -478,6 +478,24 @@ void* aloL_newblk(a_henv env, a_usize s) {
     return self->_body;
 }
 
+aloL_Buf* aloL_newbuf(a_henv env) {
+    api_check_slot(env, 1);
+
+    GBuf* self = ai_buf_new(env);
+
+    v_set_obj(env, api_incr_stack(env), self);
+
+    return cast(aloL_Buf*, self->_buf_head_mark);
+}
+
+void aloL_bufhint(a_henv env, aloL_Buf* b, a_usize a) {
+    Buf* self = cast(Buf*, b);
+
+    catch (at_buf_ncheck(env, self, a), msg) {
+        ai_buf_error(env, msg, "bytes");
+    }
+}
+
 typedef struct {
 	char const* _name;
 	void (*_init)(a_henv);

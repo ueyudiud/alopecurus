@@ -153,15 +153,15 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
  */
 void aloB_show(a_henv env, a_istk id) {
 	Value const* v = api_roslot(env, id);
-	api_check(v != null, "bad slot id.");
+	api_check(v != null, "bad stack index.");
 	l_show_impl(env, *v, 0);
 }
 
 static a_msg base_print(a_henv env) {
-	a_usize len = alo_stacksize(env);
-	for (a_usize id = 0; id < len; ++id) {
+	a_istk len = alo_stacksize(env);
+	for (a_istk id = 0; id < len; ++id) {
 		if (id != 0) aloi_show("\t");
-		aloB_show(env, cast(a_isize, id));
+		aloB_show(env, id);
 	}
 	aloi_show_newline();
 	return 0;
