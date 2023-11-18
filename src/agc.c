@@ -46,7 +46,7 @@ always_inline void flip_color(Global* gbl) {
 }
 
 void ai_gc_register_object_(a_henv env, a_hobj obj) {
-	g_vcheck(obj, drop); /* Only collectable object need be registered. */
+	g_fetch(obj, drop); /* Only collectable object need be registered. */
 	Global* gbl = G(env);
 	join_gc(&gbl->_gc_normal, obj);
 	g_set_white(gbl, obj);
@@ -76,7 +76,7 @@ static void really_mark_object(Global* gbl, a_hobj obj) {
 	/* Color object to black. */
 	g_set_black(obj);
 	/* Call mark virtual method. */
-	g_vcall(gbl, obj, mark);
+    (*g_fetch(obj, mark))(gbl, obj);
 }
 
 void ai_gc_trace_mark_(Global* gbl, a_hobj obj) {
@@ -90,14 +90,14 @@ void ai_gc_trace_mark_(Global* gbl, a_hobj obj) {
 		/* Else keep object as gray since it has no mark function to remark. */
 	}
 	else {
-		g_vcheck(obj, mark);
+		g_fetch(obj, mark);
 		join_trace(&gbl->_tr_gray, obj);
 	}
 }
 
 static void drop_object(Global* gbl, a_hobj obj) {
 	/* Call drop virtual method */
-	g_vcall(gbl, obj, drop);
+    (*g_fetch(obj, drop))(gbl, obj);
 }
 
 static void propagate_once(Global* gbl, a_trmark* list) {
@@ -121,7 +121,7 @@ static a_bool sweep_once(Global* gbl) {
 
 static void close_once(Global* gbl) {
     a_hobj obj = strip_gc(&gbl->_gc_toclose);
-	g_vcall(gbl->_active, obj, close);
+    (*g_fetch(obj, close))(gbl->_active, obj);
 	join_gc(&gbl->_gc_normal, obj);
 }
 

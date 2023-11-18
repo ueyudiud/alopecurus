@@ -818,7 +818,7 @@ void alo_fullgc(a_henv env) {
 	ai_gc_full_gc(env, false);
 }
 
-static GStr* l_get_str(a_henv env, a_isize id) {
+static GStr* l_get_str(a_henv env, a_istk id) {
 	Value const* v = api_roslot(env, id);
 	return v != null ? v_as_str(*v) : null;
 }

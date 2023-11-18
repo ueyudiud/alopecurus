@@ -17,7 +17,7 @@ static VTable const tuple_vtable;
 GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len) {
     if (len > INT32_MAX) ai_err_raisef(env, ALO_EINVAL, "tuple size too large.");
 
-    GTuple* self = ai_mem_gnew(env, GTuple, tuple_size(len));
+    GTuple* self = ai_mem_alloc(env, tuple_size(len));
 
 	self->_vptr = &tuple_vtable;
     self->_len = len;
@@ -81,7 +81,7 @@ a_msg ai_tuple_uget(a_henv env, GTuple* self, Value vk, Value* pv) {
 }
 
 static void tuple_drop(Global* gbl, GTuple* self) {
-    ai_mem_gdel(gbl, self, tuple_size(self->_len));
+    ai_mem_dealloc(gbl, self, tuple_size(self->_len));
 }
 
 static void tuple_mark(Global* gbl, GTuple* self) {

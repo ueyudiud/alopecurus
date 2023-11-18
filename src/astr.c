@@ -87,7 +87,7 @@ static void cache_emplace_in_place(StrCache* cache, GStr* self) {
 }
 
 static GStr* str_alloc(a_henv env, a_usize len) {
-	return ai_mem_gnew(env, GStr, str_size(len));
+	return ai_mem_alloc(env, str_size(len));
 }
 
 static void str_init(GStr* self, void const* src, a_usize len, a_hash hash) {
@@ -134,7 +134,7 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	GStr* self = str_get_or_null_with_hash(env, buff->_ptr, len, hash);
 	
 	if (self != null) {
-		ai_mem_gdel(G(env), buff, str_size(len));
+		ai_mem_dealloc(G(env), buff, str_size(len));
 		return self;
 	}
 
@@ -171,7 +171,7 @@ GStr* ai_str_get_or_new(a_henv env, void const* src, a_usize len) {
 a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) {
 	char buf[MAX_STACK_BUFFER_SIZE + 1];
 	if (likely(len < MAX_STACK_BUFFER_SIZE)) {
-		try((*fun)(ctx, buf, len));
+		try ((*fun)(ctx, buf, len));
 		*pstr = ai_str_get_or_new(env, buf, len);
 		return ALO_SOK;
 	}
@@ -180,7 +180,7 @@ a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) 
 		a_msg msg = (*fun)(ctx, buff->_ptr, len);
 		
 		if (unlikely(msg != ALO_SOK)) {
-			ai_mem_gdel(G(env), buff, str_size(len));
+            ai_mem_dealloc(G(env), buff, str_size(len));
 			return msg;
 		}
 		
@@ -239,7 +239,7 @@ static void cache_remove(StrCache* cache, GStr* str) {
 
 static void str_drop(Global* gbl, GStr* self) {
     cache_remove(&gbl->_str_cache, self);
-    ai_mem_gdel(gbl, self, str_size(self->_len));
+    ai_mem_dealloc(gbl, self, str_size(self->_len));
 }
 
 void ai_str_boost1(a_henv env, void* block) {
@@ -262,7 +262,7 @@ void ai_str_boost1(a_henv env, void* block) {
         for (a_u32 i = 0; i < STR__COUNT; ++i) {
             a_u32 len = l_str_len[i];
 
-            GStr* self = g_cast(GStr, g_biased(block));
+            GStr* self = block;
             a_hash hash = ai_str_hashof(env, src, len);
 
             g_set_gray(self);
@@ -271,7 +271,7 @@ void ai_str_boost1(a_henv env, void* block) {
             str_id_set(self, i);
 
             gbl->_names[i] = self;
-            block += sizeof(GcHead) + str_size(len);
+            block += str_size(len);
             src += len + 1;
         }
     }

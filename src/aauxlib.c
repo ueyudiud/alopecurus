@@ -449,11 +449,11 @@ typedef struct {
 #define block_size(s) pad_to(sizeof(GBlock) + (s), sizeof(a_usize))
 
 static void block_drop(Global* gbl, GBlock* self) {
-    ai_mem_gdel(gbl, self, block_size(self->_size));
+    ai_mem_dealloc(gbl, self, block_size(self->_size));
 }
 
 static void block_mark(Global* gbl, GBlock* self) {
-    ai_gc_trace_work(gbl, sizeof(GcHead) + block_size(self->_size));
+    ai_gc_trace_work(gbl, block_size(self->_size));
 }
 
 static VTable const block_vtable = {
@@ -468,7 +468,7 @@ static VTable const block_vtable = {
 void* aloL_newblk(a_henv env, a_usize s) {
     api_check_slot(env, 1);
 
-    GBlock* self = ai_mem_gnew(env, GBlock, block_size(s));
+    GBlock* self = ai_mem_alloc(env, block_size(s));
     self->_vptr = &block_vtable;
     self->_size = s;
     ai_gc_register_object(env, self);

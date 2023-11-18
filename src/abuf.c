@@ -47,7 +47,7 @@ a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg) {
 }
 
 GBuf* ai_buf_new(a_henv env) {
-	GBuf* self = ai_mem_gnew(env, GBuf, sizeof(GBuf));
+	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
 	self->_vptr = &buf_vtable;
 	at_buf_init(self);
@@ -75,7 +75,7 @@ static void buf_mark(Global* gbl, a_hobj raw_self) {
 static void buf_drop(Global* gbl, a_hobj raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
 	at_buf_deinit(gbl, self);
-	ai_mem_gdel(gbl, self, sizeof(GBuf));
+	ai_mem_dealloc(gbl, self, sizeof(GBuf));
 }
 
 static VTable const buf_vtable = {

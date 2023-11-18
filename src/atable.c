@@ -38,7 +38,7 @@ static void bucket_dealloc(Global* gbl, TNode* bucket, a_u32 cap) {
 }
 
 GTable* ai_table_new(a_henv env) {
-    GTable* self = ai_mem_gnew(env, GTable, table_size());
+    GTable* self = ai_mem_alloc(env, table_size());
 
 	self->_vptr = &table_vtable;
     self->_ptr = null;
@@ -441,7 +441,7 @@ void ai_table_clean(Global* gbl, GTable* self) {
 
 static void table_drop(Global* gbl, GTable* self) {
     ai_table_clean(gbl, self);
-    ai_mem_gdel(gbl, self, table_size());
+    ai_mem_dealloc(gbl, self, table_size());
 }
 
 void ai_table_mark(Global* gbl, GTable* self) {
@@ -456,7 +456,7 @@ void ai_table_mark(Global* gbl, GTable* self) {
 		}
 		ai_gc_trace_work(gbl, sizeof(TNode) * (cap + 1));
 	}
-	ai_gc_trace_work(gbl, sizeof(GcHead) + table_size());
+	ai_gc_trace_work(gbl, table_size());
 }
 
 static VTable const table_vtable = {

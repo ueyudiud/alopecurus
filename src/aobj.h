@@ -266,15 +266,9 @@ always_inline void v_set_ptr(Value* d, void* v) {
  * Object & Metadata
  *=========================================================*/
 
-typedef struct GcHead GcHead;
+struct ObjHead { a_u64 _align; };
 
-struct GcHead {
-    a_gcnext _next;
-};
-
-#define GOBJ_STRUCT_HEADER GcHead _obj_head_mark[0]; VTable const* _vptr; a_trmark _tnext
-
-#define _gnext _obj_head_mark[-1]._next
+#define GOBJ_STRUCT_HEADER struct ObjHead _obj_head_mark[0]; a_gcnext _gnext; VTable const* _vptr; a_trmark _tnext
 
 struct GObj {
 	GOBJ_STRUCT_HEADER;
@@ -297,21 +291,14 @@ struct GObj {
 	_( 1, mark  ,    void, Global* gbl                                      ) \
 	_( 2, close ,    void, a_henv env                                       )
 
-/* Method Slot Index Table. */
-union MSIT {
-#define DEF(i,n,...) struct { a_byte M_cat(_off_,n)[i]; a_byte n;  };
-    VTABLE_METHOD_LIST(DEF)
-#undef DEF
-};
-
-#define vfp_slot(n) offsetof(union MSIT, n)
-
-/* Method Slot Table. */
+/* Method Table. */
 typedef union {
 #define DEF(i,n,r,p1,pn...) struct { void* M_cat(_off_,n)[i]; r (*n)(p1, a_hobj, ##pn);  };
     VTABLE_METHOD_LIST(DEF)
 #undef DEF
-} MST;
+} ImplTable;
+
+#define vfp_slot(n) (offsetof(ImplTable, n) / sizeof(void*))
 
 /**
  ** The virtual table for type, used for fast dispatch.
@@ -328,17 +315,13 @@ struct VTable {
 
 #define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
 
-#define g_vfetch(p,f) (cast(MST*, (p)->_vptr->_slots)->f)
+#define g_impl(p) cast(ImplTable*, (p)->_vptr->_slots)
 
-#define g_vcheck(p,f) ({ \
-	__auto_type _f2 = g_vfetch(p, f); \
+#define g_fetch(p,f) ({ \
+	__auto_type _f2 = g_impl(p)->f; \
 	assume(_f2 != null, "method '"#f"' is null."); \
 	_f2;                    \
 })
-
-#define g_vcallp(r,p,fp,a...) (*(fp))(r, gobj_cast(p), ##a)
-#define g_vcall(r,p,f,a...) ({ __auto_type _p = p; __auto_type _fp = g_vcheck(_p,f); g_vcallp(r, _p, _fp, ##a); })
-#define v_vcall(r,v,f,a...) g_vcall(r, v_as_obj(v), f, ##a)
 
 #define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
 
@@ -358,20 +341,6 @@ always_inline void v_set_obj(a_henv env, Value* d, a_hobj o) {
 }
 
 #define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
-
-always_inline a_hobj g_biased(void* p, a_usize bias) {
-    return cast(void*, p) + sizeof(GcHead) + bias;
-}
-
-always_inline void* g_unbiased(a_hobj o, a_usize bias) {
-    return cast(void*, o) - sizeof(GcHead) - bias;
-}
-
-#define g_biased_(p,bias,...) g_biased(p, bias)
-#define g_biased(p,bias...) g_biased_(p, ##bias, 0)
-
-#define g_unbiased_(p,bias,...) g_unbiased(gobj_cast(p), bias)
-#define g_unbiased(p,bias...) g_unbiased_(p, ##bias, 0)
 
 /*=========================================================*
  * String
@@ -651,15 +620,15 @@ struct alo_Env {
 
 /* Some offset used in assembly, make sure the value is correct. */
 #if ALO_M64
-static_assert(offsetof(GRoute, _rctx) == 0x18);
-static_assert(offsetof(GRoute, _rctx_alloc) == 0x20);
-static_assert(offsetof(GRoute, _from) == 0x28);
-static_assert(offsetof(GRoute, _stack._base) == 0x38);
+static_assert(offsetof(GRoute, _rctx) == 0x20);
+static_assert(offsetof(GRoute, _rctx_alloc) == 0x28);
+static_assert(offsetof(GRoute, _from) == 0x30);
+static_assert(offsetof(GRoute, _stack._base) == 0x40);
 #else
-static_assert(offsetof(GRoute, _rctx) == 0x0C);
-static_assert(offsetof(GRoute, _rctx_alloc) == 0x10);
-static_assert(offsetof(GRoute, _from) == 0x14);
-static_assert(offsetof(GRoute, _stack._base) == 0x1C);
+static_assert(offsetof(GRoute, _rctx) == 0x10);
+static_assert(offsetof(GRoute, _rctx_alloc) == 0x14);
+static_assert(offsetof(GRoute, _from) == 0x18);
+static_assert(offsetof(GRoute, _stack._base) == 0x20);
 #endif
 
 #define G(env) ((env)->_global)

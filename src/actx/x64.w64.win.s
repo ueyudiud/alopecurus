@@ -12,7 +12,7 @@ ai_ctx_jump:
     movq %gs:(0x30), %r10
 
     /* save FLS */
-    movq 0x20(%r10), %rax
+    movq 0x28(%r10), %rax
     movq %rax, -0x008(%rsp)
     /* save deallocation stack */
     movq 0x1478(%r10), %rax
@@ -51,14 +51,14 @@ ai_ctx_jump:
     movaps %xmm15, -0x108(%rsp)
 
     /* save context */
-    movq %rsp, 0x18(%rdx)
+    movq %rsp, 0x20(%rdx)
 
     /* move result message */
     movq %r8, %rax
 
 ai_ctx_return:
     /* load context */
-    movq 0x18(%rcx), %rsp
+    movq 0x20(%rcx), %rsp
 
     /* load FPR */
     movaps -0x078(%rsp), %xmm6
@@ -88,7 +88,7 @@ ai_ctx_return:
 
     /* load FLS */
     movq -0x008(%rsp), %r8
-    movq %r8, 0x20(%r10)
+    movq %r8, 0x28(%r10)
     /* load deallocation stack */
     movq -0x010(%rsp), %r8
     movq %r8, 0x1478(%r10)
@@ -121,13 +121,13 @@ ai_ctx_start:
     movq %rcx, %rbx
 
     /* do vm call */
-    movq 0x38(%rcx), %rdx
+    movq 0x40(%rcx), %rdx
     movq $-1, %r8
     call ai_vm_call
 
     /* do half jump */
     movq %rbx, %rdx
-    movq 0x28(%rbx), %rcx
+    movq 0x30(%rbx), %rcx
     xorq %rax, %rax
     jmp ai_ctx_return
 

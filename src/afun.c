@@ -21,10 +21,10 @@ static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
 }
 
-#define UNIQ_PROTO_OFFSET (offsetof(GProto, _size) + sizeof(GcHead))
+#define UNIQ_PROTO_OFFSET offsetof(GProto, _size)
 
 static a_usize proto_size_with_head(ProtoDesc* desc) {
-	a_usize size = sizeof(GcHead) + sizeof(GProto) +
+	a_usize size = sizeof(GProto) +
 				   sizeof(Value) * desc->_nconst +
 				   sizeof(a_insn) * desc->_ninsn +
 				   sizeof(CapInfo) * desc->_ncap +
@@ -54,14 +54,14 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
         if (blk == null) return null;
         memclr(blk, total_size);
 
-        self = g_cast(GProto, g_biased(blk - UNIQ_PROTO_OFFSET));
+        self = blk - UNIQ_PROTO_OFFSET;
     }
     else {
         blk = ai_mem_nalloc(env, total_size);
         if (blk == null) return null;
         memclr(blk, total_size);
 
-        self = g_cast(GProto, g_biased(blk));
+        self = blk;
         self->_vptr = &proto_vtable;
     }
 
@@ -132,7 +132,7 @@ GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
 }
 
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
-	GFun* self = ai_mem_gnew(env, GFun, fun_size(ncap));
+	GFun* self = ai_mem_alloc(env, fun_size(ncap));
 
 	self->_vptr = &cfun_vtable;
 	self->_len = ncap;
@@ -174,10 +174,11 @@ static RcCap* cap_nload_from_stack(a_henv env, Value* pv) {
 
         if (self == null) return null;
 
-		self->_ptr = pv;
-		self->_rc = 1;
-		self->_next = cap;
-		self->_flags = 0;
+        init(self) {
+            ._ptr = pv,
+            ._rc = 1,
+            ._next = cap
+        };
 
 		*now = cap = self;
 	}
@@ -201,7 +202,8 @@ static RcCap* cap_load(a_henv env, CapInfo const* info, RcCap** up, Value* stack
 }
 
 static void v_close(a_henv env, Value v) {
-    v_vcall(env, v, close);
+    a_hobj p = v_as_obj(v);
+    (*g_fetch(p, close))(env, p);
 }
 
 RcCap* ai_cap_new(a_henv env) {
@@ -209,8 +211,11 @@ RcCap* ai_cap_new(a_henv env) {
 
     if (unlikely(self == null)) ai_mem_nomem(env);
 
-    self->_ptr = &self->_slot;
-    self->_rc = 1;
+    init(self) {
+        ._ptr = &self->_slot,
+        ._rc = 1,
+        ._slot = v_of_nil()
+    };
 
     return self;
 }
@@ -234,7 +239,7 @@ GFun* ai_fun_new(a_henv env, GProto* proto) {
 
 	a_u32 len = proto->_ncap;
 
-	GFun* self = ai_mem_gnew(env, GFun, fun_size(len));
+	GFun* self = ai_mem_alloc(env, fun_size(len));
 
 	self->_vptr = &afun_vtable;
 	self->_proto = proto;
@@ -332,7 +337,7 @@ void ai_cap_clean(Global* gbl) {
 }
 
 static void proto_drop(Global* gbl, GProto* self) {
-    ai_mem_dealloc(gbl, g_unbiased(self), self->_size);
+    ai_mem_dealloc(gbl, self, self->_size);
 }
 
 static void proto_mark_body(Global* gbl, GProto* self) {
@@ -371,7 +376,7 @@ static void afun_drop(Global* gbl, GFun* self) {
     for (a_u32 i = 0; i < self->_len; ++i) {
         cap_release(gbl, self->_caps[i]);
     }
-    ai_mem_gdel(gbl, self, fun_size(self->_len));
+    ai_mem_dealloc(gbl, self, fun_size(self->_len));
 }
 
 static void afun_mark_body(Global* gbl, GFun* self) {
@@ -393,8 +398,8 @@ static void uniq_afun_drop(Global* gbl, GFun* self) {
     }
 
     GProto* proto = self->_proto;
-    void* blk = g_unbiased(proto) + UNIQ_PROTO_OFFSET;
-    ai_mem_dealloc(gbl, blk, proto->_size);
+    void* block = cast(void*, proto) + UNIQ_PROTO_OFFSET;
+    ai_mem_dealloc(gbl, block, proto->_size);
 }
 
 static void uniq_afun_mark(Global* gbl, GFun* self) {
@@ -403,7 +408,7 @@ static void uniq_afun_mark(Global* gbl, GFun* self) {
 }
 
 static void cfun_drop(Global* gbl, GFun* self) {
-    ai_mem_gdel(gbl, self, fun_size(self->_len));
+    ai_mem_dealloc(gbl, self, fun_size(self->_len));
 }
 
 static void cfun_mark(Global* gbl, GFun* self) {

@@ -95,7 +95,7 @@ static void route_mark_stack(Global* gbl, GRoute* self) {
 }
 
 static void route_mark(Global* gbl, GRoute* self) {
-	ai_gc_trace_work(gbl, sizeof(GcHead) + route_size());
+	ai_gc_trace_work(gbl, route_size());
 
 	route_mark_stack(gbl, self);
 	if (self->_from != null) {
@@ -109,7 +109,7 @@ static void route_drop(Global* gbl, GRoute* self) {
 	assume(self->_status != ALO_SOK, "route is running.");
 	ai_ctx_close(self);
 	route_destroy(gbl, self);
-	ai_mem_gdel(gbl, self, route_size());
+	ai_mem_dealloc(gbl, self, route_size());
 }
 
 static VTable const route_vtable = {
@@ -147,7 +147,7 @@ a_noret ai_env_raise(a_henv env, a_msg msg) {
 }
 
 GRoute* ai_env_new(a_henv env, a_usize stack_size) {
-	GRoute* self = ai_mem_gnew(env, GRoute, route_size());
+	GRoute* self = ai_mem_alloc(env, route_size());
 
 	route_new(self, G(env));
 
@@ -163,7 +163,7 @@ GRoute* ai_env_new(a_henv env, a_usize stack_size) {
 nomem2:
 	ai_ctx_close(self);
 nomem1:
-	ai_mem_gdel(G(env), self, route_size());
+	ai_mem_dealloc(G(env), self, route_size());
 	ai_mem_nomem(env);
 }
 
@@ -179,8 +179,8 @@ static void global_init(a_henv env, unused void* ctx) {
 }
 
 static a_usize sizeof_MRoute() {
-	a_usize size = sizeof(MRoute) + sizeof(GcHead) + str_size(0)
-#define STRDEF(n) + sizeof(GcHead) + str_size(sizeof(#n) - 1)
+	a_usize size = sizeof(MRoute) + str_size(0)
+#define STRDEF(n) + str_size(sizeof(#n) - 1)
 # include "asym/kw.h"
 # include "asym/tm.h"
 # include "asym/pt.h"
