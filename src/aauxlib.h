@@ -19,6 +19,7 @@ ALO_EXPORT a_msg (aloL_checkany)(a_henv env, a_ustk id);
 ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_ustk id);
 ALO_EXPORT a_float (aloL_checknum)(a_henv env, a_ustk id);
 ALO_EXPORT char const* (aloL_checklstr)(a_henv env, a_ustk id, a_usize* plen);
+ALO_EXPORT a_bool (aloL_optbool)(a_henv env, a_ustk id, a_bool dfl);
 ALO_EXPORT a_bool (aloL_optint_)(a_henv env, a_ustk id, a_int* pval);
 ALO_EXPORT a_bool (aloL_optnum_)(a_henv env, a_ustk id, a_float* pval);
 ALO_EXPORT char const* (aloL_optlstr)(a_henv env, a_ustk id, a_usize* plen);

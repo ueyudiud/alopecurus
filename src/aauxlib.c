@@ -107,8 +107,13 @@ char const* aloL_checklstr(a_henv env, a_ustk id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
+a_bool aloL_optbool(a_henv env, a_ustk id, a_bool dfl) {
+    Value v = api_elem(env, cast(a_istk, id));
+    return !v_is_nil(v) ? v_to_bool(v) : dfl;
+}
+
 a_bool aloL_optint_(a_henv env, a_ustk id, a_int* pval) {
-	Value v = api_elem(env, cast(a_usize, id));
+	Value v = api_elem(env, cast(a_istk, id));
 	if (!v_is_int(v)) {
 		if (v_is_nil(v)) {
 			return false;
@@ -120,7 +125,7 @@ a_bool aloL_optint_(a_henv env, a_ustk id, a_int* pval) {
 }
 
 a_bool aloL_optnum_(a_henv env, a_ustk id, a_float* pval) {
-	Value v = api_elem(env, cast(a_usize, id));
+	Value v = api_elem(env, cast(a_istk, id));
 	if (!v_is_num(v)) {
 		if (v_is_nil(v)) {
 			return false;
