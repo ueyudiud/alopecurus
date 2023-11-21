@@ -15,11 +15,11 @@
 
 #define api_check(e,m...) ((e) || (api_panic(m), false))
 
-intern Value const* api_roslot(a_henv env, a_istk id);
-intern Value const* api_rdslot(a_henv env, a_istk id);
-intern Value* api_wrslot(a_henv env, a_istk id);
-intern Value* api_stack(a_henv env, a_istk id);
-intern Value api_elem(a_henv env, a_istk id);
+intern Value const* api_roslot(a_henv env, a_ilen id);
+intern Value const* api_rdslot(a_henv env, a_ilen id);
+intern Value* api_wrslot(a_henv env, a_ilen id);
+intern Value* api_stack(a_henv env, a_ilen id);
+intern Value api_elem(a_henv env, a_ilen id);
 intern a_msg api_tagof(a_henv env, Value v);
 
 intern char const ai_api_tagname[][8];
@@ -32,11 +32,11 @@ always_inline Value* api_stack_limit(a_henv env) {
 #endif
 }
 
-always_inline void api_check_slot(a_henv env, a_ustk size) {
+always_inline void api_check_slot(a_henv env, a_ulen size) {
     api_check(env->_stack._top + size <= api_stack_limit(env), "no enough stack slot.");
 }
 
-always_inline void api_check_elem(a_henv env, a_ustk size) {
+always_inline void api_check_elem(a_henv env, a_ulen size) {
     api_check(ai_stk_bot(env) + size <= env->_stack._top, "no enough stack element.");
 }
 

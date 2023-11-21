@@ -12,17 +12,17 @@ typedef struct aloL_Buf aloL_Buf;
 
 ALO_EXPORT a_henv (aloL_create)(void);
 
-ALO_EXPORT void (aloL_argerror)(a_henv env, a_ustk id, char const* what);
-ALO_EXPORT void (aloL_typeerror)(a_henv env, a_ustk id, char const* name);
-ALO_EXPORT void (aloL_checktag)(a_henv env, a_ustk id, a_msg tag);
-ALO_EXPORT a_msg (aloL_checkany)(a_henv env, a_ustk id);
-ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_ustk id);
-ALO_EXPORT a_float (aloL_checknum)(a_henv env, a_ustk id);
-ALO_EXPORT char const* (aloL_checklstr)(a_henv env, a_ustk id, a_usize* plen);
-ALO_EXPORT a_bool (aloL_optbool)(a_henv env, a_ustk id, a_bool dfl);
-ALO_EXPORT a_bool (aloL_optint_)(a_henv env, a_ustk id, a_int* pval);
-ALO_EXPORT a_bool (aloL_optnum_)(a_henv env, a_ustk id, a_float* pval);
-ALO_EXPORT char const* (aloL_optlstr)(a_henv env, a_ustk id, a_usize* plen);
+ALO_EXPORT void (aloL_argerror)(a_henv env, a_ulen id, char const* what);
+ALO_EXPORT void (aloL_typeerror)(a_henv env, a_ulen id, char const* name);
+ALO_EXPORT void (aloL_checktag)(a_henv env, a_ulen id, a_msg tag);
+ALO_EXPORT a_msg (aloL_checkany)(a_henv env, a_ulen id);
+ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_ulen id);
+ALO_EXPORT a_float (aloL_checknum)(a_henv env, a_ulen id);
+ALO_EXPORT char const* (aloL_checklstr)(a_henv env, a_ulen id, a_usize* plen);
+ALO_EXPORT a_bool (aloL_optbool)(a_henv env, a_ulen id, a_bool dfl);
+ALO_EXPORT a_bool (aloL_optint_)(a_henv env, a_ulen id, a_int* pval);
+ALO_EXPORT a_bool (aloL_optnum_)(a_henv env, a_ulen id, a_float* pval);
+ALO_EXPORT char const* (aloL_optlstr)(a_henv env, a_ulen id, a_usize* plen);
 
 #define aloL_checkstr(env,id) aloL_checklstr(env, id, NULL)
 #define aloL_optstr(env,id) aloL_optlstr(env, id, NULL)
@@ -39,14 +39,14 @@ ALO_EXPORT a_msg (aloL_compiles)(a_henv env, char const* src, a_usize len, char 
 ALO_EXPORT a_msg (aloL_compilef)(a_henv env, char const* fname, a_u32 options);
 
 ALO_EXPORT void (aloL_raisef)(a_henv env, char const* fmt, ...);
-ALO_EXPORT a_msg (aloL_traceerror)(a_henv env, a_istk id, a_usize level, a_usize limit);
+ALO_EXPORT a_msg (aloL_traceerror)(a_henv env, a_ilen id, a_usize level, a_usize limit);
 
-ALO_EXPORT a_msg (aloL_gets)(a_henv env, a_istk id, char const* s);
+ALO_EXPORT a_msg (aloL_gets)(a_henv env, a_ilen id, char const* s);
 
-ALO_EXPORT a_msg (aloL_gettm)(a_henv env, a_istk id, char const* s);
+ALO_EXPORT a_msg (aloL_gettm)(a_henv env, a_ilen id, char const* s);
 
-ALO_EXPORT void (aloL_puts)(a_henv env, a_istk id, char const* s);
-ALO_EXPORT void (aloL_putalls_)(a_henv env, a_istk id, aloL_Entry const* bs, a_usize nb);
+ALO_EXPORT void (aloL_puts)(a_henv env, a_ilen id, char const* s);
+ALO_EXPORT void (aloL_putalls_)(a_henv env, a_ilen id, aloL_Entry const* bs, a_usize nb);
 
 #define aloL_putalls(env,id,bs) aloL_putalls_(env, id, bs, sizeof(bs) / sizeof(aloL_Entry))
 

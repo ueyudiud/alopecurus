@@ -92,7 +92,7 @@ static a_msg list_mkstr(a_henv env) {
     GList* self = check_list(env);
 
     a_lstr pre = {}, sep = {}, post = {};
-    a_istk n = alo_stacksize(env);
+    a_ilen n = alo_stacksize(env);
     switch (n) {
         case 1: {
             break;
@@ -116,7 +116,7 @@ static a_msg list_mkstr(a_henv env) {
     v_set_obj(env, api_incr_stack(env), buf);
 
     at_buf_putls(env, buf, pre._ptr, pre._len);
-    for (a_ustk i = 0; i < self->_len; ++i) {
+    for (a_ulen i = 0; i < self->_len; ++i) {
         if (i != 0) at_buf_putls(env, buf, sep._ptr, sep._len);
         ai_vm_append(env, buf, self->_ptr[i]);
     }

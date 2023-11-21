@@ -65,7 +65,7 @@ typedef struct Global Global;
 #define T_FLOAT u32c(16)
 
 #define g_cast(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)
-#define gobj_cast(o) cast(a_hobj, (o)->_obj_head_mark)
+#define gobj_cast(o) g_cast(GObj, o)
 
 typedef struct { a_u64 _; } Value;
 
@@ -512,6 +512,7 @@ struct GProto {
 	a_u16 _nline;
 	a_u8 _ncap;
 	CapInfo* _caps;
+    GFun* _cache;
 	GStr* _name;
 	GStr* _dbg_file;
 	a_u32 _dbg_lndef;
@@ -519,7 +520,6 @@ struct GProto {
 	LineInfo* _dbg_lines;
 	LocalInfo* _dbg_locals;
 	GStr** _dbg_cap_names;
-	GFun* _cache;
 	GProto* _subs[0];
 };
 
@@ -631,6 +631,9 @@ static_assert(offsetof(GRoute, _from) == 0x18);
 static_assert(offsetof(GRoute, _stack._base) == 0x20);
 #endif
 
+/**
+ ** Get global context from environment.
+ */
 #define G(env) ((env)->_global)
 
 /*=========================================================*

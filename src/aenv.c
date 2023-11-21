@@ -52,7 +52,9 @@ static void route_new(GRoute* self, Global* gbl) {
 }
 
 static a_bool route_init(a_henv env, GRoute* self) {
-	if (ai_stk_init(env, &self->_stack)) return true;
+	catch (ai_stk_init(env, &self->_stack)) {
+        return true;
+    }
 	self->_base_frame._stack_bot = val2stk(env, self->_stack._base);
 	return false;
 }
@@ -178,7 +180,7 @@ static void global_init(a_henv env, unused void* ctx) {
     v_set_obj(env, &G(env)->_global, gbl);
 }
 
-static a_usize sizeof_MRoute() {
+static a_usize mroute_size() {
 	a_usize size = sizeof(MRoute) + str_size(0)
 #define STRDEF(n) + str_size(sizeof(#n) - 1)
 # include "asym/kw.h"
@@ -190,7 +192,7 @@ static a_usize sizeof_MRoute() {
 }
 
 a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
-	a_usize size = sizeof_MRoute();
+	a_usize size = mroute_size();
 	MRoute* mr = ai_mem_valloc(af, ac, size);
 	if (mr == null) return ALO_ENOMEM;
 
@@ -250,9 +252,9 @@ void alo_destroy(a_henv env) {
 
 #ifndef ALOI_USE_VALGRIND
     /* Avoid used memory check if foreign memcheck tools is enabled. */
-	assume(gbl_mem_total(gbl) == sizeof_MRoute(), "memory leak.");
+	assume(gbl_mem_total(gbl) == mroute_size(), "memory leak.");
 #endif
-	ai_mem_vdealloc(&gbl->_af, gbl->_ac, mroute, sizeof_MRoute());
+	ai_mem_vdealloc(&gbl->_af, gbl->_ac, mroute, mroute_size());
 }
 
 a_henv ai_env_mroute(Global* gbl) {

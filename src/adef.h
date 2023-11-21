@@ -6,6 +6,7 @@
 #define adef_h_
 
 #include <limits.h>
+#include <string.h>
 
 #include "aarch.h"
 #include "alo.h"
@@ -102,7 +103,7 @@ typedef a_u32 a_insn;
 
 #define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
-#define bit_cast(t,e) ({ __auto_type _e = e; t _t; static_assert(sizeof(_e) == sizeof(t)); __builtin_memcpy(&_t, &_e, sizeof(t)); _t; })
+#define bit_cast(t,e) ({ __auto_type _e = e; t _t; static_assert(sizeof(_e) == sizeof(t)); memcpy(&_t, &_e, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
 #define ptr2int(p) ((a_usize) (void const*) {p})
 #define addr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
@@ -147,7 +148,7 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 /**
  ** Fill memory with zero bits.
  */
-#define memclr(dst,len) __builtin_memset(dst, 0, len)
+#define memclr(dst,len) memset(dst, 0, len)
 
 #define NUM_TYPE_LIST(_) \
     _(i8) \

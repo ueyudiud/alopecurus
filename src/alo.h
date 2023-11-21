@@ -128,9 +128,9 @@ typedef a_i32 a_int;
 /* VM float point number type. */
 typedef a_f64 a_float;
 
-/* Signed and unsigned integer type for stack index and size. */
-typedef a_i32 a_istk;
-typedef a_u32 a_ustk;
+/* Signed and unsigned integer type for VM index and length. */
+typedef a_i32 a_ilen;
+typedef a_u32 a_ulen;
 
 /* Allocation function table. */
 typedef struct alo_Alloc alo_Alloc;
@@ -162,11 +162,11 @@ ALO_EXPORT void (alo_sethook)(a_henv env, a_hfun kf, a_hctx kc, a_flags mask);
 
 ALO_EXPORT a_bool (alo_attri)(a_henv env, a_enum n, a_i32* pi);
 
-ALO_EXPORT a_istk (alo_stacksize)(a_henv env);
-ALO_EXPORT a_bool (alo_ensure)(a_henv env, a_ustk n);
-ALO_EXPORT void (alo_settop)(a_henv env, a_istk n);
-ALO_EXPORT a_istk (alo_absindex)(a_henv env, a_istk id);
-ALO_EXPORT void (alo_push)(a_henv env, a_istk id);
+ALO_EXPORT a_ilen (alo_stacksize)(a_henv env);
+ALO_EXPORT a_bool (alo_ensure)(a_henv env, a_ulen n);
+ALO_EXPORT void (alo_settop)(a_henv env, a_ilen n);
+ALO_EXPORT a_ilen (alo_absindex)(a_henv env, a_ilen id);
+ALO_EXPORT void (alo_push)(a_henv env, a_ilen id);
 ALO_EXPORT a_msg (alo_pushex)(a_henv env, char const* sp, ...);
 ALO_EXPORT a_msg (alo_pushvex)(a_henv env, char const* sp, va_list varg);
 ALO_EXPORT void (alo_pushnil)(a_henv env);
@@ -181,13 +181,13 @@ ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg
 ALO_EXPORT void (alo_pushptype)(a_henv env, a_msg tag);
 
 ALO_EXPORT void (alo_pushroute)(a_henv env);
-ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_ustk n);
-ALO_EXPORT void (alo_pop)(a_henv env, a_istk id);
-ALO_EXPORT a_ustk (alo_rotate)(a_henv env, a_istk id, a_ustk n);
-ALO_EXPORT void (alo_newtuple)(a_henv env, a_ustk n);
-ALO_EXPORT void (alo_newlist)(a_henv env, a_ustk n);
-ALO_EXPORT void (alo_newtable)(a_henv env, a_ustk n);
-ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_ustk n);
+ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_ulen n);
+ALO_EXPORT void (alo_pop)(a_henv env, a_ilen id);
+ALO_EXPORT a_ulen (alo_rotate)(a_henv env, a_ilen id, a_ulen n);
+ALO_EXPORT void (alo_newtuple)(a_henv env, a_ulen n);
+ALO_EXPORT void (alo_newlist)(a_henv env, a_ulen n);
+ALO_EXPORT void (alo_newtable)(a_henv env, a_ulen n);
+ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_ulen n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 
 #define ALO_NEWTYPE_FLAG_STATIC 0x0001
@@ -197,19 +197,19 @@ ALO_EXPORT void (alo_newtype)(a_henv env, char const* n, a_flags flags);
 #define alo_insert(env,id) alo_rotate(env, id, 1)
 
 ALO_EXPORT a_msg (alo_compute)(a_henv env, a_enum op);
-ALO_EXPORT a_bool (alo_compare)(a_henv env, a_istk id1, a_istk id2, a_enum op);
+ALO_EXPORT a_bool (alo_compare)(a_henv env, a_ilen id1, a_ilen id2, a_enum op);
 
 #define alo_equals(env,id1,id2) alo_compare(env, id1, id2, ALO_OPEQ)
 
-ALO_EXPORT a_int (alo_rawlen)(a_henv env, a_istk id);
-ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_istk id, a_int key);
-ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_istk id);
-ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_istk id);
-ALO_EXPORT a_msg (alo_get)(a_henv env, a_istk id);
-ALO_EXPORT void (alo_set)(a_henv env, a_istk id);
-ALO_EXPORT void (alo_put)(a_henv env, a_istk id);
-ALO_EXPORT void (alo_call)(a_henv env, a_ustk narg, a_istk nres);
-ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_ustk narg, a_istk nres, a_ustk nsav);
+ALO_EXPORT a_int (alo_rawlen)(a_henv env, a_ilen id);
+ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_ilen id, a_int key);
+ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_ilen id);
+ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_ilen id);
+ALO_EXPORT a_msg (alo_get)(a_henv env, a_ilen id);
+ALO_EXPORT void (alo_set)(a_henv env, a_ilen id);
+ALO_EXPORT void (alo_put)(a_henv env, a_ilen id);
+ALO_EXPORT void (alo_call)(a_henv env, a_ulen narg, a_ilen nres);
+ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_ulen narg, a_ilen nres, a_ulen nsav);
 ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
@@ -222,13 +222,13 @@ ALO_EXPORT a_bool (alo_fattrz)(a_henv env, a_enum n);
 #define alo_canyield(env) alo_fattrz(env, ALO_FATTR_YIELD)
 #define alo_isasync(env) alo_fattrz(env, ALO_FATTR_ASYNC)
 
-ALO_EXPORT a_msg (alo_tagof)(a_henv env, a_istk id);
-ALO_EXPORT void (alo_typeof)(a_henv env, a_istk id);
-ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_istk id);
-ALO_EXPORT a_int (alo_toint)(a_henv env, a_istk id);
-ALO_EXPORT a_float (alo_tofloat)(a_henv env, a_istk id);
-ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_istk id, a_usize* plen);
-ALO_EXPORT void* (alo_toptr)(a_henv env, a_istk id);
+ALO_EXPORT a_msg (alo_tagof)(a_henv env, a_ilen id);
+ALO_EXPORT void (alo_typeof)(a_henv env, a_ilen id);
+ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_ilen id);
+ALO_EXPORT a_int (alo_toint)(a_henv env, a_ilen id);
+ALO_EXPORT a_float (alo_tofloat)(a_henv env, a_ilen id);
+ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_ilen id, a_usize* plen);
+ALO_EXPORT void* (alo_toptr)(a_henv env, a_ilen id);
 
 #define alo_tostr(env,id) alo_tolstr(env, id, NULL)
 
@@ -243,8 +243,8 @@ ALO_EXPORT void (alo_fullgc)(a_henv env);
 
 #define ALO_COMP_OPT_STOP_JIT 0x10000
 
-ALO_EXPORT a_msg (alo_compile)(a_henv env, a_ifun fun, void* ctx, a_istk id_env,
-                               a_istk id_name, a_istk id_file, a_flags options);
+ALO_EXPORT a_msg (alo_compile)(a_henv env, a_ifun fun, void* ctx, a_ilen id_env,
+                               a_ilen id_name, a_ilen id_file, a_flags options);
 
 typedef struct {
 	unsigned char kind;
