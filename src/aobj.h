@@ -351,7 +351,7 @@ struct GStr {
 	a_u32 _len;
 	a_hash _hash;
 	GStr* _snext;
-	a_byte _ptr[];
+	char _ptr[];
 };
 
 #define v_is_str(v) v_is(v, T_STR)
@@ -361,10 +361,10 @@ always_inline GStr* v_as_str(Value v) {
 	return g_cast(GStr, v_as_obj(v));
 }
 
-#define str_size(l) pad_to_raw(sizeof(GStr) + (l) + 1, sizeof(a_usize))
+#define str_size(l) pad_to_raw(sizeof(GStr) + sizeof(char) * (l) + 1, sizeof(a_usize))
 
 always_inline char const* str2ntstr(GStr* self) {
-	return cast(char const*, self->_ptr);
+	return self->_ptr;
 }
 
 /*=========================================================*

@@ -307,15 +307,15 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 				a_int k = va_arg(varg, a_int);
 				switch (v_get_tag(v)) {
 					case T_TUPLE: {
-						try(ai_tuple_ugeti(env, v_as_tuple(v), k, &v));
+						try (ai_tuple_ugeti(env, v_as_tuple(v), k, &v));
 						break;
 					}
 					case T_LIST: {
-						try(ai_list_ugeti(env, v_as_list(v), k, &v));
+						try (ai_list_ugeti(env, v_as_list(v), k, &v));
 						break;
 					}
 					case T_TABLE: {
-						try(ai_table_geti(env, v_as_table(v), k, &v));
+						try (ai_table_geti(env, v_as_table(v), k, &v));
 						break;
 					}
 					default: {

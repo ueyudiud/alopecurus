@@ -214,7 +214,7 @@ static a_i32 l_read_str(unused a_henv env, void* rctx, void const** pdst, size_t
 typedef int a_fno;
 
 typedef struct {
-	a_byte _buffer[256];
+	char _buffer[256];
 	a_fno _handle;
 } FileReadCtx;
 
@@ -309,10 +309,10 @@ static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, B
 
     if (trace._file != null) {
         if (trace._line != 0) {
-            try(ai_buf_nputfs(env, buf, "%s:%u: ", trace._file, trace._line));
+            try (ai_buf_nputfs(env, buf, "%s:%u: ", trace._file, trace._line));
         }
         else {
-            try(ai_buf_nputfs(env, buf, "%s: ", trace._file));
+            try (ai_buf_nputfs(env, buf, "%s: ", trace._file));
         }
     }
 
@@ -336,22 +336,22 @@ static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, B
         try (ai_buf_nputs(env, buf, "\nstack trace:\n\t"));
         loop {
             if (trace._line != 0) {
-                try(ai_buf_nputfs(env, buf, "at %s:%u", trace._file, trace._line));
+                try (ai_buf_nputfs(env, buf, "at %s:%u", trace._file, trace._line));
             }
             else {
-                try(ai_buf_nputfs(env, buf, "at %s", trace._file));
+                try (ai_buf_nputfs(env, buf, "at %s", trace._file));
             }
 
             if (trace._name != null) {
-                try(ai_buf_nputfs(env, buf, " (%s)", trace._name));
+                try (ai_buf_nputfs(env, buf, " (%s)", trace._name));
             }
 
 			if (limit-- == 0) {
-				try(ai_buf_nputs(env, buf, "\n\t..."));
+				try (ai_buf_nputs(env, buf, "\n\t..."));
 				break;
 			}
 			else if (frame->_flags & FRAME_FLAG_TAIL) {
-				try(ai_buf_nputs(env, buf, "\n\t... (tail call)"));
+				try (ai_buf_nputs(env, buf, "\n\t... (tail call)"));
 				if (limit > 1) {
 					limit -= 1;
 				}

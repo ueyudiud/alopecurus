@@ -102,11 +102,11 @@ static a_msg l_load_meta(InCtx* ic, ProtoDesc const* info, GProto* meta) {
 	rq_push(&ic->_rq, meta);
     
     for (a_u32 i = 0; i < info->_nconst; ++i) {
-        try(l_load_const(ic, &meta->_consts[i]));
+        try (l_load_const(ic, &meta->_consts[i]));
     }
     l_getv(ic, meta->_code, info->_ninsn);
     for (a_u16 i = 0; i < info->_nsub; ++i) {
-        try(l_load_sub(ic, &meta->_subs[i]));
+        try (l_load_sub(ic, &meta->_subs[i]));
     }
     
     return ALO_SOK;

@@ -17,11 +17,11 @@ typedef struct { a_usize _; } BufHeadMark[0];
     typedef struct n n; \
     struct n { BUF_STRUCT_BODY(t); e; }
 
-BUF_STRUCT_DECLARE(Buf, a_byte);
+BUF_STRUCT_DECLARE(Buf, char);
 
 struct GBuf {
     GOBJ_STRUCT_HEADER;
-    BUF_STRUCT_BODY(a_byte);
+    BUF_STRUCT_BODY(char);
 };
 
 #define buf_end(b) cast(void*, (b)->_ptr + (b)->_len)

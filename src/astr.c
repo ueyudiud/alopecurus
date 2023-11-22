@@ -16,6 +16,10 @@
 
 #include "astr.h"
 
+#ifndef ALOI_INIT_STR_CACHE_CAPACITY
+# define ALOI_INIT_STR_CACHE_CAPACITY 64
+#endif
+
 static VTable const str_vtable;
 
 /**
@@ -27,13 +31,13 @@ static VTable const str_vtable;
  *@param len the data length.
  *@return the hash code.
  */
-a_hash ai_str_hashof(a_henv env, void const* src, a_usize len) {
+a_hash ai_str_hashof(a_henv env, char const* src, a_usize len) {
     a_hash hash = G(env)->_seed;
 	if (len > 0) {
-		a_byte const* l = src;
+		char const* l = src;
 		a_usize step = 1 + (len >> 4);
 		assume(src != null);
-		for (a_byte const* p = src + len - 1; p >= l; p -= step) {
+		for (char const* p = src + len - 1; p >= l; p -= step) {
 			hash = (hash ^ cast(a_hash, *p)) * 0x1000193;
 		}
 	}
@@ -41,18 +45,18 @@ a_hash ai_str_hashof(a_henv env, void const* src, a_usize len) {
 }
 
 static void cache_grow(a_henv env, StrCache* cache) {
-    a_usize old_size = cache->_hmask + 1;
-    a_usize new_size = old_size * 2;
+    a_usize old_cap = cache->_hmask + 1;
+    a_usize new_cap = old_cap * 2;
 
-    GStr** table = ai_mem_vgrow(env, cache->_table, old_size, new_size);
+    GStr** table = ai_mem_vgrow(env, cache->_table, old_cap, new_cap);
 
     /* Move strings. */
-    for (a_usize i = 0; i < old_size; ++i) {
+    for (a_usize i = 0; i < old_cap; ++i) {
         GStr** p = &table[i];
-        GStr** q = &table[i + old_size];
+        GStr** q = &table[i + old_cap];
         GStr* s = *p;
         while (s != null) {
-            if (s->_hash & old_size) {
+            if (s->_hash & old_cap) {
                 *q = s;
                 q = &s->_snext;
             }
@@ -66,7 +70,7 @@ static void cache_grow(a_henv env, StrCache* cache) {
     }
 
 	cache->_table = table;
-	cache->_hmask = new_size - 1;
+	cache->_hmask = new_cap - 1;
 }
 
 static void cache_hint(a_henv env, StrCache* cache) {
@@ -90,21 +94,21 @@ static GStr* str_alloc(a_henv env, a_usize len) {
 	return ai_mem_alloc(env, str_size(len));
 }
 
-static void str_init(GStr* self, void const* src, a_usize len, a_hash hash) {
+static void str_init(GStr* self, char const* src, a_usize len, a_hash hash) {
 	self->_vptr = &str_vtable;
     self->_len = len;
     self->_hash = hash;
-    memcpy(self->_ptr, src, len);
+    memcpy(self->_ptr, src, sizeof(char) * len);
     self->_ptr[len] = '\0';
 }
 
-static GStr* str_get_or_null_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
+static GStr* str_get_or_null_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
     Global* gbl = G(env);
     StrCache* cache = &gbl->_str_cache;
 
     /* Try lookup string in intern table. */
     for (GStr* str = cache->_table[hash & cache->_hmask]; str != null; str = str->_snext) {
-        if (str->_hash == hash && likely(str->_len == len && memcmp(str->_ptr, src, len) == 0)) {
+        if (str->_hash == hash && likely(ai_str_requals(str, src, len))) {
             /* Revive string object if it is dead. */
             if (unlikely(g_has_other_color(gbl, str))) {
                 str->_tnext = white_color(gbl);
@@ -116,8 +120,8 @@ static GStr* str_get_or_null_with_hash(a_henv env, void const* src, a_usize len,
 	return null;
 }
 
-GStr* ai_str_new_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
-    /* String not found, create new string. */
+GStr* ai_str_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
+    /* Force create new string into string cache. */
     StrCache* cache = &G(env)->_str_cache;
     cache_hint(env, cache);
 
@@ -153,20 +157,20 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	return self;
 }
 
-GStr* ai_str_get_or_null_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
+GStr* ai_str_get_or_null_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
     return str_get_or_null_with_hash(env, src, len, hash);
 }
 
-GStr* ai_str_get_or_new_with_hash(a_henv env, void const* src, a_usize len, a_hash hash) {
+GStr* ai_str_get_or_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
     return ai_str_get_or_null_with_hash(env, src, len, hash) ?: ai_str_new_with_hash(env, src, len, hash);
 }
 
-GStr* ai_str_get_or_new(a_henv env, void const* src, a_usize len) {
+GStr* ai_str_get_or_new(a_henv env, char const* src, a_usize len) {
     a_hash hash = ai_str_hashof(env, src, len);
     return ai_str_get_or_new_with_hash(env, src, len, hash);
 }
 
-#define MAX_STACK_BUFFER_SIZE 255
+#define MAX_STACK_BUFFER_SIZE (256-1)
 
 a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) {
 	char buf[MAX_STACK_BUFFER_SIZE + 1];
@@ -177,12 +181,10 @@ a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) 
 	}
 	else {
 		GStr* buff = str_alloc(env, len); /* Allocate buffer to place data. */
-		a_msg msg = (*fun)(ctx, buff->_ptr, len);
-		
-		if (unlikely(msg != ALO_SOK)) {
+        catch ((*fun)(ctx, buff->_ptr, len), msg) {
             ai_mem_dealloc(G(env), buff, str_size(len));
-			return msg;
-		}
+            return msg;
+        }
 		
 		*pstr = str_get_and_drop_buff_or_put(env, buff, len);
 		return ALO_SOK;
@@ -206,7 +208,7 @@ GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
     else {
         GStr* buff = str_alloc(env, len);
 		
-		vsprintf(cast(char*, buff->_ptr), fmt, varg);
+		vsprintf(buff->_ptr, fmt, varg);
 
 		va_end(varg);
         
@@ -283,9 +285,9 @@ void ai_str_boost2(a_henv env) {
     StrCache* cache = &gbl->_str_cache;
 
     run {
-        cache->_table = ai_mem_vnew(env, GStr*, ALOI_INIT_SHTSTR_TABLE_CAPACITY);
-        cache->_hmask = ALOI_INIT_SHTSTR_TABLE_CAPACITY - 1;
-        memclr(cache->_table, sizeof(GStr*) * ALOI_INIT_SHTSTR_TABLE_CAPACITY);
+        cache->_table = ai_mem_vnew(env, GStr*, ALOI_INIT_STR_CACHE_CAPACITY);
+        cache->_hmask = ALOI_INIT_STR_CACHE_CAPACITY - 1;
+        memclr(cache->_table, sizeof(GStr*) * ALOI_INIT_STR_CACHE_CAPACITY);
     }
 
     run {

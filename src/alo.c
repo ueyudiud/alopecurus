@@ -128,8 +128,8 @@ static a_msg l_read_line_frag(a_henv env, char const* prompt) {
 }
 
 static a_msg l_read_line(a_henv env, char const* prompt) {
-	try(l_read_line_frag(env, prompt));
-	loop try(l_read_line_frag(env, null));
+	try (l_read_line_frag(env, prompt));
+	loop try (l_read_line_frag(env, null));
 }
 
 static void l_save_line(a_henv env) {
@@ -293,28 +293,34 @@ static a_bool l_scan_opts(a_henv env, int argc, char const* const* argv) {
 		char const* arg = argv[i];
 		if (arg[0] == '-') {
 			switch (arg[1]) {
-				case 'v':
-					l_opts |= OPT_VERSION;
-					l_opts &= ~OPT_EXECUTE;
-					break;
-				case 'V':
-					l_opts |= OPT_VERSION;
-					break;
-				case 'h':
-					l_opts |= OPT_HELP;
-					break;
-				case '-':
-					printf("Unknown option '%s'", arg);
-					l_opts |= OPT_HELP;
-					return true;
-				case '\0':
-					printf("Incomplete option '-'");
-					l_opts |= OPT_HELP;
-					return true;
-				default:
-					printf("Unknown option '-%c'", arg[1]);
-					l_opts |= OPT_HELP;
-					return true;
+				case 'v': {
+                    l_opts |= OPT_VERSION;
+                    l_opts &= ~OPT_EXECUTE;
+                    break;
+                }
+				case 'V': {
+                    l_opts |= OPT_VERSION;
+                    break;
+                }
+				case 'h': {
+                    l_opts |= OPT_HELP;
+                    break;
+                }
+				case '-': {
+                    printf("Unknown option '%s'", arg);
+                    l_opts |= OPT_HELP;
+                    return true;
+                }
+				case '\0': {
+                    printf("Incomplete option '-'");
+                    l_opts |= OPT_HELP;
+                    return true;
+                }
+				default: {
+                    printf("Unknown option '-%c'", arg[1]);
+                    l_opts |= OPT_HELP;
+                    return true;
+                }
 			}
 		}
 		else {
