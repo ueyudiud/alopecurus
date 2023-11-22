@@ -391,7 +391,7 @@ Value* ai_table_refls(a_henv env, GTable* self, char const* ptr, a_usize len) {
     catch (table_find_lstr(env, self, ptr, len, hash, &index)) {
         ai_table_hint(env, self, 1);
 
-        GStr* key = ai_str_get_or_new_with_hash(env, ptr, len, hash);
+        GStr* key = ai_str_new_with_hash(env, ptr, len, hash);
         index = table_emplace_backward(env, self, v_of_obj(key), hash, v_of_nil());
 
         self->_len += 1;

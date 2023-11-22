@@ -111,7 +111,7 @@ static GStr* str_get_or_null_with_hash(a_henv env, char const* src, a_usize len,
         if (str->_hash == hash && likely(ai_str_requals(str, src, len))) {
             /* Revive string object if it is dead. */
             if (unlikely(g_has_other_color(gbl, str))) {
-                str->_tnext = white_color(gbl);
+                g_set_white(gbl, str);
             }
             return str;
         }
@@ -173,14 +173,16 @@ GStr* ai_str_get_or_new(a_henv env, char const* src, a_usize len) {
 #define MAX_STACK_BUFFER_SIZE (256-1)
 
 a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) {
-	char buf[MAX_STACK_BUFFER_SIZE + 1];
 	if (likely(len < MAX_STACK_BUFFER_SIZE)) {
-		try ((*fun)(ctx, buf, len));
-		*pstr = ai_str_get_or_new(env, buf, len);
+        /* Allocate buffer on stack. */
+        char buff[MAX_STACK_BUFFER_SIZE + 1];
+		try ((*fun)(ctx, buff, len));
+		*pstr = ai_str_get_or_new(env, buff, len);
 		return ALO_SOK;
 	}
 	else {
-		GStr* buff = str_alloc(env, len); /* Allocate buffer to place data. */
+        /* Allocate buffer on heap. */
+		GStr* buff = str_alloc(env, len);
         catch ((*fun)(ctx, buff->_ptr, len), msg) {
             ai_mem_dealloc(G(env), buff, str_size(len));
             return msg;
