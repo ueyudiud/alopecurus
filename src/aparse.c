@@ -433,13 +433,19 @@ struct Sym {
 	GStr* _name; /* The symbol name. */
 };
 
+#define JMP_PROP_BREAK 0x01
+#define JMP_PROP_CONTINUE 0x02
+#define JMP_PROP_BOUND 0x04
+
 #define SCOPE_STRUCT_HEAD \
-    Scope* _up;              \
+    Scope* _up;           \
+    GStr* _label_name;    \
 	a_u8 _bot_reg; /* The bottom of scope. */ \
 	a_u8 _top_ntr; /* Top of non-temporary section. */ \
 	a_u8 _bot_fur; /* Bottom of fragmented section. */ \
 	a_u8 _num_fur; /* Number of temporary register in fragmented section. */ \
 	a_u8 _top_reg; /* The top of scope. */  \
+    a_u8 _jmp_prop; /* The jump properties. */      \
 	a_line _begin_line;      \
 	a_u32 _begin_label;      \
 	a_u32 _end_label;        \
@@ -2942,8 +2948,9 @@ static void scope_pop(Parser* par, a_line line) {
 	}
 }
 
-static void scope_enter(Parser* par, Scope* scope, a_line line) {
+static void scope_enter(Parser* par, Scope* scope, a_line line, a_u32 jmp_prop) {
 	scope_push(par, scope, par->_scope->_top_reg, line);
+    scope->_jmp_prop = jmp_prop;
 }
 
 static void scope_leave(Parser* par, a_line line) {
@@ -2964,6 +2971,54 @@ static void scope_leave_with(Parser* par, a_line line, InoutExpr e) {
         expr_to_dyn(par, e);
 		scope_pop(par, line);
 	}
+}
+
+static void scope_break(Parser* par, GStr* label, a_line line) {
+    if (label == null) {
+        for (Scope* scope = par->_scope; !(scope->_jmp_prop & JMP_PROP_BOUND); scope = scope->_up) {
+            if (scope->_jmp_prop & JMP_PROP_BREAK) {
+                scope->_end_label = l_lazy_jump(par, scope->_end_label, line);
+                return;
+            }
+        }
+        ai_par_error(par, "no block for break statement", line);
+    }
+    else {
+        for (Scope* scope = par->_scope; !(scope->_jmp_prop & JMP_PROP_BOUND); scope = scope->_up) {
+            if (scope->_label_name == label) {
+                if (scope->_jmp_prop & JMP_PROP_BREAK) {
+                    scope->_end_label = l_lazy_jump(par, scope->_end_label, line);
+                    return;
+                }
+                ai_par_error(par, "cannot break at label '%s'", line, str2ntstr(label));
+            }
+        }
+        ai_par_error(par, "label '%s' not found", line, str2ntstr(label));
+    }
+}
+
+static void scope_continue(Parser* par, GStr* label, a_line line) {
+    if (label == null) {
+        for (Scope* scope = par->_scope; !(scope->_jmp_prop & JMP_PROP_BOUND); scope = scope->_up) {
+            if (scope->_jmp_prop & JMP_PROP_CONTINUE) {
+                scope->_begin_label = l_lazy_jump(par, scope->_end_label, line);
+                return;
+            }
+        }
+        ai_par_error(par, "no block for continue statement", line);
+    }
+    else {
+        for (Scope* scope = par->_scope; !(scope->_jmp_prop & JMP_PROP_BOUND); scope = scope->_up) {
+            if (scope->_label_name == label) {
+                if (scope->_jmp_prop & JMP_PROP_CONTINUE) {
+                    scope->_begin_label = l_lazy_jump(par, scope->_end_label, line);
+                    return;
+                }
+                ai_par_error(par, "cannot continue at label '%s'", line, str2ntstr(label));
+            }
+        }
+        ai_par_error(par, "label '%s' not found", line, str2ntstr(label));
+    }
 }
 
 static void fnscope_prologue(Parser* par, FnScope* fnscope, a_line line) {
@@ -2992,6 +3047,7 @@ static void fnscope_prologue(Parser* par, FnScope* fnscope, a_line line) {
         ._fjump = false
     };
 	scope_push(par, &fnscope->_scope, 0, line);
+    fnscope->_scope._jmp_prop = JMP_PROP_BOUND;
 
 	par->_fnscope = fnscope;
 	par->_scope_depth += 1;
@@ -3895,6 +3951,16 @@ static void l_scan_pattern(Parser* par, void (*con)(Parser*, Pat*, a_usize), a_u
 static void l_scan_stat(Parser* par);
 static void l_scan_stats(Parser* par);
 
+static GStr* l_scan_label(Parser* par) {
+    return lex_test_skip(par, TK_COLON) ? lex_check_ident(par) : null;
+}
+
+static GStr* l_scan_label_for_scope(Parser* par) {
+    GStr* name = l_scan_label(par);
+    par->_scope->_label_name = name;
+    return name;
+}
+
 static void l_scan_tstring(Parser* par, OutExpr e) {
 	ConExpr ce = { ._off = par->_sbuf->_len };
 	a_u32 line = lex_line(par);
@@ -4032,7 +4098,7 @@ static void l_scan_table_constructor(Parser* par, OutExpr e) {
         return;
     }
 
-	scope_enter(par, &scope, line);
+	scope_enter(par, &scope, line, 0);
 
     local_bind(par, e, null, line);
 	expr_new_table(par, er, line);
@@ -4765,7 +4831,12 @@ static void l_scan_if_stat(Parser* par) {
 }
 
 static void l_scan_while_stat(Parser* par) {
+    Scope scope;
+    scope_enter(par, &scope, lex_line(par), JMP_PROP_BREAK | JMP_PROP_CONTINUE);
+
     lex_skip(par);
+
+    l_scan_label_for_scope(par);
 
     lex_check_skip(par, TK_LBK);
 	a_line line = lex_line(par);
@@ -4789,15 +4860,46 @@ static void l_scan_while_stat(Parser* par) {
         lex_sync(par);
 		l_scan_stat(par);
 	}
+
+    scope_pop(par, lex_line(par));
 }
 
 static void l_scan_loop_stat(Parser* par) {
-	lex_skip(par);
+    Scope scope;
+    scope_enter(par, &scope, lex_line(par), JMP_PROP_BREAK | JMP_PROP_CONTINUE);
+
+    lex_skip(par);
+
+    l_scan_label_for_scope(par);
 
 	a_u32 label = l_mark_label(par, NO_LABEL, lex_line(par));
 
 	l_scan_stat(par);
 	l_direct_jump(par, label, lex_line(par));
+
+    scope_pop(par, lex_line(par));
+}
+
+static void l_scan_break_stat(Parser* par) {
+    a_line line = lex_line(par);
+
+    lex_skip(par);
+
+    GStr* label = l_scan_label(par);
+    scope_break(par, label, line);
+
+    lex_test_skip(par, TK_SEMI);
+}
+
+static void l_scan_continue_stat(Parser* par) {
+    a_line line = lex_line(par);
+
+    lex_skip(par);
+
+    GStr* label = l_scan_label(par);
+    scope_continue(par, label, line);
+
+    lex_test_skip(par, TK_SEMI);
 }
 
 static void l_scan_return_stat(Parser* par) {
@@ -4984,7 +5086,7 @@ static void l_scan_for_stat(Parser* par) {
 	lex_skip(par);
 
 	a_u32 line = lex_line(par);
-	scope_enter(par, &scope, line);
+	scope_enter(par, &scope, line, JMP_PROP_BREAK | JMP_PROP_CONTINUE);
 	stat._line = line;
 	
 	lex_check_skip(par, TK_LBK);
@@ -5002,8 +5104,14 @@ static void l_scan_for_stat(Parser* par) {
 	l_scan_stat(par);
 	l_direct_jump(par, label, line);
 
-	l_mark_label(par, stat._label, line); /* TODO: use scoped label management. */
-	scope_pop(par, line);
+	l_mark_label(par, stat._label, line);
+
+    if (lex_test_skip(par, TK_else)) {
+        lex_sync(par);
+        l_scan_stat(par);
+    }
+
+    scope_pop(par, lex_line(par));
 	
 	expr_drop(par, e);
 }
@@ -5134,7 +5242,7 @@ static void l_scan_stat_pack(Parser* par) {
 
 	a_line line = lex_line(par);
     lex_skip(par);
-	scope_enter(par, &scope, line);
+	scope_enter(par, &scope, line, 0);
 
 	l_scan_stats(par);
 
@@ -5150,6 +5258,14 @@ static void l_scan_stat(Parser* par) {
 			l_scan_if_stat(par);
 			break;
 		}
+        case TK_break: {
+            l_scan_break_stat(par);
+            break;
+        }
+        case TK_continue: {
+            l_scan_continue_stat(par);
+            break;
+        }
 		case TK_return: {
 			l_scan_return_stat(par);
 			break;
@@ -5203,6 +5319,14 @@ static void l_scan_stats(Parser* par) {
 				l_scan_return_stat(par);
 				break;
 			}
+            case TK_break: {
+                l_scan_break_stat(par);
+                break;
+            }
+            case TK_continue: {
+                l_scan_continue_stat(par);
+                break;
+            }
 			case TK_if: {
 				l_scan_if_stat(par);
 				break;
