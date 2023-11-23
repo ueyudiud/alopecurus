@@ -16,7 +16,6 @@
 #include "afun.h"
 #include "aenv.h"
 #include "agc.h"
-#include "avm.h"
 #include "adbg.h"
 #include "aapi.h"
 
@@ -48,8 +47,8 @@ a_henv aloL_create(void) {
 
 void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 	char const* name = ai_dbg_get_func_name(env, env->_frame);
-	if (name == null) return aloL_raisef(env, "bad argument #%tu, %s", id, what);
-	return aloL_raisef(env, "bad argument #%tu to '%s', %s", id, name, what);
+	if (name == null) aloL_raisef(env, "bad argument #%tu, %s", id, what);
+	aloL_raisef(env, "bad argument #%tu to '%s', %s", id, name, what);
 }
 
 static char const* l_typename(a_henv env, a_ilen id) {
@@ -367,7 +366,7 @@ static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, B
     }
 
 	GStr* str = ai_str_get_or_new(env, buf->_ptr, buf->_len);
-	v_set_obj(env, err, str);
+	v_set_str(env, err, str);
 	return ALO_SOK;
 }
 

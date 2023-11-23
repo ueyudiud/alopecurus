@@ -7,8 +7,6 @@
 
 #include "aenv.h"
 #include "afun.h"
-#include "atype.h"
-#include "amem.h"
 
 #include "agc.h"
 
@@ -28,15 +26,15 @@
 # define ALOI_CLOSE_COST usizec(256)
 #endif
 
-always_inline void join_gc(a_gclist* list, a_hobj elem) {
+always_inline void join_gc(a_gclist* list, a_gptr elem) {
 	elem->_gnext = *list;
 	*list = elem;
 }
 
 #define join_gc(list,elem) join_gc(list, gobj_cast(elem))
 
-always_inline a_hobj strip_gc(a_gclist* list) {
-	a_hobj elem = *list;
+always_inline a_gptr strip_gc(a_gclist* list) {
+	a_gptr elem = *list;
 	*list = elem->_gnext;
 	return elem;
 }
@@ -45,7 +43,7 @@ always_inline void flip_color(Global* gbl) {
 	gbl->_white_color = cast(a_u8, other_color(gbl));
 }
 
-void ai_gc_register_object_(a_henv env, a_hobj obj) {
+void ai_gc_register_object_(a_henv env, a_gptr obj) {
 	g_fetch(obj, drop); /* Only collectable object need be registered. */
 	Global* gbl = G(env);
 	join_gc(&gbl->_gc_normal, obj);
@@ -65,21 +63,21 @@ void ai_gc_register_objects(a_henv env, RefQueue* rq) {
 	gbl->_gc_normal = rq->_head;
 }
 
-void ai_gc_fix_object_(a_henv env, a_hobj obj) {
+void ai_gc_fix_object_(a_henv env, a_gptr obj) {
 	Global* gbl = G(env);
 	assume(gbl->_gc_normal == obj, "object not registered.");
 	strip_gc(&gbl->_gc_normal);
 	join_gc(&gbl->_gc_fixed, obj);
 }
 
-static void really_mark_object(Global* gbl, a_hobj obj) {
+static void really_mark_object(Global* gbl, a_gptr obj) {
 	/* Color object to black. */
 	g_set_black(obj);
 	/* Call mark virtual method. */
     (*g_fetch(obj, mark))(gbl, obj);
 }
 
-void ai_gc_trace_mark_(Global* gbl, a_hobj obj) {
+void ai_gc_trace_mark_(Global* gbl, a_gptr obj) {
 	/* Tested in inline function. */
 	assume(g_has_white_color(gbl, obj));
 	/* Mark object lazily or greedily. */
@@ -95,18 +93,18 @@ void ai_gc_trace_mark_(Global* gbl, a_hobj obj) {
 	}
 }
 
-static void drop_object(Global* gbl, a_hobj obj) {
+static void drop_object(Global* gbl, a_gptr obj) {
 	/* Call drop virtual method */
     (*g_fetch(obj, drop))(gbl, obj);
 }
 
 static void propagate_once(Global* gbl, a_trmark* list) {
-	a_hobj obj = strip_trace(list);
+	a_gptr obj = strip_trace(list);
 	really_mark_object(gbl, obj);
 }
 
 static a_bool sweep_once(Global* gbl) {
-    a_hobj obj = *gbl->_gc_sweep;
+    a_gptr obj = *gbl->_gc_sweep;
 	if (g_has_other_color(gbl, obj)) {
         *gbl->_gc_sweep = obj->_gnext;
 		drop_object(gbl, obj);
@@ -120,7 +118,7 @@ static a_bool sweep_once(Global* gbl) {
 }
 
 static void close_once(Global* gbl) {
-    a_hobj obj = strip_gc(&gbl->_gc_toclose);
+    a_gptr obj = strip_gc(&gbl->_gc_toclose);
     (*g_fetch(obj, close))(gbl->_active, obj);
 	join_gc(&gbl->_gc_normal, obj);
 }
@@ -177,17 +175,17 @@ static void sweep_all(Global* gbl) {
 	}
 }
 
-static void drop_all(Global* gbl, a_hobj* list) {
+static void drop_all(Global* gbl, a_gptr* list) {
 	while (*list != null) {
-		a_hobj obj = strip_gc(list);
+		a_gptr obj = strip_gc(list);
 		drop_object(gbl, obj);
 	}
 }
 
-static void halt_propagate(Global* gbl, a_hobj* list) {
+static void halt_propagate(Global* gbl, a_gptr* list) {
 	a_trmark white = white_color(gbl);
 	while (*list != null) {
-		a_hobj obj = *list;
+		a_gptr obj = *list;
 		list = &obj->_gnext;
 		if (g_has_other_color(gbl, obj)) {
 			obj->_tnext = white;

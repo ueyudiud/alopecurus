@@ -67,12 +67,12 @@ a_noret ai_buf_error(a_henv env, a_msg msg, char const* what) {
 	}
 }
 
-static void buf_mark(Global* gbl, a_hobj raw_self) {
+static void buf_mark(Global* gbl, a_gptr raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
 	ai_gc_trace_work(gbl, sizeof(GBuf) + self->_cap);
 }
 
-static void buf_drop(Global* gbl, a_hobj raw_self) {
+static void buf_drop(Global* gbl, a_gptr raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
 	at_buf_deinit(gbl, self);
 	ai_mem_dealloc(gbl, self, sizeof(GBuf));

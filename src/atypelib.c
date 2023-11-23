@@ -7,7 +7,6 @@
 
 #include "aobj.h"
 #include "atype.h"
-#include "atable.h"
 #include "agc.h"
 #include "aapi.h"
 

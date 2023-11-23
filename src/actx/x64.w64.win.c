@@ -13,10 +13,9 @@
 #include <intrin.h>
 
 #include "../aobj.h"
+#include "../aenv.h"
 
 #define ext(n) M_cat(ext_,n) /* Avoid for type redefinition. */
-
-typedef int NTSTATUS;
 
 typedef struct ext(TEB) ext(TEB), *ext(PTEB);
 typedef struct ext(PEB) ext(PEB), *ext(PPEB);

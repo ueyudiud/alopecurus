@@ -7,7 +7,6 @@
 
 #include "astr.h"
 #include "aenv.h"
-#include "agc.h"
 #include "avm.h"
 
 #include "aerr.h"
@@ -22,7 +21,7 @@ a_noret ai_err_raisef(a_henv env, a_msg code, char const* fmt, ...) {
 a_noret ai_err_raisevf(a_henv env, a_msg code, char const* fmt, va_list varg) {
 	assume(code < 0, "cannot raise non error message.");
     GStr* str = ai_str_format(env, fmt, varg);
-	ai_err_raise(env, code, v_of_obj(str));
+	ai_err_raise(env, code, v_of_str(str));
 }
 
 a_noret ai_err_raise(a_henv env, a_msg code, Value err) {

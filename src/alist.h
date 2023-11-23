@@ -22,4 +22,20 @@ intern a_msg ai_list_uget(a_henv env, GList* self, Value vk, Value* pv);
 intern a_msg ai_list_useti(a_henv env, GList* self, a_int k, Value v);
 intern a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v);
 
+struct GList {
+    GOBJ_STRUCT_HEADER;
+    a_u32 _len;
+    a_u32 _cap;
+    Value* _ptr;
+};
+
+#define v_is_list(v) v_is(v, T_LIST)
+
+always_inline GList* v_as_list(Value v) {
+    assume(v_is_list(v), "not list.");
+    return g_cast(GList, v_as_obj(v));
+}
+
+#define list_size() sizeof(GList)
+
 #endif /* alist_h_ */

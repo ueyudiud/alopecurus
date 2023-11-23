@@ -1,16 +1,11 @@
-/*
- * aobj.h
+/**
+ *@file aobj.h
  */
 
 #ifndef aobj_h_
 #define aobj_h_
 
-#include <stdatomic.h>
-#include <math.h>
-
 #include "adef.h"
-#include "astrs.h"
-#include "actx.h"
 
 typedef struct GObj GObj;
 typedef struct GStr GStr;
@@ -24,12 +19,12 @@ typedef struct GType GType;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 
-/* Object pointer. */
-typedef GObj* a_hobj;
+/* GC pointer. */
+typedef GObj* a_gptr;
 
 /* GC support. */
 typedef a_usize a_trmark;
-typedef a_hobj a_gcnext;
+typedef a_gptr a_gcnext;
 typedef a_gcnext a_gclist;
 
 typedef struct VTable VTable;
@@ -39,71 +34,78 @@ typedef struct Frame Frame;
 typedef struct Stack Stack;
 typedef struct Global Global;
 
-#define T_NIL u32c(0)
-#define T_FALSE u32c(1)
-#define T_TRUE u32c(2)
-#define T_PTR u32c(3)
-#define T_LIST u32c(4)
-#define T_TABLE u32c(5)
-#define T_FUNC u32c(6)
-#define T_STR u32c(7)
-#define T_TUPLE u32c(10)
-#define T_USER u32c(11)
-#define T_INT u32c(14)
-#define T_NAN u32c(15)
+typedef struct Value Value;
 
-#define T__MIN_OBJ T_LIST
-#define T__MAX_OBJ T_USER
-#define T__MIN_NEQ T_TUPLE
-#define T__MAX_NEQ T_USER
-#define T__MIN_NHH T_TUPLE
-#define T__MAX_NHH T_USER
-#define T__MAX_FAST u32c(15)
-
-#define T_OBJ T__MIN_OBJ ... T__MAX_OBJ
-
-#define T_FLOAT u32c(16)
-
-#define g_cast(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)
-#define gobj_cast(o) g_cast(GObj, o)
-
-typedef struct { a_u64 _; } Value;
+struct Value { a_u64 _; };
 
 static_assert(sizeof(Value) == 8);
 
+#define VALUE_TAG_SHIFT 47
+
+enum {
+    T_NIL = 0,
+    T_FALSE = 1,
+    T_TRUE = 2,
+    T_PTR = 3,
+    T_LIST = 4,
+    T_TABLE = 5,
+    T_FUNC = 6,
+    T_STR = 7,
+    T_TUPLE = 10,
+    T_USER = 11,
+    T_INT = 14,
+    T_NAN = 15,
+
+    T__MAX_FAST = T_NAN,
+
+    T__MIN_OBJ = T_LIST,
+    T__MAX_OBJ = T_USER,
+    T__MIN_FLT = 16,
+    T__MAX_FLT = UINT32_MAX,
+    T__MIN_NEQ = T_TUPLE,
+    T__MAX_NEQ = T_USER,
+    T__MIN_NHH = T_TUPLE,
+    T__MAX_NHH = T_USER,
+};
+
+#define T_OBJ T__MIN_OBJ ... T__MAX_OBJ
+
+#define T_FLOAT T__MIN_FLT ... T__MAX_FLT
+
+/* Defined in aenv.h */
 always_inline void v_check_alive(a_henv env, Value v);
 
-#define V_TAG_MASK (~u64c(0) << 47)
+#define V_TAG_MASK (~u64c(0) << VALUE_TAG_SHIFT)
 #define V_PAYLOAD_MASK (~V_TAG_MASK)
 #define V_INT_MASK (~(~u64c(0) << 32))
 
-#define V_STENCIL(t) (~cast(a_u64, t) << 47)
+#define V_STENCIL(t) (~cast(a_u64, t) << VALUE_TAG_SHIFT)
 #define V_GET_TAG(r) (~(r) >> 47)
 #define V_GET_PAYLOAD(r) ((r) & V_PAYLOAD_MASK)
 #define V_IS(r,t) (((r) & V_TAG_MASK) == V_STENCIL(t))
 
 always_inline a_u64 v_stencil(a_enum tag) {
-	assume(tag <= T__MAX_FAST, "bad value tag.");
-	return V_STENCIL(tag);
+    assume(tag <= T__MAX_FAST, "bad value tag.");
+    return V_STENCIL(tag);
 }
 
 always_inline a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
-	assume((payload & ~V_PAYLOAD_MASK) == 0, "bad value payload.");
-	return v_stencil(tag) | payload;
+    assume((payload & ~V_PAYLOAD_MASK) == 0, "bad value payload.");
+    return v_stencil(tag) | payload;
 }
 
 always_inline a_u64 v_box_nan_raw_min(a_enum tag) {
-	return v_stencil(tag);
+    return v_stencil(tag);
 }
 
 always_inline a_u64 v_box_nan_raw_max(a_enum tag) {
-	return v_stencil(tag) | V_PAYLOAD_MASK;
+    return v_stencil(tag) | V_PAYLOAD_MASK;
 }
 
 #define v_new(v) ((Value) {v})
 
 always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
-	return v_new(v_box_nan_raw(tag, payload));
+    return v_new(v_box_nan_raw(tag, payload));
 }
 
 #define v_get_tag(v) V_GET_TAG((v)._)
@@ -114,17 +116,21 @@ always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
 
 #define v_is_in(v,tmn,tmx) ((v)._ - v_box_nan_raw_min(tmx) <= v_box_nan_raw_max(tmn) - v_box_nan_raw_min(tmx))
 
+/*=========================================================*
+ * Value to Value Operations
+ *=========================================================*/
+
 always_inline void v_set_raw(Value* d, Value v) {
-	*d = v;
+    *d = v;
 }
 
 always_inline void v_set(a_henv env, Value* d, Value v) {
-	v_set_raw(d, v);
-	v_check_alive(env, v);
+    v_set_raw(d, v);
+    v_check_alive(env, v);
 }
 
 always_inline void v_cpy(a_henv env, Value* restrict d, Value const* restrict s) {
-	v_set(env, d, *s);
+    v_set(env, d, *s);
 }
 
 always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
@@ -165,7 +171,7 @@ always_inline void v_reverse(a_henv env, Value* vl, Value* vh) {
 }
 
 /*=========================================================*
- * Nil & Control Values
+ * Nil & Controller
  *=========================================================*/
 
 #define V_STRICT_NIL (~-(u64c(0) + ALO_SOK))
@@ -212,33 +218,33 @@ static_assert(V_IS(V_FLOAT_MAX, T_NAN));
 #define v_of_bool(v) v_new((v) ? V_TRUE : V_FALSE)
 
 always_inline void v_set_bool(Value* d, a_bool v) {
-	v_set_raw(d, v_of_bool(v));
+    v_set_raw(d, v_of_bool(v));
 }
 
 #define v_is_int(v) v_is(v, T_INT)
 
 always_inline a_int v_as_int(Value v) {
-	assume(v_is_int(v), "not int value.");
-	return cast(a_int, v._ & V_INT_MASK);
+    assume(v_is_int(v), "not int value.");
+    return cast(a_int, v._ & V_INT_MASK);
 }
 
 #define v_of_int(v) v_box_nan(T_INT, cast(a_uint, v))
 
 always_inline void v_set_int(Value* d, a_int v) {
-	v_set_raw(d, v_of_int(v));
+    v_set_raw(d, v_of_int(v));
 }
 
 #define v_is_float(v) ((v)._ <= v_box_nan_raw_max(T_NAN))
 
 always_inline a_float v_as_float(Value v) {
-	assume(v_is_float(v), "not float value.");
-	return bit_cast(a_float, v._);
+    assume(v_is_float(v), "not float value.");
+    return bit_cast(a_float, v._);
 }
 
 #define v_of_float(v) v_new(bit_cast(a_u64, v))
 
 always_inline void v_set_float(Value* d, a_float v) {
-	v_set_raw(d, v_of_float(v));
+    v_set_raw(d, v_of_float(v));
 }
 
 #define v_is_nan(v) v_is(v, T_NAN)
@@ -246,24 +252,68 @@ always_inline void v_set_float(Value* d, a_float v) {
 #define v_is_num(v) ((v)._ <= v_box_nan_raw_max(T_INT))
 
 always_inline a_float v_as_num(Value v) {
-	return v_is_int(v) ? v_as_int(v) : v_as_float(v);
+    return v_is_int(v) ? v_as_int(v) : v_as_float(v);
 }
 
 #define v_is_ptr(v) v_is(v, T_PTR)
 
 always_inline void* v_as_ptr(Value v) {
-	assume(v_is_ptr(v), "not pointer.");
-	return int2ptr(void, v_get_payload(v));
+    assume(v_is_ptr(v), "not pointer.");
+    return int2ptr(void, v_get_payload(v));
 }
 
 #define v_of_ptr(v) v_box_nan(T_PTR, ptr2int(v))
 
 always_inline void v_set_ptr(Value* d, void* v) {
-	v_set_raw(d, v_of_ptr(v));
+    v_set_raw(d, v_of_ptr(v));
 }
 
 /*=========================================================*
- * Object & Metadata
+ * Hash & Equality
+ *=========================================================*/
+
+#define v_has_trivial_hash(v) (!v_is_in(v, T__MIN_NHH, T__MAX_NHH))
+
+#define v_has_trivial_equals(v) (!v_is_in(v, T__MIN_NEQ, T__MAX_NEQ))
+
+/* Identity hashcode. */
+always_inline a_hash v_trivial_hash_unchecked(Value v) {
+    a_u32 h = v._ * u32c(0xcc9e2d51);
+    h = (h << 15) | (h >> 17);
+    h *= u32c(0x1b873593);
+    h ^= h >> 17;
+    h *= u32c(0x85ebca6b);
+    h ^= h >> 13;
+    return h;
+}
+
+always_inline a_hash v_trivial_hash(Value v) {
+    assume(v_has_trivial_hash(v), "no trivial hash.");
+    return v_trivial_hash_unchecked(v);
+}
+
+always_inline a_hash v_float_hash(Value v) {
+    a_float f = v_as_float(v);
+    if (f == 0.0) return 0; /* Special case for 0.0 and -0.0 */
+    return v_trivial_hash_unchecked(v);
+}
+
+always_inline Value v_float_key(Value v) {
+    a_float f = v_as_float(v);
+    if (f == 0.0) return v_of_float(0.0); /* Special case for 0.0 and -0.0 */
+    return v;
+}
+
+/* Identity equality. */
+#define v_trivial_equals_unchecked(v1,v2) ((v1)._ == (v2)._)
+
+always_inline a_bool v_trivial_equals(Value v1, Value v2) {
+    assume(v_has_trivial_equals(v1), "object does not have trivial equality.");
+    return v_trivial_equals_unchecked(v1, v2);
+}
+
+/*=========================================================*
+ * Object
  *=========================================================*/
 
 struct ObjHead { a_u64 _align; };
@@ -293,7 +343,7 @@ struct GObj {
 
 /* Method Table. */
 typedef union {
-#define DEF(i,n,r,p1,pn...) struct { void* M_cat(_off_,n)[i]; r (*n)(p1, a_hobj, ##pn);  };
+#define DEF(i,n,r,p1,pn...) struct { void* M_cat(_off_,n)[i]; r (*n)(p1, a_gptr, ##pn);  };
     VTABLE_METHOD_LIST(DEF)
 #undef DEF
 } ImplTable;
@@ -323,499 +373,8 @@ struct VTable {
 	_f2;                    \
 })
 
-#define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
-
-always_inline a_hobj v_as_obj(Value v) {
-    assume(v_is_obj(v), "not object.");
-    return int2ptr(GObj, v_get_payload(v));
-}
-
-always_inline Value v_of_obj(a_hobj o) {
-    return v_new(o->_vptr->_stencil | ptr2int(o));
-}
-
-#define v_of_obj(o) v_of_obj(gobj_cast(o))
-
-always_inline void v_set_obj(a_henv env, Value* d, a_hobj o) {
-    v_set(env, d, v_of_obj(o));
-}
-
-#define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
-
-/*=========================================================*
- * String
- *=========================================================*/
-
-struct GStr {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_hash _hash;
-	GStr* _snext;
-	char _ptr[];
-};
-
-#define v_is_str(v) v_is(v, T_STR)
-
-always_inline GStr* v_as_str(Value v) {
-	assume(v_is_str(v), "not string.");
-	return g_cast(GStr, v_as_obj(v));
-}
-
-#define str_size(l) pad_to_raw(sizeof(GStr) + sizeof(char) * (l) + 1, sizeof(a_usize))
-
-always_inline char const* str2ntstr(GStr* self) {
-	return self->_ptr;
-}
-
-/*=========================================================*
- * Tuple
- *=========================================================*/
-
-struct GTuple {
-	GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_hash _hash;
-	Value _ptr[0];
-};
-
-#define v_is_tuple(v) v_is(v, T_TUPLE)
-
-always_inline GTuple* v_as_tuple(Value v) {
-	assume(v_is_tuple(v), "not tuple.");
-	return g_cast(GTuple, v_as_obj(v));
-}
-
-#define tuple_size(l) (sizeof(GTuple) + sizeof(Value) * (l))
-
-/*=========================================================*
- * List
- *=========================================================*/
-
-struct GList {
-	GOBJ_STRUCT_HEADER;
-    a_u32 _len;
-    a_u32 _cap;
-    Value* _ptr;
-};
-
-#define v_is_list(v) v_is(v, T_LIST)
-
-always_inline GList* v_as_list(Value v) {
-	assume(v_is_list(v), "not list.");
-	return g_cast(GList, v_as_obj(v));
-}
-
-#define list_size() sizeof(GList)
-
-/*=========================================================*
- * Table
- *=========================================================*/
-
-#define GTABLE_STRUCT_HEADER \
-    GOBJ_STRUCT_HEADER;      \
-    a_u32 _len;              \
-    a_u32 _hmask;            \
-    TNode* _ptr;             \
-    a_u32 _vid;              \
-    a_u32 _tmz
-
-typedef struct TNode TNode;
-
-/**
- ** Linked hash table.
- */
-struct GTable {
-	GTABLE_STRUCT_HEADER;
-};
-
-/**
- ** Table node.
- */
-struct TNode {
-    a_hash _hash;
-    a_i32 _hnext;
-    a_i32 _lprev;
-    a_i32 _lnext;
-    Value _key;
-    Value _value;
-};
-
-#define v_is_table(v) v_is(v, T_TABLE)
-
-always_inline GTable* v_as_table(Value v) {
-	assume(v_is_table(v), "not table.");
-	return g_cast(GTable, v_as_obj(v));
-}
-
-#define table_size() sizeof(GTable)
-
-/*=========================================================*
- * Type
- *=========================================================*/
-
-/**
- ** Type.
- */
-struct GType {
-    GTABLE_STRUCT_HEADER;
-    /* Type metadata (Optional). */
-    GStr* _name;
-};
-
-#define FTM_BIT(tm) (u16c(1) << (tm))
-
-#define mt_has_ftm(t,tm) (((t)->_tmz & FTM_BIT(tm)) == 0)
-
-always_inline GTable* type2mt(GType* o) {
-    return g_cast(GTable, o);
-}
-
-#define type_size(e) pad_to_raw(sizeof(GType) + (e), sizeof(a_usize))
-
-/*=========================================================*
- * Function & Prototype
- *=========================================================*/
-
-typedef struct LocalInfo LocalInfo;
-typedef struct CapInfo CapInfo;
-typedef struct LineInfo LineInfo;
-typedef struct ProtoDesc ProtoDesc;
-
-struct GFun {
-    GOBJ_STRUCT_HEADER;
-	a_u32 _len;
-	a_u16 _flags;
-    /* Function name. */
-	a_u16 _fname;
-	union {
-		a_cfun _fptr;
-		GProto* _proto;
-	};
-	union {
-		RcCap* _caps[0];
-		Value _vals[0];
-	};
-};
-
-struct GProto {
-    GOBJ_STRUCT_HEADER;
-	a_u32 _size;
-	a_u16 _flags;
-	a_u8 _nstack;
-	a_u8 _nparam;
-	Value* _consts;
-	a_insn* _code;
-	a_u16 _nconst;
-	a_u16 _ninsn;
-	a_u16 _nsub;
-	a_u16 _nlocal;
-	a_u16 _nline;
-	a_u8 _ncap;
-	CapInfo* _caps;
-    GFun* _cache;
-	GStr* _name;
-	GStr* _dbg_file;
-	a_u32 _dbg_lndef;
-	a_u32 _dbg_lnldef;
-	LineInfo* _dbg_lines;
-	LocalInfo* _dbg_locals;
-	GStr** _dbg_cap_names;
-	GProto* _subs[0];
-};
-
-struct LocalInfo {
-	GStr* _name;
-	a_u32 _begin_label;
-	a_u32 _end_label;
-	a_u8 _reg;
-};
-
-struct CapInfo {
-	union {
-		a_u8 _flags;
-		struct {
-			a_u8 _fup: 1; /* Capture from upper closure. */
-		};
-	};
-	a_u8 _reg;
-};
-
-struct LineInfo {
-	a_u32 _end;
-	a_u32 _lineno;
-};
-
-#define v_is_func(v) v_is(v, T_FUNC)
-
-always_inline GFun* v_as_func(Value v) {
-	assume(v_is_func(v), "not function.");
-	return g_cast(GFun, v_as_obj(v));
-}
-
-/*=========================================================*
- * Userdata
- *=========================================================*/
-
-struct GUser {
-    GOBJ_STRUCT_HEADER;
-};
-
-#define v_is_user(v) v_is(v, T_USER)
-
-always_inline GUser* v_as_user(Value v) {
-	assume(v_is_user(v), "not userdata.");
-	return g_cast(GUser, v_as_obj(v));
-}
-
-/*=========================================================*
- * Route
- *=========================================================*/
-
-struct Stack {
-	Value* _base;
-	Value* _top;
-	Value* _limit;
-	a_usize _alloc_size; /* The actual allocate size.*/
-};
-
-#if ALO_STACK_RELOC
-typedef a_isize StkPtr;
-#else
-typedef Value* StkPtr;
-#endif
-
-#define FRAME_FLAG_VLR 0x01
-#define FRAME_FLAG_TAIL 0x02
-#define FRAME_FLAG_META 0x04
-
-struct Frame {
-	Frame* _prev;
-	a_insn const* _pc;
-	Value* _stack_bot;
-    Value* _stack_dst;
-    a_u32 _num_ret;
-    a_u8 _flags;
-#ifdef ALOI_CHECK_API
-    StkPtr _stack_limit;
-#endif
-};
-
-typedef void* a_rctx;
-
-struct alo_Env {
-	GOBJ_STRUCT_HEADER;
-	Global* _global;
-	a_rctx _rctx;
-	void* _rctx_alloc;
-	GRoute* _from;
-	Frame* _frame;
-	Stack _stack;
-	Value _error;
-	a_u16 _flags;
-	a_u8 _status;
-	PCtx _pctx;
-	RcCap* _open_caps;
-	Frame _base_frame;
-};
-
-/* Some offset used in assembly, make sure the value is correct. */
-#if ALO_M64
-static_assert(offsetof(GRoute, _rctx) == 0x20);
-static_assert(offsetof(GRoute, _rctx_alloc) == 0x28);
-static_assert(offsetof(GRoute, _from) == 0x30);
-static_assert(offsetof(GRoute, _stack._base) == 0x40);
-#else
-static_assert(offsetof(GRoute, _rctx) == 0x10);
-static_assert(offsetof(GRoute, _rctx_alloc) == 0x14);
-static_assert(offsetof(GRoute, _from) == 0x18);
-static_assert(offsetof(GRoute, _stack._base) == 0x20);
-#endif
-
-/**
- ** Get global context from environment.
- */
-#define G(env) ((env)->_global)
-
-/*=========================================================*
- * Global
- *=========================================================*/
-
-typedef struct {
-	GStr** _table;
-	a_usize _len;
-	a_usize _hmask; /* Hash code mask. */
-} StrCache;
-
-typedef void (*a_fp_gexecpt)(a_henv env, void* ctx, a_msg msg);
-typedef void (*a_fp_gmark)(Global* gbl, void* ctx);
-
-enum { TYPE__COUNT = ALO_TUSER };
-
-struct Global {
-	Alloc _af;
-	void* _ac;
-	a_hfun _hookf;
-	a_hctx _hookc;
-	a_cfun _panic;
-	a_henv _active;
-	a_usize _mem_base;
-	a_isize _mem_debt;
-	a_isize _mem_work;
-	a_usize _mem_estimate;
-	a_gclist _gc_normal;
-	a_gclist _gc_fixed;
-	a_gclist _gc_closable;
-	a_gclist _gc_toclose;
-	a_gcnext* _gc_sweep;
-	RcCap* _cap_cache;
-	Value _global;
-	a_fp_gexecpt _gexecpt;
-	a_fp_gmark _gmark;
-	void* _gctx;
-	a_trmark _tr_gray;
-	a_trmark _tr_regray;
-	GStr* _nomem_error;
-	StrCache _str_cache;
-	a_hash _seed;
-	a_u16 _gcpausemul;
-	a_u16 _gcstepmul;
-	a_u16 _flags;
-	a_u8 _white_color;
-	a_u8 _gcstep;
-	volatile atomic_uint_fast8_t _hookm;
-	GStr* _names[STR__COUNT];
-    GType _types[TYPE__COUNT][1];
-};
-
-#define RFLAG_COUNT_VARARG UINT8_MAX
-
-#define ALO_HMSWAP 0x80
-
-always_inline void gbl_protect(a_henv env, a_fp_gmark mark, a_fp_gexecpt except, void* ctx) {
-	assume(mark != null || except != null, "no protect function given.");
-	Global* gbl = G(env);
-	gbl->_gmark = mark;
-	gbl->_gexecpt = except;
-	gbl->_gctx = ctx;
-}
-
-always_inline void gbl_unprotect(a_henv env) {
-	Global* gbl = G(env);
-	gbl->_gmark = null;
-	gbl->_gexecpt = null;
-	gbl->_gctx = null;
-}
-
-always_inline a_usize gbl_mem_total(Global* gbl) {
-	return gbl->_mem_base + cast(a_usize, gbl->_mem_debt);
-}
-
-always_inline GStr* g_str(a_henv env, a_u32 tag) {
-	return G(env)->_names[tag];
-}
-
-#define g_type(env,f) (G(env)->_types[f])
-#define g_type_ref(f) offsetof(Global, _types[f])
-
-#define route_size() sizeof(GRoute)
-
-/*=========================================================*/
-
-#define v_has_trivial_hash(v) (!v_is_in(v, T__MIN_NHH, T__MAX_NHH))
-
-#define v_has_trivial_equals(v) (!v_is_in(v, T__MIN_NEQ, T__MAX_NEQ))
-
-/* Identity hashcode. */
-always_inline a_hash v_trivial_hash_unchecked(Value v) {
-	a_u32 h = v._ * u32c(0xcc9e2d51);
-	h = (h << 15) | (h >> 17);
-	h *= u32c(0x1b873593);
-	h ^= h >> 17;
-	h *= u32c(0x85ebca6b);
-	h ^= h >> 13;
-	return h;
-}
-
-always_inline a_hash v_trivial_hash(Value v) {
-	assume(v_has_trivial_hash(v), "no trivial hash.");
-	return v_trivial_hash_unchecked(v);
-}
-
-always_inline a_hash v_float_hash(Value v) {
-	a_float f = v_as_float(v);
-    if (f == 0.0) return 0; /* Special case for 0.0 and -0.0 */
-    return v_trivial_hash_unchecked(v);
-}
-
-always_inline Value v_float_key(Value v) {
-    a_float f = v_as_float(v);
-    if (f == 0.0) return v_of_float(0.0); /* Special case for 0.0 and -0.0 */
-    return v;
-}
-
-/* Identity equality. */
-#define v_trivial_equals_unchecked(v1,v2) ((v1)._ == (v2)._)
-
-always_inline a_bool v_trivial_equals(Value v1, Value v2) {
-	assume(v_has_trivial_equals(v1), "object does not have trivial equality.");
-	return v_trivial_equals_unchecked(v1, v2);
-}
-
-intern char const ai_obj_type_names[][8];
-
-always_inline GType* g_typeof(a_henv env, a_hobj p) {
-    a_usize type_ref = p->_vptr->_type_ref;
-	return likely(type_ref) != 0 ?
-            ptr_disp(GType, G(env), p->_vptr->_type_ref) :
-            g_type(env, ALO_TPTR);
-}
-
-#define g_typeof(env,p) g_typeof(env, gobj_cast(p))
-
-always_inline char const* g_nameof(a_henv env, a_hobj p) {
-	return str2ntstr(g_typeof(env, p)->_name);
-}
-
-#define g_nameof(env,p) g_nameof(env, gobj_cast(p))
-
-always_inline GType* v_typeof(a_henv env, Value v) {
-	if (v_is_float(v)) {
-		return g_type(env, ALO_TFLOAT);
-	}
-	else if (!v_is_obj(v)) {
-		switch (v_get_tag(v)) {
-			case T_NIL:
-				return g_type(env, ALO_TNIL);
-			case T_FALSE:
-			case T_TRUE:
-				return g_type(env, ALO_TBOOL);
-			case T_INT:
-				return g_type(env, ALO_TINT);
-			case T_PTR:
-				return g_type(env, ALO_TPTR);
-			default:
-				panic("bad type tag.");
-		}
-	}
-	else {
-		return g_typeof(env, v_as_obj(v));
-	}
-}
-
-always_inline char const* v_nameof(a_henv env, Value v) {
-	if (v_is_float(v)) {
-		return ai_obj_type_names[T_FLOAT];
-	}
-	else if (!v_is_obj(v)) {
-		return ai_obj_type_names[v_get_tag(v)];
-	}
-	else {
-		return g_nameof(env, v_as_obj(v));
-	}
-}
-
-#define g_mtof(env,p) type2mt(g_typeof(env, p))
-#define v_mtof(env,p) type2mt(v_typeof(env, p))
+#define g_cast(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)
+#define gobj_cast(o) g_cast(GObj, o)
 
 #define obj_idx(k,l,f) ({ \
     a_int _k = k; a_uint _l = l; \
@@ -823,5 +382,24 @@ always_inline char const* v_nameof(a_henv env, Value v) {
     if (unlikely(_i >= _l)) return f;   \
     _i;                 \
 })
+
+#define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
+
+always_inline a_gptr v_as_obj(Value v) {
+    assume(v_is_obj(v), "not object.");
+    return int2ptr(GObj, v_get_payload(v));
+}
+
+always_inline Value v_of_obj(a_gptr o) {
+    return v_new(o->_vptr->_stencil | ptr2int(o));
+}
+
+#define v_of_obj(o) v_of_obj(gobj_cast(o))
+
+always_inline void v_set_obj(a_henv env, Value* d, a_gptr o) {
+    v_set(env, d, v_of_obj(o));
+}
+
+#define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
 
 #endif /* aobj_h_ */

@@ -1,15 +1,11 @@
-/*
- * afmt.h
- *
- *  Created on: 2022/8/11
- *      Author: ueyudiud
+/**
+ *@file afmt.h
  */
 
 #ifndef afmt_h_
 #define afmt_h_
 
 #include "abuf.h"
-#include "astr.h"
 
 intern a_usize ai_fmt_int2str(char* p, a_int v);
 intern void ai_fmt_puti(a_henv env, Buf* buf, a_int v);

@@ -11,7 +11,6 @@
 #include "agc.h"
 #include "aerr.h"
 #include "avm.h"
-#include "aapi.h"
 
 #include "atable.h"
 
@@ -314,7 +313,7 @@ static a_bool table_find(a_henv env, GTable* self, Value vk, a_hash* phash, a_i3
 
 static a_bool table_find_lstr(a_henv env, GTable* self, char const* ptr, a_usize len, a_hash hash, a_i32* pindex) {
     GStr* k = ai_str_get_or_null_with_hash(env, ptr, len, hash);
-    return k == null || table_find_with_trivial_equality(self, v_of_obj(k), hash, pindex);
+    return k == null || table_find_with_trivial_equality(self, v_of_str(k), hash, pindex);
 }
 
 a_bool ai_table_get(a_henv env, GTable* self, Value vk, Value* pv) {
@@ -352,7 +351,7 @@ a_bool ai_table_getls(a_henv env, GTable* self, char const* ptr, a_usize len, Va
 
 a_bool ai_table_gets(unused a_henv env, GTable* self, GStr* k, Value* pv) {
     a_i32 index;
-    Value vk = v_of_obj(k);
+    Value vk = v_of_str(k);
 
     try (table_find_with_trivial_equality(self, vk, k->_hash, &index));
 
@@ -392,7 +391,7 @@ Value* ai_table_refls(a_henv env, GTable* self, char const* ptr, a_usize len) {
         ai_table_hint(env, self, 1);
 
         GStr* key = ai_str_new_with_hash(env, ptr, len, hash);
-        index = table_emplace_backward(env, self, v_of_obj(key), hash, v_of_nil());
+        index = table_emplace_backward(env, self, v_of_str(key), hash, v_of_nil());
 
         self->_len += 1;
         self->_vid = 0;

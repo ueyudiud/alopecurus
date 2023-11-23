@@ -12,8 +12,8 @@ typedef struct aloL_Buf aloL_Buf;
 
 ALO_EXPORT a_henv (aloL_create)(void);
 
-ALO_EXPORT void (aloL_argerror)(a_henv env, a_ulen id, char const* what);
-ALO_EXPORT void (aloL_typeerror)(a_henv env, a_ulen id, char const* name);
+ALO_EXPORT ALO_NORETURN void (aloL_argerror)(a_henv env, a_ulen id, char const* what);
+ALO_EXPORT ALO_NORETURN void (aloL_typeerror)(a_henv env, a_ulen id, char const* name);
 ALO_EXPORT void (aloL_checktag)(a_henv env, a_ulen id, a_msg tag);
 ALO_EXPORT a_msg (aloL_checkany)(a_henv env, a_ulen id);
 ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_ulen id);
@@ -38,7 +38,7 @@ ALO_EXPORT a_msg (aloL_resulte)(a_henv env, a_i32 stat);
 ALO_EXPORT a_msg (aloL_compiles)(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options);
 ALO_EXPORT a_msg (aloL_compilef)(a_henv env, char const* fname, a_u32 options);
 
-ALO_EXPORT void (aloL_raisef)(a_henv env, char const* fmt, ...);
+ALO_EXPORT ALO_NORETURN void (aloL_raisef)(a_henv env, char const* fmt, ...);
 ALO_EXPORT a_msg (aloL_traceerror)(a_henv env, a_ilen id, a_usize level, a_usize limit);
 
 ALO_EXPORT a_msg (aloL_gets)(a_henv env, a_ilen id, char const* s);

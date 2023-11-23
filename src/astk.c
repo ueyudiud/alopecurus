@@ -7,22 +7,26 @@
 
 #include "aenv.h"
 #include "amem.h"
-#include "agc.h"
 #include "aerr.h"
 #include "actx.h"
 
 #include "astk.h"
 
 #if ALO_STACK_OUTER
-# define STACK_SIZE_GRANULARITY PAGE_SIZE
+# define STACK_GRANULARITY PAGE_SIZE
 #else
-# define STACK_SIZE_GRANULARITY usizec(1024)
+# define STACK_GRANULARITY usizec(1024)
 #endif
 
+/* Reserve stack size for VM use. */
+#define RESERVED_STACK_SIZE 5
+/* Stack size for stack overflow error handling. */
+#define OVERFLOW_STACK_SIZE 128
+
 enum {
-	INIT_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_INIT_STACKSIZE + RESERVED_STACK_SIZE), STACK_SIZE_GRANULARITY),
-	MAX_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + RESERVED_STACK_SIZE), STACK_SIZE_GRANULARITY),
-	MAX_OVERFLOWED_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + OVERFLOW_STACK_SIZE + RESERVED_STACK_SIZE), STACK_SIZE_GRANULARITY)
+	INIT_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_INIT_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
+	MAX_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
+	MAX_OVERFLOWED_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + OVERFLOW_STACK_SIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY)
 };
 
 a_bool ai_stk_init(a_henv env, Stack* stack) {
@@ -142,8 +146,8 @@ a_isize ai_stk_grow(a_henv env, Value* top) {
 		return STACK_GROW_FAILED;
 	}
 
-	a_usize size_new = pad_to(expect_size, STACK_SIZE_GRANULARITY);
-	size_new = max(size_new, current_size + STACK_SIZE_GRANULARITY);
+	a_usize size_new = pad_to(expect_size, STACK_GRANULARITY);
+	size_new = max(size_new, current_size + STACK_GRANULARITY);
 	size_new = min(size_new, MAX_STACK_SIZE);
 	return stack_grow(env, stack, size_new);
 }
@@ -152,7 +156,7 @@ void ai_stk_shrink(a_henv env) {
 	Stack* stack = &env->_stack;
 	a_usize current_size = stack->_alloc_size;
 	a_usize used_size = stack->_top - stack->_base;
-	if (unlikely(used_size <= current_size / 4 && current_size > STACK_SIZE_GRANULARITY)) {
+	if (unlikely(used_size <= current_size / 4 && current_size > STACK_GRANULARITY)) {
 		a_usize size_new = current_size / 2;
 		a_usize size_old = stack->_alloc_size;
 		assume(size_new < size_old, "shrink nothing.");

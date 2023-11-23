@@ -202,7 +202,7 @@ static RcCap* cap_load(a_henv env, CapInfo const* info, RcCap** up, Value* stack
 }
 
 static void v_close(a_henv env, Value v) {
-    a_hobj p = v_as_obj(v);
+    a_gptr p = v_as_obj(v);
     (*g_fetch(p, close))(env, p);
 }
 

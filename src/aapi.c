@@ -10,7 +10,6 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "auser.h"
 #include "atype.h"
 #include "actx.h"
 #include "agc.h"
@@ -33,8 +32,10 @@ a_msg api_tagof(unused a_henv env, Value v) {
             return ALO_TPTR;
         case T_OBJ:
             return v_as_obj(v)->_vptr->_tag;
-        default:
+        case T_FLOAT:
             return ALO_TFLOAT;
+        default:
+            unreachable();
     }
 }
 
@@ -363,15 +364,15 @@ void alo_pushptr(a_henv env, void* val) {
 }
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
-    api_check(src != null || len == 0, "bad string.");
-	GStr* val = ai_str_get_or_new(env, src, len);
-	v_set_obj(env, api_incr_stack(env), val);
+    api_check(src != null || len == 0, "string source violates contract.");
+	GStr* str = ai_str_get_or_new(env, src, len);
+	v_set_str(env, api_incr_stack(env), str);
 	ai_gc_trigger(env);
-	return str2ntstr(val);
+	return str2ntstr(str);
 }
 
 char const* alo_pushntstr(a_henv env, char const* src) {
-    api_check(src != null, "bad string.");
+    api_check(src != null, "string source violates contract.");
 	return alo_pushstr(env, src, strlen(src));
 }
 
@@ -384,10 +385,11 @@ char const* alo_pushfstr(a_henv env, char const* fmt, ...) {
 }
 
 char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
-	GStr* val = ai_str_format(env, fmt, varg);
-	v_set_obj(env, api_incr_stack(env), val);
+    api_check(fmt != null, "format string violates contract.");
+	GStr* str = ai_str_format(env, fmt, varg);
+	v_set_str(env, api_incr_stack(env), str);
 	ai_gc_trigger(env);
-	return str2ntstr(val);
+	return str2ntstr(str);
 }
 
 void alo_pushptype(a_henv env, a_msg tag) {
@@ -746,41 +748,39 @@ a_bool alo_tobool(a_henv env, a_ilen id) {
 
 a_int alo_toint(a_henv env, a_ilen id) {
 	Value v = api_elem(env, id);
-	switch (expect(v_get_tag(v), T_INT)) {
-		case T_NIL:
-		case T_FALSE:
-			return 0;
-		case T_TRUE:
-			return 1;
-		case T_INT:
-			return v_as_int(v);
-		case T_FLOAT:
-			return cast(a_int, v_as_float(v));
-		default:
-			api_panic("cannot cast to int");
-	}
+    if (likely(v_is_int(v))) {
+        return v_as_int(v);
+    }
+    else if (v_is_num(v)) {
+        return cast(a_int, v_as_float(v));
+    }
+    else {
+        api_panic("cannot convert to integer");
+    }
 }
 
 a_float alo_tofloat(a_henv env, a_ilen id) {
 	Value v = api_elem(env, id);
-	switch (expect(v_get_tag(v), T_FLOAT)) {
-		case T_NIL:
-		case T_FALSE:
-			return 0;
-		case T_TRUE:
-			return 1;
-		case T_INT:
-			return cast(a_float, v_as_int(v));
-		case T_FLOAT:
-			return v_as_float(v);
-		default:
-			api_panic("cannot cast to float");
-	}
+    if (likely(v_is_num(v))) {
+        return v_as_num(v);
+    }
+    else {
+        api_panic("cannot convert to float");
+    }
 }
 
+/**
+ ** Convert value into string value.
+ ** The slot will be replaced by converted string value.
+ **
+ * @param env the runtime environment.
+ * @param id the index of slot to convert.
+ * @param plen the optional pointer to get length of string.
+ * @return the pointer of string.
+ */
 char const* alo_tolstr(a_henv env, a_ilen id, a_usize* plen) {
 	Value v = api_elem(env, id);
-	api_check(v_is_str(v), "cannot cast to string");
+	api_check(v_is_str(v), "cannot convert to string");
 	GStr* p = v_as_str(v);
 	if (plen != null) {
 		*plen = cast(a_usize, p->_len);
@@ -806,7 +806,7 @@ void alo_newtype(a_henv env, char const* n, a_flags flags) {
     Value* pv = api_incr_stack(env);
 
     GStr* name = ai_str_from_ntstr(env, n);
-    v_set_obj(env, pv, name);
+    v_set_str(env, pv, name);
 
 	GType* self = ai_type_new(env, name);
 	v_set_obj(env, pv, self);

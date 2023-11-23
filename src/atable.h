@@ -6,7 +6,6 @@
 #define atable_h_
 
 #include "aobj.h"
-#include "agc.h"
 
 intern GTable* ai_table_new(a_henv env);
 intern void ai_table_grow(a_henv env, GTable* self, a_usize add);
@@ -21,5 +20,43 @@ intern a_bool ai_table_del(a_henv env, GTable* self, Value vk);
 intern a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv);
 intern void ai_table_mark(Global* gbl, GTable* self);
 intern void ai_table_clean(Global* gbl, GTable* self);
+
+#define GTABLE_STRUCT_HEADER \
+    GOBJ_STRUCT_HEADER;      \
+    a_u32 _len;              \
+    a_u32 _hmask;            \
+    TNode* _ptr;             \
+    a_u32 _vid;              \
+    a_u32 _tmz
+
+typedef struct TNode TNode;
+
+/**
+ ** Linked hash table.
+ */
+struct GTable {
+    GTABLE_STRUCT_HEADER;
+};
+
+/**
+ ** Table node.
+ */
+struct TNode {
+    a_hash _hash;
+    a_i32 _hnext;
+    a_i32 _lprev;
+    a_i32 _lnext;
+    Value _key;
+    Value _value;
+};
+
+#define v_is_table(v) v_is(v, T_TABLE)
+
+always_inline GTable* v_as_table(Value v) {
+    assume(v_is_table(v), "not table.");
+    return g_cast(GTable, v_as_obj(v));
+}
+
+#define table_size() sizeof(GTable)
 
 #endif /* atable_h_ */

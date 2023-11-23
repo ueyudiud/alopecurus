@@ -33,7 +33,6 @@ static a_msg sys_exit(a_henv env) {
 		}
 		default: {
 			aloL_argerror(env, 0, "bad exit code.");
-			unreachable();
 		}
 	}
 	alo_destroy(env);

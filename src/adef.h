@@ -52,6 +52,9 @@ typedef a_u32 a_uint;
 typedef a_u32 a_hash;
 typedef a_u32 a_insn;
 
+/* Protected function type. */
+typedef void (*a_pfun)(a_henv, void*);
+
 /* Literal function. */
 
 #define u8c  UINT8_C

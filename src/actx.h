@@ -10,8 +10,6 @@
 
 typedef struct PCtx PCtx;
 
-typedef void (*a_pfun)(a_henv, void*);
-
 intern a_msg ai_ctx_init(void);
 intern a_noret ai_ctx_start();
 intern a_msg ai_ctx_jump(a_henv to, a_henv from, a_msg msg);

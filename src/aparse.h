@@ -5,9 +5,9 @@
 #ifndef aparse_h_
 #define aparse_h_
 
-#include "agc.h"
 #include "alex.h"
 #include "afun.h"
+#include "agc.h"
 
 typedef struct Parser Parser;
 

@@ -1150,7 +1150,7 @@ static void expr_symbol(Parser* par, OutExpr e, GStr* name, a_line line) {
 }
 
 static void expr_index_str(Parser* par, InoutExpr e, GStr* name, a_line line) {
-	a_u32 index = const_index(par, v_of_obj(name));
+	a_u32 index = const_index(par, v_of_str(name));
 	if (e->_tag == EXPR_CAP) {
 		e->_tag = EXPR_REFCK;
 		e->_d2 = index;
@@ -1169,7 +1169,7 @@ static void expr_lookup(Parser* par, InoutExpr e, GStr* name, a_line line) {
 
 	a_u32 reg = stack_alloc_succ(par, 2, line);
 
-    l_emit_aby(par, BC_LOOK, reg, e->_d1, const_index(par, v_of_obj(name)), line);
+    l_emit_aby(par, BC_LOOK, reg, e->_d1, const_index(par, v_of_str(name)), line);
 
 	expr_init(e, EXPR_NTMP,
 		._d1 = reg,
@@ -2217,7 +2217,7 @@ static void expr_concat(Parser* par, ConExpr* ce, InExpr e, a_line line) {
             expr_pin_reg(par, e, reg + 1);
 
             GStr* str = buf_to_str(par, ce);
-            l_emit_k(par, reg, v_of_obj(str), line);
+            l_emit_k(par, reg, v_of_str(str), line);
         }
         else {
             exprs_push(par, ce->_expr, e);
@@ -2234,7 +2234,7 @@ static void expr_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 		if (par->_sbuf->_len > ce->_off) {
 			GStr* str = buf_to_str(par, ce);
 			a_u32 reg = stack_alloc(par, line);
-			l_emit_k(par, reg, v_of_obj(str), line);
+			l_emit_k(par, reg, v_of_str(str), line);
 		}
         a_u32 base = ce->_expr->_d1;
 		l_emit_idbc(par, BC_CAT, e, base, par->_scope->_top_reg - base, line);
@@ -3266,7 +3266,7 @@ bind:
 			return l_emit_iabx(par, BC_K, reg, const_index(par, v_of_float(e->_n)), e->_line);
 		}
 		case EXPR_STR: {
-			return l_emit_iabx(par, BC_K, reg, const_index(par, v_of_obj(e->_s)), e->_line);
+			return l_emit_iabx(par, BC_K, reg, const_index(par, v_of_str(e->_s)), e->_line);
 		}
 		case EXPR_CAP: {
 			return l_emit_iab(par, BC_LDC, reg, e->_d1, e->_line);
@@ -5364,7 +5364,7 @@ static void l_scan_root_return_stat(Parser* par) {
 
 	if (!lex_test_sep(par)) {
 		l_scan_exprs(par, e, false);
-		/* Unpack the return value if only return one value and it can be unpacked. */
+		/* Unpack the return value if only return one value, and it can be unpacked. */
 		if (e->_fupk) {
 			expr_unpack(par, e, lex_line(par));
 		}

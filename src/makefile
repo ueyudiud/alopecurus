@@ -242,8 +242,7 @@ endif
 
 KER_O= aapi.o aparse.o alex.o adbg.o aerr.o aload.o asave.o avm.o \
 atm.o afmt.o agc.o amem.o aenv.o astk.o auser.o atype.o afun.o \
-atable.o alist.o atuple.o astr.o abuf.o aio.o aobj.o abc.o actx.o \
-ajmp.o
+atable.o alist.o atuple.o astr.o abuf.o aio.o abc.o actx.o ajmp.o
 LIB_O= asyslib.o adbglib.o atypelib.o alistlib.o aintlib.o abaselib.o \
 aauxlib.o
 BASE_O= $(KER_O) $(LIB_O)
@@ -264,10 +263,10 @@ ALL_O= $(BASE_O) $(ALO_O)
 ALL_T= $(TARGET_T)
 ALL_RM= $(ALL_O) $(BASE_DYNO) $(ALO_T) $(ALO_A) $(ALO_SO)
 
-#E=@
-#Q=@echo
-E=
-Q=@:
+E=@
+Q=@echo
+#E=
+#Q=@:
 
 ##############################################################
 # Make targets.

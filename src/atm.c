@@ -5,9 +5,8 @@
 #define atm_c_
 #define ALO_LIB
 
-#include <string.h>
-
 #include "atable.h"
+#include "afun.h"
 #include "agc.h"
 #include "aerr.h"
 #include "avm.h"
@@ -47,7 +46,7 @@ static a_bool meta_int(Value v, void* p) {
 }
 
 a_bool ai_tm_hash(a_henv env, Value v, a_hash* ph) {
-    a_hobj p = v_as_obj(v);
+    a_gptr p = v_as_obj(v);
 
     Value vf;
     try (type_lookft(env, g_mtof(env, p), TM___hash__, &vf));
@@ -60,7 +59,7 @@ a_bool ai_tm_hash(a_henv env, Value v, a_hash* ph) {
 }
 
 a_bool ai_tm_equals(a_henv env, Value v1, Value v2, a_bool* pz) {
-    a_hobj p = v_as_obj(v1);
+    a_gptr p = v_as_obj(v1);
 
     Value vf;
     try (type_lookft(env, g_mtof(env, p), TM___eq__, &vf));
@@ -71,7 +70,7 @@ a_bool ai_tm_equals(a_henv env, Value v1, Value v2, a_bool* pz) {
 }
 
 a_bool ai_tm_len(a_henv env, Value v, a_uint* pi) {
-    a_hobj p = v_as_obj(v);
+    a_gptr p = v_as_obj(v);
 
     Value vf;
     try (type_lookft(env, g_mtof(env, p), TM___len__, &vf));
@@ -88,18 +87,18 @@ a_bool ai_tm_look(a_henv env, Value v, GStr* k, Value* pv) {
     try (type_lookft(env, v_mtof(env, v), TM___look__, &vf));
 
     if (v_is_func(vf)) {
-        Value vr = vm_call1(env, vf, v, v_of_obj(k));
+        Value vr = vm_call1(env, vf, v, v_of_str(k));
         v_set(env, pv, vr);
         return false;
     }
     else {
-        v_set(env, pv, ai_vm_get(env, vf, v_of_obj(k)));
+        v_set(env, pv, ai_vm_get(env, vf, v_of_str(k)));
         return false;
     }
 }
 
 a_bool ai_tm_str(a_henv env, Value v, GStr** ps) {
-    a_hobj p = v_as_obj(v);
+    a_gptr p = v_as_obj(v);
 
     Value vf;
     try (type_lookt(env, g_mtof(env, p), TM___str__, &vf));
@@ -118,7 +117,7 @@ a_bool ai_tm_str(a_henv env, Value v, GStr** ps) {
 }
 
 a_bool ai_tm_get(a_henv env, Value v1, Value v2, Value* pv) {
-    a_hobj p = v_as_obj(v1);
+    a_gptr p = v_as_obj(v1);
 
     Value vf;
     try (type_lookft(env, g_mtof(env, p), TM___get__, &vf));
@@ -129,7 +128,7 @@ a_bool ai_tm_get(a_henv env, Value v1, Value v2, Value* pv) {
 }
 
 a_bool ai_tm_set(a_henv env, Value v1, Value v2, Value v3) {
-    a_hobj p = v_as_obj(v1);
+    a_gptr p = v_as_obj(v1);
 
     Value vf;
     try (type_lookft(env, g_mtof(env, p), TM___set__, &vf));

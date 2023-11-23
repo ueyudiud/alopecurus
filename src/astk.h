@@ -13,23 +13,31 @@ intern void ai_stk_shrink(a_henv env);
 intern a_noret ai_stk_overflow(a_henv env, a_isize diff);
 intern void ai_stk_deinit(Global* gbl, Stack* stack);
 
+struct Stack {
+    Value* _base;
+    Value* _top;
+    Value* _limit;
+    a_usize _alloc_size; /* The actual allocate size.*/
+};
+
+#if ALO_STACK_RELOC
+typedef a_isize StkPtr;
+#else
+typedef Value* StkPtr;
+#endif
+
 #define STACK_GROW_FAILED isizec(1)
 
-/* Reserve stack size for VM use. */
-#define RESERVED_STACK_SIZE 5
-/* Stack size for stack overflow error handling. */
-#define OVERFLOW_STACK_SIZE 128
-
 #ifndef ALOI_INIT_STACKSIZE
-# define ALOI_INIT_STACKSIZE usizec(500)
+# define ALOI_INIT_STACKSIZE 500
 #endif
 
 #ifndef ALOI_INIT_CFRAME_STACKSIZE
-# define ALOI_INIT_CFRAME_STACKSIZE usizec(16)
+# define ALOI_INIT_CFRAME_STACKSIZE 16
 #endif
 
 #ifndef ALOI_MAX_STACKSIZE
-# define ALOI_MAX_STACKSIZE usizec(100000)
+# define ALOI_MAX_STACKSIZE 100000
 #endif
 
 #endif /* astk_h_ */

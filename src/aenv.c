@@ -10,11 +10,11 @@
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
+#include "afun.h"
 #include "atype.h"
 #include "actx.h"
 #include "amem.h"
 #include "agc.h"
-#include "aerr.h"
 
 #include "aenv.h"
 

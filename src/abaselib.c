@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include "atuple.h"
+#include "alist.h"
 #include "atable.h"
 #include "auser.h"
 #include "agc.h"

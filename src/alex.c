@@ -10,7 +10,6 @@
 
 #include "aenv.h"
 #include "aerr.h"
-#include "astrs.h"
 #include "afmt.h"
 #include "aparse.h"
 
@@ -26,7 +25,7 @@ always_inline a_i32 l_poll_unchecked(Lexer* lex) {
     return ch;
 }
 
-static void l_unwind(Lexer* lex, a_i32 ch) {
+static void l_back(Lexer* lex, a_i32 ch) {
     assume(ch >= 0, "cannot unwind error.");
     lex->_in._ptr -= 1;
     lex->_in._len += 1;
@@ -357,7 +356,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     tk->_float = 0.0;
                     return TK_FLOAT;
                 }
-                l_unwind(lex, '.');
+                l_back(lex, '.');
                 tk->_int = 0;
                 return TK_INTEGER;
             }
@@ -378,7 +377,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     ch = l_peek(lex);
                     j = c_xdigit(ch);
                     if (j >= 0) goto float_hex_frag;
-                    l_unwind(lex, '.');
+                    l_back(lex, '.');
                 }
 
                 check_gap();
@@ -490,7 +489,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     ch = l_peek(lex);
                     j = c_ddigit(ch);
                     if (j >= 0) goto float_frag_base;
-                    l_unwind(lex, '.');
+                    l_back(lex, '.');
                 }
                 else {
                     check_gap();
@@ -514,7 +513,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     ch = l_peek(lex);
                     j = c_ddigit(ch);
                     if (j >= 0) goto float_frag_base;
-                    l_unwind(lex, '.');
+                    l_back(lex, '.');
                 }
                 else {
                     check_gap();
@@ -538,7 +537,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     ch = l_peek(lex);
                     j = c_ddigit(ch);
                     if (j >= 0) goto float_frag_base;
-                    l_unwind(lex, '.');
+                    l_back(lex, '.');
                 }
                 else {
                     check_gap();
@@ -992,7 +991,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
 					if (l_test_skip(lex, '>')) {
 						return TK_QARROW;
 					}
-					l_unwind(lex, '-');
+                    l_back(lex, '-');
 				}
                 return TK_QUESTION;
             }

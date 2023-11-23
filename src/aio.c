@@ -5,10 +5,6 @@
 #define aio_c_
 #define ALO_LIB
 
-#include <string.h>
-
-#include "amem.h"
-
 #include "aio.h"
 
 void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in) {

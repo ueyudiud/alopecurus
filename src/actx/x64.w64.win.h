@@ -11,7 +11,7 @@
 #define actx_x64_w64_win_h_
 #define actx_impl_h_
 
-#include <windef.h>
+#include <windows.h>
 
 /* Basic stack size alignment. */
 #define PAGE_SIZE usizec(0x1000)

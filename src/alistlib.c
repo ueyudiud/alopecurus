@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include "aobj.h"
+#include "atuple.h"
 #include "alist.h"
 #include "abuf.h"
 #include "agc.h"

@@ -1496,8 +1496,8 @@ tail_call:
                 loadC();
 
                 env->_stack._top = &R[b + c];
-                GStr* st = vm_cat(env, &R[b], c);
-                v_set_obj(env, &R[a], st);
+                GStr* str = vm_cat(env, &R[b], c);
+                v_set_str(env, &R[a], str);
                 adjust_top();
 
                 check_gc();

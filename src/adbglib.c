@@ -46,10 +46,7 @@ static void dump_const(Value v) {
 			}
 			break;
 		}
-		default: {
-			aloi_show("%g", v_as_float(v));
-			break;
-		}
+		default: panic("Unexpected function constant type.");
 	}
 }
 

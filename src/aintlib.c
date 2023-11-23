@@ -9,7 +9,6 @@
 #include <errno.h>
 #include <ctype.h>
 
-#include "agc.h"
 #include "aapi.h"
 
 #include "alolib.h"
@@ -129,6 +128,4 @@ void aloopen_int(a_henv env) {
 
     alo_push(env, -1);
     aloL_puts(env, -2, "__look__");
-
-    ai_gc_trigger(env);
 }

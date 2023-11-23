@@ -9,7 +9,6 @@
 #include <string.h>
 
 #include "aop.h"
-#include "abuf.h"
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"

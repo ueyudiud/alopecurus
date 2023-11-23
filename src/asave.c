@@ -7,7 +7,6 @@
 
 #include "aio.h"
 #include "aenv.h"
-#include "agc.h"
 
 #include "aload.h"
 
