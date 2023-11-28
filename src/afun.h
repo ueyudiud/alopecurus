@@ -12,7 +12,7 @@ typedef struct CapInfo CapInfo;
 typedef struct LineInfo LineInfo;
 typedef struct ProtoDesc ProtoDesc;
 
-intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc);
+intern GProto* ai_proto_xalloc(a_henv env, ProtoDesc const* desc);
 intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
 intern GFun* ai_fun_new(a_henv env, GProto *proto);
 intern void ai_proto_drop(Global* gbl, GProto* self);

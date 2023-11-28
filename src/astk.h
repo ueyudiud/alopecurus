@@ -28,6 +28,11 @@ typedef Value* StkPtr;
 
 #define STACK_GROW_FAILED isizec(1)
 
+/* Reserve stack size for VM use. */
+#define RESERVED_STACK_SIZE 5
+/* Stack size for stack overflow error handling. */
+#define OVERFLOW_STACK_SIZE 128
+
 #ifndef ALOI_INIT_STACKSIZE
 # define ALOI_INIT_STACKSIZE 500
 #endif

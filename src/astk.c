@@ -18,11 +18,6 @@
 # define STACK_GRANULARITY usizec(1024)
 #endif
 
-/* Reserve stack size for VM use. */
-#define RESERVED_STACK_SIZE 5
-/* Stack size for stack overflow error handling. */
-#define OVERFLOW_STACK_SIZE 128
-
 enum {
 	INIT_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_INIT_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
 	MAX_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),

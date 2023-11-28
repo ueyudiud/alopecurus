@@ -23,7 +23,7 @@ static a_usize fun_size(a_usize ncap) {
 
 #define UNIQ_PROTO_OFFSET offsetof(GProto, _size)
 
-static a_usize proto_size_with_head(ProtoDesc* desc) {
+static a_usize proto_size_with_head(ProtoDesc const* desc) {
 	a_usize size = sizeof(GProto) +
 				   sizeof(Value) * desc->_nconst +
 				   sizeof(a_insn) * desc->_ninsn +
@@ -43,7 +43,7 @@ static a_usize proto_size_with_head(ProtoDesc* desc) {
 	return pad_to(size, sizeof(a_usize));
 }
 
-GProto* ai_proto_xalloc(a_henv env, ProtoDesc* desc) {
+GProto* ai_proto_xalloc(a_henv env, ProtoDesc const* desc) {
 	a_usize total_size = proto_size_with_head(desc);
 
     void* blk;
