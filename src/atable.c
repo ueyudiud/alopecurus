@@ -311,9 +311,22 @@ static a_bool table_find(a_henv env, GTable* self, Value vk, a_hash* phash, a_i3
     }
 }
 
-static a_bool table_find_lstr(a_henv env, GTable* self, char const* ptr, a_usize len, a_hash hash, a_i32* pindex) {
+union LstrFindResult {
+    a_i32 _index;
+    GStr* _key;
+};
+
+static a_bool table_find_lstr(a_henv env, GTable* self, char const* ptr, a_usize len, a_hash hash, union LstrFindResult* presult) {
     GStr* k = ai_str_get_or_null_with_hash(env, ptr, len, hash);
-    return k == null || table_find_with_trivial_equality(self, v_of_str(k), hash, pindex);
+    if (k == null) {
+        presult->_key = null;
+        return true;
+    }
+    if (table_find_with_trivial_equality(self, v_of_str(k), hash, &presult->_index)) {
+        presult->_key = k;
+        return true;
+    }
+    return false;
 }
 
 a_bool ai_table_get(a_henv env, GTable* self, Value vk, Value* pv) {
@@ -339,12 +352,12 @@ a_bool ai_table_geti(a_henv env, GTable* self, a_int k, Value* pv) {
 }
 
 a_bool ai_table_getls(a_henv env, GTable* self, char const* ptr, a_usize len, Value* pv) {
-    a_i32 index;
+    union LstrFindResult result;
     a_hash hash = ai_str_hashof(env, ptr, len);
 
-    try (table_find_lstr(env, self, ptr, len, hash, &index));
+    try (table_find_lstr(env, self, ptr, len, hash, &result));
 
-    TNode* node = table_node(self, index);
+    TNode* node = table_node(self, result._index);
     v_set(env, pv, node->_value);
     return false;
 }
@@ -384,14 +397,14 @@ a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
 }
 
 Value* ai_table_refls(a_henv env, GTable* self, char const* ptr, a_usize len) {
-    a_i32 index;
+    union LstrFindResult result;
     a_hash hash = ai_str_hashof(env, ptr, len);
 
-    catch (table_find_lstr(env, self, ptr, len, hash, &index)) {
+    catch (table_find_lstr(env, self, ptr, len, hash, &result)) {
         ai_table_hint(env, self, 1);
 
-        GStr* key = ai_str_new_with_hash(env, ptr, len, hash);
-        index = table_emplace_backward(env, self, v_of_str(key), hash, v_of_nil());
+        GStr* key = result._key ?: ai_str_new_with_hash(env, ptr, len, hash);
+        result._index = table_emplace_backward(env, self, v_of_str(key), hash, v_of_nil());
 
         self->_len += 1;
         self->_vid = 0;
@@ -402,7 +415,7 @@ Value* ai_table_refls(a_henv env, GTable* self, char const* ptr, a_usize len) {
         break;
     }
 
-    TNode* node = table_node(self, index);
+    TNode* node = table_node(self, result._index);
     return &node->_value;
 }
 

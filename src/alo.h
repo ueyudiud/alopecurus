@@ -97,8 +97,9 @@ typedef a_u32 a_flags;
 #define ALO_TTABLE 8
 #define ALO_TFUNC 9
 #define ALO_TROUTE 10
-#define ALO_TTYPE 11
-#define ALO_TUSER 12
+#define ALO_TMOD 11
+#define ALO_TTYPE 12
+#define ALO_TUSER 13
 
 #define ALO_OPADD 0
 #define ALO_OPSUB 1
@@ -189,6 +190,7 @@ ALO_EXPORT void (alo_newlist)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newtable)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_ulen n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
+ALO_EXPORT void* (alo_newmod)(a_henv env, a_usize s);
 
 #define ALO_NEWTYPE_FLAG_STATIC 0x0001
 

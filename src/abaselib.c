@@ -136,6 +136,10 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			aloi_show("<func:%p>", v_as_obj(v));
 			break;
 		}
+        case T_MOD: {
+            aloi_show("<mod:%p>", v_as_obj(v));
+            break;
+        }
 		case T_USER: {
 			aloi_show("<%s:%p>", v_nameof(env, v), v_as_obj(v));
 			break;

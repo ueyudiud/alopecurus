@@ -423,20 +423,20 @@ void aloL_puts(a_henv env, a_ilen id, char const* s) {
     ai_gc_trigger(env);
 }
 
-void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* bs, a_usize nb) {
+void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 	Value v = api_elem(env, id);
 	api_check(v_is_table(v), "table expected.");
 
 	GTable* o = v_as_table(v);
 
-	for (a_usize i = 0; i < nb; ++i) {
-		aloL_Entry const* b = &bs[i];
-		assume(b->name != null, "missing field name.");
+	for (a_usize i = 0; i < ne; ++i) {
+		aloL_Entry const* e = &es[i];
+		assume(e->name != null, "missing field name.");
 
-        Value* slot = ai_table_refls(env, o, b->name, strlen(b->name));
+        Value* slot = ai_table_refls(env, o, e->name, strlen(e->name));
 
-		if (b->fptr != null) {
-			GFun* fun = ai_cfun_create(env, b->fptr, 0, null);
+		if (e->fptr != null) {
+			GFun* fun = ai_cfun_create(env, e->fptr, 0, null);
             v_set_obj(env, slot, fun);
 		}
 	}
@@ -514,6 +514,7 @@ static void l_open_lib(a_henv env, LibEntry const* entry) {
 void aloL_openlibs(a_henv env) {
 	static LibEntry const entries[] = {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
+        { ALO_LIB_MOD_NAME, aloopen_mod },
         { ALO_LIB_TYPE_NAME, aloopen_type },
         { ALO_LIB_LIST_NAME, aloopen_list },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },

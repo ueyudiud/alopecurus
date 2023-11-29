@@ -46,7 +46,7 @@ ALO_EXPORT a_msg (aloL_gets)(a_henv env, a_ilen id, char const* s);
 ALO_EXPORT a_msg (aloL_gettm)(a_henv env, a_ilen id, char const* s);
 
 ALO_EXPORT void (aloL_puts)(a_henv env, a_ilen id, char const* s);
-ALO_EXPORT void (aloL_putalls_)(a_henv env, a_ilen id, aloL_Entry const* bs, a_usize nb);
+ALO_EXPORT void (aloL_putalls_)(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne);
 
 #define aloL_putalls(env,id,bs) aloL_putalls_(env, id, bs, sizeof(bs) / sizeof(aloL_Entry))
 

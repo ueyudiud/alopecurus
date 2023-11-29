@@ -11,6 +11,7 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
+#include "amod.h"
 #include "atype.h"
 #include "afmt.h"
 #include "aenv.h"
@@ -252,6 +253,13 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
             }
             return v;
         }
+        case T_MOD: {
+            Value v;
+            catch (ai_mod_get(env, v_as_mod(v1), v2, &v)) {
+                return v_of_nil();
+            }
+            return v;
+        }
 		case T_USER: {
             Value v;
             if (!ai_tm_get(env, v1, v2, &v)) {
@@ -272,6 +280,10 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
         }
         case T_TABLE: {
             ai_table_set(env, v_as_table(v1), v2, v3);
+            break;
+        }
+        case T_MOD: {
+            ai_mod_set(env, v_as_mod(v1), v2, v3);
             break;
         }
         case T_USER: {
@@ -299,6 +311,9 @@ static Value vm_len(a_henv env, Value v) {
         }
         case T_TABLE: {
             return v_of_int(v_as_table(v)->_len);
+        }
+        case T_MOD: {
+            return v_of_int(v_as_mod(v)->_len);
         }
         case T_USER: {
             a_uint i;
@@ -365,12 +380,12 @@ static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
         }
         case T_TABLE: {
             GTable* p = v_as_table(vc);
-            a_u32 i = cast(a_u32, v_as_int(*pi));
+            a_i32 i = v_as_int(*pi);
             if (i == 0 && p->_len == 0)
                 return (ValueSlice) { };
 
-            i = p->_ptr[i]._lnext;
-            if (i > p->_hmask)
+            i = p->_ptr[i - 1]._lnext;
+            if (i < 0)
                 return (ValueSlice) { };
 
             TNode* n = &p->_ptr[i];

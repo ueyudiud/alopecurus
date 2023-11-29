@@ -15,6 +15,7 @@ typedef struct GTable GTable;
 typedef struct GFun GFun;
 typedef struct GUser GUser;
 typedef struct alo_Env GRoute;
+typedef struct GMod GMod;
 typedef struct GType GType;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
@@ -51,6 +52,7 @@ enum {
     T_TABLE = 5,
     T_FUNC = 6,
     T_STR = 7,
+    T_MOD = 8,
     T_TUPLE = 10,
     T_USER = 11,
     T_INT = 14,
@@ -141,14 +143,14 @@ always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restric
 }
 
 always_inline void v_mov_all_fwd(a_henv env, Value* d, Value const* s, a_usize n) {
-    assume(d <= s || n == 0, "move regions violate contract.");
+    assume(d <= s, "move regions not at forward.");
     for (a_usize i = 0; i < n; ++i) {
         v_cpy(env, &d[i], &s[i]);
     }
 }
 
 always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n) {
-    assume(d >= s || n == 0, "move regions violate contract.");
+    assume(d >= s, "move regions not at backward.");
     for (a_usize i = n - 1; i < n; --i) {
         v_cpy(env, &d[i], &s[i]);
     }
@@ -274,8 +276,6 @@ always_inline void v_set_ptr(Value* d, void* v) {
 
 #define v_has_trivial_hash(v) (!v_is_in(v, T__MIN_NHH, T__MAX_NHH))
 
-#define v_has_trivial_equals(v) (!v_is_in(v, T__MIN_NEQ, T__MAX_NEQ))
-
 /* Identity hashcode. */
 always_inline a_hash v_trivial_hash_unchecked(Value v) {
     a_u32 h = v._ * u32c(0xcc9e2d51);
@@ -303,6 +303,8 @@ always_inline Value v_float_key(Value v) {
     if (f == 0.0) return v_of_float(0.0); /* Special case for 0.0 and -0.0 */
     return v;
 }
+
+#define v_has_trivial_equals(v) (!v_is_in(v, T__MIN_NEQ, T__MAX_NEQ))
 
 /* Identity equality. */
 #define v_trivial_equals_unchecked(v1,v2) ((v1)._ == (v2)._)
