@@ -21,21 +21,16 @@ intern a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv);
 intern void ai_table_mark(Global* gbl, GTable* self);
 intern void ai_table_clean(Global* gbl, GTable* self);
 
-#define GTABLE_STRUCT_HEADER \
-    GOBJ_STRUCT_HEADER;      \
-    a_u32 _len;              \
-    a_u32 _hmask;            \
-    TNode* _ptr;             \
-    a_u32 _vid;              \
-    a_u32 _tmz
-
 typedef struct TNode TNode;
 
 /**
  ** Linked hash table.
  */
 struct GTable {
-    GTABLE_STRUCT_HEADER;
+    GOBJ_STRUCT_HEADER;
+    a_u32 _len;
+    a_u32 _hmask;
+    TNode* _ptr;
 };
 
 /**

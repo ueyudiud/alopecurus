@@ -43,8 +43,6 @@ GTable* ai_table_new(a_henv env) {
     self->_ptr = null;
     self->_hmask = 0;
     self->_len = 0;
-    self->_vid = 1;
-    self->_tmz = 0;
 
 	ai_gc_register_object(env, self);
     return self;
@@ -223,7 +221,6 @@ void ai_table_grow(a_henv env, GTable* self, a_usize add) {
 void ai_table_hint(a_henv env, GTable* self, a_usize add) {
     if (unlikely(add > ((self->_hmask + 1) & ~u32c(1)) - self->_len)) {
         ai_table_grow(env, self, add);
-        self->_vid = 0;
     }
 }
 
@@ -379,15 +376,12 @@ a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
 
     if (!table_find(env, self, vk, &hash, &index)) {
         v_set(env, &self->_ptr[index]._value, vv);
-        self->_vid = 0;
         return true;
     }
     else {
         ai_table_hint(env, self, 1);
         table_emplace_backward(env, self, vk, hash, vv);
         self->_len += 1;
-        self->_vid = 0;
-        self->_tmz = 0;
 
         ai_gc_barrier_backward_val(env, self, vk);
         ai_gc_barrier_backward_val(env, self, vv);
@@ -407,8 +401,6 @@ Value* ai_table_refls(a_henv env, GTable* self, char const* ptr, a_usize len) {
         result._index = table_emplace_backward(env, self, v_of_str(key), hash, v_of_nil());
 
         self->_len += 1;
-        self->_vid = 0;
-        self->_tmz = 0;
 
         ai_gc_barrier_backward(env, self, key);
 
@@ -427,7 +419,6 @@ a_bool ai_table_del(a_henv env, GTable* self, Value vk) {
 
     table_erase(env, self, index);
     self->_len -= 1;
-    self->_vid = 0;
     return true;
 }
 

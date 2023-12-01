@@ -384,11 +384,11 @@ a_msg aloL_traceerror(a_henv env, a_ilen id, a_usize level, a_usize limit) {
 
 a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
-    api_check(v_is_table(v), "table expected.");
+    api_check(v_is_mod(v), "table expected.");
 
-    GTable* o = v_as_table(v);
+    GMod* o = v_as_mod(v);
 
-    catch (ai_table_getls(env, o, s, strlen(s), &v)) {
+    catch (ai_mod_getls(env, o, s, strlen(s), &v)) {
         return ALO_EEMPTY;
     }
 
