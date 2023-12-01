@@ -349,7 +349,7 @@ static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, B
 				try (ai_buf_nputs(env, buf, "\n\t..."));
 				break;
 			}
-			else if (frame->_flags & FRAME_FLAG_TAIL) {
+			else if (frame->_flags & FRAME_FLAG_TAIL_CALL) {
 				try (ai_buf_nputs(env, buf, "\n\t... (tail call)"));
 				if (limit > 1) {
 					limit -= 1;

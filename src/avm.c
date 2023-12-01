@@ -1434,7 +1434,7 @@ tail_call:
 
                 env->_stack._top = &R[a + b];
 
-                vm_call(env, &R[a], &R[a], c, 0);
+                vm_call(env, &R[a], &R[a], c, FRAME_FLAG_TRIM_RET);
                 check_gc();
 
                 adjust_top();
@@ -1445,7 +1445,7 @@ tail_call:
 
                 env->_stack._top = &R[a + b];
 
-                vm_call(env, &R[a], &R[a], UINT32_MAX, FRAME_FLAG_VLR);
+                vm_call(env, &R[a], &R[a], UINT32_MAX, FRAME_FLAG_NONE);
                 check_gc();
                 break;
             }
@@ -1468,14 +1468,14 @@ tail_call:
             case BC_CALLM: {
                 loadC();
 
-				vm_call(env, &R[a], &R[a], c, 0);
+				vm_call(env, &R[a], &R[a], c, FRAME_FLAG_TRIM_RET);
                 check_gc();
 
                 adjust_top();
                 break;
             }
             case BC_CALLMV: {
-				vm_call(env, &R[a], &R[a], UINT32_MAX, FRAME_FLAG_VLR);
+				vm_call(env, &R[a], &R[a], UINT32_MAX, FRAME_FLAG_NONE);
                 check_gc();
                 break;
             }
@@ -1560,13 +1560,13 @@ tail_call:
     }
 
 handle_tail_call:
-    frame->_flags |= FRAME_FLAG_TAIL;
+    frame->_flags |= FRAME_FLAG_TAIL_CALL;
     goto tail_call;
 
 handle_return:
     env->_frame = frame->_prev;
 
-    if (!(frame->_flags & FRAME_FLAG_VLR)) {
+    if (frame->_flags & FRAME_FLAG_TRIM_RET) {
         Value* top = frame->_stack_dst + frame->_num_ret;
         v_set_nil_ranged(frame->_stack_dst, top);
         frame->_stack_dst = top;
@@ -1587,15 +1587,15 @@ handle_return:
  */
 void ai_vm_call(a_henv env, Value* base, a_i32 nret) {
 	if (nret >= 0) {
-		vm_call(env, base, base, cast(a_u32, nret), 0);
+		vm_call(env, base, base, cast(a_u32, nret), FRAME_FLAG_TRIM_RET);
 	}
 	else {
-		vm_call(env, base, base, UINT32_MAX, FRAME_FLAG_VLR);
+		vm_call(env, base, base, UINT32_MAX, FRAME_FLAG_NONE);
 	}
 }
 
 Value ai_vm_call_meta(a_henv env, Value* bot) {
-    vm_call(env, bot, bot, 1, FRAME_FLAG_META);
+    vm_call(env, bot, bot, 1, FRAME_FLAG_META_CALL | FRAME_FLAG_TRIM_RET);
     Value v = env->_stack._top[-1];
     env->_stack._top -= 1;
 	return v;

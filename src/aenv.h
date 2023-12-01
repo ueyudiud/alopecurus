@@ -24,9 +24,11 @@ intern void ai_env_yield(a_henv env);
 intern a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx);
 intern a_noret ai_env_raise(a_henv env, a_msg msg);
 
-#define FRAME_FLAG_VLR 0x01
-#define FRAME_FLAG_TAIL 0x02
-#define FRAME_FLAG_META 0x04
+#define FRAME_FLAG_NONE 0x00
+
+#define FRAME_FLAG_TRIM_RET 0x01
+#define FRAME_FLAG_TAIL_CALL 0x02
+#define FRAME_FLAG_META_CALL 0x04
 
 struct Frame {
     Frame* _prev;
