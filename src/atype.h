@@ -7,6 +7,7 @@
 
 #include "aobj.h"
 #include "atable.h"
+#include "amod.h"
 
 intern GType* ai_type_new(a_henv env, GStr* name);
 intern void ai_type_boost(a_henv env);
@@ -16,17 +17,17 @@ intern void ai_type_clean(Global* gbl);
  ** Type.
  */
 struct GType {
-    GTABLE_STRUCT_HEADER;
+    GMOD_STRUCT_HEADER;
     /* Type metadata (Optional). */
     GStr* _name;
 };
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
 
-#define mt_has_ftm(t,tm) (((t)->_tmz & FTM_BIT(tm)) == 0)
+#define mt_has_ftm(t,tm) (((t)->_ftmz & FTM_BIT(tm)) == 0)
 
-always_inline GTable* type2mt(GType* o) {
-    return g_cast(GTable, o);
+always_inline GMod* type2mt(GType* o) {
+    return gmod_cast(o);
 }
 
 #define type_size(e) pad_to_raw(sizeof(GType) + (e), sizeof(a_usize))

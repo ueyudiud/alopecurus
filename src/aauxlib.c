@@ -12,7 +12,7 @@
 
 #include "abuf.h"
 #include "astr.h"
-#include "atable.h"
+#include "amod.h"
 #include "afun.h"
 #include "aenv.h"
 #include "agc.h"
@@ -402,7 +402,7 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_typeof(env, v);
 
-    catch (ai_table_getls(env, type2mt(o), s, strlen(s), &v)) {
+    catch (ai_mod_getls(env, type2mt(o), s, strlen(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -413,27 +413,28 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
 void aloL_puts(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
-    api_check(v_is_table(v), "table expected.");
+    api_check(v_is_mod(v), "module expected.");
 
-    GTable* o = v_as_table(v);
+    GMod* o = v_as_mod(v);
 
-    Value* slot = ai_table_refls(env, o, s, strlen(s));
-    v_set(env, slot, api_decr_stack(env));
+    Value* p = ai_mod_refls(env, o, s, strlen(s));
+    v_set(env, p, api_decr_stack(env));
 
     ai_gc_trigger(env);
 }
 
 void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 	Value v = api_elem(env, id);
-	api_check(v_is_table(v), "table expected.");
+	api_check(v_is_mod(v), "module expected.");
 
-	GTable* o = v_as_table(v);
+	GMod* o = v_as_mod(v);
 
 	for (a_usize i = 0; i < ne; ++i) {
 		aloL_Entry const* e = &es[i];
 		assume(e->name != null, "missing field name.");
 
-        Value* slot = ai_table_refls(env, o, e->name, strlen(e->name));
+        Value* slot = ai_mod_refls(env, o, e->name, strlen(e->name));
+        v_set_nil(slot);
 
 		if (e->fptr != null) {
 			GFun* fun = ai_cfun_create(env, e->fptr, 0, null);

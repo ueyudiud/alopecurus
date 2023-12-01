@@ -31,6 +31,25 @@ GMod* ai_mod_new(a_henv env, a_usize extra) {
     return self;
 }
 
+void ai_mod_mark(Global* gbl, GMod* self) {
+    if (self->_ptr != null) {
+        for (a_u32 i = 0; i <= self->_hmask; ++i) {
+            MNode* node = &self->_ptr[i];
+            if (node->_key > dead_key) {
+                ai_gc_trace_mark(gbl, node->_key);
+                ai_gc_trace_mark_val(gbl, node->_value);
+            }
+        }
+        ai_gc_trace_work(gbl, sizeof(MNode) * (self->_hmask + 1));
+    }
+}
+
+void ai_mod_deinit(Global* gbl, GMod* self) {
+    if (self->_ptr != null) {
+        ai_mem_vdel(gbl, self->_ptr, self->_hmask + 1);
+    }
+}
+
 a_bool ai_mod_get(a_henv env, GMod* self, Value vk, Value* pv) {
     if (!v_is_str(vk)) {
         ai_err_bad_key(env, "mod", v_nameof(env, vk));
@@ -63,7 +82,22 @@ a_bool ai_mod_gets(a_henv env, GMod* self, GStr* key, Value* pval) {
     }
 }
 
-a_bool ai_mod_refs_or_empty(a_henv env, GMod* self, GStr* key, MNode** pnode) {
+a_bool ai_mod_getls(a_henv env, GMod* self, char const* src, a_usize len, Value* pval) {
+    a_hash hash = ai_str_hashof(env, src, len);
+
+    GStr* str = ai_str_get_or_null_with_hash(env, src, len, hash);
+    if (str == null) {
+        return true;
+    }
+
+    return ai_mod_gets(env, self, str, pval);
+}
+
+static a_bool mod_needs_grow_one(GMod* self) {
+    return self->_len >= (self->_hmask + 1) / 4 * 3;
+}
+
+a_bool ai_mod_refs_or_empty(unused a_henv env, GMod* self, GStr* key, MNode** pnode) {
     if (self->_len == 0) {
         *pnode = null;
         return true;
@@ -72,7 +106,7 @@ a_bool ai_mod_refs_or_empty(a_henv env, GMod* self, GStr* key, MNode** pnode) {
     a_u32 index = key->_hash & self->_hmask;
     a_u32 perturb = key->_hash;
 
-    a_bool can_put_inplace = self->_len < (self->_hmask + 1) / 4 * 3;
+    a_bool can_put_inplace = !mod_needs_grow_one(self);
     MNode* first_empty_field = null;
 
     MNode* field = &self->_ptr[index];
@@ -192,24 +226,48 @@ void ai_mod_sets(a_henv env, GMod* self, GStr* key, Value val) {
     }
 }
 
-static void mod_drop(Global* gbl, GMod* self) {
-    if (self->_ptr != null) {
-        ai_mem_vdel(gbl, self->_ptr, self->_hmask + 1);
+Value* ai_mod_refls(a_henv env, GMod* self, char const* src, a_usize len) {
+    a_hash hash = ai_str_hashof(env, src, len);
+    MNode* node;
+
+    GStr* str = ai_str_get_or_null_with_hash(env, src, len, hash);
+    if (str != null) {
+        if (!ai_mod_refs_or_empty(env, self, str, &node)) {
+            return &node->_value;
+        }
+
+        if (node != null) {
+            goto place;
+        }
+
+        mod_grow(env, self);
     }
+    else if (mod_needs_grow_one(self)) {
+        mod_grow(env, self);
+    }
+
+    str = ai_str_get_or_new(env, src, len);
+    node = mod_ref_empty(self, str);
+
+place:
+    node->_key = str;
+
+    ai_gc_barrier_backward(env, self, str);
+
+    self->_len += 1;
+    self->_nchg += 1;
+    self->_ftmz = 0;
+
+    return &node->_value;
+}
+
+static void mod_drop(Global* gbl, GMod* self) {
+    ai_mod_deinit(gbl, self);
     ai_mem_dealloc(gbl, self, self->_size);
 }
 
 static void mod_mark(Global* gbl, GMod* self) {
-    if (self->_ptr != null) {
-        for (a_u32 i = 0; i <= self->_hmask; ++i) {
-            MNode* node = &self->_ptr[i];
-            if (node->_key > dead_key) {
-                ai_gc_trace_mark(gbl, node->_key);
-                ai_gc_trace_mark_val(gbl, node->_value);
-            }
-        }
-        ai_gc_trace_work(gbl, sizeof(MNode) * (self->_hmask + 1));
-    }
+    ai_mod_mark(gbl, self);
     ai_gc_trace_work(gbl, self->_size);
 }
 

@@ -176,7 +176,7 @@ static void global_init(a_henv env, unused void* ctx) {
     ai_type_boost(env);
     ai_str_boost2(env);
 
-    GTable* gbl = ai_table_new(env);
+    GMod* gbl = ai_mod_new(env, 0);
     v_set_obj(env, &G(env)->_global, gbl);
 }
 

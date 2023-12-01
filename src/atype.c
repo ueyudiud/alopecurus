@@ -56,7 +56,7 @@ void ai_type_boost(a_henv env) {
 }
 
 static void type_clean(Global* gbl, GType* self) {
-    ai_table_clean(gbl, type2mt(self));
+    ai_mod_deinit(gbl, type2mt(self));
 }
 
 void ai_type_clean(Global* gbl) {
@@ -71,13 +71,13 @@ static void type_drop(Global* gbl, GType* self) {
 }
 
 static void type_mark(Global* gbl, GType* self) {
-    ai_table_mark(gbl, type2mt(self));
+    ai_mod_mark(gbl, type2mt(self));
     ai_gc_trace_mark(gbl, self->_name);
     ai_gc_trace_work(gbl, type_size(0));
 }
 
 static VTable const type_vtable = {
-	._stencil = V_STENCIL(T_TABLE),
+	._stencil = V_STENCIL(T_MOD),
     ._tag = ALO_TTYPE,
     ._type_ref = g_type_ref(ALO_TTYPE),
 	._slots = {

@@ -207,9 +207,6 @@ always_inline char const* v_nameof(a_henv env, Value v) {
     }
 }
 
-#define g_mtof(env,p) type2mt(g_typeof(env, p))
-#define v_mtof(env,p) type2mt(v_typeof(env, p))
-
 #ifndef ALOI_DFL_GCSTEPMUL
 # define ALOI_DFL_GCSTEPMUL usizec(384)
 #endif
