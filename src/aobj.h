@@ -116,7 +116,7 @@ always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
 
 #define v_is(v,t) V_IS((v)._, t)
 
-#define v_is_in(v,tmn,tmx) ((v)._ - v_box_nan_raw_min(tmx) <= v_box_nan_raw_max(tmn) - v_box_nan_raw_min(tmx))
+#define v_in(v,tmn,tmx) ((v)._ - v_box_nan_raw_min(tmx) <= v_box_nan_raw_max(tmn) - v_box_nan_raw_min(tmx))
 
 /*=========================================================*
  * Value to Value Operations
@@ -213,7 +213,7 @@ static_assert(V_IS(V_TRUE, T_TRUE));
 static_assert(V_TRUE + 1 == V_FALSE);
 static_assert(V_IS(V_FLOAT_MAX, T_NAN));
 
-#define v_is_bool(v) v_is_in(v, T_FALSE, T_TRUE)
+#define v_is_bool(v) v_in(v, T_FALSE, T_TRUE)
 
 #define v_to_bool(v) ((v)._ <= v_box_nan_raw_max(T_TRUE))
 
@@ -274,7 +274,7 @@ always_inline void v_set_ptr(Value* d, void* v) {
  * Hash & Equality
  *=========================================================*/
 
-#define v_has_trivial_hash(v) (!v_is_in(v, T__MIN_NHH, T__MAX_NHH))
+#define v_has_trivial_hash(v) (!v_in(v, T__MIN_NHH, T__MAX_NHH))
 
 /* Identity hashcode. */
 always_inline a_hash v_trivial_hash_unchecked(Value v) {
@@ -304,7 +304,7 @@ always_inline Value v_float_key(Value v) {
     return v;
 }
 
-#define v_has_trivial_equals(v) (!v_is_in(v, T__MIN_NEQ, T__MAX_NEQ))
+#define v_has_trivial_equals(v) (!v_in(v, T__MIN_NEQ, T__MAX_NEQ))
 
 /* Identity equality. */
 #define v_trivial_equals_unchecked(v1,v2) ((v1)._ == (v2)._)
@@ -385,7 +385,7 @@ struct VTable {
     _i;                 \
 })
 
-#define v_is_obj(v) v_is_in(v, T__MIN_OBJ, T__MAX_OBJ)
+#define v_is_obj(v) v_in(v, T__MIN_OBJ, T__MAX_OBJ)
 
 always_inline a_gptr v_as_obj(Value v) {
     assume(v_is_obj(v), "not object.");

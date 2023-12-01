@@ -49,15 +49,12 @@ static a_msg int___new__(a_henv env) {
                     if (isspace(p[0]))
                         goto einval;
 
-                    int old_err = errno;
                     errno = 0;
                     a_int i = strtol(p, &q, radix);
-                    int the_err = errno;
-                    errno = old_err;
 
                     if (q != p + str->_len)
                         goto einval;
-                    if (the_err == ERANGE)
+                    if (errno == ERANGE)
                         goto erange;
                     alo_pushint(env, i);
                     break;
