@@ -235,6 +235,10 @@ ALO_EXPORT void* (alo_toptr)(a_henv env, a_ilen id);
 #define alo_isnil(env,id) (alo_tagof(env, id) == ALO_TNIL)
 #define alo_isnone(env,id) (alo_tagof(env, id) <= ALO_TNIL)
 #define alo_isstr(env,id) (alo_tagof(env, id) == ALO_TSTR)
+#define alo_istuple(env,id) (alo_tagof(env, id) == ALO_TTUPLE)
+#define alo_islist(env,id) (alo_tagof(env, id) == ALO_TLIST)
+#define alo_istable(env,id) (alo_tagof(env, id) == ALO_TTABLE)
+#define alo_isfunc(env,id) (alo_tagof(env, id) == ALO_TFUNC)
 
 ALO_EXPORT void (alo_fullgc)(a_henv env);
 

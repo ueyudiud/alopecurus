@@ -102,6 +102,9 @@ typedef void (*a_pfun)(a_henv, void*);
 # define static_assert(e) extern void (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
 #endif
 
+#undef max
+#undef min
+
 /* Special generic functors. */
 
 #define init(p) *(p) = (typeof(*(p)))
