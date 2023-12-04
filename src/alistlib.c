@@ -17,7 +17,7 @@
 #include "aauxlib.h"
 #include "alolib.h"
 
-static GList* check_list(a_henv env) {
+static GList* check_self(a_henv env) {
     aloL_checktag(env, 0, ALO_TLIST);
     return v_as_list(*api_stack(env, 0));
 }
@@ -65,7 +65,7 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
 }
 
 static a_msg list_clear(a_henv env) {
-    GList* self = check_list(env);
+    GList* self = check_self(env);
 
     self->_len = 0;
 
@@ -73,7 +73,7 @@ static a_msg list_clear(a_henv env) {
 }
 
 static a_msg list_get(a_henv env) {
-    GList* self = check_list(env);
+    GList* self = check_self(env);
     a_int k = aloL_checkint(env, 1);
 
     Value v;
@@ -90,7 +90,7 @@ static a_msg list_get(a_henv env) {
 }
 
 static a_msg list_mkstr(a_henv env) {
-    GList* self = check_list(env);
+    GList* self = check_self(env);
 
     a_lstr pre = {}, sep = {}, post = {};
     a_ilen n = alo_stacksize(env);
@@ -129,7 +129,7 @@ static a_msg list_mkstr(a_henv env) {
 }
 
 static a_msg list_push(a_henv env) {
-    GList* self = check_list(env);
+    GList* self = check_self(env);
     aloL_checkany(env, 1);
 
     Value v = api_elem(env, 1);
@@ -140,7 +140,7 @@ static a_msg list_push(a_henv env) {
 }
 
 static a_msg list_reverse(a_henv env) {
-    GList* self = check_list(env);
+    GList* self = check_self(env);
     v_reverse(env, self->_ptr, self->_ptr + self->_len);
     return 0;
 }
@@ -635,7 +635,7 @@ static void tim_sort(a_henv env, Value* ptr, a_u32 len) {
 }
 
 static a_msg list_sort(a_henv env) {
-    GList* self = check_list(env);
+    GList* self = check_self(env);
     alo_settop(env, 2);
 
     tim_sort(env, self->_ptr, self->_len);

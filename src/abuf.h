@@ -137,7 +137,8 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 #define ai_buf_nputfs(env,b,f,a...) ai_buf_nputfs_(env, buf_cast(b), f, ##a)
 #define ai_buf_nputvfs(env,b,f,v) ai_buf_nputvfs_(env, buf_cast(b), f, v)
 
-#define at_buf_putls(env,b,s,l) catch (ai_buf_nputls(env, b, s, l), _msg) { ai_buf_error(env, _msg, "char"); }
+#define at_buf_check(env,b,a) catch (at_buf_ncheck(env, b, a)) { ai_buf_error(env, _e, "byte"); }
+#define at_buf_putls(env,b,s,l) catch (ai_buf_nputls(env, b, s, l), _msg) { ai_buf_error(env, _msg, "byte"); }
 #define at_buf_puts(env,b,s) at_buf_putls(env, b, s, strlen(s))
 #define at_buf_putc(env,b,c) at_buf_push(env, b, c, "char")
 #define at_buf_tostr(env,b) ai_str_get_or_new(env, (b)->_ptr, (b)->_len)

@@ -719,7 +719,7 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ulen nsav) {
 }
 
 void alo_raise(a_henv env) {
-	ai_err_raise(env, ALO_EOUTER, api_decr_stack(env));
+	ai_err_raise(env, ALO_ERAISE, api_decr_stack(env));
 }
 
 a_msg alo_resume(a_henv env) {

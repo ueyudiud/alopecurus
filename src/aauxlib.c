@@ -236,7 +236,7 @@ a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname,
 
 a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
 	a_fno handle = open(fname, O_RDONLY);
-	if (handle < 0) return ALO_EOUTER;
+	if (handle < 0) return ALO_EEMPTY;
 
 	FileReadCtx ctx;
 	ctx._handle = handle;
@@ -384,7 +384,7 @@ a_msg aloL_traceerror(a_henv env, a_ilen id, a_usize level, a_usize limit) {
 
 a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
-    api_check(v_is_mod(v), "table expected.");
+    api_check(v_is_mod(v), "module expected.");
 
     GMod* o = v_as_mod(v);
 
@@ -483,6 +483,10 @@ void* aloL_newblk(a_henv env, a_usize s) {
     return self->_body;
 }
 
+static_assert(offsetof(aloL_Buf, ptr) == offsetof(Buf, _ptr));
+static_assert(offsetof(aloL_Buf, len) == offsetof(Buf, _len));
+static_assert(offsetof(aloL_Buf, cap) == offsetof(Buf, _cap));
+
 aloL_Buf* aloL_newbuf(a_henv env) {
     api_check_slot(env, 1);
 
@@ -496,9 +500,21 @@ aloL_Buf* aloL_newbuf(a_henv env) {
 void aloL_bufhint(a_henv env, aloL_Buf* b, a_usize a) {
     Buf* self = cast(Buf*, b);
 
-    catch (at_buf_ncheck(env, self, a), msg) {
-        ai_buf_error(env, msg, "bytes");
-    }
+    at_buf_check(env, self, a);
+}
+
+void aloL_bufpush(a_henv env, aloL_Buf* b) {
+    Buf* self = cast(Buf*, b);
+
+    GStr* str = v_as_str(api_pre_decr_stack(env));
+    at_buf_putls(env, self, str->_ptr, str->_len);
+    api_post_decr_stack(env);
+}
+
+void aloL_bufstr(a_henv env, aloL_Buf* b) {
+    Buf* self = cast(Buf*, b);
+
+    alo_pushstr(env, self->_ptr, self->_len);
 }
 
 typedef struct {
@@ -517,10 +533,12 @@ void aloL_openlibs(a_henv env) {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
         { ALO_LIB_MOD_NAME, aloopen_mod },
         { ALO_LIB_TYPE_NAME, aloopen_type },
+        { ALO_LIB_STR_NAME, aloopen_str },
         { ALO_LIB_LIST_NAME, aloopen_list },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
 		{ ALO_LIB_INT_NAME, aloopen_int },
-		{ ALO_LIB_SYS_NAME, aloopen_sys }
+		{ ALO_LIB_SYS_NAME, aloopen_sys },
+        { ALO_LIB_LOAD_NAME, aloopen_load }
 	};
 
 	for (a_usize i = 0; i < sizeof(entries) / sizeof(LibEntry); ++i) {
