@@ -44,13 +44,9 @@ static a_msg mod___new__(a_henv env) {
 
 void aloopen_mod(a_henv env) {
     static aloL_Entry const bindings[] = {
-        { "__look__", null },
         { "__new__", mod___new__ }
     };
 
     alo_pushptype(env, ALO_TMOD);
     aloL_putalls(env, -1, bindings);
-
-    alo_push(env, -1);
-    aloL_puts(env, -2, "__look__");
 }
