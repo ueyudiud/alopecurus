@@ -463,8 +463,8 @@ static a_msg load_load(a_henv env) {
 # define ALO_CPATH_VAR "ALO_CPATH"
 #endif
 
-#ifndef ALO_VERSIONED_PATH_SUFFIX
-# define ALO_VERSIONED_PATH_SUFFIX "_"ALO_VERSION_STRING("_")
+#ifndef ALO_VERSIONED_SUFFIX
+# define ALO_VERSIONED_SUFFIX "_"ALO_VERSION_STRING("_")
 #endif
 
 static void push_paths(a_henv env, char const* paths, char const* dfl) {
@@ -481,9 +481,11 @@ static void push_paths(a_henv env, char const* paths, char const* dfl) {
             p = q + 2;
         }
         else {
-            alo_pushstr(env, p, q - p);
-            setprogdir(env);
-            alo_put(env, -2);
+            if (p < q) {
+                alo_pushstr(env, p, q - p);
+                setprogdir(env);
+                alo_put(env, -2);
+            }
             p = q + 1;
         }
     }
@@ -524,8 +526,8 @@ void aloopen_load(a_henv env) {
     alo_newmod(env, 0);
     aloL_putalls(env, -1, bindings);
 
-    build_paths(env, ALIB_PATH_FIELD_NAME, ALO_PATH_VAR, ALO_PATH_VAR ALO_VERSIONED_PATH_SUFFIX, ALO_ALIB_PATH);
-    build_paths(env, CLIB_PATH_FIEND_NAME, ALO_CPATH_VAR, ALO_CPATH_VAR ALO_VERSIONED_PATH_SUFFIX, ALO_CLIB_PATH);
+    build_paths(env, ALIB_PATH_FIELD_NAME, ALO_PATH_VAR, ALO_PATH_VAR ALO_VERSIONED_SUFFIX, ALO_ALIB_PATH);
+    build_paths(env, CLIB_PATH_FIEND_NAME, ALO_CPATH_VAR, ALO_CPATH_VAR ALO_VERSIONED_SUFFIX, ALO_CLIB_PATH);
 
     alo_push(env, -1);
     alo_newcfun(env, load_load, 1);
