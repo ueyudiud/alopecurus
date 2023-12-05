@@ -394,7 +394,6 @@ static void load_module(a_henv env, GMod* self, GStr* name) {
     aloL_Buf* buf = aloL_newbuf(env);
 
     for (a_u32 i = 0; i < loaders->_len; ++i) {
-        /* TODO Should we protect loader in this scope? */
         vm_push_args(env, loaders->_ptr[i], v_of_str(name));
 
         catch (alo_pcall(env, 1, 2, 1)) {

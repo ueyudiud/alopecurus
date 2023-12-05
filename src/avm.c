@@ -276,7 +276,8 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
 void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
     switch (v_get_tag(v1)) {
         case T_LIST: {
-            return ai_list_set(env, v_as_list(v1), v2, v3);
+            ai_list_set(env, v_as_list(v1), v2, v3);
+            break;
         }
         case T_TABLE: {
             ai_table_set(env, v_as_table(v1), v2, v3);
