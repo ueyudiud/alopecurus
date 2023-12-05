@@ -421,16 +421,29 @@ void alo_pop(a_henv env, a_ilen id) {
 	v_set(env, d, s);
 }
 
-a_ulen alo_rotate(a_henv env, a_ilen id, a_ulen n) {
+a_ulen alo_rotate(a_henv env, a_ilen id, a_ilen n) {
     Value* p = api_stack(env, id);
     Value* r = env->_stack._top;
-    api_check(n <= cast(a_usize, r - p), "rotate range out of bound");
+    Value* q = n >= 0 ? p + n : r - n;
+    api_check(p <= q && q <= r, "rotate range out of bound");
 
-    Value* q = r - n;
     v_reverse(env, p, q);
     v_reverse(env, q, r);
     v_reverse(env, p, r);
     return cast(a_ulen, r - p);
+}
+
+a_ulen alo_erase(a_henv env, a_ilen id, a_ulen n) {
+    Value* p = api_stack(env, id);
+    Value* r = env->_stack._top;
+    Value* q = p + n;
+    api_check(p <= q && q <= r, "erase range out of bound");
+
+    v_mov_all_fwd(env, p, q, r - q);
+
+    a_ulen m = cast(a_ulen, r - q);
+    env->_stack._top = p + m;
+    return m;
 }
 
 void alo_newtuple(a_henv env, a_ulen n) {

@@ -81,6 +81,7 @@ static void buf_drop(Global* gbl, a_gptr raw_self) {
 static VTable const buf_vtable = {
 	._stencil = V_STENCIL(T_USER),
     ._tag = ALO_TUSER,
+    ._flags = VTABLE_FLAG_GREEDY_MARK,
 	._slots = {
         [vfp_slot(drop)] = buf_drop,
         [vfp_slot(mark)] = buf_mark

@@ -71,7 +71,7 @@ static a_msg int___new__(a_henv env) {
                     if (aloL_gettm(env, 0, "__int__") == ALO_EEMPTY) {
                         aloL_argerror(env, 0, "cannot convert to int.");
                     }
-                    a_isize n = alo_insert(env, 0);
+                    a_ilen n = alo_insert(env, 0);
                     alo_call(env, n - 1, 1);
                     break;
                 }

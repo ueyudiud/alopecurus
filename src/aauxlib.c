@@ -418,7 +418,11 @@ void aloL_puts(a_henv env, a_ilen id, char const* s) {
     GMod* o = v_as_mod(v);
 
     Value* p = ai_mod_refls(env, o, s, strlen(s));
-    v_set(env, p, api_decr_stack(env));
+
+    v = api_decr_stack(env);
+    v_set(env, p, v);
+
+    ai_gc_barrier_backward_val(env, o, v);
 
     ai_gc_trigger(env);
 }
@@ -439,7 +443,8 @@ void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 		if (e->fptr != null) {
 			GFun* fun = ai_cfun_create(env, e->fptr, 0, null);
             v_set_obj(env, slot, fun);
-		}
+            ai_gc_barrier_backward(env, o, fun);
+        }
 	}
 
 	ai_gc_trigger(env);
@@ -487,33 +492,34 @@ static_assert(offsetof(aloL_Buf, ptr) == offsetof(Buf, _ptr));
 static_assert(offsetof(aloL_Buf, len) == offsetof(Buf, _len));
 static_assert(offsetof(aloL_Buf, cap) == offsetof(Buf, _cap));
 
+static GBuf* from_buff(a_henv env, aloL_Buf* raw) {
+    GBuf* self = from_member(GBuf, _buf_head_mark, cast(BufHeadMark*, raw));
+    v_check_alive(env, v_of_obj(self));
+    return self;
+}
+
 aloL_Buf* aloL_newbuf(a_henv env) {
     api_check_slot(env, 1);
 
     GBuf* self = ai_buf_new(env);
-
     v_set_obj(env, api_incr_stack(env), self);
-
     return cast(aloL_Buf*, self->_buf_head_mark);
 }
 
 void aloL_bufhint(a_henv env, aloL_Buf* b, a_usize a) {
-    Buf* self = cast(Buf*, b);
-
+    GBuf* self = from_buff(env, b);
     at_buf_check(env, self, a);
 }
 
 void aloL_bufpush(a_henv env, aloL_Buf* b) {
-    Buf* self = cast(Buf*, b);
-
+    GBuf* self = from_buff(env, b);
     GStr* str = v_as_str(api_pre_decr_stack(env));
     at_buf_putls(env, self, str->_ptr, str->_len);
     api_post_decr_stack(env);
 }
 
 void aloL_bufstr(a_henv env, aloL_Buf* b) {
-    Buf* self = cast(Buf*, b);
-
+    GBuf* self = from_buff(env, b);
     alo_pushstr(env, self->_ptr, self->_len);
 }
 

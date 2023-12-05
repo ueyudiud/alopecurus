@@ -75,11 +75,14 @@ char const* aloS_replace(a_henv env, char const* sub, char const* pat, char cons
         ._rep = ntstr2lstr(rep)
     };
 
-    api_check_slot(env, 1);
+    api_check_slot(env, 2);
 
     Buf* buf = l_newbuf(env);
     l_replace(env, &ctx, buf);
-    return alo_pushstr(env, buf->_ptr, buf->_len);
+
+    char const* out = alo_pushstr(env, buf->_ptr, buf->_len);
+    alo_erase(env, -2, 1); /* Drop buffer. */
+    return out;
 }
 
 static a_msg str_replace(a_henv env) {

@@ -50,6 +50,21 @@
 #define ALO_OS_WINDOWS (ALO_OS == ALO_ENUM_OS_WINDOWS)
 #define ALO_OS_POSIX (ALO_OS >= ALO_ENUM_OS_LINUX)
 
+/**
+ ** ALO_DIR_SEP is directory separator.
+ ** ALO_PATH_SEP is separator between two paths.
+ */
+#if ALO_OS_WINDOWS
+# define ALO_DIR_SEP  "\\"
+# define ALO_PATH_SEP ";"
+#elif ALO_OS_POSIX
+# define ALO_DIR_SEP  "/"
+# define ALO_PATH_SEP ":"
+#else
+# define ALO_DIR_SEP  "/"
+# define ALO_PATH_SEP ";"
+#endif
+
 #if ALO_ARCH_X64
 # define ALO_BITS 64
 #else

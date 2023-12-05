@@ -17,15 +17,15 @@
 
 #define ALO_VERSION_NUMBER (ALO_MAJOR_VERSION * 100 + ALO_MINOR_VERSION)
 
-#define ALO_NAME "Alopecurus"
-#define ALO_VERSION_STRING_BUILDER2(major,minor) ALO_NAME" "#major"."#minor
-#define ALO_VERSION_STRING_BUILDER(major,minor) ALO_VERSION_STRING_BUILDER2(major,minor)
-#define ALO_VERSION_STRING ALO_VERSION_STRING_BUILDER(ALO_MAJOR_VERSION,ALO_MINOR_VERSION)
-#define ALO_VERSION_FULL_STRING_BUILDER2(major,minor,patch) ALO_VERSION_STRING_BUILDER2(major,minor)"."#patch
-#define ALO_VERSION_FULL_STRING_BUILDER(major,minor,patch) ALO_VERSION_FULL_STRING_BUILDER2(major,minor,patch)
-#define ALO_VERSION_FULL_STRING ALO_VERSION_FULL_STRING_BUILDER(ALO_MAJOR_VERSION,ALO_MINOR_VERSION,ALO_PATCH_VERSION)
+#define ALO_VERSION_STRING_BUILDER2(major,minor,sep) "" #major sep #minor ""
+#define ALO_VERSION_STRING_BUILDER(major,minor,sep) ALO_VERSION_STRING_BUILDER2(major,minor,sep)
+#define ALO_VERSION_STRING(sep) ALO_VERSION_STRING_BUILDER(ALO_MAJOR_VERSION,ALO_MINOR_VERSION,sep)
+#define ALO_VERSION_FULL_STRING_BUILDER2(major,minor,patch,sep) ALO_VERSION_STRING_BUILDER2(major,minor,".") sep #patch ""
+#define ALO_VERSION_FULL_STRING_BUILDER(major,minor,patch,sep) ALO_VERSION_FULL_STRING_BUILDER2(major,minor,patch,sep)
+#define ALO_VERSION_FULL_STRING(sep) ALO_VERSION_FULL_STRING_BUILDER(ALO_MAJOR_VERSION,ALO_MINOR_VERSION,ALO_PATCH_VERSION,sep)
 
-#define ALO_COPYRIGHT ALO_VERSION_FULL_STRING" Copyright (C) 2022-2023 ueyudiud"
+#define ALO_NAME "Alopecurus"
+#define ALO_COPYRIGHT ALO_NAME " " ALO_VERSION_FULL_STRING(".") " Copyright (C) 2022-2023 ueyudiud"
 
 typedef unsigned char a_byte;
 
@@ -183,7 +183,8 @@ ALO_EXPORT void (alo_pushptype)(a_henv env, a_msg tag);
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_ulen n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_ilen id);
-ALO_EXPORT a_ulen (alo_rotate)(a_henv env, a_ilen id, a_ulen n);
+ALO_EXPORT a_ulen (alo_rotate)(a_henv env, a_ilen id, a_ilen n);
+ALO_EXPORT a_ulen (alo_erase)(a_henv env, a_ilen id, a_ulen n);
 ALO_EXPORT void (alo_newtuple)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newlist)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newtable)(a_henv env, a_ulen n);
@@ -195,7 +196,7 @@ ALO_EXPORT void* (alo_newmod)(a_henv env, a_usize s);
 
 ALO_EXPORT void (alo_newtype)(a_henv env, char const* n, a_flags flags);
 
-#define alo_insert(env,id) alo_rotate(env, id, 1)
+#define alo_insert(env,id) alo_rotate(env, id, -1)
 
 ALO_EXPORT a_msg (alo_compute)(a_henv env, a_enum op);
 ALO_EXPORT a_bool (alo_compare)(a_henv env, a_ilen id1, a_ilen id2, a_enum op);

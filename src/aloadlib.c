@@ -5,6 +5,8 @@
 #define aloadlib_c_
 #define ALO_LIB
 
+#include <stdlib.h>
+
 #include "aarch.h"
 
 #if ALO_OS_WINDOWS
@@ -24,10 +26,9 @@
 #include "aauxlib.h"
 #include "alolib.h"
 
-#if ALO_OS_WINDOWS
+#define setprogdir(env) quiet(env)
 
-#define CLIB_PATH_DEFAULT "./?.dll"
-#define ALIB_PATH_DEFAULT "./?.alo", "./?/mod.alo"
+#if ALO_OS_WINDOWS
 
 typedef struct GLib {
     GOBJ_STRUCT_HEADER;
@@ -94,6 +95,30 @@ static GLib* lib_cast(Value v) {
     return g_cast(GLib, obj);
 }
 
+#undef setprogdir
+
+static void setprogdir(a_henv env) {
+    char buff[MAX_PATH + 1];
+    char const* path = alo_tostr(env, -1);
+    char* ls;
+
+    DWORD n = GetModuleFileNameA(null, buff, sizeof(buff));
+    if (n == 0 || n == sizeof(buff) / sizeof(char))
+        goto bad_get;
+
+    ls = strrchr(buff, '\\');
+    if (ls == null)
+        goto bad_get;
+
+    *ls = '\0';
+    aloS_replace(env, path, ALO_EXEC_DIR, buff);
+    alo_erase(env, -2, 1); /* Erase old path. */
+    return;
+
+bad_get:
+    aloL_raisef(env, "unable get module file name");
+}
+
 static VTable const lib_vtable = {
     ._stencil = V_STENCIL(T_USER),
     ._tag = ALO_TUSER,
@@ -106,8 +131,8 @@ static VTable const lib_vtable = {
 
 #else
 
-#define CLIB_PATH_DEFAULT
-#define ALIB_PATH_DEFAULT "./?.alo", "./?/mod.alo"
+#define ALO_CLIB_PATH
+#define ALO_ALIB_PATH "./?.alo", "./?/mod.alo"
 
 typedef GObj GLib;
 
@@ -133,10 +158,8 @@ static a_cfun lib_load(unused a_henv env, unused GLib* self, unused char const* 
 #define CLIB_CACHE_FIELD_NAME "clibs"
 #define CLIB_OPEN_FUNC_PREFIX "aloopen_"
 #define ALIB_PATH_FIELD_NAME "path"
-#define PATH_PLACEHOLDER "?"
 
-#define DIR_SEP '/'
-#define VER_SEP '-'
+#define PATH_PLACEHOLDER "?"
 
 #define CAPTURED_SELF_INDEX ALO_STACK_INDEX_CAPTURE(0)
 
@@ -223,8 +246,8 @@ static void resolve_clib_path(a_henv env, char const* base, char const* file, CL
     /* File format like: X/Y-Z */
     out->_file = aloS_replace(env, base, PATH_PLACEHOLDER, file);
 
-    char const* p1 = strrchr(file, DIR_SEP) ?: file;
-    char const* p2 = strchr(p1, VER_SEP);
+    char const* p1 = strrchr(file, *ALO_DIR_SEP) ?: file;
+    char const* p2 = strchr(p1, '-');
     out->_proc = p2 != null ?
         alo_pushfstr(env, "%s%.*s", CLIB_OPEN_FUNC_PREFIX, p2 - p1, p1) :
         alo_pushfstr(env, "%s%s", CLIB_OPEN_FUNC_PREFIX, p1);
@@ -348,8 +371,13 @@ static a_msg load_load(a_henv env) {
     GMod* self = check_self(env, CAPTURED_SELF_INDEX);
     GTable* cache = check_cache(env, self);
 
-    aloL_checktag(env, 0, ALO_TSTR);
-    GStr* name = v_as_str(*api_stack(env, 0));
+    GStr* name;
+    run {
+        char const* load_path = aloL_checkstr(env, 0);
+        aloS_replace(env, load_path, ".", ALO_PATH_SEP);
+        alo_pop(env, 0);
+        name = v_as_str(*api_stack(env, 0));
+    }
     a_bool load = aloL_optbool(env, 1, true);
 
     alo_settop(env, 1);
@@ -357,10 +385,8 @@ static a_msg load_load(a_henv env) {
     Value v_mod;
     if (!ai_table_gets(env, cache, name, &v_mod)) {
         v_set(env, api_incr_stack(env), v_mod);
-        return 1;
     }
-
-    if (load) {
+    else if (load) {
         load_module(env, self, name);
         alo_push(env, 0);
         alo_call(env, 2, 1);
@@ -368,11 +394,10 @@ static a_msg load_load(a_henv env) {
         if (alo_isnil(env, -1)) {
             alo_pushbool(env, true);
         }
-        else if (!alo_tobool(env, -1)) {
-            return 1;
+        else if (alo_tobool(env, -1)) {
+            v_mod = *api_stack(env, -1);
+            ai_table_set(env, cache, v_of_str(name), v_mod);
         }
-        v_mod = *api_stack(env, -1);
-        ai_table_set(env, cache, v_of_str(name), v_mod);
     }
     else {
         alo_pushbool(env, false);
@@ -381,10 +406,56 @@ static a_msg load_load(a_henv env) {
     return 1;
 }
 
-void aloopen_load(a_henv env) {
-    static char const* alib_path[] = { ALIB_PATH_DEFAULT };
-    static char const* clib_path[] = { CLIB_PATH_DEFAULT };
+#ifndef ALO_PATH_VAR
+# define ALO_PATH_VAR "ALO_PATH"
+#endif
 
+#ifndef ALO_CPATH_VAR
+# define ALO_CPATH_VAR "ALO_CPATH"
+#endif
+
+#define ALO_PATH_VERSION_SPEC "_"ALO_VERSION_STRING("_")
+
+static void push_paths(a_henv env, char const* paths, char const* dfl) {
+    char const* p = paths;
+    char const* q;
+    a_bool has_dfl = false;
+    while ((q = strchr(p, *ALO_PATH_SEP)) != null) {
+        if (q[1] == *ALO_PATH_SEP) {
+            assume(dfl != null);
+            if (!has_dfl) {
+                push_paths(env, dfl, null);
+                has_dfl = true;
+            }
+            p = q + 2;
+        }
+        else {
+            alo_pushstr(env, p, q - p);
+            setprogdir(env);
+            alo_put(env, -2);
+            p = q + 1;
+        }
+    }
+    if (*p != '\0') {
+        alo_pushntstr(env, p);
+        setprogdir(env);
+        alo_put(env, -2);
+    }
+}
+
+static void build_paths(a_henv env,
+                        char const* field,
+                        char const* var,
+                        char const* spec_var,
+                        char const* dfl) {
+    char const* paths = getenv(spec_var) ?: getenv(var) ?: dfl;
+
+    alo_newlist(env, 0);
+    push_paths(env, paths, dfl);
+    aloL_puts(env, -2, field);
+}
+
+void aloopen_load(a_henv env) {
     static a_cfun const loaders[] = {
         loader_clib,
         loader_alib
@@ -402,6 +473,9 @@ void aloopen_load(a_henv env) {
     alo_newmod(env, 0);
     aloL_putalls(env, -1, bindings);
 
+    build_paths(env, ALIB_PATH_FIELD_NAME, ALO_PATH_VAR, ALO_PATH_VAR ALO_PATH_VERSION_SPEC, ALO_ALIB_PATH);
+    build_paths(env, CLIB_PATH_FIEND_NAME, ALO_CPATH_VAR, ALO_CPATH_VAR ALO_PATH_VERSION_SPEC, ALO_CLIB_PATH);
+
     alo_push(env, -1);
     alo_newcfun(env, load_load, 1);
     aloL_puts(env, -2, "load");
@@ -413,20 +487,6 @@ void aloopen_load(a_henv env) {
         alo_put(env, -2);
     }
     aloL_puts(env, -2, LOADER_FIEND_NAME);
-
-    alo_newlist(env, 0);
-    for (a_u32 i = 0; i < sizeof(alib_path) / sizeof(char const*); ++i) {
-        alo_pushntstr(env, alib_path[i]);
-        alo_put(env, -2);
-    }
-    aloL_puts(env, -2, ALIB_PATH_FIELD_NAME);
-
-    alo_newlist(env, 0);
-    for (a_u32 i = 0; i < sizeof(clib_path) / sizeof(char const*); ++i) {
-        alo_pushntstr(env, clib_path[i]);
-        alo_put(env, -2);
-    }
-    aloL_puts(env, -2, CLIB_PATH_FIEND_NAME);
 
     alo_newtable(env, 0);
     aloL_puts(env, -2, LOADED_FIELD_NAME);

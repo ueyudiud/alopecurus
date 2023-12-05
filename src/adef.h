@@ -8,7 +8,7 @@
 #include <limits.h>
 #include <string.h>
 
-#include "aarch.h"
+#include "acfg.h"
 #include "alo.h"
 #include "aauxlib.h"
 
