@@ -12,6 +12,10 @@
 #if ALO_OS_WINDOWS
 # include <winerror.h>
 # include <windows.h>
+#elif ALO_OS_POSIX
+# include <unistd.h>
+# include <dlfcn.h>
+# include <errno.h>
 #endif
 
 #include "alist.h"
@@ -28,24 +32,11 @@
 
 #define setprogdir(env) quiet(env)
 
-#if ALO_OS_WINDOWS
-
-typedef struct GLib {
-    GOBJ_STRUCT_HEADER;
-    HMODULE _handle;
-} GLib;
-
 static VTable const lib_vtable;
 
-static void lib_drop(Global* gbl, GLib* self) {
-    FreeLibrary(self->_handle);
-    ai_mem_dealloc(gbl, self, sizeof(GLib));
-}
+#if ALO_OS_WINDOWS
 
-static void lib_mark(Global* gbl, GLib* self) {
-    (void) self;
-    ai_gc_trace_work(gbl, sizeof(GLib));
-}
+typedef HMODULE a_hlib;
 
 static a_msg lib_error(a_henv env) {
     DWORD error = GetLastError();
@@ -61,38 +52,24 @@ static a_msg lib_error(a_henv env) {
     return ALO_EINVAL;
 }
 
-static a_msg lib_open(a_henv env, char const* file, GLib** plib) {
-    GLib* self = ai_mem_alloc(env, sizeof(GLib));
+static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
+    a_hlib lib = LoadLibrary(file);
+    if (lib == NULL) return lib_error(env);
 
-    HMODULE handle = LoadLibrary(file);
-    if (unlikely(handle == NULL)) {
-        ai_mem_dealloc(G(env), self, sizeof(GLib));
-        return lib_error(env);
-    }
-    self->_handle = handle;
-
-    ai_gc_register_object(env, self);
-    v_set_obj(env, api_incr_stack(env), self);
-
-    *plib = self;
+    *plib = lib;
     return ALO_SOK;
 }
 
-static a_msg lib_load(unused a_henv env, GLib* self, char const* func, a_cfun* pproc) {
-    void* addr = GetProcAddress(self->_handle, func);
+static a_msg lib_load(a_henv env, a_hlib lib, char const* sym, a_cfun* pproc) {
+    void* addr = GetProcAddress(lib, sym);
     if (addr == null) return lib_error(env);
     a_cfun proc = cast(a_cfun, addr);
     *pproc = proc;
     return ALO_SOK;
 }
 
-static GLib* lib_cast(Value v) {
-    if (!v_is_obj(v))
-        return null;
-    GObj* obj = v_as_obj(v);
-    if (obj->_vptr != &lib_vtable)
-        return null;
-    return g_cast(GLib, obj);
+static void lib_close(a_hlib lib) {
+    FreeLibrary(lib);
 }
 
 #undef setprogdir
@@ -119,6 +96,101 @@ bad_get:
     aloL_raisef(env, "unable get module file name");
 }
 
+#elif ALO_OS_POSIX
+
+typedef void* a_hlib;
+
+static a_msg lib_error(a_henv env) {
+    alo_pushntstr(env, dlerror());
+    return ALO_EINVAL;
+}
+
+static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
+    catch (access(file, R_OK)) {
+        int err = errno;
+        if (err == ENOENT) {
+            return ALO_EEMPTY;
+        }
+        alo_pushntstr(env, strerror(err));
+        return ALO_EINVAL;
+    }
+    a_hlib lib = dlopen(file, RTLD_NOW | RTLD_LOCAL);
+    *plib = lib;
+    return lib != null ? ALO_SOK : lib_error(env);
+}
+
+static a_msg lib_load(a_henv env, a_hlib lib, char const* sym, a_cfun* pproc) {
+    void* addr = dlsym(lib, sym);
+    if (addr == null) return lib_error(env);
+    a_cfun proc = cast(a_cfun, addr);
+    *pproc = proc;
+    return ALO_SOK;
+}
+
+static void lib_close(a_hlib lib) {
+    dlclose(lib);
+}
+
+#else
+
+typedef int a_hlib; /* Dummy value. */
+
+#define LIB_ERR "dynamic library not enabled"
+
+static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
+    alo_pushstr(env, LIB_ERR);
+    return ALO_EINVAL;
+}
+
+static a_msg lib_load(a_henv env, a_hlib lib, char const* func, a_cfun* pproc) {
+    alo_pushstr(env, LIB_ERR);
+    return ALO_EINVAL;
+}
+
+static void lib_close(a_hlib lib) {
+    unreachable();
+}
+
+#endif
+
+typedef struct GLib {
+    GOBJ_STRUCT_HEADER;
+    a_hlib _lib;
+} GLib;
+
+static void lib_drop(Global* gbl, GLib* self) {
+    lib_close(self->_lib);
+    ai_mem_dealloc(gbl, self, sizeof(GLib));
+}
+
+static void lib_mark(Global* gbl, unused GLib* self) {
+    ai_gc_trace_work(gbl, sizeof(GLib));
+}
+
+static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
+    GLib* self = ai_mem_alloc(env, sizeof(GLib));
+
+    catch (lib_open(env, file, &self->_lib), msg) {
+        ai_mem_dealloc(G(env), self, sizeof(GLib));
+        return msg;
+    }
+
+    ai_gc_register_object(env, self);
+    v_set_obj(env, api_incr_stack(env), self);
+
+    *plib = self;
+    return ALO_SOK;
+}
+
+static GLib* lib_cast(Value v) {
+    if (!v_is_obj(v))
+        return null;
+    GObj* obj = v_as_obj(v);
+    if (obj->_vptr != &lib_vtable)
+        return null;
+    return g_cast(GLib, obj);
+}
+
 static VTable const lib_vtable = {
     ._stencil = V_STENCIL(T_USER),
     ._tag = ALO_TUSER,
@@ -128,29 +200,6 @@ static VTable const lib_vtable = {
         [vfp_slot(mark)] = lib_mark
     }
 };
-
-#else
-
-#define ALO_CLIB_PATH
-#define ALO_ALIB_PATH "./?.alo", "./?/mod.alo"
-
-typedef GObj GLib;
-
-#define LIB_ERR "dynamic library not enabled"
-
-#define lib_drop null
-
-static GLib* lib_open(unused a_henv env, unused char const* file) {
-    alo_pushstr(env, LIB_ERR);
-    return null;
-}
-
-static a_cfun lib_load(unused a_henv env, unused GLib* self, unused char const* func_name) {
-    alo_pushstr(env, LIB_ERR);
-    return null;
-}
-
-#endif
 
 #define LOADED_FIELD_NAME "loaded"
 #define LOADER_FIEND_NAME "loaders"
@@ -190,7 +239,7 @@ static a_msg load_clib(a_henv env, GMod* self, char const* file, GLib** plib) {
 
     Value* pv = ai_table_refls(env, cache, file, strlen(file));
     if (v_is_nil(*pv)) {
-        try (lib_open(env, file, &lib));
+        try (lib_new(env, file, &lib));
 
         v_set_obj(env, pv, lib);
 
@@ -213,7 +262,7 @@ static a_msg load_cfunc(a_henv env, GMod* self, char const* file, char const* fu
     try (load_clib(env, self, file, &lib));
 
     a_cfun proc;
-    try (lib_load(env, lib, func, &proc));
+    try (lib_load(env, lib->_lib, func, &proc));
 
     alo_newcfun(env, proc, 0);
     return ALO_SOK;
@@ -414,7 +463,9 @@ static a_msg load_load(a_henv env) {
 # define ALO_CPATH_VAR "ALO_CPATH"
 #endif
 
-#define ALO_PATH_VERSION_SPEC "_"ALO_VERSION_STRING("_")
+#ifndef ALO_VERSIONED_PATH_SUFFIX
+# define ALO_VERSIONED_PATH_SUFFIX "_"ALO_VERSION_STRING("_")
+#endif
 
 static void push_paths(a_henv env, char const* paths, char const* dfl) {
     char const* p = paths;
@@ -473,8 +524,8 @@ void aloopen_load(a_henv env) {
     alo_newmod(env, 0);
     aloL_putalls(env, -1, bindings);
 
-    build_paths(env, ALIB_PATH_FIELD_NAME, ALO_PATH_VAR, ALO_PATH_VAR ALO_PATH_VERSION_SPEC, ALO_ALIB_PATH);
-    build_paths(env, CLIB_PATH_FIEND_NAME, ALO_CPATH_VAR, ALO_CPATH_VAR ALO_PATH_VERSION_SPEC, ALO_CLIB_PATH);
+    build_paths(env, ALIB_PATH_FIELD_NAME, ALO_PATH_VAR, ALO_PATH_VAR ALO_VERSIONED_PATH_SUFFIX, ALO_ALIB_PATH);
+    build_paths(env, CLIB_PATH_FIEND_NAME, ALO_CPATH_VAR, ALO_CPATH_VAR ALO_VERSIONED_PATH_SUFFIX, ALO_CLIB_PATH);
 
     alo_push(env, -1);
     alo_newcfun(env, load_load, 1);

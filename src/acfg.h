@@ -47,7 +47,7 @@
 
 #define ALO_CLIB_PATH \
     ALO_LDIR ALO_FILE_MARK".so:" \
-    "./"ALO_FILE_MARK".dll"
+    "./"ALO_FILE_MARK".so"
 
 #else
 # error file paths need configure manually.

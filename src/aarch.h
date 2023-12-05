@@ -51,6 +51,7 @@
 #define ALO_OS_POSIX (ALO_OS >= ALO_ENUM_OS_LINUX)
 
 /**
+ ** File system and naming contracts.
  ** ALO_DIR_SEP is directory separator.
  ** ALO_PATH_SEP is separator between two paths.
  */
