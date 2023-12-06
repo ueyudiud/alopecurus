@@ -181,6 +181,7 @@ ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);
 ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg);
 ALO_EXPORT void (alo_pushptype)(a_henv env, a_msg tag);
 ALO_EXPORT void (alo_pushroute)(a_henv env);
+ALO_EXPORT void (alo_copy)(a_henv env, a_ilen id_src, a_ilen id_dst);
 ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_ulen n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_ilen id);
 ALO_EXPORT a_ulen (alo_rotate)(a_henv env, a_ilen id, a_ilen n);
@@ -231,6 +232,7 @@ ALO_EXPORT a_int (alo_toint)(a_henv env, a_ilen id);
 ALO_EXPORT a_float (alo_tofloat)(a_henv env, a_ilen id);
 ALO_EXPORT char const* (alo_tolstr)(a_henv env, a_ilen id, a_usize* plen);
 ALO_EXPORT void* (alo_toptr)(a_henv env, a_ilen id);
+ALO_EXPORT a_henv (alo_toroute)(a_henv env, a_ilen id);
 
 #define alo_tostr(env,id) alo_tolstr(env, id, NULL)
 #define alo_isnil(env,id) (alo_tagof(env, id) == ALO_TNIL)

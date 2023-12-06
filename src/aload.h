@@ -8,16 +8,22 @@
 #include "afun.h"
 
 /* Binary value tags. */
-#define LVTAG_NIL 0xff
-#define LVTAG_FALSE 0xfe
-#define LVTAG_TRUE 0xfd
-#define LVTAG_INT 0xfc
-#define LVTAG_FLOAT 0xfb
-#define LVTAG_LSTR 0xfa
+enum {
+    LVTAG_NIL = 0xff,
+    LVTAG_FALSE = 0xfe,
+    LVTAG_TRUE = 0xfd,
+    LVTAG_INT = 0xfc,
+    LVTAG_FLOAT = 0xfb,
+    LVTAG_LSTR = 0xfa,
 
-#define LVLSTR_LEN_BIAS LVTAG_LSTR
+    LVLSTR_LEN_BIAS = LVTAG_LSTR
+};
 
 intern a_msg ai_fun_save(a_henv env, GFun* val, a_ofun fun, void* ctx, a_flags flags);
 intern a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags);
+
+enum { CHUNK_HEADER_SIZE = 4 };
+
+intern char const ai_fun_header[CHUNK_HEADER_SIZE];
 
 #endif /* aload_h_ */

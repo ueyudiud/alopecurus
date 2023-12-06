@@ -12,6 +12,11 @@
 #include "alo.h"
 #include "aauxlib.h"
 
+/**
+ ** The implement variant index.
+ */
+#define ALO_VARIANT 1
+
 #define M_false 0
 #define M_true 1
 

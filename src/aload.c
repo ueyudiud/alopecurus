@@ -13,6 +13,8 @@
 
 #include "aload.h"
 
+char const ai_fun_header[CHUNK_HEADER_SIZE] = { '\x04', 'A', 'l', 'o' };
+
 typedef struct InCtx InCtx;
 
 struct InCtx {
@@ -27,7 +29,7 @@ struct InCtx {
 #define l_in(ic,p,l) try(ai_io_iget(&(ic)->_in, p, l))
 #define l_get(ic,t) ({ t _v0; l_in(ic, &_v0, sizeof(t));  _v0; })
 #define l_getv(ic,p,l) l_in(ic, p, sizeof((p)[0]) * (l))
-
+/* Get var sized int */
 #define l_getvi(ic,t) ({ \
     t _v = 0; \
     a_byte _b = 0; \
@@ -37,7 +39,7 @@ struct InCtx {
     _v << 7 | _b; \
 })
 
-#define l_gets(ic,l) ({ GStr* _v; try(ai_str_load((ic)->_env, cast(a_sbfun, ai_io_iget), l, &(ic)->_in, &_v)); _v; })
+#define l_gets(ic,l) ({ GStr* _v; try (ai_str_load((ic)->_env, cast(a_sbfun, ai_io_iget), l, &(ic)->_in, &_v)); _v; })
 
 static a_msg l_load_const(InCtx* ic, Value* v) {
     a_u8 tag;
@@ -139,6 +141,15 @@ static a_msg l_load_root(InCtx* ic) {
 }
 
 static a_msg l_load(InCtx* ic) {
+    /* Check chunk header */
+    char header[CHUNK_HEADER_SIZE];
+    l_getv(ic, header, CHUNK_HEADER_SIZE);
+    if (memcmp(header, ai_fun_header, CHUNK_HEADER_SIZE) != 0) return ALO_ECHUNK;
+    /* Check version and variant */
+    a_u16 variant = l_get(ic, a_u16);
+    a_u16 version = l_get(ic, a_u16);
+    if (version != ALO_VERSION_NUMBER || variant != ALO_VARIANT) return ALO_ECHUNK;
+
     try (l_load_root(ic));
 	ai_gc_register_objects(ic->_in._env, &ic->_rq);
     return ALO_SOK;

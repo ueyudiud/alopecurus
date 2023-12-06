@@ -69,7 +69,7 @@ a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
 			*pi = ALO_VERSION_NUMBER;
 			return true;
 		case ALO_ATTR_VARIANT:
-			*pi = 1;
+			*pi = ALO_VARIANT;
 			return true;
 		default:
 			return false;
@@ -216,9 +216,6 @@ Value* api_wrslot(a_henv env, a_ilen id) {
 	Value* v;
 	if (id >= MIN_NEG_STACK_INDEX) {
 		v = api_stack(env, id);
-	}
-	else if (id == ALO_STACK_INDEX_ERROR) {
-		v = &env->_error;
 	}
 	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
 		id -= ALO_STACK_INDEX_CAPTURE_BASE;
@@ -402,6 +399,12 @@ void alo_pushptype(a_henv env, a_msg tag) {
 
 void alo_pushroute(a_henv env) {
 	v_set_obj(env, api_incr_stack(env), env);
+}
+
+void alo_copy(a_henv env, a_ilen id_src, a_ilen id_dst) {
+    Value const* s = api_rdslot(env, id_src);
+    Value* d = api_wrslot(env, id_dst);
+    v_cpy(env, d, s);
 }
 
 void alo_xmove(a_henv src, a_henv dst, a_ulen n) {
@@ -804,7 +807,7 @@ char const* alo_tolstr(a_henv env, a_ilen id, a_usize* plen) {
 	api_check(v_is_str(v), "cannot convert to string");
 	GStr* p = v_as_str(v);
 	if (plen != null) {
-		*plen = cast(a_usize, p->_len);
+		*plen = p->_len;
 	}
 	return str2ntstr(p);
 }
@@ -824,6 +827,12 @@ void* alo_toptr(a_henv env, a_ilen id) {
             return null;
         }
     }
+}
+
+a_henv alo_toroute(a_henv env, a_ilen id) {
+    Value v = api_elem(env, id);
+    api_check(v_is_route(v), "not route");
+    return v_as_route(v);
 }
 
 void alo_typeof(a_henv env, a_ilen id) {

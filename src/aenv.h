@@ -155,6 +155,19 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
 #define g_type(env,f) (G(env)->_types[f])
 #define g_type_ref(f) offsetof(Global, _types[f])
 
+always_inline a_bool g_is_route(a_gptr p) {
+    return p->_vptr->_tag == ALO_TROUTE;
+}
+
+always_inline a_bool v_is_route(Value v) {
+    return v_is(v, T_USER) && g_is_route(v_as_obj(v));
+}
+
+always_inline GRoute* v_as_route(Value v) {
+    assume(v_is_route(v), "not route");
+    return g_cast(GRoute, v_as_obj(v));
+}
+
 #define route_size() sizeof(GRoute)
 
 always_inline GType* g_typeof(a_henv env, a_gptr p) {
