@@ -60,29 +60,26 @@ always_inline void ai_buf_deinit_(Global* gbl, Buf* buf, a_usize size) {
 	v += 1                    \
 )
 
-always_inline a_msg ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize size) {
+always_inline a_bool ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize size) {
     a_usize old_cap = buf->_cap;
     assume(old_cap <= SIZE_MAX / size && new_cap <= SIZE_MAX / size, "invalid capacity.");
 
     void* ptr = ai_mem_nrealloc(env, buf->_ptr, size * old_cap, size * new_cap);
-    if (unlikely(ptr == null)) return ALO_ENOMEM;
+    if (unlikely(ptr == null)) return true;
 
     buf->_ptr = ptr;
 	buf->_cap = new_cap;
-    return ALO_SOK;
+    return false;
 }
 
-always_inline a_msg ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usize lim) {
+always_inline a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usize lim) {
 	a_usize old_cap = *pcap;
 	assume(add > old_cap - len, "need not grow.");
-	a_usize expect;
-	if (checked_add_usize(len, add, &expect)) {
-		return ALO_EINVAL;
-	}
+	a_usize expect = try_add(len, add);
 	a_usize new_cap;
 	if (unlikely(expect >= lim / 2)) {
 		if (expect > lim) {
-			return ALO_EINVAL;
+			return true;
 		}
 		new_cap = lim;
 	}
@@ -91,14 +88,14 @@ always_inline a_msg ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usiz
 		new_cap = max(new_cap, usizec(8));
 	}
 	*pcap = new_cap;
-	return ALO_SOK;
+	return false;
 }
 
 always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, a_usize lim) {
 	if (add > buf->_cap - buf->_len) {
 		a_usize cap = buf->_cap;
-		try (ai_buf_nhint(&cap, buf->_len, add, lim));
-		try (ai_buf_ngrow(env, buf, cap, size));
+		catch (ai_buf_nhint(&cap, buf->_len, add, lim)) { return ALO_EINVAL; }
+		catch (ai_buf_ngrow(env, buf, cap, size)) { return ALO_ENOMEM; }
 	}
 	return ALO_SOK;
 }
@@ -110,7 +107,6 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 	return ALO_SOK;
 }
 
-#define at_buf_nhint(t,c,l,a) ai_buf_nhint(&(c), l, a, (SIZE_MAX / sizeof(t)))
 #define at_buf_ncheck(env,b,a) ai_buf_ncheck(env, buf_cast(b), a, buf_elem_size(b), buf_max_len(b))
 #define at_buf_nappend(env,b,s,l) ai_buf_nappend(env, buf_cast(b), s, l, buf_elem_size(b), buf_max_len(b))
 #define at_buf_npush(env,b,v) ({ buf_elem_type(b) _va = (v); at_buf_nappend(env, b, &_va, 1); })

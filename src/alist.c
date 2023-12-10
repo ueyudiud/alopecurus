@@ -14,6 +14,12 @@
 
 static VTable const list_vtable;
 
+#if ALO_M64
+# define LIST_MAX_CAP INT32_MAX
+#else
+# define LIST_MAX_CAP (UINT32_MAX / sizeof(Value))
+#endif
+
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, list_size());
 
@@ -27,20 +33,16 @@ GList* ai_list_new(a_henv env) {
     return self;
 }
 
-static a_bool list_grow(a_henv env, GList* self, a_usize add) {
-    a_usize need;
-    try (checked_add_usize(self->_len, add, &need));
+static a_bool list_grow(a_henv env, GList* self, a_ulen add) {
+    a_ulen need = try_add(self->_len, add);
+    if (unlikely(need > LIST_MAX_CAP)) return true;
 
     assume(need >= self->_cap, "not need to grow.");
 
-    a_usize old_cap = self->_cap;
-    a_usize new_cap = max(old_cap * 2, need + 4);
-
-    if (unlikely(need > INT32_MAX)) {
-        return true;
-    }
-    else if (unlikely(new_cap > INT32_MAX)) {
-        new_cap = INT32_MAX; /* Trim to maximum capacity. */
+    a_ulen old_cap = self->_cap;
+    a_ulen new_cap = max(old_cap * 2, need + 4);
+    if (unlikely(new_cap > LIST_MAX_CAP)) {
+        new_cap = LIST_MAX_CAP;
     }
 
     self->_ptr = ai_mem_vgrow(env, self->_ptr, old_cap, new_cap);
@@ -56,7 +58,7 @@ void ai_list_grow(a_henv env, GList* self, a_usize add) {
 }
 
 void ai_list_hint(a_henv env, GList* self, a_usize add) {
-    if (unlikely(add > self->_cap - self->_len)) {
+    if (add > self->_cap - self->_len) {
         ai_list_grow(env, self, add);
     }
 }

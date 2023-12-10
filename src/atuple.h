@@ -7,7 +7,7 @@
 
 #include "aobj.h"
 
-intern GTuple* ai_tuple_new(a_henv env, Value const* src, a_usize len);
+intern GTuple* ai_tuple_new(a_henv env, Value const* src, a_ulen len);
 intern Value ai_tuple_get(a_henv env, GTuple* self, Value vk);
 intern Value ai_tuple_geti(a_henv env, GTuple* self, a_int k);
 intern a_hash ai_tuple_hash(a_henv env, GTuple* self);

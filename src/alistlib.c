@@ -257,7 +257,7 @@ static void binary_sort(a_henv env, Value* ptr, a_u32 init, a_u32 len) {
  ** Returns the minimum run length for sorting.
  */
 static a_u32 get_min_run_len(a_u32 len) {
-    a_u32 head_shift = clz_usize(len) - MIN_MERGE_SHIFT;
+    a_u32 head_shift = count_leading_zero(len) - MIN_MERGE_SHIFT;
     a_u32 head = len >> head_shift;
     a_u32 tail_mask = ~((~usizec(0)) << head_shift);
     a_u32 tail = (len & tail_mask) != 0 ? 1 : 0;

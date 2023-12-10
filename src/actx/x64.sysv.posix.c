@@ -56,12 +56,12 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
     void* addr = mmap(null, commit, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_STACK, -1, 0);
     if (addr == MAP_FAILED) return ALO_ENOMEM;
 
-	void* stack_base = addr + commit;
+	a_usize stack_base = ptr2int(addr + commit);
 
-    cast(void**, stack_base)[0] = null;
-    cast(void**, stack_base)[-1] = null;
-    cast(void**, stack_base)[-2] = ai_ctx_start;
-    env->_rctx = stack_base - sizeof(void*) * 3;
+    ref_of(void*, stack_base - 0x00) = null;
+    ref_of(void*, stack_base - 0x08) = null;
+    ref_of(void*, stack_base - 0x10) = ai_ctx_start;
+    env->_rctx = int2ptr(void, stack_base - 0x18);
     env->_rctx_alloc = addr;
 
     return ALO_SOK;

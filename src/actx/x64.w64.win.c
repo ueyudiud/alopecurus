@@ -260,12 +260,12 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
 	if (VirtualAlloc(addr + PAGE_SIZE * 2, reserve - 2 * PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
 		goto nomem;
 
-	void* stack_base = alloc_info.StackBase + reserve;
+	a_usize stack_base = ptr2int(alloc_info.StackBase) + reserve;
 
-    cast(void**, stack_base)[0] = null;
-    cast(void**, stack_base)[-1] = null;
-    cast(void**, stack_base)[-2] = ai_ctx_start;
-    env->_rctx = stack_base - sizeof(void*) * 3;
+    ref_of(void*, stack_base - 0x00) = null;
+    ref_of(void*, stack_base - 0x08) = null;
+    ref_of(void*, stack_base - 0x10) = ai_ctx_start;
+    env->_rctx = int2ptr(void, stack_base - 0x18);
 	env->_rctx_alloc = addr;
 
 	return ALO_SOK;

@@ -12,7 +12,7 @@
 
 #include "amod.h"
 
-#define MOD_MAX_CAPACITY (u32c(1) << 31)
+#define MOD_MAX_CAP (u32c(1) << 31)
 
 #define dead_key ((GStr*) sizeof(a_usize))
 
@@ -164,7 +164,7 @@ static void mod_grow(a_henv env, GMod* self) {
     a_u32 old_cap = (self->_hmask + 1) & ~1;
     MNode* old_ptr = self->_ptr;
 
-    if (unlikely(old_cap == MOD_MAX_CAPACITY)) {
+    if (unlikely(old_cap == MOD_MAX_CAP)) {
         ai_err_raisef(env, ALO_EINVAL, "too many fields");
     }
 

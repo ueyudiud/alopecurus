@@ -26,7 +26,7 @@ struct InCtx {
     RefQueue _rq;
 };
 
-#define l_in(ic,p,l) try(ai_io_iget(&(ic)->_in, p, l))
+#define l_in(ic,p,l) try (ai_io_iget(&(ic)->_in, p, l))
 #define l_get(ic,t) ({ t _v0; l_in(ic, &_v0, sizeof(t));  _v0; })
 #define l_getv(ic,p,l) l_in(ic, p, sizeof((p)[0]) * (l))
 /* Get var sized int */
@@ -39,7 +39,11 @@ struct InCtx {
     _v << 7 | _b; \
 })
 
-#define l_gets(ic,l) ({ GStr* _v; try (ai_str_load((ic)->_env, cast(a_sbfun, ai_io_iget), l, &(ic)->_in, &_v)); _v; })
+static a_msg l_load_str(InCtx* ic, a_usize len, GStr** pstr) {
+    return ai_str_load(ic->_env, cast(a_sbfun, ai_io_iget), len, &ic->_in, pstr);
+}
+
+#define l_gets(ic,l) ({ GStr* _v; try (l_load_str(ic, l, &_v)); _v; })
 
 static a_msg l_load_const(InCtx* ic, Value* v) {
     a_u8 tag;

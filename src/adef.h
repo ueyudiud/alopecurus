@@ -94,6 +94,12 @@ typedef void (*a_pfun)(a_henv, void*);
 # define ALO_C11 M_false
 #endif
 
+#if __STDC_VERSION__ >= 202311L
+# define ALO_C23 M_true
+#else
+# define ALO_C23 M_false
+#endif
+
 #if ALO_C11
 # ifndef static_assert
 #  define static_assert(e) _Static_assert(e, "assert failed.")
@@ -107,6 +113,11 @@ typedef void (*a_pfun)(a_henv, void*);
 # define static_assert(e) extern void (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
 #endif
 
+#if ALO_C23
+# include <stdchkint.h>
+# include <stdbit.h>
+#endif
+
 #undef max
 #undef min
 
@@ -114,7 +125,7 @@ typedef void (*a_pfun)(a_henv, void*);
 
 #define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
-#define bit_cast(t,e) ({ __auto_type _e = e; t _t; static_assert(sizeof(_e) == sizeof(t)); memcpy(&_t, &_e, sizeof(t)); _t; })
+#define bit_cast(t,e) ({ __auto_type _b = e; t _t; static_assert(sizeof(_b) == sizeof(t)); memcpy(&_t, &_b, sizeof(t)); _t; })
 #define quiet(e...) ((void) ((void) 0, ##e))
 #define ptr2int(p) ((a_usize) (void const*) {p})
 #define addr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
@@ -138,7 +149,15 @@ typedef void (*a_pfun)(a_henv, void*);
 /* Error handling functions. */
 
 #define catch_(e,n,...) for (__auto_type n = (e); unlikely(n); n = 0)
+
+/**
+ ** Do the statement inside catch block if 'e' is not zero.
+ ** The error is assumed happening rarely.
+ */
 #define catch(e,n...) catch_(e, ##n, _e)
+/**
+ ** Leave current function and return 'e' if 'e' is not zero.
+ */
 #define try(e) catch(e) { return _e; }
 
 intern a_noret ai_dbg_panic(char const* fmt, ...);
@@ -161,40 +180,23 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
  */
 #define memclr(dst,len) memset(dst, 0, len)
 
-#define NUM_TYPE_LIST(_) \
-    _(i8) \
-    _(i16) \
-    _(i32) \
-    _(i64) \
-    _(isize) \
-    _(u8) \
-    _(u16) \
-    _(u32) \
-    _(u64) \
-    _(usize)
+#if !ALO_C23
+/* Compact with C23 standard name. */
+# define ckd_add(d,a,b) __builtin_add_overflow(a, b, d)
+# define ckd_sub(d,a,b) __builtin_sub_overflow(a, b, d)
+# define ckd_mul(d,a,b) __builtin_mul_overflow(a, b, d)
 
-#define FUNDEF(t) \
-    always_inline a_bool checked_add_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_add_overflow(a, b, d); } \
-    always_inline a_bool checked_sub_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_sub_overflow(a, b, d); } \
-    always_inline a_bool checked_mul_##t(a_##t a, a_##t b, a_##t* d) { return __builtin_mul_overflow(a, b, d); }
-
-NUM_TYPE_LIST(FUNDEF)
-
-#undef FUNDEF
-
-#undef NUM_TYPE_LIST
-
-always_inline a_u32 clz_usize(a_usize a) {
-#if ALO_M64
-	return __builtin_clzll(a);
+# define count_leading_zero(a) __builtin_clz(a)
+# define ceil_power_of_two(a) (~(((typeof(a)) 0) >> count_leading_zero(a)) + 1)
 #else
-	return __builtin_clz(a);
+/* Redirect to C23 defined function name. */
+# define count_leading_zero(a) stdc_leading_zeros(a)
+# define ceil_power_of_two(a) stdc_bit_ceil(a)
 #endif
-}
 
-always_inline a_usize ceil_pow2_usize(a_usize a) {
-    return (~usizec(0) >> clz_usize(a)) + 1;
-}
+#define try_add(a,b) ({ typeof((a) + (b)) _c; try (ckd_add(&_c, a, b)); _c; })
+#define try_sub(a,b) ({ typeof((a) - (b)) _c; try (ckd_sub(&_c, a, b)); _c; })
+#define try_mul(a,b) ({ typeof((a) * (b)) _c; try (ckd_mul(&_c, a, b)); _c; })
 
 #define pad_to_raw(s,g) (((s) + (g) - 1) & ~((g) - 1))
 

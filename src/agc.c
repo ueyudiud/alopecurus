@@ -321,7 +321,7 @@ static void compute_work(Global* gbl) {
     assume(work <= ISIZE_MAX);
 #elif ALO_M32
     a_isize work;
-    if (checked_mul_isize(gbl->_mem_work + gbl->_mem_debt, gbl->_gcstepmul, &work)) {
+    if (ckd_mul(&work, gbl->_mem_work + gbl->_mem_debt, gbl->_gcstepmul)) {
         work = ISIZE_MAX;
     }
     work /= GCUNIT;
@@ -330,7 +330,7 @@ static void compute_work(Global* gbl) {
 }
 
 static void compute_step_debt(Global* gbl, a_isize work) {
-	if (unlikely(checked_mul_isize(work, 2, &work))) {
+	if (unlikely(ckd_mul(&work, work, 2))) {
 		work = ISIZE_MAX;
 	}
 	gbl->_mem_work = work;
@@ -344,7 +344,7 @@ static void compute_pause_debt(Global* gbl) {
     assume(debt <= ISIZE_MAX);
 #elif ALO_M32
     a_isize debt;
-    if (checked_mul_isize(gbl->_mem_estimate, gbl->_gcpausemul, &work)) {
+    if (unlikely(ckd_mul(&work, gbl->_mem_estimate, gbl->_gcpausemul))) {
         work = ISIZE_MAX;
     }
     debt /= GCUNIT;

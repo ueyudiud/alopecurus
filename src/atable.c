@@ -14,17 +14,17 @@
 
 #include "atable.h"
 
+static VTable const table_vtable;
+
 #if ALO_M64
-# define MAX_BUCKET_CAPACITY (cast(a_usize, INT32_MAX) + 1)
+# define TABLE_MAX_CAP (cast(a_usize, INT32_MAX) + 1)
 #elif ALO_M32
-# define MAX_BUCKET_CAPACITY ceil_pow2_usize(INT32_MAX / sizeof(TNode))
+# define TABLE_MAX_CAP ceil_power_of_two(INT32_MAX / sizeof(TNode))
 #endif
 
 enum {
-    ctrl_index = i32c(-1)
+    CTRL_INDEX = i32c(-1)
 };
-
-static VTable const table_vtable;
 
 static TNode* bucket_alloc(a_henv env, a_u32 cap) {
     TNode* p = ai_mem_vnew(env, TNode, cap + 1);
@@ -49,12 +49,12 @@ GTable* ai_table_new(a_henv env) {
 }
 
 static TNode* table_node(GTable* self, a_i32 index) {
-    assume(index == ctrl_index || (index >= 0 && index <= cast(a_i32, self->_hmask)), "bad table node index");
+    assume(index == CTRL_INDEX || (index >= 0 && index <= cast(a_i32, self->_hmask)), "bad table node index");
     return &self->_ptr[index];
 }
 
 static TNode* table_ctrl_node(GTable* self) {
-    return table_node(self, ctrl_index);
+    return table_node(self, CTRL_INDEX);
 }
 
 static a_i32 table_hash_to_first_index(GTable* self, a_hash hash) {
@@ -110,7 +110,7 @@ static void table_redirect_from_hash_chain(GTable* self, a_i32 index_seek, a_has
     assume(index != index_seek);
 
     loop {
-        assume(index != ctrl_index, "index is not in hash chain");
+        assume(index != CTRL_INDEX, "index is not in hash chain");
         TNode* node = table_node(self, index);
         if (node->_hnext == index_seek) {
             node->_hnext = index_new;
@@ -142,7 +142,7 @@ static a_i32 table_emplace_backward(a_henv env, GTable* self, Value key, a_hash 
         index = index_head;
         node = node_head;
 
-        node->_hnext = ctrl_index;
+        node->_hnext = CTRL_INDEX;
     }
     else {
         a_i32 index_free = table_reserve_free(self, index_head);
@@ -162,14 +162,14 @@ static a_i32 table_emplace_backward(a_henv env, GTable* self, Value key, a_hash 
             index = index_head;
             node = node_head;
 
-            node_head->_hnext = ctrl_index;
+            node_head->_hnext = CTRL_INDEX;
         }
     }
 
     v_set(env, &node->_key, key);
     v_set(env, &node->_value, value);
     node->_hash = hash;
-    table_join_before(self, ctrl_index, index);
+    table_join_before(self, CTRL_INDEX, index);
 
     return index;
 }
@@ -185,7 +185,7 @@ static void table_resize(a_henv env, GTable* self, a_usize old_cap, a_usize new_
 
     if (old_ptr != null) {
         if (self->_len > 0) {
-            TNode* node = &old_ptr[ctrl_index];
+            TNode* node = &old_ptr[CTRL_INDEX];
             for (a_i32 index = node->_lnext; index >= 0; index = node->_lnext) {
                 node = &old_ptr[index];
                 table_emplace_backward(env, self, node->_key, node->_hash, node->_value);
@@ -196,30 +196,31 @@ static void table_resize(a_henv env, GTable* self, a_usize old_cap, a_usize new_
     }
 }
 
-static a_bool table_grow_amortized(a_henv env, GTable* self, a_usize add) {
-    a_usize need;
-    try (checked_add_usize(self->_len, add, &need));
+static a_usize table_capacity(GTable* self) {
+    return (self->_hmask + usizec(1)) & ~usizec(1);
+}
 
-    if (unlikely(need > MAX_BUCKET_CAPACITY)) return true;
+static a_bool table_grow_amortized(a_henv env, GTable* self, a_ulen add) {
+    a_ulen need = try_add(self->_len, add);
+    if (unlikely(need > TABLE_MAX_CAP)) return true;
 
-    a_usize old_cap = (cast(a_usize, self->_hmask) + 1) & ~usizec(1);
-
-    a_usize new_cap = ceil_pow2_usize(need);
+    a_usize old_cap = table_capacity(self);
+    a_usize new_cap = ceil_power_of_two(need);
     new_cap = max(new_cap, 4);
-    assume(new_cap <= MAX_BUCKET_CAPACITY);
+    assume(new_cap <= TABLE_MAX_CAP);
 
     table_resize(env, self, old_cap, new_cap);
     return false;
 }
 
-void ai_table_grow(a_henv env, GTable* self, a_usize add) {
+void ai_table_grow(a_henv env, GTable* self, a_ulen add) {
     catch (table_grow_amortized(env, self, add)) {
         ai_err_raisef(env, ALO_EINVAL, "too many elements.");
     }
 }
 
-void ai_table_hint(a_henv env, GTable* self, a_usize add) {
-    if (unlikely(add > ((self->_hmask + 1) & ~u32c(1)) - self->_len)) {
+void ai_table_hint(a_henv env, GTable* self, a_ulen add) {
+    if (unlikely(add > table_capacity(self) - self->_len)) {
         ai_table_grow(env, self, add);
     }
 }
@@ -255,7 +256,7 @@ static a_bool table_find_with_trivial_equality(GTable* self, Value vk, a_hash ha
             return false;
         }
         index = node->_hnext;
-        if (index == ctrl_index) {
+        if (index == CTRL_INDEX) {
             return true;
         }
         node = table_node(self, index);
@@ -275,7 +276,7 @@ static a_bool table_find_with_generic_equality(a_henv env, GTable* self, Value v
             return false;
         }
         index = node->_hnext;
-        if (index == ctrl_index) {
+        if (index == CTRL_INDEX) {
             return true;
         }
         node = table_node(self, index);
@@ -433,21 +434,16 @@ a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
     TNode* node = table_node(self, index);
     v_set(env, &node->_value, vv);
     return ALO_SOK;
-
-}
-
-void ai_table_clean(Global* gbl, GTable* self) {
-    if (self->_ptr != null) {
-        bucket_dealloc(gbl, self->_ptr, self->_hmask + 1);
-    }
 }
 
 static void table_drop(Global* gbl, GTable* self) {
-    ai_table_clean(gbl, self);
+    if (self->_ptr != null) {
+        bucket_dealloc(gbl, self->_ptr, self->_hmask + 1);
+    }
     ai_mem_dealloc(gbl, self, table_size());
 }
 
-void ai_table_mark(Global* gbl, GTable* self) {
+static void table_mark(Global* gbl, GTable* self) {
 	if (self->_ptr != null) {
         a_u32 cap = self->_hmask + 1;
 		for (a_u32 i = 0; i < cap; ++i) {
@@ -469,6 +465,6 @@ static VTable const table_vtable = {
     ._flags = VTABLE_FLAG_NONE,
 	._slots = {
         [vfp_slot(drop)] = table_drop,
-        [vfp_slot(mark)] = ai_table_mark
+        [vfp_slot(mark)] = table_mark
 	}
 };

@@ -20,16 +20,15 @@ void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in) {
 
 static a_msg in_fetch(ZIn* in) {
     assume(in->_len == 0);
-    a_i32 err = (*in->_fun)(in->_env, in->_ctx, cast(void const**, &in->_ptr), &in->_len);
-    in->_err = err;
-    return likely(!err) ? ALO_SOK : ALO_EOUTER;
+    in->_err = (*in->_fun)(in->_env, in->_ctx, cast(void const**, &in->_ptr), &in->_len);
+    return unlikely(in->_err) ? ALO_EOUTER :
+            unlikely(in->_len == 0) ? ALO_EEMPTY :
+            ALO_SOK;
 }
 
 a_i32 ai_io_igetc(ZIn* in) {
     if (unlikely(in->_len == 0)) {
         try (in_fetch(in));
-        if (in->_len == 0)
-            return ALO_EEMPTY;
     }
     a_i32 ch = *in->_ptr;
     in->_ptr += 1;
@@ -38,8 +37,9 @@ a_i32 ai_io_igetc(ZIn* in) {
 }
 
 a_msg ai_io_iget(ZIn* in, void* dst, a_usize len) {
-    if (unlikely(in->_len == 0))
-        goto fetch;
+    if (in->_len == 0) {
+        try (in_fetch(in));
+    }
     loop {
 		if (in->_len >= len) {
 			memcpy(dst, in->_ptr, len);
@@ -49,11 +49,7 @@ a_msg ai_io_iget(ZIn* in, void* dst, a_usize len) {
 		}
 		memcpy(dst, in->_ptr, in->_len);
 		in->_len = 0;
-
-	fetch:
 		try (in_fetch(in));
-		if (unlikely(in->_len == 0))
-			return ALO_EEMPTY;
 	}
 }
 

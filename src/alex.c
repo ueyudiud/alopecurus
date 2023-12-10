@@ -289,6 +289,14 @@ static a_float l_10pow(a_i32 i) {
     return neg ? 1.0 / f : f;
 }
 
+/**
+ ** Scan integer or float point number literal.
+ * @param lex the lexer.
+ * @param tk the output token.
+ * @param sign the sign of number, 0 for unsigned number and 1 or -1 for positive or negative number.
+ * @param ch the leading character.
+ * @return the token kind.
+ */
 static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
     a_i32 e; /* Exponent count. */
     a_i32 eb;
@@ -364,7 +372,8 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 				l_skip(lex);
                 scan_digits(c_xdigit) {
 					a_u32 t;
-					if (unlikely(checked_mul_u32(i, 16, &t))) {
+					catch (ckd_mul(&t, i, 16)) {
+                        /* Overflow cases, the literal can only be float value. */
 						n = cast(a_u64, i) * 16 + j;
 						eb = 0;
 						goto float_hex_head;
@@ -373,7 +382,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 				}
 
                 if (l_test_skip(lex, '.')) {
-                    n = cast(a_u64, cast(a_i64, i));
+                    n = cast(a_u64, i);
                     ch = l_peek(lex);
                     j = c_xdigit(ch);
                     if (j >= 0) goto float_hex_frag;
@@ -381,13 +390,13 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 }
 
                 check_gap();
-                tk->_int = sign >= 0 ? cast(a_i32, i) : -cast(a_i32, i);
+                tk->_int = sign >= 0 ? bit_cast(a_i32, i) : -bit_cast(a_i32, i);
                 return TK_INTEGER;
             }
             float_hex_head: {
                 scan_digits(c_ddigit) {
 					n = n * 16 + j;
-					if (unlikely(n >= u64c(0x1000000000000))) {
+					catch (n >= u64c(0x1000000000000)) {
 						eb = 1;
 						goto float_hex_ignore_int;
 					}
@@ -403,8 +412,9 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 scan_digits(c_ddigit) {
 					n = n * 16 + j;
 					eb -= 1;
-					if (unlikely(n >= u64c(0x1000000000000)))
-						goto float_hex_ignore_frag;
+					catch (n >= u64c(0x1000000000000)) {
+                        goto float_hex_ignore_frag;
+                    }
 				}
                 goto float_hex_exp;
 
@@ -414,10 +424,10 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 				}
 
                 check_end_sep();
-                if (unlikely(!l_test_skip(lex, '.')))
+                if (!l_test_skip(lex, '.'))
                     goto error_overflow;
                 ch = l_poll(lex);
-                if (unlikely(c_xdigit(ch) < 0))
+                if (c_xdigit(ch) < 0)
                     goto error_overflow;
             
             float_hex_ignore_frag:
@@ -432,22 +442,25 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 e = 0;
                 if (l_test_skip(lex, '-')) {
                     scan_digits(c_ddigit) {
-						if (unlikely(checked_mul_i32(e, 10, &e) || checked_sub_i32(e, j, &e)))
-							goto error_overflow;
+						catch (ckd_mul(&e, e, 10) || ckd_sub(&e, e, j)) {
+                            goto error_overflow;
+                        }
 					}
                 }
                 else {
                     l_test_skip(lex, '+');
                     scan_digits(c_ddigit) {
-						if (unlikely(checked_mul_i32(e, 10, &e) || checked_add_i32(e, j, &e)))
-							goto error_overflow;
+						catch (ckd_mul(&e, e, 10) || ckd_add(&e, e, j)) {
+                            goto error_overflow;
+                        }
 					}
                 }
-                if (unlikely(checked_add_i32(e, eb, &e)))
+                catch (ckd_add(&e, e, eb)) {
                     goto error_overflow;
+                }
                 
                 a_float f = ldexp(cast(a_float, n), e * 4);
-                if (!isfinite(f)) goto error_overflow;
+                if (unlikely(!isfinite(f))) goto error_overflow;
                 tk->_float = f;
                 return TK_FLOAT;
             }
@@ -455,8 +468,9 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 				l_skip(lex);
                 scan_digits(c_bdigit) {
 					a_u32 t;
-					if (unlikely(checked_mul_u32(i, 2, &t)))
-						goto error_overflow;
+					catch (ckd_mul(&t, i, 2)) {
+                        goto error_overflow;
+                    }
 					i = t + j;
 				}
                 check_gap();
@@ -476,7 +490,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 a_u32 i = c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_u32 t;
-					if (unlikely(checked_mul_u32(i, 10, &t) || checked_add_u32(t, j, &t))) {
+                    catch (ckd_mul(&t, i, 10) || ckd_add(&t, t, j)) {
 						n = cast(a_u64, i) * 10 + j;
 						sign = 1;
 						goto float_head;
@@ -501,7 +515,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 a_i32 i = c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_i32 t;
-					if (unlikely(checked_mul_i32(i, 10, &t) || checked_add_i32(t, j, &t))) {
+					catch (ckd_mul(&t, i, 10) || ckd_add(&t, t, j)) {
 						n = cast(a_u64, cast(a_i64, i)) * 10 + j;
 						goto float_head;
 					}
@@ -525,7 +539,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 a_i32 i = -c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_i32 t;
-					if (unlikely(checked_mul_i32(i, 10, &t) || checked_sub_i32(t, j, &t))) {
+					catch (ckd_mul(&t, i, 10) || ckd_sub(&t, t, j)) {
 						n = cast(a_u64, -cast(a_i64, i)) * 10 + j;
 						goto float_head;
 					}
@@ -548,16 +562,17 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
             float_head: {
                 scan_digits(c_ddigit) {
 					n = n * 10 + j;
-					if (unlikely(n >= u64c(10000000000000000)))
-						goto float_ignore_int;
+					catch (n >= u64c(10000000000000000)) {
+                        goto float_ignore_int;
+                    }
 				}
 
                 check_end_sep();
-                if (unlikely(!l_test_skip(lex, '.')))
+                if (!l_test_skip(lex, '.'))
                     goto error_overflow;
                 ch = l_peek(lex);
                 j = c_ddigit(ch);
-                if (unlikely(j < 0))
+                if (j < 0)
                     goto error_overflow;
 
 			float_frag_base:
@@ -569,8 +584,9 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 scan_digits(c_ddigit) {
 					n = n * 10 + j;
 					eb -= 1;
-					if (unlikely(n >= u64c(10000000000000000)))
-						goto float_ignore_frag;
+					catch (n >= u64c(10000000000000000)) {
+                        goto float_ignore_frag;
+                    }
 				}
                 goto float_exp;
                 
@@ -581,10 +597,10 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 				}
 
                 check_end_sep();
-                if (unlikely(!l_test_skip(lex, '.')))
+                if (!l_test_skip(lex, '.'))
                     goto error_overflow;
                 ch = l_poll(lex);
-                if (unlikely(c_ddigit(ch) < 0))
+                if (c_ddigit(ch) < 0)
                     goto error_overflow;
             
             float_ignore_frag:
@@ -597,25 +613,28 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     e = 0;
                     if (l_test_skip(lex, '-')) {
                         scan_digits(c_ddigit) {
-							if (unlikely(checked_mul_i32(e, 10, &e) || checked_sub_i32(e, j, &e)))
-								goto error_overflow;
+                            catch (ckd_mul(&e, e, 10) || ckd_sub(&e, e, j)) {
+                                goto error_overflow;
+                            }
 						}
                     }
                     else {
                         l_test_skip(lex, '+');
                         scan_digits(c_ddigit) {
-							if (unlikely(checked_mul_i32(e, 10, &e) || checked_add_i32(e, j, &e)))
-								goto error_overflow;
+							catch (ckd_mul(&e, e, 10) || ckd_add(&e, e, j)) {
+                                goto error_overflow;
+                            }
 						}
                     }
-                    if (unlikely(checked_add_i32(e, eb, &e)))
+                    catch (ckd_add(&e, e, eb)) {
                         goto error_overflow;
+                    }
                 }
                 else {
                     e = eb;
                 }
                 a_float f = cast(a_float, n) * l_10pow(e);
-                if (!isfinite(f)) goto error_overflow;
+                if (unlikely(!isfinite(f))) goto error_overflow;
                 check_gap();
                 tk->_float = f;
                 return TK_FLOAT;
