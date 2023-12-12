@@ -33,7 +33,7 @@
 #  include <readline/readline.h>
 #  include <readline/history.h>
 
-typedef char* LinePtr;
+typedef char* LineBuf;
 
 #  define aloi_readline(env,b,l,p) ({ quiet(env); ((b) = readline(p)) != null ? ((l) = strlen(b), ALO_SYIELD) : ALO_EOUTER; })
 #  define aloi_saveline(env,l) (quiet(env), add_history(l))
@@ -41,15 +41,15 @@ typedef char* LinePtr;
 
 # else
 
-typedef char LinePtr[512];
+typedef char LineBuf[512];
 
-static a_msg aloi_readline(a_henv env, LinePtr buf, a_usize* plen, char const* prompt) {
+static a_msg aloi_readline(a_henv env, LineBuf buf, a_usize* plen, char const* prompt) {
 	quiet(env);
 	if (prompt != null) {
 		aloi_show("%s", prompt);
 		aloi_show_flush();
 	}
-	if (fgets(buf, sizeof(LinePtr), stdin) == null)
+	if (fgets(buf, sizeof(LineBuf), stdin) == null)
 		return ALO_EOUTER;
 	a_usize len = strlen(buf);
 	*plen = len;
@@ -68,7 +68,7 @@ typedef struct InLine InLine;
 struct InLine {
 	InLine* _next;
 	a_usize _len;
-	LinePtr _ptr;
+	LineBuf _ptr;
 };
 
 typedef struct {
@@ -102,13 +102,13 @@ static void l_close(void) {
 
 static a_msg l_open(void) {
 	l_init_lines();
-	try(alo_init());
+	try (alo_init());
 
 	atexit(l_close); /* add exit handler. */
 	return ALO_SOK;
 }
 
-static a_msg l_read_line_frag(a_henv env, char const* prompt) {
+static a_msg l_read_frag(a_henv env, char const* prompt) {
 	InLine* frag = malloc(sizeof(InLine));
 	if (frag == null) return ALO_ENOMEM;
 
@@ -128,8 +128,8 @@ static a_msg l_read_line_frag(a_henv env, char const* prompt) {
 }
 
 static a_msg l_read_line(a_henv env, char const* prompt) {
-	try (l_read_line_frag(env, prompt));
-	loop try (l_read_line_frag(env, null));
+	try (l_read_frag(env, prompt));
+	loop try (l_read_frag(env, null));
 }
 
 static void l_save_line(a_henv env) {
@@ -145,7 +145,7 @@ static void l_save_line(a_henv env) {
 	free(lines);
 }
 
-static a_i32 l_source_input(unused a_henv env, void* rctx, void const** pdst, a_usize* plen) {
+static a_i32 l_read_lines(unused a_henv env, void* rctx, void const** pdst, a_usize* plen) {
 	InLine** pline = rctx;
 	InLine* line = *pline;
 	if (line != null) {
@@ -168,30 +168,37 @@ static a_bool l_is_eof_error(a_henv env) {
 	return len >= sizeof(EOF_MARK) - 1 && strcmp(ptr + len - sizeof(EOF_MARK) + 1, EOF_MARK) == 0;
 }
 
+static a_msg l_print_error(a_henv env, a_msg msg) {
+    catch (msg) {
+        switch (alo_tagof(env, -1)) {
+            case ALO_TINT: {
+                aloi_show("error code: %d\n", alo_toint(env, -1));
+                break;
+            }
+            case ALO_TSTR: {
+                aloi_show("%s\n", alo_tostr(env, -1));
+                break;
+            }
+            default: {
+                aloi_show("unidentified error.\n");
+                break;
+            }
+        }
+    }
+    return msg;
+}
+
 static void l_print_result(a_henv env, a_msg msg) {
 	if (msg == ALO_SOK) {
-		a_u32 n = alo_stacksize(env);
-		for (a_u32 i = 0; i < n; ++i) {
+		a_ilen n = alo_stacksize(env);
+		for (a_ilen i = 0; i < n; ++i) {
 			if (i != 0) aloi_show("\t");
 			aloB_show(env, i);
 		}
 		aloi_show_newline();
 	}
 	else {
-		switch (alo_tagof(env, -1)) {
-			case ALO_TINT: {
-				aloi_show("error code: %d\n", alo_toint(env, -1));
-				break;
-			}
-			case ALO_TSTR: {
-				aloi_show("%s\n", alo_tostr(env, -1));
-				break;
-			}
-			default: {
-				aloi_show("unidentified error.\n");
-				break;
-			}
-		}
+        l_print_error(env, msg);
 	}
 }
 
@@ -206,13 +213,13 @@ again:
 
 	/* stack: name */
 	msg = alo_compile(
-		env,
-		l_source_input,
-		&ctx,
-		ALO_STACK_INDEX_GLOBAL,
-		0,
-		1,
-		ALO_COMP_OPT_LOSSEN | (*peval ? ALO_COMP_OPT_EVAL : 0));
+        env,
+        l_read_lines,
+        &ctx,
+        ALO_STACK_INDEX_GLOBAL,
+        0,
+        1,
+        ALO_COMP_OPT_LOSSEN | (*peval ? ALO_COMP_OPT_EVAL : 0));
 
 	switch (msg) {
 		case ALO_SOK: {
@@ -241,8 +248,8 @@ static a_msg l_comp_reps(a_henv env, a_bool* peval) {
     alo_pushntstr(env, "__main__");
     alo_pushntstr(env, "stdin");
 
-	try(l_try_comp_reps(env, "> ", peval));
-	loop try(l_try_comp_reps(env, ">> ", peval));
+	try (l_try_comp_reps(env, "> ", peval));
+	loop try (l_try_comp_reps(env, ">> ", peval));
 }
 
 static a_msg l_pcomp_reps(a_henv env) {
@@ -267,6 +274,16 @@ static a_msg l_pread_eval(a_henv env) {
 	return ALO_SOK;
 }
 
+static a_msg l_run_file(a_henv env, char const* file) {
+    char const* fname = file[0] != '-' ? file : null;
+    catch (aloL_compilef(env, fname, ALO_COMP_OPT_NOTHING), msg) {
+        return l_print_error(env, msg);
+    }
+    a_ilen nsav = alo_stacksize(env) - 1;
+    a_msg msg = alo_pcall(env, 0, 0, nsav);
+    return l_print_error(env, msg);
+}
+
 static a_noret l_run_repl(a_henv env) {
 	loop {
 		a_msg msg = l_pread_eval(env);
@@ -275,83 +292,107 @@ static a_noret l_run_repl(a_henv env) {
 	}
 }
 
-#define OPT_EXECUTE u32c(1)
-#define OPT_VERSION u32c(2)
-#define OPT_HELP u32c(4)
+#define OPT_I u32c(1)
+#define OPT_V u32c(2)
+#define OPT_H u32c(4)
 
 #define ALO_HELP \
-"Usage: alo [options]\n" \
-"\t-h print help information\n" \
-"\t-v print version only"
+"Usage: alo [options] [script [args]]\n"            \
+"Available options are:\n"                          \
+"\t-h show help information\n"                      \
+"\t-i into interactive mode after execute script\n" \
+"\t-v show version information\n"                   \
+"\t-- stop handling options\n"                      \
+"\t-  stop handling options and execute stdin"
 
 static a_enum l_opts;
+static char const* l_script;
 
 static a_bool l_scan_opts(a_henv env, int argc, char const* const* argv) {
-	l_opts = OPT_EXECUTE;
+	l_opts = 0;
+    l_script = null;
 
-	for (int i = 1; i < argc; ++i) {
+    int i;
+
+	for (i = 1; i < argc; ++i) {
 		char const* arg = argv[i];
-		if (arg[0] == '-') {
-			switch (arg[1]) {
-				case 'v': {
-                    l_opts |= OPT_VERSION;
-                    l_opts &= ~OPT_EXECUTE;
-                    break;
-                }
-				case 'V': {
-                    l_opts |= OPT_VERSION;
-                    break;
-                }
-				case 'h': {
-                    l_opts |= OPT_HELP;
-                    break;
-                }
-				case '-': {
-                    printf("Unknown option '%s'", arg);
-                    l_opts |= OPT_HELP;
-                    return true;
-                }
-				case '\0': {
-                    printf("Incomplete option '-'");
-                    l_opts |= OPT_HELP;
-                    return true;
-                }
-				default: {
-                    printf("Unknown option '-%c'", arg[1]);
-                    l_opts |= OPT_HELP;
-                    return true;
-                }
-			}
-		}
-		else {
-			printf("Unexpected option");
-		}
+        if (arg[0] != '-') {
+            l_script = arg;
+            break;
+        }
+        else if (strcmp(arg, "-") == 0) {
+            l_script = "-";
+            goto push_args;
+        }
+        else if (strcmp(arg, "--") == 0) {
+            goto push_args;
+        }
+        else if (strcmp(arg, "-h") == 0) {
+            l_opts |= OPT_H;
+        }
+        else if (strcmp(arg, "-v") == 0) {
+            l_opts |= OPT_V;
+        }
+        else if (strcmp(arg, "-i") == 0) {
+            l_opts |= OPT_I;
+        }
+        else {
+            printf("unrecognized option '%s'", arg);
+            l_opts |= OPT_H;
+            return true;
+        }
 	}
+
+push_args:
+    alo_newlist(env, argc - i);
+    for (; i < argc; ++i) {
+        alo_pushntstr(env, argv[i]);
+        alo_put(env, -2);
+    }
+    aloL_puts(env, ALO_STACK_INDEX_GLOBAL, "args");
+
 	return false;
 }
 
-static void l_main(a_henv env) {
-	if ((l_opts & OPT_VERSION) || aloi_stdin_is_tty()) {
-		aloi_show(ALO_COPYRIGHT"\n");
-	}
-	if (l_opts & OPT_HELP) {
-		aloi_show(ALO_HELP);
-	}
-	if (l_opts & OPT_EXECUTE) {
-		aloL_openlibs(env);
-		l_run_repl(env);
-	}
+static a_msg l_main(a_henv env) {
+    a_int argc = aloL_checkint(env, 0);
+    char const* const* argv = aloL_checkptr(env, 1);
+    alo_settop(env, 0);
+
+    catch (l_scan_opts(env, argc, argv)) {
+        aloi_show(ALO_HELP);
+        return 0;
+    }
+
+    if ((l_opts & OPT_V) || aloi_stdin_is_tty()) {
+        aloi_show(ALO_COPYRIGHT"\n");
+    }
+    if (l_opts & OPT_H) {
+        aloi_show(ALO_HELP);
+    }
+    aloL_openlibs(env);
+    if (l_script != null) {
+        catch (l_run_file(env, l_script)) {
+            return 0;
+        }
+    }
+    if (!((l_opts & OPT_V) || l_script != null) || (l_opts & OPT_I)) {
+        l_run_repl(env);
+    }
+    return 0;
 }
 
 int main(int argc, char const* const argv[]) {
-	if (l_open() != ALO_SOK) {
+	catch (l_open()) {
 		return EXIT_FAILURE; /* fatal error. */
 	}
 
 	a_henv env = aloL_create();
-	a_bool argerr = l_scan_opts(env, argc, argv);
-	l_main(env);
+    alo_newcfun(env, l_main, 0);
+    alo_pushint(env, argc);
+    alo_pushptr(env, argv);
+    a_msg msg = alo_pcall(env, 2, 0, 0);
 	alo_destroy(env);
 	
-	return !argerr ? EXIT_SUCCESS : EXIT_FAILURE;
+	return msg == ALO_SOK ? EXIT_SUCCESS : EXIT_FAILURE;
 }

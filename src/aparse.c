@@ -729,7 +729,6 @@ static a_u32 l_emit(Parser* par, a_insn i, a_line line) {
 }
 
 #define l_emit_ia(par,i,a,l) l_emit(par, bc_make_ia(i, a), l)
-#define l_emit_iax(par,i,a,l) l_emit(par, bc_make_iax(i, a), l)
 #define l_emit_iab(par,i,a,b,l) l_emit(par, bc_make_iab(i, a, b), l)
 #define l_emit_iac(par,i,a,c,l) l_emit(par, bc_make_iac(i, a, c), l)
 #define l_emit_iabx(par,i,a,b,l) l_emit(par, bc_make_iabx(i, a, b), l)
@@ -2678,7 +2677,9 @@ static void pat_bind_nils(Parser* par, Pat* p, a_line line) {
 	a_u32 reg = stack_alloc_succ(par, num, line);
 	a_u32 label = l_emit_kn(par, reg, num, line);
 	for (Pat* pat = p->_child; pat != null; pat = pat->_sibling) {
-        sym_local(par, pat->_name, reg++, label, (SymMods) {});
+        sym_local(par, pat->_name, reg++, label, (SymMods) {
+
+        });
 	}
 
 	scope->_top_ntr = scope->_top_reg;

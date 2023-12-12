@@ -121,7 +121,7 @@ a_bool ai_mod_refs_or_empty(unused a_henv env, GMod* self, GStr* key, MNode** pn
             return false;
         }
         if (field->_key == null) {
-            *pnode = can_put_inplace ? (first_empty_field ?: field) : field;
+            *pnode = can_put_inplace ? (first_empty_field ?: field) : null;
             return true;
         }
         if (field->_key == dead_key && can_put_inplace && first_empty_field == null) {

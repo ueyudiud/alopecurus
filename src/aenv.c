@@ -219,13 +219,12 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	if (route_init(env, env)) return ALO_ENOMEM;
 
 	/* Initialize remaining components. */
-	a_msg msg = ai_env_pcall(env, global_init, null);
+	catch (ai_env_pcall(env, global_init, null), msg) {
+        alo_destroy(env);
+        return msg;
+    }
 
-	if (unlikely(msg != ALO_SOK)) {
-		alo_destroy(env);
-		return msg;
-	}
-
+    env->_status = ALO_SOK;
 	*penv = env;
 	return ALO_SOK;
 }

@@ -116,9 +116,15 @@ static void strs_alloc_array(a_henv env, StrSet* self, a_usize cap) {
 	self->_ptr = ptr;
 }
 
+#if ALO_M64
+# define STRS_MAX_CAP (u32c(1) << 31)
+#else
+# define STRS_MAX_CAP ((u32c(1) << 31) / sizeof(GStr*))
+#endif
+
 static void strs_grow(Lexer* lex, StrSet* self) {
     a_usize old_cap = self->_hmask + 1;
-	if (old_cap == u32c(1) << 31) {
+	if (old_cap == STRS_MAX_CAP) {
 		ai_lex_error(lex, "too many symbol and string in chunk.");
 	}
 

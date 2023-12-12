@@ -47,8 +47,8 @@ a_henv aloL_create(void) {
 
 void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 	char const* name = ai_dbg_get_func_name(env, env->_frame);
-	if (name == null) aloL_raisef(env, "bad argument #%tu, %s", id, what);
-	aloL_raisef(env, "bad argument #%tu to '%s', %s", id, name, what);
+	if (name == null) aloL_raisef(env, "bad argument #%u, %s", id, what);
+	aloL_raisef(env, "bad argument #%u to '%s', %s", id, name, what);
 }
 
 static char const* l_typename(a_henv env, a_ilen id) {
@@ -61,17 +61,26 @@ void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
 	aloL_argerror(env, id, what);
 }
 
-#define aloL_tagof(env,id) alo_tagof(env, cast(a_isize, id))
+/**
+ ** Get API slot index from absolute stack index.
+ */
+static a_ilen sid2uid(a_henv env, a_ulen id) {
+    if (id >= env->_stack._top - ai_stk_bot(env)) {
+        /* Return empty stack index if overflow */
+        return ALO_STACK_INDEX_EMPTY;
+    }
+    return cast(a_ilen, id);
+}
 
 void aloL_checktag(a_henv env, a_ulen id, a_msg tag) {
 	api_check(tag >= ALO_TNIL && tag <= ALO_TUSER, "bad type tag.");
-	if (aloL_tagof(env, id) != tag) {
+	if (alo_tagof(env, sid2uid(env, id)) != tag) {
 		aloL_typeerror(env, id, ai_api_tagname[tag]);
 	}
 }
 
 a_msg aloL_checkany(a_henv env, a_ulen id) {
-    a_msg tag = aloL_tagof(env, id);
+    a_msg tag = alo_tagof(env, sid2uid(env, id));
     if (tag == ALO_EEMPTY) {
         aloL_argerror(env, id, "value expected");
     }
@@ -79,7 +88,7 @@ a_msg aloL_checkany(a_henv env, a_ulen id) {
 }
 
 a_int aloL_checkint(a_henv env, a_ulen id) {
-	Value v = api_elem(env, cast(a_isize, id));
+	Value v = api_elem(env, sid2uid(env, id));
 	if (!v_is_int(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TINT]);
 	}
@@ -87,15 +96,23 @@ a_int aloL_checkint(a_henv env, a_ulen id) {
 }
 
 a_float aloL_checknum(a_henv env, a_ulen id) {
-	Value v = api_elem(env, cast(a_isize, id));
+	Value v = api_elem(env, sid2uid(env, id));
 	if (!v_is_num(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TFLOAT]);
 	}
 	return v_as_num(v);
 }
 
+void* aloL_checkptr(a_henv env, a_ulen id) {
+    Value v = api_elem(env, sid2uid(env, id));
+    if (!v_is_ptr(v) && !v_is_nil(v)) {
+        aloL_typeerror(env, id, ai_api_tagname[ALO_TPTR]);
+    }
+    return v_is_ptr(v) ? v_as_ptr(v) : null;
+}
+
 char const* aloL_checklstr(a_henv env, a_ulen id, a_usize* plen) {
-	Value v = api_elem(env, cast(a_isize, id));
+	Value v = api_elem(env, sid2uid(env, id));
 	if (!v_is_str(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TSTR]);
 	}
@@ -107,12 +124,12 @@ char const* aloL_checklstr(a_henv env, a_ulen id, a_usize* plen) {
 }
 
 a_bool aloL_optbool(a_henv env, a_ulen id, a_bool dfl) {
-    Value v = api_elem(env, cast(a_ilen, id));
+    Value v = api_elem(env, sid2uid(env, id));
     return !v_is_nil(v) ? v_to_bool(v) : dfl;
 }
 
 a_bool aloL_optint_(a_henv env, a_ulen id, a_int* pval) {
-	Value v = api_elem(env, cast(a_ilen, id));
+	Value v = api_elem(env, sid2uid(env, id));
 	if (!v_is_int(v)) {
 		if (v_is_nil(v)) {
 			return false;
@@ -124,7 +141,7 @@ a_bool aloL_optint_(a_henv env, a_ulen id, a_int* pval) {
 }
 
 a_bool aloL_optnum_(a_henv env, a_ulen id, a_float* pval) {
-	Value v = api_elem(env, cast(a_ilen, id));
+	Value v = api_elem(env, sid2uid(env, id));
 	if (!v_is_num(v)) {
 		if (v_is_nil(v)) {
 			return false;
@@ -136,7 +153,7 @@ a_bool aloL_optnum_(a_henv env, a_ulen id, a_float* pval) {
 }
 
 char const* aloL_optlstr(a_henv env, a_ulen id, a_usize* plen) {
-	Value v = api_elem(env, cast(a_usize, id));
+	Value v = api_elem(env, sid2uid(env, id));
 	if (!v_is_str(v)) {
 		if (v_is_nil(v)) {
 			return null;
@@ -201,8 +218,13 @@ a_msg aloL_resulte(a_henv env, a_i32 stat) {
 	}
 }
 
+typedef struct {
+    char const* _ptr;
+    a_usize _len;
+} ReadStrCtx;
+
 static a_i32 l_read_str(unused a_henv env, void* rctx, void const** pdst, size_t* plen) {
-	a_lstr* ctx = rctx;
+    ReadStrCtx* ctx = rctx;
 	*pdst = ctx->_ptr;
 	*plen = ctx->_len;
 	ctx->_ptr = null;
@@ -210,42 +232,45 @@ static a_i32 l_read_str(unused a_henv env, void* rctx, void const** pdst, size_t
 	return 0;
 }
 
-typedef int a_fno;
-
-typedef struct {
-	char _buffer[256];
-	a_fno _handle;
-} FileReadCtx;
-
-static a_i32 l_read_file(unused a_henv env, void* rctx, void const** pdst, size_t* plen) {
-	FileReadCtx* ctx = rctx;
-	int count = read(ctx->_handle, ctx->_buffer, sizeof(ctx->_buffer));
-	if (count < 0) return count;
-	*pdst = ctx->_buffer;
-	*plen = cast(a_usize, count);
-	return 0;
-}
-
 a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options) {
-	a_lstr str = {src, len };
+    ReadStrCtx str = {
+        src,
+        len
+    };
 	alo_pushntstr(env, fname);
 	a_msg msg = alo_compile(env, l_read_str, &str, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
 	return msg;
 }
 
+typedef int a_hfile;
+
+typedef struct {
+    char _buffer[256];
+    a_hfile _file;
+} FileReadCtx;
+
+static a_i32 l_read_file(unused a_henv env, void* rctx, void const** pdst, size_t* plen) {
+    FileReadCtx* ctx = rctx;
+    int count = read(ctx->_file, ctx->_buffer, sizeof(ctx->_buffer));
+    if (count < 0) return count;
+    *pdst = ctx->_buffer;
+    *plen = cast(a_usize, count);
+    return 0;
+}
+
 a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
-	a_fno handle = open(fname, O_RDONLY);
-	if (handle < 0) return ALO_EEMPTY;
+    a_hfile file = fname != null ? open(fname, O_RDONLY) : STDIN_FILENO;
+	if (file < 0) return ALO_EEMPTY;
 
 	FileReadCtx ctx;
-	ctx._handle = handle;
+	ctx._file = file;
 
 	alo_pushntstr(env, fname);
 	a_msg msg = alo_compile(env, l_read_file, &ctx, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, -1, options);
 	alo_pop(env, -2);
 
-	close(ctx._handle);
+    if (fname != null) close(ctx._file);
 	return msg;
 }
 

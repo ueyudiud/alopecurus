@@ -174,7 +174,7 @@ ALO_EXPORT void (alo_pushnil)(a_henv env);
 ALO_EXPORT void (alo_pushbool)(a_henv env, a_bool val);
 ALO_EXPORT void (alo_pushint)(a_henv env, a_int val);
 ALO_EXPORT void (alo_pushfloat)(a_henv env, a_float val);
-ALO_EXPORT void (alo_pushptr)(a_henv env, void* val);
+ALO_EXPORT void (alo_pushptr)(a_henv env, void const* val);
 ALO_EXPORT char const* (alo_pushstr)(a_henv env, void const* src, a_usize len);
 ALO_EXPORT char const* (alo_pushntstr)(a_henv env, char const* src);
 ALO_EXPORT char const* (alo_pushfstr)(a_henv env, char const* fmt, ...);

@@ -22,6 +22,7 @@ ALO_EXPORT void (aloL_checktag)(a_henv env, a_ulen id, a_msg tag);
 ALO_EXPORT a_msg (aloL_checkany)(a_henv env, a_ulen id);
 ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_ulen id);
 ALO_EXPORT a_float (aloL_checknum)(a_henv env, a_ulen id);
+ALO_EXPORT void* (aloL_checkptr)(a_henv env, a_ulen id);
 ALO_EXPORT char const* (aloL_checklstr)(a_henv env, a_ulen id, a_usize* plen);
 ALO_EXPORT a_bool (aloL_optbool)(a_henv env, a_ulen id, a_bool dfl);
 ALO_EXPORT a_bool (aloL_optint_)(a_henv env, a_ulen id, a_int* pval);

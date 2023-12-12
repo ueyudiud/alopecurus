@@ -266,7 +266,7 @@ always_inline void* v_as_ptr(Value v) {
 
 #define v_of_ptr(v) v_box_nan(T_PTR, ptr2int(v))
 
-always_inline void v_set_ptr(Value* d, void* v) {
+always_inline void v_set_ptr(Value* d, void const* v) {
     v_set_raw(d, v_of_ptr(v));
 }
 

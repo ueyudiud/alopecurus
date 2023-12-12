@@ -357,7 +357,7 @@ void alo_pushfloat(a_henv env, a_float val) {
 	v_set_float(api_incr_stack(env), val);
 }
 
-void alo_pushptr(a_henv env, void* val) {
+void alo_pushptr(a_henv env, void const* val) {
 	v_set_ptr(api_incr_stack(env), val);
 }
 
@@ -711,7 +711,8 @@ static void l_pcall(a_henv env, void* rctx) {
 }
 
 a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ulen nsav) {
-	api_check(nres < 256, "bad result count.");
+    api_check(env->_status == ALO_SOK, "cannot call on a non-normal route");
+	api_check(nres < 256, "result count overflow");
 	api_check_elem(env, max(nsav + 1, narg + 1));
 
     PCallCtx ctx = {
@@ -815,6 +816,9 @@ char const* alo_tolstr(a_henv env, a_ilen id, a_usize* plen) {
 void* alo_toptr(a_henv env, a_ilen id) {
     Value v = api_elem(env, id);
     switch (v_get_tag(v)) {
+        case T_NIL: {
+            return null;
+        }
         case T_PTR: {
             return v_as_ptr(v);
         }
