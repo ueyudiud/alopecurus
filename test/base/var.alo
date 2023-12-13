@@ -1,0 +1,40 @@
+let a = true
+
+-- Variable definition
+assert(a)
+
+do {
+    -- Variable shadowing inside block
+    let a = false
+    assert(!a)
+}
+
+-- Shadowing end.
+assert(a)
+
+let a = true
+
+fn f1() {
+    -- Capture variable
+    assert(a)
+
+    -- Variable assign
+    a = false
+    assert(!a)
+
+    let a = true
+    -- Capture variable shadowing
+    assert(a)
+
+    fn f2(a) {
+        -- Parameter
+        assert(!a)
+    }
+
+    f2(false)
+}
+
+f1()
+
+-- Captured variable changed inside closure
+assert(!a)
