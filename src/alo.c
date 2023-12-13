@@ -162,7 +162,7 @@ static a_i32 l_read_lines(unused a_henv env, void* rctx, void const** pdst, a_us
 
 #define EOF_MARK ", got <eof>"
 
-static a_bool l_is_eof_error(a_henv env) {
+static a_bool l_test_eof(a_henv env) {
 	a_usize len;
 	char const* ptr = alo_tolstr(env, -1, &len);
 	return len >= sizeof(EOF_MARK) - 1 && strcmp(ptr + len - sizeof(EOF_MARK) + 1, EOF_MARK) == 0;
@@ -226,7 +226,7 @@ again:
 			return ALO_SYIELD;
 		}
 		case ALO_ECHUNK: {
-			if (l_is_eof_error(env)) {
+			if (l_test_eof(env)) {
 				alo_settop(env, 2);
 				return ALO_SOK;
 			}
@@ -268,10 +268,22 @@ static a_msg l_pcomp_reps(a_henv env) {
 	return ALO_SOK;
 }
 
+static a_msg l_stack_trace(a_henv env) {
+    aloL_traceerror(env, 0, 1, 6);
+    return 1;
+}
+
+static a_msg l_eval(a_henv env) {
+    alo_newcfun(env, l_stack_trace, 0);
+    alo_insert(env, 0);
+    try (alo_pcall(env, 0, -1, 0));
+    alo_erase(env, 0, 1);
+    return ALO_SOK;
+}
+
 static a_msg l_pread_eval(a_henv env) {
 	try (l_pcomp_reps(env));
-	try (alo_pcall(env, 0, -1, 0));
-	return ALO_SOK;
+	return l_eval(env);
 }
 
 static a_msg l_run_file(a_henv env, char const* file) {
@@ -279,8 +291,7 @@ static a_msg l_run_file(a_henv env, char const* file) {
     catch (aloL_compilef(env, fname, ALO_COMP_OPT_NOTHING), msg) {
         return l_print_error(env, msg);
     }
-    a_ilen nsav = alo_stacksize(env) - 1;
-    a_msg msg = alo_pcall(env, 0, 0, nsav);
+    a_msg msg = l_eval(env);
     return l_print_error(env, msg);
 }
 
@@ -391,7 +402,7 @@ int main(int argc, char const* const argv[]) {
     alo_newcfun(env, l_main, 0);
     alo_pushint(env, argc);
     alo_pushptr(env, argv);
-    a_msg msg = alo_pcall(env, 2, 0, 0);
+    a_msg msg = alo_pcall(env, 2, 0, ALO_STACK_INDEX_EMPTY);
 	alo_destroy(env);
 	
 	return msg == ALO_SOK ? EXIT_SUCCESS : EXIT_FAILURE;

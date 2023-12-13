@@ -116,6 +116,8 @@ static void strs_alloc_array(a_henv env, StrSet* self, a_usize cap) {
 	self->_ptr = ptr;
 }
 
+#define STRS_INIT_CAP 64
+
 #if ALO_M64
 # define STRS_MAX_CAP (u32c(1) << 31)
 #else
@@ -157,16 +159,17 @@ static GStr* l_to_str(Lexer* lex) {
     return str;
 }
 
-#define STRS_INIT_CAP 64
-
 void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
 	ai_io_iinit(env, fun, ctx, &lex->_in);
     lex->_line = 1;
-	
-	strs_alloc_array(env, &lex->_strs, STRS_INIT_CAP);
+
 	lex->_strs._len = 0;
 
     l_poll_unchecked(lex);
+}
+
+void ai_lex_open(Lexer* lex) {
+    strs_alloc_array(lex->_env, &lex->_strs, STRS_INIT_CAP);
 }
 
 void ai_lex_close(Lexer* lex) {

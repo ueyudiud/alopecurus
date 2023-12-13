@@ -29,6 +29,13 @@ always_inline void rq_push(RefQueue* rq, a_gptr p) {
 	_p_##v = &(v)->_gnext \
 )
 
+always_inline void g_set_stack_white(a_gptr o) {
+    assume(vtable_has_flag(o->_vptr, VTABLE_FLAG_STACK_ALLOC));
+    o->_tnext = WHITE_COLOR;
+}
+
+#define g_set_stack_white(o) g_set_stack_white(gobj_cast(o))
+
 always_inline void g_set_white(Global* gbl, a_gptr o) {
     o->_tnext = white_color(gbl);
 }

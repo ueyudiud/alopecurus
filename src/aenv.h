@@ -21,7 +21,7 @@ intern GRoute* ai_env_new(a_henv env, a_usize stack_size);
 intern a_henv ai_env_mroute(Global* gbl);
 intern a_msg ai_env_resume(a_henv env, GRoute* self);
 intern void ai_env_yield(a_henv env);
-intern a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx);
+intern a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx, Value* errf);
 intern a_noret ai_env_raise(a_henv env, a_msg msg);
 
 #define FRAME_FLAG_NONE 0x00
@@ -42,6 +42,11 @@ struct Frame {
 #endif
 };
 
+struct PFrame {
+    PFrame* _prev;
+    StkPtr _errf;
+};
+
 typedef void* a_rctx;
 
 struct alo_Env {
@@ -52,6 +57,7 @@ struct alo_Env {
     GRoute* _from;
     Frame* _frame;
     Stack _stack;
+    StkPtr _errf;
     Value _error;
     a_u16 _flags;
     a_u8 _status;
@@ -128,21 +134,6 @@ struct Global {
 #define RFLAG_COUNT_VARARG UINT8_MAX
 
 #define ALO_HMSWAP 0x80
-
-always_inline void gbl_protect(a_henv env, a_fp_gmark mark, a_fp_gexecpt except, void* ctx) {
-    assume(mark != null || except != null, "no protect function given.");
-    Global* gbl = G(env);
-    gbl->_gmark = mark;
-    gbl->_gexecpt = except;
-    gbl->_gctx = ctx;
-}
-
-always_inline void gbl_unprotect(a_henv env) {
-    Global* gbl = G(env);
-    gbl->_gmark = null;
-    gbl->_gexecpt = null;
-    gbl->_gctx = null;
-}
 
 always_inline a_usize gbl_mem_total(Global* gbl) {
     return gbl->_mem_base + cast(a_usize, gbl->_mem_debt);
@@ -291,6 +282,7 @@ enum {
 
 #define WHITE1_COLOR 0x1
 #define WHITE2_COLOR 0x2
+#define WHITE_COLOR (WHITE1_COLOR|WHITE2_COLOR)
 #define BLACK_COLOR 0x4
 
 #define GRAY_NULL ((a_trmark) 0)
@@ -327,8 +319,12 @@ always_inline a_bool g_has_other_color(Global* gbl, a_gptr o) {
 
 #define g_has_other_color(gbl,v) g_has_other_color(gbl, gobj_cast(v))
 
+always_inline a_bool g_has_valid_color(Global* gbl, a_gptr o) {
+    return !g_has_other_color(gbl, o) || vtable_has_flag(o->_vptr, VTABLE_FLAG_STACK_ALLOC);
+}
+
 always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o) {
-    assume(!g_has_other_color(gbl, o));
+    assume(g_has_valid_color(gbl, o));
     return (o->_tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
 
@@ -338,7 +334,7 @@ always_inline void v_check_alive(a_henv env, Value v) {
     if (v_is_obj(v)) {
         a_gptr p = v_as_obj(v);
         a_u64 stencil = v._ ^ p->_vptr->_stencil;
-        assume((stencil & V_TAG_MASK) == 0 && !g_has_other_color(G(env), p));
+        assume((stencil & V_TAG_MASK) == 0 && g_has_valid_color(G(env), p));
     }
 }
 

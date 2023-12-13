@@ -396,8 +396,8 @@ static void load_module(a_henv env, GMod* self, GStr* name) {
     for (a_u32 i = 0; i < loaders->_len; ++i) {
         vm_push_args(env, loaders->_ptr[i], v_of_str(name));
 
-        catch (alo_pcall(env, 1, 2, 1)) {
-            load_error(env, 1, str2ntstr(name));
+        catch (alo_pcall(env, 1, 2, ALO_STACK_INDEX_EMPTY)) {
+            load_error(env, -1, str2ntstr(name));
         }
 
         if (alo_isfunc(env, 2)) {

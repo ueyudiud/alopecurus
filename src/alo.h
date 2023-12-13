@@ -212,7 +212,7 @@ ALO_EXPORT a_msg (alo_get)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_set)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_put)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_call)(a_henv env, a_ulen narg, a_ilen nres);
-ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_ulen narg, a_ilen nres, a_ulen nsav);
+ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf);
 ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);

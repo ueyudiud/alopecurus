@@ -172,15 +172,8 @@ static a_msg base_print(a_henv env) {
 	return 0;
 }
 
-#define ERROR_DEFAULT_LEVEL 0
-#define ERROR_DEFAULT_LIMIT 6
-
 static a_msg base_error(a_henv env) {
-    a_int level = aloL_optint(env, 1, ERROR_DEFAULT_LEVEL);
-    a_int limit = aloL_optint(env, 2, ERROR_DEFAULT_LIMIT);
-
     alo_settop(env, 1);
-    aloL_traceerror(env, 0, cast(a_usize, max(level, 0) + 1), limit >= 0 ? cast(a_usize, limit) : SIZE_MAX);
     alo_raise(env);
 }
 

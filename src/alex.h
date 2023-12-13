@@ -19,6 +19,7 @@ typedef struct Token Token;
 typedef char a_tkbuf[MAX_TOKEN_STR_BUF_SIZE + 1];
 
 intern void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx);
+intern void ai_lex_open(Lexer* lex);
 intern void ai_lex_close(Lexer* lex);
 intern char const* ai_lex_tagname(a_i32 tag);
 intern char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf);

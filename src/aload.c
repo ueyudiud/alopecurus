@@ -10,6 +10,7 @@
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
+#include "aerr.h"
 
 #include "aload.h"
 
@@ -18,6 +19,7 @@ char const ai_fun_header[CHUNK_HEADER_SIZE] = { '\x04', 'A', 'l', 'o' };
 typedef struct InCtx InCtx;
 
 struct InCtx {
+    GOBJ_STRUCT_HEADER;
 	union {
 		a_henv _env;
 		ZIn _in;
@@ -26,7 +28,23 @@ struct InCtx {
     RefQueue _rq;
 };
 
-#define l_in(ic,p,l) try (ai_io_iget(&(ic)->_in, p, l))
+static void load_report(InCtx* ic, a_msg msg) {
+    if (msg == ALO_EEMPTY) {
+        ai_err_raisef(ic->_env, ALO_ECHUNK, "unexpected ending of chunk");
+    }
+    else {
+        assume(msg == ALO_EOUTER);
+        ai_err_raisef(ic->_env, msg, "foreign error, code: %d", ic->_in._err);
+    }
+}
+
+static void load_input(InCtx* ic, void* dst, a_usize len) {
+    catch (ai_io_iget(&ic->_in, dst, len), msg) {
+        load_report(ic, msg);
+    }
+}
+
+#define l_in(ic,p,l) load_input(ic, p, l)
 #define l_get(ic,t) ({ t _v0; l_in(ic, &_v0, sizeof(t));  _v0; })
 #define l_getv(ic,p,l) l_in(ic, p, sizeof((p)[0]) * (l))
 /* Get var sized int */
@@ -39,13 +57,15 @@ struct InCtx {
     _v << 7 | _b; \
 })
 
-static a_msg l_load_str(InCtx* ic, a_usize len, GStr** pstr) {
-    return ai_str_load(ic->_env, cast(a_sbfun, ai_io_iget), len, &ic->_in, pstr);
+static GStr* l_gets(InCtx* ic, a_usize len) {
+    GStr* str;
+    catch (ai_str_load(ic->_env, cast(a_sbfun, ai_io_iget), len, &ic->_in, &str), msg) {
+        load_report(ic, msg);
+    }
+    return str;
 }
 
-#define l_gets(ic,l) ({ GStr* _v; try (l_load_str(ic, l, &_v)); _v; })
-
-static a_msg l_load_const(InCtx* ic, Value* v) {
+static void load_const(InCtx* ic, Value* v) {
     a_u8 tag;
     switch (tag = l_get(ic, a_u8)) {
         case LVTAG_NIL: {
@@ -82,10 +102,9 @@ static a_msg l_load_const(InCtx* ic, Value* v) {
             break;
         }
     }
-    return ALO_SOK;
 }
 
-static a_msg l_load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
+static void load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
     init(info) {
         ._nconst = l_getvi(ic, a_u32),
         ._ninsn = l_getvi(ic, a_u32),
@@ -96,70 +115,62 @@ static a_msg l_load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
         ._nstack = l_get(ic, a_u8),
         ._flags = l_get(ic, a_u16) | (ic->_flags << 16)
     };
-	if (root && !(info->_flags & FUN_FLAG_UNIQUE))
-		return ALO_EINVAL;
-    return ALO_SOK;
-}
-
-static a_msg l_load_sub(InCtx* ic, GProto** pf);
-
-static a_msg l_load_meta(InCtx* ic, ProtoDesc const* info, GProto* meta) {
-    /* Noexcept code until here, add meta into object list. */
-	rq_push(&ic->_rq, meta);
-    
-    for (a_u32 i = 0; i < info->_nconst; ++i) {
-        try (l_load_const(ic, &meta->_consts[i]));
+	if (root && !(info->_flags & FUN_FLAG_UNIQUE)) {
+        ai_err_raisef(ic->_env, ALO_ECHUNK, "chunk data verification failed");
     }
-    l_getv(ic, meta->_code, info->_ninsn);
-    for (a_u16 i = 0; i < info->_nsub; ++i) {
-        try (l_load_sub(ic, &meta->_subs[i]));
+}
+
+static GProto* load_proto(InCtx* ic, a_bool root) {
+    ProtoDesc info;
+
+    /* Load prototype header */
+    load_info(ic, &info, root);
+
+    GProto* proto = ai_proto_alloc(ic->_env, &info);
+
+    /* Noexcept code until here, add proto into object list. */
+	rq_push(&ic->_rq, proto);
+    
+    for (a_u32 i = 0; i < info._nconst; ++i) {
+        load_const(ic, &proto->_consts[i]);
     }
-    
-    return ALO_SOK;
+    l_getv(ic, proto->_code, info._ninsn);
+    for (a_u16 i = 0; i < info._nsub; ++i) {
+        proto->_subs[i] = load_proto(ic, false);
+    }
+
+    return proto;
 }
 
-static a_msg l_load_sub(InCtx* ic, GProto** pf) {
-    /* Load function header */
-    ProtoDesc info;
-    try (l_load_info(ic, &info, false));
-
-    GProto* meta = ai_proto_xalloc(ic->_env, &info);
-    if (meta == null) return ALO_ENOMEM;
-
-    try (l_load_meta(ic, &info, meta));
-    *pf = meta;
-    return ALO_SOK;
-}
-
-static a_msg l_load_root(InCtx* ic) {
-    /* Load function header */
-    ProtoDesc info;
-    try (l_load_info(ic, &info, true));
-
-	GProto* meta = ai_proto_xalloc(ic->_env, &info);
-	if (meta == null) return ALO_ENOMEM;
-
-    try (l_load_meta(ic, &info, meta));
-    
-    return ALO_SOK;
-}
-
-static a_msg l_load(InCtx* ic) {
+static void load_verify(InCtx* ic) {
     /* Check chunk header */
     char header[CHUNK_HEADER_SIZE];
     l_getv(ic, header, CHUNK_HEADER_SIZE);
-    if (memcmp(header, ai_fun_header, CHUNK_HEADER_SIZE) != 0) return ALO_ECHUNK;
+    if (memcmp(header, ai_fun_header, CHUNK_HEADER_SIZE) != 0) {
+        ai_err_raisef(ic->_env, ALO_ECHUNK, "not chunk file");
+    }
     /* Check version and variant */
     a_u16 variant = l_get(ic, a_u16);
+    if (variant != ALO_VARIANT) {
+        ai_err_raisef(ic->_env, ALO_ECHUNK, "chunk file variant mismatched, expect %u, got %u", ALO_VARIANT, variant);
+    }
     a_u16 version = l_get(ic, a_u16);
-    if (version != ALO_VERSION_NUMBER || variant != ALO_VARIANT) return ALO_ECHUNK;
-
-    try (l_load_root(ic));
-	ai_gc_register_objects(ic->_in._env, &ic->_rq);
-    return ALO_SOK;
+    if (version != ALO_VERSION_NUMBER) {
+        ai_err_raisef(ic->_env, ALO_ECHUNK, "chunk file version mismatched, expect %u, got %u", ALO_VERSION_NUMBER, version);
+    }
 }
 
-static void l_splash(Global* gbl, void* ctx) {
+static void load_chunk(unused a_henv env, void* ctx) {
+    InCtx* ic = ctx;
+    /* Verify chunk head */
+    load_verify(ic);
+    /* Load root prototype */
+    load_proto(ic, true);
+    /* Register prototypes into GC */
+	ai_gc_register_objects(ic->_in._env, &ic->_rq);
+}
+
+static void load_mark(Global* gbl, void* ctx) {
     InCtx* ic = ctx;
 	rq_for (obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
@@ -167,30 +178,44 @@ static void l_splash(Global* gbl, void* ctx) {
 			ai_gc_trace_mark_val(gbl, meta->_consts[i]);
 		}
 	}
+    g_set_stack_white(ic);
 }
 
-static void l_release(InCtx* ic) {
-    Global* gbl = G(ic->_env);
+static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
+    Global* gbl = G(env);
 	rq_for (obj, &ic->_rq) {
 		GProto* meta = g_cast(GProto, obj);
 		ai_mem_ndealloc(gbl, meta, meta->_size);
 	}
 }
 
+static VTable const load_vtable = {
+    ._stencil = V_STENCIL(T_USER),
+    ._flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
+    ._slots = {
+        [vfp_slot(mark)] = load_mark,
+        [vfp_slot(except)] = load_except
+    }
+};
+
 a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags) {
-    InCtx ic = { ._flags = flags };
+    InCtx ic = {
+        ._vptr = &load_vtable,
+        ._flags = flags
+    };
+    g_set_stack_white(&ic);
 	rq_init(&ic._rq);
     ai_io_iinit(env, fun, ctx, &ic._in);
 
-	gbl_protect(env, l_splash, null, &ic);
-    a_msg msg = l_load(&ic);
-	gbl_unprotect(env);
+    Value* p = env->_stack._top++;
+    v_set_obj(env, p, &ic);
+
+    a_msg msg = ai_env_pcall(env, load_chunk, &ic, p);
+
+    v_set_nil(--env->_stack._top);
     
     if (likely(msg == ALO_SOK)) {
         *pval = g_cast(GProto, ic._rq._head)->_cache;
-    }
-    else {
-        l_release(&ic);
     }
     return msg;
 }

@@ -23,7 +23,7 @@
 #include "aauxlib.h"
 
 static void* aux_alloc(unused void* ctx, a_usize sz) {
-	return malloc(sz);
+    return malloc(sz);
 }
 
 static void* aux_realloc(unused void* ctx, void* blk, unused a_usize sz_old, a_usize sz_new) {
@@ -307,7 +307,7 @@ static void trace_fill(a_henv env, Frame* frame, Trace* trace) {
 	}
 }
 
-static Frame* l_frame_at(a_henv env, a_usize level) {
+static Frame* virtual_unwind(a_henv env, a_usize level) {
     Frame* frame = env->_frame;
 
     loop {
@@ -326,7 +326,7 @@ static Frame* l_frame_at(a_henv env, a_usize level) {
 static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, Buf* buf) {
     Trace trace;
 	Value* err = api_wrslot(env, id);
-    Frame* frame = l_frame_at(env, level);
+    Frame* frame = virtual_unwind(env, level);
     if (frame == null) return ALO_EINVAL;
 
     trace_fill(env, frame, &trace);

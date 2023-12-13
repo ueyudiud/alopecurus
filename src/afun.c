@@ -9,6 +9,7 @@
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
+#include "avm.h"
 
 #include "afun.h"
 
@@ -43,24 +44,17 @@ static a_usize proto_size_with_head(ProtoDesc const* desc) {
 	return pad_to(size, sizeof(a_usize));
 }
 
-GProto* ai_proto_xalloc(a_henv env, ProtoDesc const* desc) {
+GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
 	a_usize total_size = proto_size_with_head(desc);
+    void* blk = ai_mem_alloc(env, total_size);
+    memclr(blk, total_size);
 
-    void* blk;
     GProto* self;
 
     if (desc->_flags & FUN_FLAG_UNIQUE) {
-        blk = ai_mem_nalloc(env, total_size);
-        if (blk == null) return null;
-        memclr(blk, total_size);
-
         self = blk - UNIQ_PROTO_OFFSET;
     }
     else {
-        blk = ai_mem_nalloc(env, total_size);
-        if (blk == null) return null;
-        memclr(blk, total_size);
-
         self = blk;
         self->_vptr = &proto_vtable;
     }
@@ -347,6 +341,9 @@ static void proto_mark_body(Global* gbl, GProto* self) {
     for (a_u32 i = 0; i < self->_nsub; ++i) {
         ai_gc_trace_mark(gbl, self->_subs[i]);
     }
+    if (self->_name != null) {
+        ai_gc_trace_mark(gbl, self->_name);
+    }
     if (self->_dbg_file != null) {
         ai_gc_trace_mark(gbl, self->_dbg_file);
     }
@@ -419,6 +416,13 @@ static void cfun_mark(Global* gbl, GFun* self) {
     ai_gc_trace_work(gbl, fun_size(len));
 }
 
+static void fun_except(a_henv env, GFun* self, unused a_msg msg) {
+    Value* bot = vm_push_args(env, v_of_obj(self), env->_error);
+    v_set_nil(&env->_error);
+    Value err = ai_vm_call_meta(env, bot);
+    v_set(env, &env->_error, err);
+}
+
 void ai_proto_drop(Global* gbl, GProto* self) {
     if (self->_flags & FUN_FLAG_UNIQUE) {
         uniq_afun_drop(gbl, self->_cache);
@@ -434,7 +438,8 @@ static VTable const afun_vtable = {
     ._type_ref = g_type_ref(ALO_TFUNC),
 	._slots = {
         [vfp_slot(drop)] = afun_drop,
-        [vfp_slot(mark)] = afun_mark
+        [vfp_slot(mark)] = afun_mark,
+        [vfp_slot(except)] = fun_except
 	}
 };
 
@@ -444,7 +449,8 @@ static VTable const uniq_afun_vtable = {
     ._type_ref = g_type_ref(ALO_TFUNC),
 	._slots = {
         [vfp_slot(drop)] = uniq_afun_drop,
-        [vfp_slot(mark)] = uniq_afun_mark
+        [vfp_slot(mark)] = uniq_afun_mark,
+        [vfp_slot(except)] = fun_except
 	}
 };
 
@@ -454,7 +460,8 @@ static VTable const cfun_vtable = {
     ._type_ref = g_type_ref(ALO_TFUNC),
 	._slots = {
         [vfp_slot(drop)] = cfun_drop,
-        [vfp_slot(mark)] = cfun_mark
+        [vfp_slot(mark)] = cfun_mark,
+        [vfp_slot(except)] = fun_except
 	}
 };
 

@@ -7,6 +7,8 @@
 
 #include "aobj.h"
 
+#define ALO_ALLOC_ALIGN sizeof(a_f64)
+
 intern a_noret ai_mem_nomem(a_henv env);
 
 intern void* ai_mem_alloc(a_henv env, a_usize sz);
@@ -19,13 +21,17 @@ intern void ai_mem_ndealloc(Global* gbl, void* blk, a_usize sz);
 
 always_inline void* ai_mem_valloc(alo_Alloc const* af, void* ac, a_usize sz) {
 	assume(sz > 0);
-	return (*af->allocate)(ac, sz);
+	void* ptr = (*af->allocate)(ac, sz);
+    assume((ptr2int(ptr) & (ALO_ALLOC_ALIGN - 1)) == 0, "allocation violate alignment contract");
+    return ptr;
 }
 
 always_inline void* ai_mem_vrealloc(alo_Alloc const* af, void* ac, void* blk_old, a_usize sz_old, a_usize sz_new) {
 	assume(blk_old != null && sz_old > 0);
 	assume(sz_new > 0);
-	return (*af->reallocate)(ac, blk_old, sz_old, sz_new);
+	void* ptr = (*af->reallocate)(ac, blk_old, sz_old, sz_new);
+    assume((ptr2int(ptr) & (ALO_ALLOC_ALIGN - 1)) == 0, "reallocation violate alignment contract");
+    return ptr;
 }
 
 always_inline void ai_mem_vdealloc(alo_Alloc const* af, void* ac, void* blk, a_usize sz) {

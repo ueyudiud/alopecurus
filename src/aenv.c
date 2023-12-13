@@ -140,8 +140,12 @@ void ai_env_yield(a_henv env) {
 	ai_ctx_jump(caller, env, ALO_SOK);
 }
 
-a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx) {
-	return ai_ctx_catch(env, pfun, pctx);
+a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx, Value* errf) {
+    StkPtr old_errf = env->_errf;
+    env->_errf = errf != null ? val2stk(env, errf) : 0;
+	a_msg msg = ai_ctx_catch(env, pfun, pctx);
+    env->_errf = old_errf;
+    return msg;
 }
 
 a_noret ai_env_raise(a_henv env, a_msg msg) {
@@ -219,7 +223,7 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	if (route_init(env, env)) return ALO_ENOMEM;
 
 	/* Initialize remaining components. */
-	catch (ai_env_pcall(env, global_init, null), msg) {
+	catch (ai_env_pcall(env, global_init, null, null), msg) {
         alo_destroy(env);
         return msg;
     }

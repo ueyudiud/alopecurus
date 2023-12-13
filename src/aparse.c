@@ -26,6 +26,7 @@ BUF_STRUCT_DECLARE(LocalInfoBuf, LocalInfo);
 BUF_STRUCT_DECLARE(CapInfoBuf, RichCapInfo);
 
 struct Parser {
+    GOBJ_STRUCT_HEADER;
     union {
         Lexer _lex;
         a_henv _env;
@@ -3076,7 +3077,7 @@ static GProto* fnscope_epilogue(Parser* par, GStr* name, a_bool root, a_line lin
             (root ? FUN_FLAG_UNIQUE : 0)
 	};
 
-	GProto* proto = ai_proto_xalloc(par->_env, &desc);
+	GProto* proto = ai_proto_alloc(par->_env, &desc);
 	if (proto == null) {
 		ai_mem_nomem(par->_env);
 	}
@@ -3160,21 +3161,22 @@ static void parser_close(Parser* par) {
     at_buf_deinit(gbl, par->_secs);
     at_buf_deinit(gbl, par->_sbuf);
 	ai_lex_close(&par->_lex);
-
-	gbl_unprotect(par->_env);
 }
 
 static void parser_mark(Global* gbl, void* ctx) {
 	Parser* par = ctx;
 	run {
 		StrSet* set = &par->_lex._strs;
-		for (a_u32 i = 0; i <= set->_hmask; ++i) {
-            GStr* str = set->_ptr[i];
-			if (str != null) {
-				ai_gc_trace_mark(gbl, str);
-			}
-		}
+        if (set->_ptr != null) {
+            for (a_u32 i = 0; i <= set->_hmask; ++i) {
+                GStr* str = set->_ptr[i];
+                if (str != null) {
+                    ai_gc_trace_mark(gbl, str);
+                }
+            }
+        }
 	}
+    g_set_stack_white(par);
 }
 
 static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
@@ -3194,7 +3196,7 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 #define ENV_NAME "_ENV"
 
 static void parser_start(Parser* par) {
-	gbl_protect(par->_env, parser_mark, parser_except, par);
+    ai_lex_open(lex(par));
 
 	par->_gname = ai_lex_to_str(lex(par), ENV_NAME, sizeof(ENV_NAME) - 1);
 
@@ -5396,8 +5398,19 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 	fnscope_epilogue(par, par->_name, true, lex_line(par));
 }
 
+static VTable const parser_vtable = {
+    ._stencil = V_STENCIL(T_USER),
+    ._flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
+    ._slots = {
+        [vfp_slot(mark)] = parser_mark,
+        [vfp_slot(except)] = parser_except
+    }
+};
+
 static void parser_init(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, Parser* par) {
     init(par) {
+        ._vptr = &parser_vtable,
+        ._tnext = WHITE_COLOR,
         ._options = options,
         ._file = file,
         ._name = name
@@ -5410,7 +5423,12 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 
 	Parser par;
     parser_init(env, fun, ctx, file, name, options, &par);
 
-	a_msg msg = ai_env_pcall(env, l_scan_root, &par);
+    Value* p = env->_stack._top++;
+    v_set_obj(env, p, &par);
+
+	a_msg msg = ai_env_pcall(env, l_scan_root, &par, p);
+
+    v_set_nil(--env->_stack._top);
 
 	if (msg == ALO_SOK) {
 		*pfun = func_build(&par);

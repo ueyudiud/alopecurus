@@ -231,9 +231,6 @@ static void propagate_atomic(Global* gbl) {
 	if (v_is_obj(gbl->_global)) {
 		ai_gc_trace_mark(gbl, v_as_obj(gbl->_global));
 	}
-	if (gbl->_gmark != null) {
-		(*gbl->_gmark)(gbl, gbl->_gctx);
-	}
 	propagate_all(gbl, &gbl->_tr_gray);
 
 	a_isize old_work = gbl->_mem_work;

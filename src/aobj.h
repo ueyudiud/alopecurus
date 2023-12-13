@@ -33,6 +33,7 @@ typedef struct alo_Alloc Alloc;
 typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Stack Stack;
+typedef struct PFrame PFrame;
 typedef struct Global Global;
 
 typedef struct Value Value;
@@ -326,22 +327,11 @@ struct GObj {
 	GOBJ_STRUCT_HEADER;
 };
 
-#define VTABLE_STRUCT_HEADER \
-    /* The stencil for value representation. */ \
-    a_u64 _stencil;          \
-    /* The type variant index. */               \
-    a_u32 _vid;              \
-    /* The API tag of object. */                \
-    a_u16 _tag;              \
-    /* The flags for virtual table. */          \
-    a_u16 _flags;            \
-    /* The handle of type object (optional). */ \
-    a_usize _type_ref
-
 #define VTABLE_METHOD_LIST(_) \
 	_( 0, drop  ,    void, Global* gbl                                      ) \
 	_( 1, mark  ,    void, Global* gbl                                      ) \
-	_( 2, close ,    void, a_henv env                                       )
+	_( 2, close ,    void, a_henv env                                       ) \
+	_( 3, except,    void, a_henv env, a_msg msg                            )
 
 /* Method Table. */
 typedef union {
@@ -357,13 +347,25 @@ typedef union {
  ** Primitive types do not have virtual table.
  */
 struct VTable {
-    VTABLE_STRUCT_HEADER;
-    /* The virtual function pointer slots. */
+    /* The stencil for value representation. */
+    a_u64 _stencil;
+    /* The type variant index. */
+    a_u32 _vid;
+    /* The API tag of object. */
+    a_u16 _tag;
+    /* The flags for virtual table. */
+    a_u16 _flags;
+    /* The metadata used to describe virtual table. */
+    void const* _meta;
+    /* The handle of type object (optional). */
+    a_usize _type_ref;
+    /* The virtual slots. */
     void* _slots[];
 };
 
 #define VTABLE_FLAG_NONE        u8c(0x00)
 #define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
+#define VTABLE_FLAG_STACK_ALLOC u8c(0x02)
 
 #define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
 

@@ -14,6 +14,7 @@
 
 #include "../aobj.h"
 #include "../aenv.h"
+#include "../aerr.h"
 
 #define ext(n) M_cat(ext_,n) /* Avoid for type redefinition. */
 
@@ -167,7 +168,7 @@ EXCEPTION_DISPOSITION ai_ctx_start_catch(
 		_In_ PEXCEPTION_RECORD ExceptionRecord,
 		_In_ unused PVOID EstablisherFrame,
 		_Inout_ PCONTEXT ContextRecord,
-		_Inout_ PDISPATCHER_CONTEXT unused DispatcherContext) {
+		_Inout_ unused PDISPATCHER_CONTEXT DispatcherContext) {
 	a_henv callee = cast(a_henv, ContextRecord->Rbx);
 	a_henv caller = callee->_from;
 
@@ -198,10 +199,7 @@ static EXCEPTION_DISPOSITION catch_except_hook(
 	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
 	a_henv env = int2ptr(GRoute, DispatcherContext->ContextRecord->Rsi);
-	Global* gbl = G(env);
-	if (gbl->_gexecpt != null) {
-		(*gbl->_gexecpt)(env, gbl->_gctx, msg);
-	}
+    ai_err_except(env, msg);
 
 	a_usize target_ip = DispatcherContext->ImageBase + *((a_u32*) DispatcherContext->HandlerData);
 

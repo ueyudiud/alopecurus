@@ -427,7 +427,7 @@ void alo_pop(a_henv env, a_ilen id) {
 a_ulen alo_rotate(a_henv env, a_ilen id, a_ilen n) {
     Value* p = api_stack(env, id);
     Value* r = env->_stack._top;
-    Value* q = n >= 0 ? p + n : r - n;
+    Value* q = n >= 0 ? p + n : r + n;
     api_check(p <= q && q <= r, "rotate range out of bound");
 
     v_reverse(env, p, q);
@@ -710,10 +710,10 @@ static void l_pcall(a_henv env, void* rctx) {
 	l_call(env, ctx->_narg, ctx->_nres);
 }
 
-a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ulen nsav) {
+a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
     api_check(env->_status == ALO_SOK, "cannot call on a non-normal route");
 	api_check(nres < 256, "result count overflow");
-	api_check_elem(env, max(nsav + 1, narg + 1));
+    api_check_elem(env, narg + 1);
 
     PCallCtx ctx = {
 		._narg = narg,
@@ -721,11 +721,14 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ulen nsav) {
 	};
 
     Frame* frame = env->_frame;
+    Value* v_errf = id_errf != ALO_STACK_INDEX_EMPTY ? api_stack(env, id_errf) : null;
 
-    catch (ai_env_pcall(env, l_pcall, &ctx), msg) {
+    StkPtr p_bot = val2stk(env, env->_stack._top - (narg + 1));
+
+    catch (ai_env_pcall(env, l_pcall, &ctx, v_errf), msg) {
         env->_frame = frame; /* Recover frame. */
 
-        Value* bot = ai_stk_bot(env) + nsav;
+        Value* bot = stk2val(env, p_bot);
         env->_stack._top = bot;
         ai_cap_close_above(env, bot);
         ai_env_pop_error(env, api_incr_stack(env));
