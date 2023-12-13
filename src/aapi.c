@@ -710,6 +710,19 @@ static void l_pcall(a_henv env, void* rctx) {
 	l_call(env, ctx->_narg, ctx->_nres);
 }
 
+static Value* load_errf(a_henv env, a_ilen id) {
+    if (id != ALO_STACK_INDEX_EMPTY) {
+        Value* v = api_stack(env, id);
+        if (v_is_obj(*v)) {
+            a_gptr o = v_as_obj(*v);
+            if (g_impl(o)->except != null) {
+                return v;
+            }
+        }
+    }
+    return null;
+}
+
 a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
     api_check(env->_status == ALO_SOK, "cannot call on a non-normal route");
 	api_check(nres < 256, "result count overflow");
@@ -721,7 +734,7 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
 	};
 
     Frame* frame = env->_frame;
-    Value* v_errf = id_errf != ALO_STACK_INDEX_EMPTY ? api_stack(env, id_errf) : null;
+    Value* v_errf = load_errf(env, id_errf);
 
     StkPtr p_bot = val2stk(env, env->_stack._top - (narg + 1));
 
@@ -743,12 +756,12 @@ void alo_raise(a_henv env) {
 }
 
 a_msg alo_resume(a_henv env) {
-	api_check(env->_status == ALO_SYIELD, "cannot resume the route.");
+	api_check(env->_status == ALO_SYIELD, "cannot resume a non-yielded route.");
 	return ai_env_resume(G(env)->_active, env);
 }
 
 void alo_yield(a_henv env) {
-	api_check(env->_status == ALO_SOK, "cannot yield the route.");
+	api_check(env->_status == ALO_SOK, "cannot yield a non-normal route.");
 	ai_env_yield(env);
 }
 
@@ -907,6 +920,7 @@ char const ai_api_tagname[][8] = {
 	[ALO_TLIST] = "list",
 	[ALO_TTABLE] = "table",
 	[ALO_TFUNC] = "func",
+    [ALO_TMOD] = "mod",
 	[ALO_TTYPE] = "type",
 	[ALO_TUSER] = "user"
 };

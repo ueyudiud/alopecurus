@@ -178,16 +178,15 @@ static a_msg base_error(a_henv env) {
 }
 
 static a_msg base_assert(a_henv env) {
-	a_usize n = alo_stacksize(env);
+	a_ilen n = alo_stacksize(env);
 	if (alo_tobool(env, 0)) {
-		return cast(a_msg, n);
+		return n;
 	}
 	else {
 		if (n == 1) {
 			alo_pushntstr(env, "assertion failed!");
 		}
 		alo_settop(env, 2);
-        aloL_traceerror(env, 1, 1, 6);
 		alo_raise(env);
 	}
 }

@@ -187,7 +187,7 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 # define ckd_mul(d,a,b) __builtin_mul_overflow(a, b, d)
 
 # define count_leading_zero(a) __builtin_clz(a)
-# define ceil_power_of_two(a) (~(((typeof(a)) 0) >> count_leading_zero(a)) + 1)
+# define ceil_power_of_two(a) ((~((typeof(a)) 0) >> count_leading_zero(a)) + 1)
 #else
 /* Redirect to C23 defined function name. */
 # define count_leading_zero(a) stdc_leading_zeros(a)

@@ -1061,7 +1061,7 @@ static void expr_env(Parser* par, OutExpr e) {
 	expr_resolve(par, e, id);
 }
 
-static void expr_gvar(Parser* par, InoutExpr e) {
+static void expr_gvar(Parser* par, InoutExpr e, a_line line) {
 	a_u32 id = e->_d1;
 	assume(e->_tag == EXPR_GBL, "not global variable.");
 	expr_env(par, e);
@@ -1074,6 +1074,7 @@ static void expr_gvar(Parser* par, InoutExpr e) {
 		e->_tag = EXPR_REFK;
 		e->_d2 = id;
 	}
+    e->_line = line;
 }
 
 static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
@@ -1082,7 +1083,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 		case SYM_LOCAL: {
 			if (par->_scope_depth == sym->_scope) {
 				expr_init(e, EXPR_REG,
-					._d1 = par->_locals->_ptr[par->_fnscope->_local_off + sym->_index]._reg,
+					._d1 = par->_locals->_ptr[sym->_index]._reg,
 					._d2 = id,
 					._fsym = true
 				);
@@ -1139,6 +1140,7 @@ static void expr_symbol(Parser* par, OutExpr e, GStr* name, a_line line) {
 	a_u32 id;
 	if (l_lookup_symbol(par, name, &id)) {
 		expr_resolve(par, e, id);
+        e->_line = line;
 	}
 	else {
 		expr_init(e, EXPR_GBL,
@@ -2444,9 +2446,9 @@ assign:
 			}
 			else if (!(par->_options & ALO_COMP_OPT_LOSSEN)) {
 				GStr* name = v_as_str(const_at(par, e1->_d2));
-				ai_par_error(par, "cannot assign to anonymous variable '%s'", e1->_line, str2ntstr(name));
+				ai_par_error(par, "cannot assign to anonymous variable '%s'", line, str2ntstr(name));
 			}
-			expr_gvar(par, e1);
+			expr_gvar(par, e1, line);
 			goto assign;
 		}
 		default: {
@@ -2931,12 +2933,11 @@ static void scope_pop(Parser* par, a_line line) {
 		a_u32 bot = scope->_sym_off;
 		a_u32 top = par->_syms->_len;
 		a_u32 label = par->_head_label - par->_fnscope->_begin_label;
-		a_u32 local_off = par->_fnscope->_local_off;
 		for (a_u32 i = bot; i < top; ++i) {
 			Sym* sym = &par->_syms->_ptr[i];
 			switch (sym->_tag) {
 				case SYM_LOCAL: {
-					par->_locals->_ptr[sym->_index - local_off]._end_label = label;
+					par->_locals->_ptr[sym->_index]._end_label = label;
 					break;
 				}
 			}
@@ -3358,7 +3359,7 @@ bind:
 			return l_emit_iab(par, BC_MOV, reg, reg2, e->_line);
 		}
 		case EXPR_GBL: {
-			expr_gvar(par, e);
+			expr_gvar(par, e, e->_line);
 			goto bind;
 		}
 		default: {
@@ -4023,8 +4024,8 @@ static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 		}
 	}
 
-	GProto* meta = fnscope_epilogue(par, name, false, lex_line(par));
-	expr_func(par, e, meta);
+	GProto* proto = fnscope_epilogue(par, name, false, lex_line(par));
+	expr_func(par, e, proto);
 }
 
 static void l_scan_lambda(Parser* par, OutExpr e) {
@@ -4052,8 +4053,8 @@ static void l_scan_lambda(Parser* par, OutExpr e) {
 		expr_return(par, e2, scope._begin_line);
 	}
 
-	GProto* meta = fnscope_epilogue(par, null, false, lex_line(par));
-	expr_func(par, e, meta);
+	GProto* proto = fnscope_epilogue(par, null, false, lex_line(par));
+	expr_func(par, e, proto);
 }
 
 static void l_scan_table_index_or_value(Parser* par, OutExpr e, a_int* pindex) {
@@ -4803,11 +4804,25 @@ static void l_scan_assign_or_call(Parser* par) {
 	expr_discard(par, lhs._head._expr);
 }
 
+static void l_scan_do_stat(Parser* par) {
+    Scope scope;
+    lex_skip(par);
+
+    lex_check_skip(par, TK_LBR);
+    a_line line = lex_line(par);
+
+    scope_enter(par, &scope, line, 0);
+    l_scan_stats(par);
+
+    lex_check_pair_right(par, TK_LBR, TK_RBR, line);
+    scope_leave(par, lex_line(par));
+}
+
 static void l_scan_if_stat(Parser* par) {
 	lex_skip(par);
 
 	lex_check_skip(par, TK_LBK);
-	a_u32 line = lex_line(par);
+	a_line line = lex_line(par);
 
 	Expr ep;
 	l_scan_expr(par, ep);
@@ -5206,7 +5221,8 @@ static void l_scan_fun_def_stat(Parser* par) {
 	Expr ef;
 
 	GStr* name = lex_check_ident(par);
-	expr_symbol(par, en, name, lex_line(par));
+    local_bind(par, en, name, lex_line(par));
+
 	while (lex_test_skip(par, TK_DOT)) {
 		name = lex_check_ident(par);
 		expr_index_str(par, en, name, lex_line(par));
@@ -5328,6 +5344,10 @@ static void l_scan_stats(Parser* par) {
             }
             case TK_continue: {
                 l_scan_continue_stat(par);
+                break;
+            }
+            case TK_do: {
+                l_scan_do_stat(par);
                 break;
             }
 			case TK_if: {

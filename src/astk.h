@@ -20,6 +20,9 @@ struct Stack {
     a_usize _alloc_size; /* The actual allocate size.*/
 };
 
+/**
+ ** The unchanged stack pointer can across GC boundary.
+ */
 #if ALO_STACK_RELOC
 typedef a_isize StkPtr;
 #else

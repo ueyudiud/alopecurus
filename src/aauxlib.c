@@ -45,26 +45,10 @@ a_henv aloL_create(void) {
 	return msg == ALO_SOK ? env : null;
 }
 
-void aloL_argerror(a_henv env, a_ulen id, char const* what) {
-	char const* name = ai_dbg_get_func_name(env, env->_frame);
-	if (name == null) aloL_raisef(env, "bad argument #%u, %s", id, what);
-	aloL_raisef(env, "bad argument #%u to '%s', %s", id, name, what);
-}
-
-static char const* l_typename(a_henv env, a_ilen id) {
-	Value const* p = api_roslot(env, id);
-	return likely(p != null) ? v_nameof(env, *p) : "empty";
-}
-
-void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
-	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, l_typename(env, cast(a_ilen, id)));
-	aloL_argerror(env, id, what);
-}
-
 /**
  ** Get API slot index from absolute stack index.
  */
-static a_ilen sid2uid(a_henv env, a_ulen id) {
+static a_ilen uid2sid(a_henv env, a_ulen id) {
     if (id >= env->_stack._top - ai_stk_bot(env)) {
         /* Return empty stack index if overflow */
         return ALO_STACK_INDEX_EMPTY;
@@ -72,15 +56,28 @@ static a_ilen sid2uid(a_henv env, a_ulen id) {
     return cast(a_ilen, id);
 }
 
+void aloL_argerror(a_henv env, a_ulen id, char const* what) {
+	char const* name = ai_dbg_get_func_name(env, env->_frame);
+    a_ilen sid = uid2sid(env, id);
+	if (name == null) aloL_raisef(env, "bad argument #%u, %s", sid, what);
+	aloL_raisef(env, "bad argument #%u to '%s', %s", sid, name, what);
+}
+
+void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
+    a_ilen sid = uid2sid(env, id);
+	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, v_nameof(env, api_elem(env, sid)));
+	aloL_argerror(env, sid, what);
+}
+
 void aloL_checktag(a_henv env, a_ulen id, a_msg tag) {
 	api_check(tag >= ALO_TNIL && tag <= ALO_TUSER, "bad type tag.");
-	if (alo_tagof(env, sid2uid(env, id)) != tag) {
+	if (alo_tagof(env, uid2sid(env, id)) != tag) {
 		aloL_typeerror(env, id, ai_api_tagname[tag]);
 	}
 }
 
 a_msg aloL_checkany(a_henv env, a_ulen id) {
-    a_msg tag = alo_tagof(env, sid2uid(env, id));
+    a_msg tag = alo_tagof(env, uid2sid(env, id));
     if (tag == ALO_EEMPTY) {
         aloL_argerror(env, id, "value expected");
     }
@@ -88,7 +85,7 @@ a_msg aloL_checkany(a_henv env, a_ulen id) {
 }
 
 a_int aloL_checkint(a_henv env, a_ulen id) {
-	Value v = api_elem(env, sid2uid(env, id));
+	Value v = api_elem(env, uid2sid(env, id));
 	if (!v_is_int(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TINT]);
 	}
@@ -96,7 +93,7 @@ a_int aloL_checkint(a_henv env, a_ulen id) {
 }
 
 a_float aloL_checknum(a_henv env, a_ulen id) {
-	Value v = api_elem(env, sid2uid(env, id));
+	Value v = api_elem(env, uid2sid(env, id));
 	if (!v_is_num(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TFLOAT]);
 	}
@@ -104,7 +101,7 @@ a_float aloL_checknum(a_henv env, a_ulen id) {
 }
 
 void* aloL_checkptr(a_henv env, a_ulen id) {
-    Value v = api_elem(env, sid2uid(env, id));
+    Value v = api_elem(env, uid2sid(env, id));
     if (!v_is_ptr(v) && !v_is_nil(v)) {
         aloL_typeerror(env, id, ai_api_tagname[ALO_TPTR]);
     }
@@ -112,7 +109,7 @@ void* aloL_checkptr(a_henv env, a_ulen id) {
 }
 
 char const* aloL_checklstr(a_henv env, a_ulen id, a_usize* plen) {
-	Value v = api_elem(env, sid2uid(env, id));
+	Value v = api_elem(env, uid2sid(env, id));
 	if (!v_is_str(v)) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TSTR]);
 	}
@@ -124,12 +121,12 @@ char const* aloL_checklstr(a_henv env, a_ulen id, a_usize* plen) {
 }
 
 a_bool aloL_optbool(a_henv env, a_ulen id, a_bool dfl) {
-    Value v = api_elem(env, sid2uid(env, id));
+    Value v = api_elem(env, uid2sid(env, id));
     return !v_is_nil(v) ? v_to_bool(v) : dfl;
 }
 
 a_bool aloL_optint_(a_henv env, a_ulen id, a_int* pval) {
-	Value v = api_elem(env, sid2uid(env, id));
+	Value v = api_elem(env, uid2sid(env, id));
 	if (!v_is_int(v)) {
 		if (v_is_nil(v)) {
 			return false;
@@ -141,7 +138,7 @@ a_bool aloL_optint_(a_henv env, a_ulen id, a_int* pval) {
 }
 
 a_bool aloL_optnum_(a_henv env, a_ulen id, a_float* pval) {
-	Value v = api_elem(env, sid2uid(env, id));
+	Value v = api_elem(env, uid2sid(env, id));
 	if (!v_is_num(v)) {
 		if (v_is_nil(v)) {
 			return false;
@@ -153,7 +150,7 @@ a_bool aloL_optnum_(a_henv env, a_ulen id, a_float* pval) {
 }
 
 char const* aloL_optlstr(a_henv env, a_ulen id, a_usize* plen) {
-	Value v = api_elem(env, sid2uid(env, id));
+	Value v = api_elem(env, uid2sid(env, id));
 	if (!v_is_str(v)) {
 		if (v_is_nil(v)) {
 			return null;

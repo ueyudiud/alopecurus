@@ -213,7 +213,6 @@ static VTable const lib_vtable = {
 #define CAPTURED_SELF_INDEX ALO_STACK_INDEX_CAPTURE(0)
 
 static GMod* check_self(a_henv env, a_ilen id) {
-    aloL_checktag(env, id, ALO_TMOD);
     return v_as_mod(api_elem(env, id));
 }
 
@@ -422,7 +421,7 @@ static a_msg load_load(a_henv env) {
     GStr* name;
     run {
         char const* load_path = aloL_checkstr(env, 0);
-        aloS_replace(env, load_path, ".", ALO_PATH_SEP);
+        aloS_replace(env, load_path, ".", ALO_DIR_SEP);
         alo_pop(env, 0);
         name = v_as_str(*api_stack(env, 0));
     }
