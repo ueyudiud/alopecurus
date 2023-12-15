@@ -860,9 +860,7 @@ static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
 }
 
 static a_i32 l_scan_dqstr(Lexer* lex, Token* tk, a_u32 line) {
-	loop {
-		try(l_scan_dqchr(lex, tk, line));
-	}
+	loop try (l_scan_dqchr(lex, tk, line));
 }
 
 static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
@@ -943,7 +941,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
             }
             case '-': {
                 if (l_test_skip(lex, '-')) {
-                    try(l_skip_line(lex));
+                    try (l_skip_line(lex));
                     break;
                 }
                 else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {

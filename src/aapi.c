@@ -687,6 +687,22 @@ void alo_put(a_henv env, a_ilen id) {
 	ai_gc_trigger(env);
 }
 
+a_hiter alo_iter(a_henv env, a_ilen id) {
+    Value v = api_elem(env, id);
+    api_check_slot(env, 3);
+
+    Value* p = env->_stack._top;
+    ai_vm_iter(env, p, v);
+
+    env->_stack._top += 3;
+    return cast(a_hiter, val2stk(env, p));
+}
+
+a_bool alo_next(a_henv env, a_hiter itr) {
+    Value* p = stk2val(env, cast(StkPtr, itr));
+    return ai_vm_next(env, p) >= 0;
+}
+
 static void l_call(a_henv env, a_ulen narg, a_ilen nres) {
 	Value* base = env->_stack._top - narg - 1;
 

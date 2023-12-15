@@ -17,6 +17,8 @@ intern a_bool ai_table_gets(a_henv env, GTable* self, GStr* k, Value* pv);
 intern a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv);
 intern Value* ai_table_refls(a_henv env, GTable* self, char const* ptr, a_usize len);
 intern a_bool ai_table_del(a_henv env, GTable* self, Value vk);
+intern void ai_table_delr(a_henv env, GTable* self, Value* ref);
+intern a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex);
 intern a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv);
 
 typedef struct TNode TNode;

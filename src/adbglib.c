@@ -143,7 +143,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_CALLV:
 			case BC_RET:
 			case BC_ITER:
-			case BC_FORGV: {
+			case BC_NEXTGV: {
 				aloi_show("%4u %4u    _\n", bc_load_a(ip), bc_load_b(ip));
 				break;
 			}
@@ -166,7 +166,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_LPUSH:
 			case BC_CALL:
 			case BC_CAT:
-			case BC_FORG: {
+			case BC_NEXTG: {
 				aloi_show("%4u %4u %4u\n", bc_load_a(ip), bc_load_b(ip), bc_load_c(ip));
 				break;
 			}

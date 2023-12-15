@@ -329,7 +329,7 @@ static Value vm_len(a_henv env, Value v) {
     }
 }
 
-static void vm_iter(a_henv env, Value* restrict vs, Value v) {
+void ai_vm_iter(a_henv env, Value* restrict vs, Value v) {
     switch (v_get_tag(v)) {
         case T_TUPLE: {
             v_set(env, &vs[0], v);
@@ -343,7 +343,8 @@ static void vm_iter(a_henv env, Value* restrict vs, Value v) {
         }
         case T_TABLE: {
             v_set(env, &vs[0], v);
-            v_set_int(&vs[2], 0);
+            v_set_int(&vs[1], -1);
+            v_set_nil(&vs[2]);
             break;
         }
         default: {
@@ -353,54 +354,55 @@ static void vm_iter(a_henv env, Value* restrict vs, Value v) {
     }
 }
 
-static ValueSlice vm_next(a_henv env, Value* restrict vs, Value* vb) {
+static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
     Value vc = vb[0];
-    Value* pi = &vb[2];
     switch (v_get_tag(vc)) {
         case T_TUPLE: {
             GTuple* p = v_as_tuple(vc);
-            a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (i >= p->_len)
-                return (ValueSlice) { null, 0 };
+            a_u32 i = cast(a_u32, v_as_int(vb[2]));
+            if (i >= p->_len) return ALO_EEMPTY;
             
-            v_set_int(pi, cast(a_i32, i + 1));
+            v_set_int(&vb[2], cast(a_i32, i + 1));
             env->_stack._top = vs;
-            Value* vd = vm_push_args(env, p->_ptr[i]);
-            return (ValueSlice) { vd, 1 };
+            vm_push_args(env, p->_ptr[i]);
+            return 1;
         }
         case T_LIST: {
             GList* p = v_as_list(vc);
-            a_u32 i = cast(a_u32, v_as_int(*pi));
-            if (i >= p->_len)
-                return (ValueSlice) { null, 0 };
+            a_u32 i = cast(a_u32, v_as_int(vb[2]));
+            if (i >= p->_len) return ALO_EEMPTY;
             
-            v_set_int(pi, cast(a_i32, i + 1));
+            v_set_int(&vb[2], cast(a_i32, i + 1));
             env->_stack._top = vs;
-            Value* vd = vm_push_args(env, p->_ptr[i]);
-            return (ValueSlice) { vd, 1 };
+            vm_push_args(env, p->_ptr[i]);
+            return 1;
         }
         case T_TABLE: {
             GTable* p = v_as_table(vc);
-            a_i32 i = v_as_int(*pi);
-            if (i == 0 && p->_len == 0)
-                return (ValueSlice) { };
+            a_i32 i = v_as_int(vb[1]);
+            Value k = vb[2];
+            catch (ai_table_next(env, p, &k, &i)) {
+                return ALO_EEMPTY;
+            }
 
-            i = p->_ptr[i - 1]._lnext;
-            if (i < 0)
-                return (ValueSlice) { };
+            v_set_int(&vb[1], i);
+            v_set(env, &vb[2], k);
 
             TNode* n = &p->_ptr[i];
 
-            v_set_int(pi, cast(a_i32, i + 1));
             env->_stack._top = vs;
-            Value* vd = vm_push_args(env, n->_key, n->_value);
-            return (ValueSlice) { vd, 2 };
+            vm_push_args(env, n->_key, n->_value);
+            return 2;
         }
         default: {
             //TODO
             ai_err_bad_tm(env, TM___next__);
         }
     }
+}
+
+a_msg ai_vm_next(a_henv env, Value* vs) {
+    return vm_next(env, env->_stack._top, vs);
 }
 
 static a_bool vm_append(a_henv env, Buf* buf, Value v) {
@@ -811,27 +813,27 @@ tail_call:
 
                 Value vb = R[b];
 
-                vm_iter(env, &R[a], vb);
+                ai_vm_iter(env, &R[a], vb);
                 break;
             }
-            case BC_FORG: {
+            case BC_NEXTG: {
                 loadB();
                 loadC();
 
-                ValueSlice vs = vm_next(env, &R[a], &R[b]);
-                if (vs._ptr != null) {
-					v_mov_all_with_nil(env, &R[a], c, vs._ptr, vs._len);
+                a_msg n = vm_next(env, &R[a], &R[b]);
+                if (n >= 0) {
+					v_mov_all_with_nil(env, &R[a], c, &R[a], n);
                     adjust_top();
                     pc += 1;
                 }
                 break;
             }
-            case BC_FORGV: {
+            case BC_NEXTGV: {
                 loadB();
 
-                ValueSlice vs = vm_next(env, &R[a], &R[b]);
-                if (vs._ptr != null) {
-					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, vs._ptr, vs._len);
+                a_msg n = vm_next(env, &R[a], &R[b]);
+                if (n >= 0) {
+					v_mov_all_with_nil(env, &R[a], RFLAG_COUNT_VARARG, &R[a], n);
                     pc += 1;
                 }
                 break;

@@ -137,6 +137,7 @@ typedef a_u32 a_ulen;
 typedef struct alo_Alloc alo_Alloc;
 /* Environment handle. */
 typedef struct alo_Env* a_henv;
+typedef void* a_hiter;
 
 struct alo_Alloc {
 	void* (*allocate)(void*, a_usize);
@@ -211,6 +212,8 @@ ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_ilen id);
 ALO_EXPORT a_msg (alo_get)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_set)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_put)(a_henv env, a_ilen id);
+ALO_EXPORT a_hiter (alo_iter)(a_henv env, a_ilen id);
+ALO_EXPORT a_bool (alo_next)(a_henv env, a_hiter itr);
 ALO_EXPORT void (alo_call)(a_henv env, a_ulen narg, a_ilen nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf);
 ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);

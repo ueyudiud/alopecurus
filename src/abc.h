@@ -121,9 +121,9 @@ always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
     _(  LOOK,  "look",reg,reg,kst,___) /* R[a:a+2] := look(R[b], K[c])            */ \
     _( LOOKX, "lookx",reg,reg,___,kst) /* R[a:a+2] := look(R[b], K[ex])           */ \
     _(  ITER,  "iter",reg,reg,___,___) /* R[a:a+2] := iter(R[b])                  */ \
-    _(  FORG,  "forg",reg,reg,len,___) /* t, R[a:a+c] := next(R[b:b+2])
+    _( NEXTG, "nextg",reg,reg,len,___) /* t, R[a:a+c] := next(R[b:b+2])
                                           if R[a] { pc += 1; R[b+2] := t }        */ \
-    _( FORGV, "forgv",reg,reg,___,___) /* t, R[a:] := next(R[b:b+2])
+    _(NEXTGV,"nextgv",reg,reg,___,___) /* t, R[a:] := next(R[b:b+2])
                                           if t { pc += 1; R[b+2] := t }           */ \
     _(   GET,   "get",reg,reg,reg,___) /* R[a] := R[b][R[c]]                      */ \
     _(  GETI,  "geti",reg,reg,int,___) /* R[a] := R[b][int(c)]                    */ \

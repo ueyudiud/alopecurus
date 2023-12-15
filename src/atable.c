@@ -235,7 +235,16 @@ static void table_erase(unused a_henv env, GTable* self, a_i32 index) {
     TNode* node_prev = table_node(self, index_prev);
     TNode* node_next = table_node(self, index_next);
 
-    table_redirect_from_hash_chain(self, index, node->_hash, node->_hnext);
+    v_set_nil(&node->_key);
+
+    if (table_is_head_of_hash_chain(self, index, node)) {
+        if (index_next >= 0) {
+            table_move_node(env, self, index_next, index);
+        }
+    }
+    else {
+        table_redirect_from_hash_chain(self, index, node->_hash, node->_hnext);
+    }
     node->_hnext = node_ctrl->_hnext;
     node_ctrl->_hnext = index;
 
@@ -421,6 +430,40 @@ a_bool ai_table_del(a_henv env, GTable* self, Value vk) {
     table_erase(env, self, index);
     self->_len -= 1;
     return true;
+}
+
+void ai_table_delr(a_henv env, GTable* self, Value* ref) {
+    assume(self->_ptr != null && &self->_ptr->_value <= ref && ref <= &(self->_ptr + self->_hmask)->_value,
+           "not table reference");
+    TNode* node = from_member(TNode, _value, ref);
+
+    a_i32 index = cast(a_i32, node - self->_ptr);
+    table_erase(env, self, index);
+    self->_len -= 1;
+}
+
+a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex) {
+    if (self->_len == 0) return ALO_EEMPTY;
+
+    assume(self->_ptr != null);
+    TNode* n = &self->_ptr[*pindex];
+    Value vk = *rk;
+
+    /* Attempt to use cached index. */
+    if (!v_trivial_equals_unchecked(vk, n->_key)) {
+        /* Failed, try to locate index again. */
+        catch (table_find_with_trivial_equality(self, vk, ai_vm_hash(env, vk), pindex)) {
+            /* No key found, raise error here. */
+            ai_err_raisef(env, ALO_EINVAL, "modified iterator.");
+        }
+    }
+
+    if (n->_lnext < 0)
+        return true;
+
+    *pindex = n->_lnext;
+    v_cpy(env, rk, &self->_ptr[*pindex]._key);
+    return false;
 }
 
 a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {

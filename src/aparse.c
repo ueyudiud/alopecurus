@@ -2840,7 +2840,7 @@ static a_u32 for_bind_real(Parser* par, Pat* pat, a_line line) {
 	a_u32 reg_itr = par->_scope->_top_reg - 3; /* The index of iterator register. */
 
 	Expr e;
-	a_u32 label = l_emit_branch(par, bc_make_iabc(BC_FORG, R_DYN, reg_itr, N_DYN), NO_LABEL, line);
+	a_u32 label = l_emit_branch(par, bc_make_iabc(BC_NEXTG, R_DYN, reg_itr, N_DYN), NO_LABEL, line);
 	expr_init(e, EXPR_VDYN, ._d1 = label - 1, ._fupk = true);
 
 	pat_bind(par, pat, e);

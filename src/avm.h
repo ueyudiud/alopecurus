@@ -16,6 +16,8 @@ intern Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op);
 intern a_bool ai_vm_compare(a_henv env, Value v1, Value v2, a_enum op);
 intern Value ai_vm_get(a_henv env, Value v1, Value v2);
 intern void ai_vm_set(a_henv env, Value v1, Value v2, Value v3);
+intern void ai_vm_iter(a_henv env, Value* vs, Value v);
+intern a_msg ai_vm_next(a_henv env, Value* vs);
 intern void ai_vm_append(a_henv env, GBuf* buf, Value v);
 intern void ai_vm_call(a_henv env, Value* base, a_i32 nret);
 intern Value ai_vm_call_meta(a_henv env, Value* bot);
