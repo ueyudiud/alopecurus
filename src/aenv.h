@@ -177,26 +177,15 @@ always_inline char const* g_nameof(a_henv env, a_gptr p) {
 #define g_nameof(env,p) g_nameof(env, gobj_cast(p))
 
 always_inline GType* v_typeof(a_henv env, Value v) {
-    if (v_is_float(v)) {
-        return g_type(env, ALO_TFLOAT);
-    }
-    else if (!v_is_obj(v)) {
-        switch (v_get_tag(v)) {
-            case T_NIL:
-                return g_type(env, ALO_TNIL);
-            case T_FALSE:
-            case T_TRUE:
-                return g_type(env, ALO_TBOOL);
-            case T_INT:
-                return g_type(env, ALO_TINT);
-            case T_PTR:
-                return g_type(env, ALO_TPTR);
-            default:
-                panic("bad type tag.");
-        }
-    }
-    else {
-        return g_typeof(env, v_as_obj(v));
+    switch (v_get_tag(v)) {
+        case T_NIL: return g_type(env, ALO_TNIL);
+        case T_FALSE:
+        case T_TRUE: return g_type(env, ALO_TBOOL);
+        case T_INT: return g_type(env, ALO_TINT);
+        case T_PTR: return g_type(env, ALO_TPTR);
+        case T_OBJ: return g_typeof(env, v_as_obj(v));
+        case T_FLOAT: return g_type(env, ALO_TFLOAT);
+        default: unreachable();
     }
 }
 

@@ -22,11 +22,6 @@
 
 #include "avm.h"
 
-typedef struct {
-	Value const* _ptr;
-	a_usize _len;
-} ValueSlice;
-
 static void l_call_hook(a_henv env, a_msg msg, a_hfun fun, a_hctx ctx) {
 	/* Call hook function. */
 	(*fun)(env, msg, ctx);
@@ -62,7 +57,7 @@ static a_noret l_div_0_err(a_henv env) {
 static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
     Value vr;
 
-    if (ai_tm_unary(env, tm, v1, &vr)) {
+    catch (ai_tm_unary(env, tm, v1, &vr)) {
         ai_err_bad_tm(env, tm);
     }
 
@@ -72,7 +67,7 @@ static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
     Value vr;
 
-    if (ai_tm_binary(env, tm, v1, v2, &vr)) {
+    catch (ai_tm_binary(env, tm, v1, v2, &vr)) {
         ai_err_bad_tm(env, tm);
     }
 
@@ -459,11 +454,11 @@ void ai_vm_append(a_henv env, GBuf* buf, Value v) {
     }
 }
 
-static GStr* vm_cat(a_henv env, Value* base, a_usize n) {
+static GStr* vm_cat(a_henv env, Value* base, a_ulen n) {
 	GBuf* buf = ai_buf_new(env);
 	vm_push_args(env, v_of_obj(buf));
 
-	for (a_usize i = 0; i < n; ++i) {
+	for (a_ulen i = 0; i < n; ++i) {
 	    Value v = base[i];
         if (vm_append(env, buf_cast(buf), v)) {
             GStr* str;
@@ -504,7 +499,7 @@ static a_u32 vm_fetch_ex(a_insn const** pc) {
 	return bc_load_ax(ip);
 }
 
-static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_u32 num_ret, a_u32 flags) {
+static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_ulen num_ret, a_u32 flags) {
 	GFun* fun;
 	Value const* K;
     Frame frame[1] = {};
