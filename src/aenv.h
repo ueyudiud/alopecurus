@@ -112,14 +112,11 @@ struct Global {
     a_gclist _gc_toclose;
     a_gcnext* _gc_sweep;
     RcCap* _cap_cache;
-    Value _global;
-    a_fp_gexecpt _gexecpt;
-    a_fp_gmark _gmark;
-    void* _gctx;
     a_trmark _tr_gray;
     a_trmark _tr_regray;
     GStr* _nomem_error;
     StrCache _str_cache;
+    Value _global;
     a_hash _seed;
     a_u16 _gcpausemul;
     a_u16 _gcstepmul;

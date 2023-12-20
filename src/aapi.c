@@ -61,18 +61,18 @@ a_msg alo_init(void) {
  *@param env the optional runtime environment.
  *@param n the attribute name.
  *@param pi the pointer to store result.
- *@return true if attribute name is valid and false for otherwise.
+ *@return false if attribute name is valid and true for otherwise.
  */
 a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
 	switch (n) {
 		case ALO_ATTR_VERSION:
 			*pi = ALO_VERSION_NUMBER;
-			return true;
+			return false;
 		case ALO_ATTR_VARIANT:
 			*pi = ALO_VARIANT;
-			return true;
-		default:
 			return false;
+		default:
+			return true;
 	}
 }
 
@@ -497,7 +497,17 @@ void* alo_newmod(a_henv env, a_usize s) {
 
 a_msg alo_compute(a_henv env, a_enum op) {
     switch (op) {
-        case ALO_OPADD ... ALO_OPBXOR: {
+        case ALO_OPADD:
+        case ALO_OPSUB:
+        case ALO_OPMUL:
+        case ALO_OPDIV:
+        case ALO_OPMOD:
+        case ALO_OPPOW:
+        case ALO_OPSHL:
+        case ALO_OPSHR:
+        case ALO_OPBAND:
+        case ALO_OPBOR:
+        case ALO_OPBXOR: {
             api_check_elem(env, 2);
             Value v1 = env->_stack._top[-2];
             Value v2 = env->_stack._top[-1];
@@ -508,7 +518,8 @@ a_msg alo_compute(a_henv env, a_enum op) {
             v_set(env, api_incr_stack(env), v);
             return api_tagof(env, v);
         }
-        case ALO_OPNEG ... ALO_OPBNOT: {
+        case ALO_OPNEG:
+        case ALO_OPBNOT: {
             api_check_elem(env, 1);
             Value v1 = api_pre_decr_stack(env);
 
@@ -529,7 +540,8 @@ a_bool alo_compare(a_henv env, a_ilen id1, a_ilen id2, a_enum op) {
         case ALO_OPEQ: {
             return ai_vm_equals(env, v1, v2);
         }
-        case ALO_OPLT ... ALO_OPLE: {
+        case ALO_OPLT:
+        case ALO_OPLE: {
             return ai_vm_compare(env, v1, v2, op - ALO_OPLT + OP_LT);
         }
         default: api_panic("bad opcode for alo_compare: %u", op);

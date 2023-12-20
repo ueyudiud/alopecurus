@@ -152,7 +152,9 @@ Value ai_vm_unary(a_henv env, Value v, a_enum op) {
 
 Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op) {
     switch (op) {
-        case OP_ADD ... OP_MUL: {
+        case OP_ADD:
+        case OP_SUB:
+        case OP_MUL: {
             if (v_is_int(v1) && v_is_int(v2)) {
                 a_int val = ai_op_bin_int(v_as_int(v1), v_as_int(v2), op);
                 return v_of_int(val);
@@ -163,7 +165,8 @@ Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op) {
             }
             return vm_meta_bin(env, v1, v2, ai_op_bin2tm(op));
         }
-        case OP_DIV ... OP_MOD: {
+        case OP_DIV:
+        case OP_MOD: {
             if (v_is_int(v1) && v_is_int(v2)) {
                 a_int ic = v_as_int(v2);
                 if (unlikely(ic == 0)) {
@@ -178,7 +181,11 @@ Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op) {
             }
             return vm_meta_bin(env, v1, v1, ai_op_bin2tm(op));
         }
-        case OP_SHL ... OP_BIT_XOR: {
+        case OP_SHL:
+        case OP_SHR:
+        case OP_BIT_AND:
+        case OP_BIT_OR:
+        case OP_BIT_XOR: {
             if (v_is_int(v1) && v_is_int(v2)) {
                 a_int val = ai_op_bin_int(v_as_int(v1), v_as_int(v2), op);
                 return v_of_int(val);
