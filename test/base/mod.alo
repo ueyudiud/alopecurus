@@ -1,1 +1,2 @@
 lib.load('base.var')
+lib.load('base.logic')
