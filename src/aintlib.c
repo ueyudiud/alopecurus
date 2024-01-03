@@ -52,7 +52,7 @@ static a_msg int___new__(a_henv env) {
                     errno = 0;
                     a_int i = strtol(p, &q, radix);
 
-                    if (q != p + str->_len)
+                    if (q != p + str->len)
                         goto einval;
                     if (errno == ERANGE)
                         goto erange;

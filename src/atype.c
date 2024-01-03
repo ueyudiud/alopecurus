@@ -20,8 +20,8 @@ GType* ai_type_new(a_henv env, GStr* name) {
     GType* self = ai_mem_alloc(env, size);
     memclr(self, size);
 
-    self->_vptr = &type_vtable;
-    self->_name = name;
+    self->vptr = &type_vtable;
+    self->name = name;
 
     ai_gc_register_object(env, self);
     return self;
@@ -48,9 +48,9 @@ void ai_type_boost(a_henv env) {
     static_assert(sizeof(l_name_tags) == TYPE__COUNT);
 
     for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
-        init(gbl->_types[i]) {
-            ._vptr = &type_vtable,
-            ._name = g_str(env, l_name_tags[i])
+        init(gbl->fast_types[i]) {
+            .vptr = &type_vtable,
+            .name = g_str(env, l_name_tags[i])
         };
     }
 }
@@ -61,7 +61,7 @@ static void type_clean(Global* gbl, GType* self) {
 
 void ai_type_clean(Global* gbl) {
     for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
-        type_clean(gbl, gbl->_types[i]);
+        type_clean(gbl, gbl->fast_types[i]);
     }
 }
 
@@ -72,15 +72,15 @@ static void type_drop(Global* gbl, GType* self) {
 
 static void type_mark(Global* gbl, GType* self) {
     ai_mod_mark(gbl, type2mt(self));
-    ai_gc_trace_mark(gbl, self->_name);
+    ai_gc_trace_mark(gbl, self->name);
     ai_gc_trace_work(gbl, type_size(0));
 }
 
 static VTable const type_vtable = {
-	._stencil = V_STENCIL(T_MOD),
-    ._tag = ALO_TTYPE,
-    ._type_ref = g_type_ref(ALO_TTYPE),
-	._slots = {
+	.stencil = V_STENCIL(T_MOD),
+    .tag = ALO_TTYPE,
+    .type_ref = g_type_ref(ALO_TTYPE),
+	.slots = {
         [vfp_slot(drop)] = type_drop,
         [vfp_slot(mark)] = type_mark
 	}

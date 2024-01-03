@@ -66,31 +66,31 @@ static a_msg aloi_readline(a_henv env, LineBuf buf, a_usize* plen, char const* p
 typedef struct InLine InLine;
 
 struct InLine {
-	InLine* _next;
-	a_usize _len;
-	LineBuf _ptr;
+	InLine* next;
+	a_usize len;
+	LineBuf ptr;
 };
 
 typedef struct {
-	InLine* _head;
-	InLine** _tail;
-	a_usize _len;
+	InLine* head;
+	InLine** tail;
+	a_usize len;
 } InLines;
 
 static InLines l_lines;
 
 static void l_init_lines(void) {
     init(&l_lines) {
-        ._head = null,
-        ._tail = &l_lines._head
+        .head = null,
+        .tail = &l_lines.head
     };
 }
 
 static void l_deinit_lines(void) {
-	InLine* frag = l_lines._head;
+	InLine* frag = l_lines.head;
 	while (frag != null) {
-		InLine* next = frag->_next;
-		aloi_freeline(frag->_ptr);
+		InLine* next = frag->next;
+		aloi_freeline(frag->ptr);
 		free(frag);
 		frag = next;
 	}
@@ -112,17 +112,17 @@ static a_msg l_read_frag(a_henv env, char const* prompt) {
 	InLine* frag = malloc(sizeof(InLine));
 	if (frag == null) return ALO_ENOMEM;
 
-	a_msg msg = aloi_readline(env, frag->_ptr, frag->_len, prompt);
+	a_msg msg = aloi_readline(env, frag->ptr, frag->len, prompt);
 
 	if (msg < 0) {
 		free(frag);
 		return msg;
 	}
 
-	frag->_next = null;
-	*l_lines._tail = frag;
-	l_lines._tail = &frag->_next;
-	l_lines._len += frag->_len;
+	frag->next = null;
+	*l_lines.tail = frag;
+	l_lines.tail = &frag->next;
+	l_lines.len += frag->len;
 
 	return msg;
 }
@@ -133,12 +133,12 @@ static a_msg l_read_line(a_henv env, char const* prompt) {
 }
 
 static void l_save_line(a_henv env) {
-	char* lines = malloc(l_lines._len + 1);
+	char* lines = malloc(l_lines.len + 1);
 	char* dst = lines;
 	if (lines == null) return;
-	for (InLine* line = l_lines._head; line != null; line = line->_next) {
-		memcpy(dst, line->_ptr, line->_len);
-		dst += line->_len;
+	for (InLine* line = l_lines.head; line != null; line = line->next) {
+		memcpy(dst, line->ptr, line->len);
+		dst += line->len;
 	}
 	dst[0] = '\0';
 	aloi_saveline(env, lines);
@@ -149,9 +149,9 @@ static a_i32 l_read_lines(unused a_henv env, void* rctx, void const** pdst, a_us
 	InLine** pline = rctx;
 	InLine* line = *pline;
 	if (line != null) {
-		*pdst = line->_ptr;
-		*plen = strlen(line->_ptr);
-		*pline = line->_next;
+		*pdst = line->ptr;
+		*plen = strlen(line->ptr);
+		*pline = line->next;
 	}
 	else {
 		*pdst = null;
@@ -209,9 +209,9 @@ static a_msg l_try_comp_reps(a_henv env, char const* prompt, a_bool* peval) {
 	InLine* ctx;
 
 again:
-	ctx = l_lines._head;
+	ctx = l_lines.head;
 
-	/* stack: name */
+	/* stack: dbg_name */
 	msg = alo_compile(
         env,
         l_read_lines,

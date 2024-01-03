@@ -14,10 +14,10 @@ intern a_noret ai_stk_overflow(a_henv env, a_isize diff);
 intern void ai_stk_deinit(Global* gbl, Stack* stack);
 
 struct Stack {
-    Value* _base;
-    Value* _top;
-    Value* _limit;
-    a_usize _alloc_size; /* The actual allocate size.*/
+    Value* base;
+    Value* top;
+    Value* limit;
+    a_usize alloc_size; /* The actual allocate size.*/
 };
 
 /**

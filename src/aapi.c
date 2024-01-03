@@ -32,7 +32,7 @@ a_msg api_tagof(unused a_henv env, Value v) {
         case T_PTR:
             return ALO_TPTR;
         case T_OBJ:
-            return v_as_obj(v)->_vptr->_tag;
+            return v_as_obj(v)->vptr->tag;
         case T_FLOAT:
             return ALO_TFLOAT;
         default:
@@ -59,9 +59,9 @@ a_msg alo_init(void) {
 /**
  ** Load integer attribute.
  *@param env the optional runtime environment.
- *@param n the attribute name.
+ *@param n the attribute dbg_name.
  *@param pi the pointer to store result.
- *@return false if attribute name is valid and true for otherwise.
+ *@return false if attribute dbg_name is valid and true for otherwise.
  */
 a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
 	switch (n) {
@@ -83,15 +83,15 @@ a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
  */
 void alo_setpanic(a_henv env, a_cfun f) {
 	Global* gbl = G(env);
-	gbl->_panic = f;
+	gbl->panic_ = f;
 }
 
 /**
- ** Set hook for VM. This function is thread safe.
+ ** Set hook_ for VM. This function is thread safe.
  *@param env the runtime environment.
- *@param kf the hook function.
- *@param kc the hook context.
- *@param mask the hook mask.
+ *@param kf the hook_ function.
+ *@param kc the hook_ context.
+ *@param mask the hook_ mask.
  */
 void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
 	Global* gbl = G(env);
@@ -104,10 +104,10 @@ void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
 
 	ai_vm_lock_hook(gbl);
 
-	gbl->_hookf = kf;
-	gbl->_hookc = kc;
+	gbl->hook_ = kf;
+	gbl->hook_ctx = kc;
 
-	gbl->_hookm = mask;
+	gbl->hookm = mask;
 }
 
 /**
@@ -116,7 +116,7 @@ void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
  *@return the stack size.
  */
 a_ilen alo_stacksize(a_henv env) {
-	return env->_stack._top - ai_stk_bot(env);
+	return env->stack.top - ai_stk_bot(env);
 }
 
 /**
@@ -126,11 +126,11 @@ a_ilen alo_stacksize(a_henv env) {
  *@return false if reserved success and true for otherwise.
  */
 a_bool alo_ensure(a_henv env, a_ulen n) {
-	Value* const expect = env->_stack._top + n;
+	Value* const expect = env->stack.top + n;
 	Value* const limit = api_stack_limit(env);
 	if (expect > limit) {
 #ifdef ALOI_CHECK_API
-        if (expect > env->_stack._limit) {
+        if (expect > env->stack.limit) {
 #endif
             a_isize diff = ai_stk_grow(env, expect);
 
@@ -140,7 +140,7 @@ a_bool alo_ensure(a_henv env, a_ulen n) {
 #ifdef ALOI_CHECK_API
         }
 
-        env->_frame->_stack_limit = val2stk(env, expect);
+        env->frame->stack_limit = val2stk(env, expect);
 #endif
 	}
 	return false;
@@ -154,20 +154,20 @@ a_bool alo_ensure(a_henv env, a_ulen n) {
  *@param n the stack index of top, only valid stack index is available.
  */
 void alo_settop(a_henv env, a_ilen n) {
-	Value* old_top = env->_stack._top;
+	Value* old_top = env->stack.top;
 	Value* new_top = n >= 0 ? ai_stk_bot(env) + n : old_top + n;
 
 	api_check(new_top >= ai_stk_bot(env) && new_top <= api_stack_limit(env));
 
 	v_set_nil_ranged(old_top, new_top);
-	env->_stack._top = new_top;
+	env->stack.top = new_top;
 }
 
 #define MIN_NEG_STACK_INDEX (-255)
 
 a_ilen alo_absindex(a_henv env, a_ilen id) {
 	if (id < 0 && id >= MIN_NEG_STACK_INDEX) {
-		Value* v = env->_stack._top + id;
+		Value* v = env->stack.top + id;
 		api_check(v >= ai_stk_bot(env));
 		id = v - ai_stk_bot(env);
 	}
@@ -177,28 +177,28 @@ a_ilen alo_absindex(a_henv env, a_ilen id) {
 Value const* api_roslot(a_henv env, a_ilen id) {
 	if (id >= 0) {
 		Value const* bot = ai_stk_bot(env);
-		if (id >= env->_stack._top - bot) 
+		if (id >= env->stack.top - bot)
 			return null;
 		return bot + id;
 	}
 	else if (id >= MIN_NEG_STACK_INDEX) {
 		Value const* bot = ai_stk_bot(env);
-		if (-id > env->_stack._top - bot)
+		if (-id > env->stack.top - bot)
 			return null;
-		return env->_stack._top + id;
+		return env->stack.top + id;
 	}
 	else if (id == ALO_STACK_INDEX_ERROR) {
-		return &env->_error;
+		return &env->error;
 	}
 	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
 		id -= ALO_STACK_INDEX_CAPTURE_BASE;
-		GFun* fun = v_as_func(*stk2val(env, env->_frame->_stack_bot - 1));
-		if (cast(a_u32, id) >= fun->_len)
+		GFun* fun = v_as_func(*stk2val(env, env->frame->stack_bot - 1));
+		if (cast(a_u32, id) >= fun->ncap)
 			return null;
-		return unlikely(fun->_flags & FUN_FLAG_NATIVE) ? &fun->_vals[id] : fun->_caps[id]->_ptr;
+		return unlikely(fun->flags & FUN_FLAG_NATIVE) ? &fun->val_caps[id] : fun->ref_caps[id]->ptr;
 	}
 	else if (id == ALO_STACK_INDEX_GLOBAL) {
-		return &G(env)->_global;
+		return &G(env)->global_value;
 	}
 	return null;
 }
@@ -219,9 +219,9 @@ Value* api_wrslot(a_henv env, a_ilen id) {
 	}
 	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
 		id -= ALO_STACK_INDEX_CAPTURE_BASE;
-		GFun* fun = v_as_func(*stk2val(env, env->_frame->_stack_bot - 1));
-		api_check(cast(a_u32, id) < fun->_len);
-		v = unlikely(fun->_flags & FUN_FLAG_NATIVE) ? &fun->_vals[id] : fun->_caps[id]->_ptr;
+		GFun* fun = v_as_func(*stk2val(env, env->frame->stack_bot - 1));
+		api_check(cast(a_u32, id) < fun->ncap);
+		v = unlikely(fun->flags & FUN_FLAG_NATIVE) ? &fun->val_caps[id] : fun->ref_caps[id]->ptr;
 	}
 	else {
 		v = null;
@@ -234,10 +234,11 @@ Value* api_stack(a_henv env, a_ilen id) {
     Value* v;
     if (id >= 0) {
         v = ai_stk_bot(env) + id;
-        api_check(v < env->_stack._top, "stack index out of bound.");
+        api_check(v < env->stack.top, "stack index out of bound.");
     }
-    else if (id >= MIN_NEG_STACK_INDEX) {
-        v = env->_stack._top + id;
+    else {
+        api_check(id >= MIN_NEG_STACK_INDEX, "not valid stack index.");
+        v = env->stack.top + id;
         api_check(v >= ai_stk_bot(env), "stack index out of bound.");
     }
     return v;
@@ -288,7 +289,7 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 			break;
 		}
 		case 'g': {
-			v_set(env, &v, G(env)->_global);
+			v_set(env, &v, G(env)->global_value);
 			break;
 		}
 		default: {
@@ -412,21 +413,21 @@ void alo_xmove(a_henv src, a_henv dst, a_ulen n) {
 	api_check(G(src) == G(dst), "not in same global context.");
 	api_check_elem(src, n);
 	api_check_slot(dst, n);
-	v_cpy_all(src, dst->_stack._top, src->_stack._top - n, n);
-	src->_stack._top -= n;
-	dst->_stack._top += n;
+	v_cpy_all(src, dst->stack.top, src->stack.top - n, n);
+	src->stack.top -= n;
+	dst->stack.top += n;
 }
 
 void alo_pop(a_henv env, a_ilen id) {
 	Value* d = api_wrslot(env, id);
-	api_check(env->_stack._top - 1 != d, "bad pop index.");
+	api_check(env->stack.top - 1 != d, "bad pop index.");
 	Value s = api_decr_stack(env);
 	v_set(env, d, s);
 }
 
 a_ulen alo_rotate(a_henv env, a_ilen id, a_ilen n) {
     Value* p = api_stack(env, id);
-    Value* r = env->_stack._top;
+    Value* r = env->stack.top;
     Value* q = n >= 0 ? p + n : r + n;
     api_check(p <= q && q <= r, "rotate range out of bound");
 
@@ -438,21 +439,21 @@ a_ulen alo_rotate(a_henv env, a_ilen id, a_ilen n) {
 
 a_ulen alo_erase(a_henv env, a_ilen id, a_ulen n) {
     Value* p = api_stack(env, id);
-    Value* r = env->_stack._top;
+    Value* r = env->stack.top;
     Value* q = p + n;
     api_check(p <= q && q <= r, "erase range out of bound");
 
     v_mov_all_fwd(env, p, q, r - q);
 
     a_ulen m = cast(a_ulen, r - q);
-    env->_stack._top = p + m;
+    env->stack.top = p + m;
     return m;
 }
 
 void alo_newtuple(a_henv env, a_ulen n) {
 	api_check_elem(env, n);
-	GTuple* val = ai_tuple_new(env, env->_stack._top - n, n);
-	env->_stack._top -= n;
+	GTuple* val = ai_tuple_new(env, env->stack.top - n, n);
+	env->stack.top -= n;
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 }
@@ -475,8 +476,8 @@ void alo_newtable(a_henv env, a_ulen n) {
 
 void alo_newcfun(a_henv env, a_cfun f, a_ulen n) {
 	api_check_elem(env, n);
-	GFun* val = ai_cfun_create(env, f, n, env->_stack._top - n);
-	env->_stack._top -= n;
+	GFun* val = ai_cfun_create(env, f, n, env->stack.top - n);
+	env->stack.top -= n;
 	v_set_obj(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 }
@@ -492,7 +493,7 @@ void* alo_newmod(a_henv env, a_usize s) {
     GMod* val = ai_mod_new(env, s);
     v_set_obj(env, api_incr_stack(env), val);
     ai_gc_trigger(env);
-    return val->_extra;
+    return val->extra;
 }
 
 a_msg alo_compute(a_henv env, a_enum op) {
@@ -509,11 +510,11 @@ a_msg alo_compute(a_henv env, a_enum op) {
         case ALO_OPBOR:
         case ALO_OPBXOR: {
             api_check_elem(env, 2);
-            Value v1 = env->_stack._top[-2];
-            Value v2 = env->_stack._top[-1];
+            Value v1 = env->stack.top[-2];
+            Value v2 = env->stack.top[-1];
 
             Value v = ai_vm_binary(env, v1, v2, op - ALO_OPADD + OP_ADD);
-            env->_stack._top -= 2;
+            env->stack.top -= 2;
 
             v_set(env, api_incr_stack(env), v);
             return api_tagof(env, v);
@@ -552,11 +553,11 @@ a_msg alo_get(a_henv env, a_ilen id) {
     api_check_elem(env, 1);
 
     Value v = api_elem(env, id);
-    Value vk = env->_stack._top[-1];
+    Value vk = env->stack.top[-1];
 
     Value vv = ai_vm_get(env, v, vk);
 
-    v_set(env, &env->_stack._top[-1], vv);
+    v_set(env, &env->stack.top[-1], vv);
 
     return api_tagof(env, vv);
 }
@@ -565,12 +566,12 @@ void alo_set(a_henv env, a_ilen id) {
     api_check_elem(env, 2);
 
     Value v = api_elem(env, id);
-    Value vv = env->_stack._top[-1];
-    Value vk = env->_stack._top[-2];
+    Value vv = env->stack.top[-1];
+    Value vk = env->stack.top[-2];
 
     ai_vm_set(env, v, vk, vv);
 
-    env->_stack._top -= 2;
+    env->stack.top -= 2;
 }
 
 /**
@@ -586,15 +587,15 @@ a_int alo_rawlen(a_henv env, a_ilen id) {
 	switch (v_get_tag(v)) {
 		case T_TUPLE: {
 			GTuple* p = v_as_tuple(v);
-			return cast(a_int, p->_len);
+			return cast(a_int, p->len);
 		}
 		case T_LIST: {
 			GList* p = v_as_list(v);
-            return cast(a_int, p->_len);
+            return cast(a_int, p->len);
 		}
 		case T_TABLE: {
 			GTable* p = v_as_table(v);
-            return cast(a_int, p->_len);
+            return cast(a_int, p->len);
 		}
 		default: {
 			return 0;
@@ -667,8 +668,8 @@ a_msg alo_rawset(a_henv env, a_ilen id) {
 	api_check_elem(env, 2);
 
 	Value v = api_elem(env, id);
-	Value vk = env->_stack._top[-2];
-    Value vv = env->_stack._top[-1];
+	Value vk = env->stack.top[-2];
+    Value vv = env->stack.top[-1];
 
     switch (v_get_tag(v)) {
         case T_LIST: {
@@ -686,7 +687,7 @@ a_msg alo_rawset(a_henv env, a_ilen id) {
         }
     }
 
-    env->_stack._top -= 2;
+    env->stack.top -= 2;
     return ALO_SOK;
 }
 
@@ -703,10 +704,10 @@ a_hiter alo_iter(a_henv env, a_ilen id) {
     Value v = api_elem(env, id);
     api_check_slot(env, 3);
 
-    Value* p = env->_stack._top;
+    Value* p = env->stack.top;
     ai_vm_iter(env, p, v);
 
-    env->_stack._top += 3;
+    env->stack.top += 3;
     return cast(a_hiter, val2stk(env, p));
 }
 
@@ -716,7 +717,7 @@ a_bool alo_next(a_henv env, a_hiter itr) {
 }
 
 static void l_call(a_henv env, a_ulen narg, a_ilen nres) {
-	Value* base = env->_stack._top - narg - 1;
+	Value* base = env->stack.top - narg - 1;
 
 	ai_vm_call(env, base, nres);
 }
@@ -729,13 +730,13 @@ void alo_call(a_henv env, a_ulen narg, a_ilen nres) {
 }
 
 typedef struct {
-	a_u32 _narg;
-	a_i32 _nres;
+	a_u32 narg;
+	a_i32 nres;
 } PCallCtx;
 
 static void l_pcall(a_henv env, void* rctx) {
 	PCallCtx* ctx = cast(PCallCtx*, rctx);
-	l_call(env, ctx->_narg, ctx->_nres);
+	l_call(env, ctx->narg, ctx->nres);
 }
 
 static Value* load_errf(a_henv env, a_ilen id) {
@@ -752,25 +753,25 @@ static Value* load_errf(a_henv env, a_ilen id) {
 }
 
 a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
-    api_check(env->_status == ALO_SOK, "cannot call on a non-normal route");
+    api_check(env->status == ALO_SOK, "cannot call on a non-normal route");
 	api_check(nres < 256, "result count overflow");
     api_check_elem(env, narg + 1);
 
     PCallCtx ctx = {
-		._narg = narg,
-		._nres = cast(a_i32, nres)
+		.narg = narg,
+		.nres = cast(a_i32, nres)
 	};
 
-    Frame* frame = env->_frame;
+    Frame* frame = env->frame;
     Value* v_errf = load_errf(env, id_errf);
 
-    StkPtr p_bot = val2stk(env, env->_stack._top - (narg + 1));
+    StkPtr p_bot = val2stk(env, env->stack.top - (narg + 1));
 
     catch (ai_env_pcall(env, l_pcall, &ctx, v_errf), msg) {
-        env->_frame = frame; /* Recover frame. */
+        env->frame = frame; /* Recover frame. */
 
         Value* bot = stk2val(env, p_bot);
-        env->_stack._top = bot;
+        env->stack.top = bot;
         ai_cap_close_above(env, bot);
         ai_env_pop_error(env, api_incr_stack(env));
         return msg;
@@ -784,12 +785,12 @@ void alo_raise(a_henv env) {
 }
 
 a_msg alo_resume(a_henv env) {
-	api_check(env->_status == ALO_SYIELD, "cannot resume a non-yielded route.");
-	return ai_env_resume(G(env)->_active, env);
+	api_check(env->status == ALO_SYIELD, "cannot resume a non-yielded route.");
+	return ai_env_resume(G(env)->active, env);
 }
 
 void alo_yield(a_henv env) {
-	api_check(env->_status == ALO_SOK, "cannot yield a non-normal route.");
+	api_check(env->status == ALO_SOK, "cannot yield a non-normal route.");
 	ai_env_yield(env);
 }
 
@@ -852,7 +853,7 @@ char const* alo_tolstr(a_henv env, a_ilen id, a_usize* plen) {
 	api_check(v_is_str(v), "cannot convert to string");
 	GStr* p = v_as_str(v);
 	if (plen != null) {
-		*plen = p->_len;
+		*plen = p->len;
 	}
 	return str2ntstr(p);
 }
@@ -868,7 +869,7 @@ void* alo_toptr(a_henv env, a_ilen id) {
         }
         case T_MOD: {
             GMod* mod = v_as_mod(v);
-            return mod->_extra;
+            return mod->extra;
         }
         default: {
             api_panic("cannot cast to pointer");
@@ -925,10 +926,10 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 	a_msg msg = ai_parse(env, fun, ctx, file, name, options, &out);
 	if (likely(msg == ALO_SOK)) {
 		v_set_obj(env, api_incr_stack(env), out);
-		if (out->_len > 0) {
+		if (out->ncap > 0) {
             RcCap* cap = ai_cap_new(env);
-            out->_caps[0] = cap;
-            v_cpy(env, cap->_ptr, api_rdslot(env, id_env));
+            out->ref_caps[0] = cap;
+            v_cpy(env, cap->ptr, api_rdslot(env, id_env));
 		}
 	}
 	else {

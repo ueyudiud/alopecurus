@@ -26,7 +26,7 @@ a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...) {
 
 a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg) {
     va_list varg2;
-	a_usize rem = buf->_cap - buf->_len;
+	a_usize rem = buf->cap - buf->len;
 
 	va_copy(varg2, varg);
 
@@ -42,14 +42,14 @@ a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg) {
 
 	va_end(varg2);
 
-	buf->_len += len;
+	buf->len += len;
 	return ALO_SOK;
 }
 
 GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
-	self->_vptr = &buf_vtable;
+	self->vptr = &buf_vtable;
 	at_buf_init(self);
 
 	ai_gc_register_object(env, self);
@@ -69,7 +69,7 @@ a_noret ai_buf_error(a_henv env, a_msg msg, char const* what) {
 
 static void buf_mark(Global* gbl, a_gptr raw_self) {
 	GBuf* self = g_cast(GBuf, raw_self);
-	ai_gc_trace_work(gbl, sizeof(GBuf) + self->_cap);
+	ai_gc_trace_work(gbl, sizeof(GBuf) + self->cap);
 }
 
 static void buf_drop(Global* gbl, a_gptr raw_self) {
@@ -79,10 +79,10 @@ static void buf_drop(Global* gbl, a_gptr raw_self) {
 }
 
 static VTable const buf_vtable = {
-	._stencil = V_STENCIL(T_USER),
-    ._tag = ALO_TUSER,
-    ._flags = VTABLE_FLAG_GREEDY_MARK,
-	._slots = {
+	.stencil = V_STENCIL(T_USER),
+    .tag = ALO_TUSER,
+    .flags = VTABLE_FLAG_GREEDY_MARK,
+	.slots = {
         [vfp_slot(drop)] = buf_drop,
         [vfp_slot(mark)] = buf_mark
 	}

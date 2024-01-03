@@ -25,13 +25,13 @@ intern void ai_str_clean(Global* gbl);
 
 struct GStr {
     GOBJ_STRUCT_HEADER;
-    a_u32 _len;
-    a_hash _hash;
-    GStr* _snext;
-    char _ptr[];
+    a_u32 len;
+    a_hash hash;
+    GStr* snext;
+    char ptr[];
 };
 
-#define g_is_str(p) ((p)->_vptr->_tag == ALO_TSTR)
+#define g_is_str(p) ((p)->vptr->tag == ALO_TSTR)
 
 #define v_is_str(v) v_is(v, T_STR)
 
@@ -55,7 +55,7 @@ always_inline void v_set_str(a_henv env, Value* d, GStr* p) {
 #define str_size(l) pad_to_raw(sizeof(GStr) + sizeof(char) * (l) + 1, sizeof(a_usize))
 
 always_inline char const* str2ntstr(GStr* self) {
-    return self->_ptr;
+    return self->ptr;
 }
 
 #define ai_str_from_ntstr(env,src) ai_str_get_or_new(env, src, strlen(src))

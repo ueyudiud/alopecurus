@@ -28,11 +28,11 @@ static a_msg mod___new__(a_henv env) {
         GTable* src = v_as_table(api_elem(env, 0));
         GMod* dst = v_as_mod(api_elem(env, 1));
 
-        if (src->_len > 0) {
-            for (a_u32 i = 0; i <= src->_hmask; ++i) {
-                TNode* node = &src->_ptr[i];
-                if (!v_is_nil(node->_key)) {
-                    ai_mod_set(env, dst, node->_key, node->_value);
+        if (src->len > 0) {
+            for (a_u32 i = 0; i <= src->hmask; ++i) {
+                TNode* node = &src->ptr[i];
+                if (!v_is_nil(node->key)) {
+                    ai_mod_set(env, dst, node->key, node->value);
                 }
             }
         }

@@ -40,7 +40,7 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
 
                 GList* out = ai_list_new(env);
                 v_set_obj(env, api_incr_stack(env), out);
-                ai_list_push_all(env, out, init_val->_ptr, init_val->_len);
+                ai_list_push_all(env, out, init_val->ptr, init_val->len);
 
                 ai_gc_trigger(env);
                 break;
@@ -50,7 +50,7 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
 
                 GList* out = ai_list_new(env);
                 v_set_obj(env, api_incr_stack(env), out);
-                ai_list_push_all(env, out, init_val->_ptr, init_val->_len);
+                ai_list_push_all(env, out, init_val->ptr, init_val->len);
 
                 ai_gc_trigger(env);
                 break;
@@ -67,7 +67,7 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
 static a_msg list_clear(a_henv env) {
     GList* self = check_self(env);
 
-    self->_len = 0;
+    self->len = 0;
 
     return 0;
 }
@@ -99,13 +99,13 @@ static a_msg list_mkstr(a_henv env) {
             break;
         }
         case 2: {
-            sep._ptr = aloL_checklstr(env, 1, &sep._len);
+            sep.ptr = aloL_checklstr(env, 1, &sep.len);
             break;
         }
         case 4: {
-            pre._ptr = aloL_checklstr(env, 1, &pre._len);
-            sep._ptr = aloL_checklstr(env, 2, &sep._len);
-            post._ptr = aloL_checklstr(env, 3, &post._len);
+            pre.ptr = aloL_checklstr(env, 1, &pre.len);
+            sep.ptr = aloL_checklstr(env, 2, &sep.len);
+            post.ptr = aloL_checklstr(env, 3, &post.len);
             break;
         }
         default: {
@@ -116,13 +116,13 @@ static a_msg list_mkstr(a_henv env) {
     GBuf* buf = ai_buf_new(env);
     v_set_obj(env, api_incr_stack(env), buf);
 
-    at_buf_putls(env, buf, pre._ptr, pre._len);
-    for (a_ulen i = 0; i < self->_len; ++i) {
-        if (i != 0) at_buf_putls(env, buf, sep._ptr, sep._len);
-        ai_vm_append(env, buf, self->_ptr[i]);
+    at_buf_putls(env, buf, pre.ptr, pre.len);
+    for (a_ulen i = 0; i < self->len; ++i) {
+        if (i != 0) at_buf_putls(env, buf, sep.ptr, sep.len);
+        ai_vm_append(env, buf, self->ptr[i]);
     }
-    at_buf_putls(env, buf, post._ptr, post._len);
-    alo_pushstr(env, buf->_ptr, buf->_len);
+    at_buf_putls(env, buf, post.ptr, post.len);
+    alo_pushstr(env, buf->ptr, buf->len);
 
     ai_gc_trigger(env);
     return 1;
@@ -141,7 +141,7 @@ static a_msg list_push(a_henv env) {
 
 static a_msg list_reverse(a_henv env) {
     GList* self = check_self(env);
-    v_reverse(env, self->_ptr, self->_ptr + self->_len);
+    v_reverse(env, self->ptr, self->ptr + self->len);
     return 0;
 }
 
@@ -161,7 +161,7 @@ static a_msg list_reverse(a_henv env) {
  *@see list_sort
  */
 static a_bool sort_comp(a_henv env, Value v1, Value v2) {
-    Value vf = env->_frame->_stack_bot[1];
+    Value vf = env->frame->stack_bot[1];
     if (v_is_nil(vf)) {
         return ai_vm_compare(env, v1, v2, OP_LT);
     }
@@ -318,11 +318,11 @@ static a_u32 gallop_left_backward(a_henv env, Value v, Value* const ptr, a_u32 l
 
 static void merge_run_forward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32 len2, a_u32* p_init_gallop) {
     GList* tmp_list = v_as_list(*api_stack(env, 2));
-    assume(len1_and_off <= tmp_list->_cap && tmp_list->_len == 0);
+    assume(len1_and_off <= tmp_list->cap && tmp_list->len == 0);
 
-    Value* tmp_ptr = tmp_list->_ptr;
+    Value* tmp_ptr = tmp_list->ptr;
     v_cpy_all(env, tmp_ptr, &ptr[0], len1_and_off);
-    tmp_list->_len = len1_and_off;
+    tmp_list->len = len1_and_off;
 
     a_u32 dst = 0;
     a_u32 src1 = 0;
@@ -332,13 +332,13 @@ static void merge_run_forward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32 
     v_cpy(env, &ptr[dst++], &ptr[src2++]);
     if (--len2 == 0) {
         v_cpy_all(env, &ptr[dst], tmp_ptr, len1);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
     if (len1 == 1) {
         v_mov_all_fwd(env, &ptr[dst], &ptr[src2], len2);
         v_cpy(env, &ptr[dst + len2], tmp_ptr);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
 
@@ -411,7 +411,7 @@ static void merge_run_forward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32 
         *p_init_gallop = max(min_gallop, 1);
         v_mov_all_fwd(env, &ptr[dst], &ptr[src2], len2);
         v_cpy(env, &ptr[dst + len2], &tmp_ptr[src1]);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
 
@@ -419,18 +419,18 @@ static void merge_run_forward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32 
         assume(len1 > 1);
         *p_init_gallop = max(min_gallop, 1);
         v_cpy_all(env, &ptr[dst], &tmp_ptr[src1], len1);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
 }
 
 static void merge_run_backward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32 len2, a_u32* p_init_gallop) {
     GList* tmp_list = v_as_list(*api_stack(env, 2));
-    assume(len2 <= tmp_list->_len);
+    assume(len2 <= tmp_list->len);
 
-    Value* tmp_ptr = tmp_list->_ptr;
+    Value* tmp_ptr = tmp_list->ptr;
     v_cpy_all(env, tmp_ptr, &ptr[len1_and_off], len2);
-    tmp_list->_len = len2;
+    tmp_list->len = len2;
 
     a_u32 dst = len1_and_off + len2 - 1;
     a_u32 src1 = len1_and_off - 1;
@@ -440,13 +440,13 @@ static void merge_run_backward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32
     v_cpy(env, &ptr[dst--], &ptr[src1--]);
     if (--len1 == 0) {
         v_cpy_all(env, &ptr[dst - (len2 - 1)], tmp_ptr, len2);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
     if (len2 == 1) {
         v_mov_all_bwd(env, &ptr[dst - (len2 - 1)], &ptr[src1 - (len1 - 1)], len1);
         v_cpy(env, &ptr[dst - len2], tmp_ptr);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
 
@@ -519,7 +519,7 @@ static void merge_run_backward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32
         *p_init_gallop = max(min_gallop, 1);
         v_mov_all_bwd(env, &ptr[dst - (len1 - 1)], &ptr[src1 - (len1 - 1)], len1);
         v_cpy(env, &ptr[dst - len1], &tmp_ptr[src1 - len1]);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
 
@@ -527,7 +527,7 @@ static void merge_run_backward(a_henv env, Value* ptr, a_u32 len1_and_off, a_u32
         assume(len2 > 0);
         *p_init_gallop = max(min_gallop, 1);
         v_cpy_all(env, &ptr[dst], &tmp_ptr[src2], len2);
-        tmp_list->_len = 0;
+        tmp_list->len = 0;
         return;
     }
 }
@@ -638,7 +638,7 @@ static a_msg list_sort(a_henv env) {
     GList* self = check_self(env);
     alo_settop(env, 2);
 
-    tim_sort(env, self->_ptr, self->_len);
+    tim_sort(env, self->ptr, self->len);
 
     alo_settop(env, 1);
     return 1;

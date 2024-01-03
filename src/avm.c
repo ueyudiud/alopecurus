@@ -23,13 +23,13 @@
 #include "avm.h"
 
 static void l_call_hook(a_henv env, a_msg msg, a_hfun fun, a_hctx ctx) {
-	/* Call hook function. */
+	/* Call hook_ function. */
 	(*fun)(env, msg, ctx);
 }
 
 a_u32 ai_vm_lock_hook(Global* gbl) {
-	atomic_uint_fast8_t mask = gbl->_hookm;
-	while (((mask & ALO_HMSWAP) != 0) | !atomic_compare_exchange_weak(&gbl->_hookm, &mask, ALO_HMSWAP));
+	atomic_uint_fast8_t mask = gbl->hookm;
+	while (((mask & ALO_HMSWAP) != 0) | !atomic_compare_exchange_weak(&gbl->hookm, &mask, ALO_HMSWAP));
 	return mask;
 }
 
@@ -38,12 +38,12 @@ void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
 
 	a_u32 mask = ai_vm_lock_hook(gbl);
 
-	/* Load hook closure. */
-	a_hfun fun = gbl->_hookf;
-	a_hctx ctx = gbl->_hookc;
+	/* Load hook_ closure. */
+	a_hfun fun = gbl->hook_;
+	a_hctx ctx = gbl->hook_ctx;
 
 	/* Reset mask. */
-	gbl->_hookm = mask;
+	gbl->hookm = mask;
 
 	if (fun != null && (mask & test)) {
 		l_call_hook(env, msg, fun, ctx);
@@ -89,7 +89,7 @@ a_hash ai_vm_hash(a_henv env, Value v) {
         return v_trivial_hash(v);
     }
     else if (likely(v_is_str(v))) {
-        return v_as_str(v)->_hash;
+        return v_as_str(v)->hash;
     }
     else if (likely(v_is_tuple(v))) {
         return ai_tuple_hash(env, v_as_tuple(v));
@@ -304,19 +304,19 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
 static Value vm_len(a_henv env, Value v) {
 	switch (v_get_tag(v)) {
         case T_STR: {
-            return v_of_int(v_as_str(v)->_len);
+            return v_of_int(v_as_str(v)->len);
         }
         case T_TUPLE: {
-            return v_of_int(v_as_tuple(v)->_len);
+            return v_of_int(v_as_tuple(v)->len);
         }
         case T_LIST: {
-            return v_of_int(v_as_list(v)->_len);
+            return v_of_int(v_as_list(v)->len);
         }
         case T_TABLE: {
-            return v_of_int(v_as_table(v)->_len);
+            return v_of_int(v_as_table(v)->len);
         }
         case T_MOD: {
-            return v_of_int(v_as_mod(v)->_len);
+            return v_of_int(v_as_mod(v)->len);
         }
         case T_USER: {
             a_uint i;
@@ -362,21 +362,21 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
         case T_TUPLE: {
             GTuple* p = v_as_tuple(vc);
             a_u32 i = cast(a_u32, v_as_int(vb[2]));
-            if (i >= p->_len) return ALO_EEMPTY;
+            if (i >= p->len) return ALO_EEMPTY;
             
             v_set_int(&vb[2], cast(a_i32, i + 1));
-            env->_stack._top = vs;
-            vm_push_args(env, p->_ptr[i]);
+            env->stack.top = vs;
+            vm_push_args(env, p->ptr[i]);
             return 1;
         }
         case T_LIST: {
             GList* p = v_as_list(vc);
             a_u32 i = cast(a_u32, v_as_int(vb[2]));
-            if (i >= p->_len) return ALO_EEMPTY;
+            if (i >= p->len) return ALO_EEMPTY;
             
             v_set_int(&vb[2], cast(a_i32, i + 1));
-            env->_stack._top = vs;
-            vm_push_args(env, p->_ptr[i]);
+            env->stack.top = vs;
+            vm_push_args(env, p->ptr[i]);
             return 1;
         }
         case T_TABLE: {
@@ -390,10 +390,10 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
             v_set_int(&vb[1], i);
             v_set(env, &vb[2], k);
 
-            TNode* n = &p->_ptr[i];
+            TNode* n = &p->ptr[i];
 
-            env->_stack._top = vs;
-            vm_push_args(env, n->_key, n->_value);
+            env->stack.top = vs;
+            vm_push_args(env, n->key, n->value);
             return 2;
         }
         default: {
@@ -404,13 +404,13 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
 }
 
 a_msg ai_vm_next(a_henv env, Value* vs) {
-    return vm_next(env, env->_stack._top, vs);
+    return vm_next(env, env->stack.top, vs);
 }
 
 static a_bool vm_append(a_henv env, Buf* buf, Value v) {
     if (likely(v_is_str(v))) {
         GStr* val = v_as_str(v);
-        at_buf_putls(env, buf, val->_ptr, val->_len);
+        at_buf_putls(env, buf, val->ptr, val->len);
     }
     else {
         switch (v_get_tag(v)) {
@@ -457,7 +457,7 @@ void ai_vm_append(a_henv env, GBuf* buf, Value v) {
         catch (ai_tm_str(env, v, &str)) {
             ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
         }
-        at_buf_putls(env, buf, str->_ptr, str->_len);
+        at_buf_putls(env, buf, str->ptr, str->len);
     }
 }
 
@@ -474,7 +474,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_ulen n) {
                 ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
             }
             base = stk2val(env, bptr);
-            at_buf_putls(env, buf, str->_ptr, str->_len);
+            at_buf_putls(env, buf, str->ptr, str->len);
         }
 	}
 
@@ -511,37 +511,37 @@ static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_ulen num_ret, a_u32 f
 	Value const* K;
     Frame frame[1] = {};
 
-#define pc (frame->_pc)
+#define pc (frame->pc)
 #if ALO_STACK_RELOC
     Value* R;
 # define R R
 # define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); base = ptr_disp(Value, R, _d); reload_stack(); })
-# define reload_stack() quiet(R = env->_stack._bot)
+# define reload_stack() quiet(R = env->stack.bot)
 #else
-# define R (frame->_stack_bot)
+# define R (frame->stack_bot)
 # define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); assume(_d == 0, "stack moved."); reload_stack(); })
 # define reload_stack() ((void) 0)
 #endif
 #define check_gc() ai_gc_trigger_(env, (void) 0, reload_stack())
-#define adjust_top() quiet(env->_stack._top = &R[fun->_proto->_nstack])
+#define adjust_top() quiet(env->stack.top = &R[fun->proto->nstack])
 
-    frame->_prev = env->_frame;
-    frame->_stack_bot = bot;
-    frame->_stack_dst = dst;
-    frame->_num_ret = num_ret;
-    frame->_flags = flags;
+    frame->prev = env->frame;
+    frame->stack_bot = bot;
+    frame->stack_dst = dst;
+    frame->num_ret = num_ret;
+    frame->flags = flags;
 
-	env->_frame = frame;
+	env->frame = frame;
 
 tail_call:
-	R = frame->_stack_bot;
+	R = frame->stack_bot;
 
-	frame->_pc = null;
+	pc = null;
 
     run { /* Check for function. */
         Value vf = R[0];
         if (v_is_call(vf)) { /* For static call from look. */
-            frame->_stack_bot += 1; /* Elision call stub. */
+            frame->stack_bot += 1; /* Elision call stub. */
             reload_stack();
             vf = R[0];
         }
@@ -550,65 +550,65 @@ tail_call:
                 ai_err_bad_tm(env, TM___call__);
             }
 
-            if (R > frame->_stack_dst) {
-                frame->_stack_bot -= 1;
+            if (R > frame->stack_dst) {
+                frame->stack_bot -= 1;
                 reload_stack();
                 v_set(env, &R[0], vf);
             }
             else {
-                for (Value* p = env->_stack._top; p > R; --p) {
+                for (Value* p = env->stack.top; p > R; --p) {
                     v_cpy(env, p, p - 1);
                 }
                 v_set(env, &R[0], vf);
 
-                env->_stack._top += 1;
+                env->stack.top += 1;
             }
 
-            check_stack(env->_stack._top);
+            check_stack(env->stack.top);
         }
 		fun = v_as_func(vf);
-        if (R > frame->_stack_dst) {
-            a_usize len = env->_stack._top - R;
-            v_mov_all_fwd(env, frame->_stack_dst, R, len);
-            env->_stack._top = frame->_stack_dst + len;
-            frame->_stack_bot = frame->_stack_dst;
+        if (R > frame->stack_dst) {
+            a_usize len = env->stack.top - R;
+            v_mov_all_fwd(env, frame->stack_dst, R, len);
+            env->stack.top = frame->stack_dst + len;
+            frame->stack_bot = frame->stack_dst;
         }
     }
 
-    assume(frame->_stack_bot == frame->_stack_dst, "unexpected stack pointer.");
+    assume(frame->stack_bot == frame->stack_dst, "unexpected stack pointer.");
 
-	frame->_stack_bot += 1;
+	frame->stack_bot += 1;
 	reload_stack();
 
-	if (fun->_flags & FUN_FLAG_NATIVE) {
+	if (fun->flags & FUN_FLAG_NATIVE) {
 		check_stack(R + ALOI_INIT_CFRAME_STACKSIZE);
 #ifdef ALOI_CHECK_API
-        frame->_stack_limit = val2stk(env, R + ALOI_INIT_CFRAME_STACKSIZE);
+        frame->stack_limit = val2stk(env, R + ALOI_INIT_CFRAME_STACKSIZE);
 #endif
 
-		a_msg n = (*fun->_fptr)(env);
+		a_msg n = (*fun->fptr)(env);
 		if (unlikely(n < 0))
             unreachable(); /* TODO when error raised. */
         api_check_elem(env, n);
 
-        Value* p = env->_stack._top - n;
-        n = min(n, frame->_num_ret);
+        Value* p = env->stack.top - n;
+        n = min(n, frame->num_ret);
 
-        ai_cap_close_above(env, frame->_stack_bot);
-        v_mov_all_fwd(env, frame->_stack_dst, p, n);
-        frame->_num_ret -= n;
-        frame->_stack_dst += n;
+        ai_cap_close_above(env, frame->stack_bot);
+        v_mov_all_fwd(env, frame->stack_dst, p, n);
+        frame->num_ret -= n;
+        frame->stack_dst += n;
 		goto handle_return;
 	}
 	else {
-		GProto* proto = fun->_proto;
+		GProto* proto = fun->proto;
 
-		check_stack(R + proto->_nstack);
+		check_stack(R + proto->nstack);
 
-		frame->_pc = proto->_code;
+		pc = proto->code;
 
-		K = proto->_consts;
-		if (!(proto->_flags & FUN_FLAG_VARARG)) {
+		K = proto->consts;
+		if (!(proto->flags & FUN_FLAG_VARARG)) {
 			adjust_top();
 		}
 	}
@@ -638,15 +638,15 @@ tail_call:
             case BC_LDC: {
                 loadB();
 
-                RcCap* cap = fun->_caps[b];
-                v_cpy(env, &R[a], cap->_ptr);
+                RcCap* cap = fun->ref_caps[b];
+                v_cpy(env, &R[a], cap->ptr);
                 break;
             }
             case BC_STC: {
                 loadB();
 
-                RcCap* cap = fun->_caps[a];
-                v_cpy(env, cap->_ptr, &R[b]);
+                RcCap* cap = fun->ref_caps[a];
+                v_cpy(env, cap->ptr, &R[b]);
 
                 ai_gc_barrier_backward_val(env, fun, R[b]);
                 break;
@@ -690,7 +690,7 @@ tail_call:
             case BC_LDF: {
                 loadB();
 
-                GFun* v = ai_fun_new(env, fun->_proto->_subs[b]);
+                GFun* v = ai_fun_new(env, fun->proto->subs[b]);
                 v_set_obj(env, &R[a], v);
 
                 check_gc();
@@ -709,7 +709,7 @@ tail_call:
             case BC_TNEWM: {
                 loadB();
 
-                a_u32 n = env->_stack._top - &R[b];
+                a_u32 n = env->stack.top - &R[b];
                 GTuple* v = ai_tuple_new(env, &R[b], n);
                 v_set_obj(env, &R[a], v);
 
@@ -731,8 +731,8 @@ tail_call:
                 loadC();
 
                 GList* val = ai_list_new(env);
-                v_set_obj(env, env->_stack._top, val);
-                env->_stack._top += 1;
+                v_set_obj(env, env->stack.top, val);
+                env->stack.top += 1;
 
                 ai_list_push_all(env, val, &R[b], c);
                 v_set_obj(env, &R[a], val);
@@ -744,11 +744,11 @@ tail_call:
             case BC_LBOXM: {
                 loadB();
 
-                a_u32 n = env->_stack._top - &R[b];
+                a_u32 n = env->stack.top - &R[b];
 
                 GList* val = ai_list_new(env);
-                v_set_obj(env, env->_stack._top, val);
-                env->_stack._top += 1;
+                v_set_obj(env, env->stack.top, val);
+                env->stack.top += 1;
 
                 ai_list_push_all(env, val, &R[b], n);
                 v_set_obj(env, &R[a], val);
@@ -770,7 +770,7 @@ tail_call:
             case BC_LPUSHM: {
                 loadB();
 
-                a_u32 n = env->_stack._top - &R[b];
+                a_u32 n = env->stack.top - &R[b];
 
                 GList* val = v_as_list(R[a]);
                 ai_list_push_all(env, val, &R[b], n);
@@ -891,7 +891,7 @@ tail_call:
                 loadB();
                 loadC();
 
-                Value vb = *fun->_caps[b]->_ptr;
+                Value vb = *fun->ref_caps[b]->ptr;
                 Value vc = K[c];
 
                 Value vt = ai_vm_get(env, vb, vc);
@@ -903,7 +903,7 @@ tail_call:
                 loadB();
                 loadEx();
 
-                Value vb = *fun->_caps[b]->_ptr;
+                Value vb = *fun->ref_caps[b]->ptr;
                 Value vc = K[ex];
 
                 Value vt = ai_vm_get(env, vb, vc);
@@ -963,7 +963,7 @@ tail_call:
                 loadC();
 
                 Value va = R[a];
-                Value vb = *fun->_caps[b]->_ptr;
+                Value vb = *fun->ref_caps[b]->ptr;
                 Value vc = K[c];
 
                 ai_vm_set(env, vb, vc, va);
@@ -975,7 +975,7 @@ tail_call:
                 loadEx();
 
                 Value va = R[a];
-                Value vb = *fun->_caps[b]->_ptr;
+                Value vb = *fun->ref_caps[b]->ptr;
                 Value vc = K[ex];
 
                 ai_vm_set(env, vb, vc, va);
@@ -1036,11 +1036,11 @@ tail_call:
 
                 if (v_is_tuple(vb)) {
                     GTuple* val = v_as_tuple(vb);
-					v_mov_all_with_nil(env, &R[a], c, val->_ptr, val->_len);
+					v_mov_all_with_nil(env, &R[a], c, val->ptr, val->len);
                 }
                 else if (v_is_list(vb)) {
                     GList* val = v_as_list(vb);
-					v_mov_all_with_nil(env, &R[a], c, val->_ptr, val->_len);
+					v_mov_all_with_nil(env, &R[a], c, val->ptr, val->len);
                 }
                 else {
 					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_nameof(env, vb));
@@ -1054,15 +1054,15 @@ tail_call:
 
                 if (v_is_tuple(vb)) {
                     GTuple* val = v_as_tuple(vb);
-                    check_stack(&R[a] + val->_len);
-                    v_cpy_all(env, &R[a], val->_ptr, val->_len);
-                    env->_stack._top = &R[a + val->_len];
+                    check_stack(&R[a] + val->len);
+                    v_cpy_all(env, &R[a], val->ptr, val->len);
+                    env->stack.top = &R[a + val->len];
                 }
                 else if (v_is_list(vb)) {
                     GList* val = v_as_list(vb);
-                    check_stack(&R[a] + val->_len);
-					v_cpy_all(env, &R[a], val->_ptr, val->_len);
-                    env->_stack._top = &R[a + val->_len];
+                    check_stack(&R[a] + val->len);
+					v_cpy_all(env, &R[a], val->ptr, val->len);
+                    env->stack.top = &R[a + val->len];
                 }
                 else {
 					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_nameof(env, vb));
@@ -1437,7 +1437,7 @@ tail_call:
                 loadB();
                 loadC();
 
-                env->_stack._top = &R[a + b];
+                env->stack.top = &R[a + b];
 
                 vm_call(env, &R[a], &R[a], c, FRAME_FLAG_TRIM_RET);
                 check_gc();
@@ -1448,7 +1448,7 @@ tail_call:
             case BC_CALLV: {
                 loadB();
 
-                env->_stack._top = &R[a + b];
+                env->stack.top = &R[a + b];
 
                 vm_call(env, &R[a], &R[a], UINT32_MAX, FRAME_FLAG_NONE);
                 check_gc();
@@ -1458,15 +1458,15 @@ tail_call:
                 loadB();
                 loadC();
 
-                a_usize n = min(c, frame->_num_ret);
+                a_usize n = min(c, frame->num_ret);
 
-                ai_cap_close_above(env, frame->_stack_bot);
-                v_mov_all_fwd(env, frame->_stack_dst, &R[a], n);
-                frame->_stack_dst += n;
-                frame->_num_ret -= n;
+                ai_cap_close_above(env, frame->stack_bot);
+                v_mov_all_fwd(env, frame->stack_dst, &R[a], n);
+                frame->stack_dst += n;
+                frame->num_ret -= n;
 
-                env->_stack._top = &R[a + b];
-                frame->_stack_bot = &R[a + c];
+                env->stack.top = &R[a + b];
+                frame->stack_bot = &R[a + c];
 
                 goto handle_tail_call;
             }
@@ -1487,26 +1487,26 @@ tail_call:
             case BC_TCALLM: {
                 loadC();
 
-                a_u32 b = env->_stack._top - &R[a];
-				a_u32 n = min(c, frame->_num_ret);
+                a_u32 b = env->stack.top - &R[a];
+				a_u32 n = min(c, frame->num_ret);
 
-                ai_cap_close_above(env, frame->_stack_bot);
-                v_mov_all_fwd(env, frame->_stack_dst, &R[a], n);
-                frame->_stack_dst += n;
-                frame->_num_ret -= n;
+                ai_cap_close_above(env, frame->stack_bot);
+                v_mov_all_fwd(env, frame->stack_dst, &R[a], n);
+                frame->stack_dst += n;
+                frame->num_ret -= n;
 
-                v_mov_all_fwd(env, frame->_stack_dst, &R[a + c], b - c);
+                v_mov_all_fwd(env, frame->stack_dst, &R[a + c], b - c);
 
-                env->_stack._top = &R[a + b];
-                frame->_stack_bot = &R[a + c];
+                env->stack.top = &R[a + b];
+                frame->stack_bot = &R[a + c];
 
                 goto handle_tail_call;
             }
             case BC_TRIM: {
                 loadC();
 
-                assume(&R[a] <= env->_stack._top, "stack corrupt.");
-                v_set_nil_ranged(env->_stack._top, &R[a + c]);
+                assume(&R[a] <= env->stack.top, "stack corrupt.");
+                v_set_nil_ranged(env->stack.top, &R[a + c]);
 
                 adjust_top();
                 break;
@@ -1515,7 +1515,7 @@ tail_call:
                 loadB();
                 loadC();
 
-                env->_stack._top = &R[b + c];
+                env->stack.top = &R[b + c];
                 GStr* str = vm_cat(env, &R[b], c);
                 v_set_str(env, &R[a], str);
                 adjust_top();
@@ -1527,27 +1527,27 @@ tail_call:
                 loadB();
 
 				Value* p = &R[a];
-                a_usize n = min(b, frame->_num_ret);
+                a_usize n = min(b, frame->num_ret);
 
-                ai_cap_close_above(env, frame->_stack_bot);
-                v_mov_all_fwd(env, frame->_stack_dst, p, n);
-                frame->_stack_dst += n;
-                frame->_num_ret -= n;
+                ai_cap_close_above(env, frame->stack_bot);
+                v_mov_all_fwd(env, frame->stack_dst, p, n);
+                frame->stack_dst += n;
+                frame->num_ret -= n;
                 goto handle_return;
             }
             case BC_RETM: {
 				Value* p = &R[a];
-                a_usize n = env->_stack._top - &R[a];
-                n = min(n, frame->_num_ret);
+                a_usize n = env->stack.top - &R[a];
+                n = min(n, frame->num_ret);
 
-                ai_cap_close_above(env, frame->_stack_bot);
-                v_mov_all_fwd(env, frame->_stack_dst, p, n);
-                frame->_stack_dst += n;
-                frame->_num_ret -= n;
+                ai_cap_close_above(env, frame->stack_bot);
+                v_mov_all_fwd(env, frame->stack_dst, p, n);
+                frame->stack_dst += n;
+                frame->num_ret -= n;
 				goto handle_return;
             }
             case BC_RET0: {
-                ai_cap_close_above(env, frame->_stack_bot);
+                ai_cap_close_above(env, frame->stack_bot);
                 goto handle_return;
             }
             default: {
@@ -1565,18 +1565,18 @@ tail_call:
     }
 
 handle_tail_call:
-    frame->_flags |= FRAME_FLAG_TAIL_CALL;
+    frame->flags |= FRAME_FLAG_TAIL_CALL;
     goto tail_call;
 
 handle_return:
-    env->_frame = frame->_prev;
+    env->frame = frame->prev;
 
-    if (frame->_flags & FRAME_FLAG_TRIM_RET) {
-        Value* top = frame->_stack_dst + frame->_num_ret;
-        v_set_nil_ranged(frame->_stack_dst, top);
-        frame->_stack_dst = top;
+    if (frame->flags & FRAME_FLAG_TRIM_RET) {
+        Value* top = frame->stack_dst + frame->num_ret;
+        v_set_nil_ranged(frame->stack_dst, top);
+        frame->stack_dst = top;
     }
-    env->_stack._top = frame->_stack_dst;
+    env->stack.top = frame->stack_dst;
     return ALO_SOK;
 
 #undef pc
@@ -1601,7 +1601,7 @@ void ai_vm_call(a_henv env, Value* base, a_i32 nret) {
 
 Value ai_vm_call_meta(a_henv env, Value* bot) {
     vm_call(env, bot, bot, 1, FRAME_FLAG_META_CALL | FRAME_FLAG_TRIM_RET);
-    Value v = env->_stack._top[-1];
-    env->_stack._top -= 1;
+    Value v = env->stack.top[-1];
+    env->stack.top -= 1;
 	return v;
 }

@@ -321,10 +321,10 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 
 struct ObjHead { a_u64 _align; };
 
-#define GOBJ_STRUCT_HEADER struct ObjHead _obj_head_mark[0]; a_gcnext _gnext; VTable const* _vptr; a_trmark _tnext
+#define GOBJ_STRUCT_HEADER struct ObjHead _obj_head_mark[0]; a_gcnext gnext; VTable const* vptr; a_trmark tnext
 
 struct GObj {
-	GOBJ_STRUCT_HEADER;
+    GOBJ_STRUCT_HEADER;
 };
 
 #define VTABLE_METHOD_LIST(_) \
@@ -348,28 +348,28 @@ typedef union {
  */
 struct VTable {
     /* The stencil for value representation. */
-    a_u64 _stencil;
+    a_u64 stencil;
     /* The type variant index. */
-    a_u32 _vid;
+    a_u32 vid;
     /* The API tag of object. */
-    a_u16 _tag;
+    a_u16 tag;
     /* The flags for virtual table. */
-    a_u16 _flags;
+    a_u16 flags;
     /* The metadata used to describe virtual table. */
-    void const* _meta;
+    void const* meta;
     /* The handle of type object (optional). */
-    a_usize _type_ref;
+    a_usize type_ref;
     /* The virtual slots. */
-    void* _slots[];
+    void* slots[];
 };
 
 #define VTABLE_FLAG_NONE        u8c(0x00)
 #define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
 #define VTABLE_FLAG_STACK_ALLOC u8c(0x02)
 
-#define vtable_has_flag(vt,f) (((vt)->_flags & (f)) != 0)
+#define vtable_has_flag(vt,f) (((vt)->flags & (f)) != 0)
 
-#define g_impl(p) cast(ImplTable*, (p)->_vptr->_slots)
+#define g_impl(p) cast(ImplTable*, (p)->vptr->slots)
 
 #define g_fetch(p,f) ({ \
 	__auto_type _f2 = g_impl(p)->f; \
@@ -395,7 +395,7 @@ always_inline a_gptr v_as_obj(Value v) {
 }
 
 always_inline Value v_of_obj(a_gptr o) {
-    return v_new(o->_vptr->_stencil | ptr2int(o));
+    return v_new(o->vptr->stencil | ptr2int(o));
 }
 
 #define v_of_obj(o) v_of_obj(gobj_cast(o))

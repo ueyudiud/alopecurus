@@ -38,8 +38,8 @@ static void dump_const(Value v) {
 		}
 		case T_STR: {
 			GStr* str = v_as_str(v);
-			if (str->_len > 16) {
-				aloi_show("<%u bytes string>", str->_len);
+			if (str->len > 16) {
+				aloi_show("<%u bytes string>", str->len);
 			}
 			else {
 				aloi_show("\"%s\"", str2ntstr(str));
@@ -58,20 +58,20 @@ typedef struct {
 static void dump_line(GProto* meta, LineItr* itr, a_u32 pc) {
 	if (pc >= itr->_limit) {
 		a_u32 index = itr->_index++;
-		assume(index < meta->_nline);
-		LineInfo* info = &meta->_dbg_lines[index];
-		aloi_show("line %u\n", info->_lineno);
-		itr->_limit = info->_end;
+		assume(index < meta->nline);
+		LineInfo* info = &meta->dbg_lines[index];
+		aloi_show("line %u\n", info->line);
+		itr->_limit = info->lend;
 	}
 }
 
 static void dump_code(GProto* meta, a_bool fline) {
-	a_insn* begin = meta->_code;
-	a_insn* end = begin + meta->_ninsn;
+	a_insn* begin = meta->code;
+	a_insn* end = begin + meta->ninsn;
 	LineItr line_itr = {};
 	for (a_insn* ip = begin; ip < end; ++ip) {
 		a_u32 op = bc_load_op(ip);
-		a_u32 n = cast(a_u32, ip - meta->_code);
+		a_u32 n = cast(a_u32, ip - meta->code);
 		if (fline) {
 			dump_line(meta, &line_itr, n);
 		}
@@ -98,7 +98,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_K: {
 				a_u32 b = bc_load_bx(ip);
 				aloi_show("%4u %9u ; ", bc_load_a(ip), b);
-				dump_const(meta->_consts[b]);
+				dump_const(meta->consts[b]);
 				aloi_show("\n");
 				break;
 			}
@@ -125,7 +125,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			}
 			case BC_LDF: {
 				a_u32 b = bc_load_bx(ip);
-				aloi_show("%4u %4u    _ ; %p\n", bc_load_a(ip), b, meta->_subs[b]);
+				aloi_show("%4u %4u    _ ; %p\n", bc_load_a(ip), b, meta->subs[b]);
 				break;
 			}
 			case BC_MOV:
@@ -177,7 +177,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_LOOK: {
 				a_u32 c = bc_load_c(ip);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(ip), bc_load_b(ip), c);
-				dump_const(meta->_consts[c]);
+				dump_const(meta->consts[c]);
 				aloi_show("\n");
 				break;
 			}
@@ -188,7 +188,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_LOOKX: {
 				a_u32 ex = bc_load_ax(ip++);
 				aloi_show("%4u %4u %4u ; ", bc_load_a(ip), bc_load_b(ip), ex);
-				dump_const(meta->_consts[ex]);
+				dump_const(meta->consts[ex]);
 				aloi_show("\n");
 				break;
 			}
@@ -223,48 +223,48 @@ static void dump_code(GProto* meta, a_bool fline) {
 
 static void dump_chunk(a_henv env, GProto* proto, a_u32 options) {
 	aloi_show("fn %p ", proto);
-	if (proto->_name != null) {
-		aloi_show("%s ", str2ntstr(proto->_name));
+	if (proto->dbg_name != null) {
+		aloi_show("%s ", str2ntstr(proto->dbg_name));
 	}
-	if (proto->_dbg_file != null) {
-		aloi_show("<%s:%u,%u>", str2ntstr(proto->_dbg_file), proto->_dbg_lndef, proto->_dbg_lnldef);
+	if (proto->dbg_file != null) {
+		aloi_show("<%s:%u,%u>", str2ntstr(proto->dbg_file), proto->dbg_lndef, proto->dbg_lnldef);
 	}
 	aloi_show("\n%u %s, %u %s, %u %s, %u %s, %u %s, %u %s\n",
-			Ks("param", proto->_nparam),
-			Ks("slot", proto->_nstack),
-			Ks("local", proto->_nlocal),
-			Ks("capture", proto->_ncap),
-			Ks("constant", proto->_nconst),
-			Ks("sub", proto->_nsub));
+			Ks("param", proto->nparam),
+			Ks("slot", proto->nstack),
+			Ks("local", proto->nlocal),
+			Ks("capture", proto->ncap),
+			Ks("constant", proto->nconst),
+			Ks("sub", proto->nsub));
 	dump_code(proto, (options & ALOE_DUMP_OPT_LINE) != 0);
 	if (options & ALOE_DUMP_OPT_CONST_POOL) {
-		aloi_show("constant pool <%p>\n", proto->_consts);
-		for (a_u32 i = 0; i < proto->_nconst; ++i) {
+		aloi_show("constant pool <%p>\n", proto->consts);
+		for (a_u32 i = 0; i < proto->nconst; ++i) {
 			aloi_show("\t%5u\t", i);
-			dump_const(proto->_consts[i]);
+			dump_const(proto->consts[i]);
 			aloi_show("\n");
 		}
 	}
 	if (options & ALOE_DUMP_OPT_LOCAL) {
-		if (proto->_dbg_locals != null) {
-			aloi_show("local info table <%p>\n", proto->_dbg_locals);
-			for (a_u32 i = 0; i < proto->_nlocal; ++i) {
-				LocalInfo* info = &proto->_dbg_locals[i];
+		if (proto->dbg_locals != null) {
+			aloi_show("local info table <%p>\n", proto->dbg_locals);
+			for (a_u32 i = 0; i < proto->nlocal; ++i) {
+				LocalInfo* info = &proto->dbg_locals[i];
 				aloi_show("\t%5u\tR[%u]\t%s ; %u %u\n",
                           i,
-                          info->_reg,
-                          info->_name ? str2ntstr(info->_name) : "?",
-                          info->_begin_label,
-                          info->_end_label);
+                          info->reg,
+                          info->name ? str2ntstr(info->name) : "?",
+                          info->lbegin,
+                          info->lend);
 			}
-			printf("capture info table <%p>\n", proto->_caps);
-			for (a_u32 i = 0; i < proto->_ncap; ++i) {
-				CapInfo* info = &proto->_caps[i];
-				GStr* name = proto->_dbg_cap_names[i];
+			printf("capture info table <%p>\n", proto->caps);
+			for (a_u32 i = 0; i < proto->ncap; ++i) {
+				CapInfo* info = &proto->caps[i];
+				GStr* name = proto->dbg_cap_names[i];
 				aloi_show("\t%5u\t%c[%u]\t%s\n",
                           i,
-                          info->_fup ? 'C' : 'R',
-                          info->_reg,
+                          info->fup ? 'C' : 'R',
+                          info->reg,
                           name != null ? str2ntstr(name) : "?");
 			}
 		}
@@ -273,26 +273,26 @@ static void dump_chunk(a_henv env, GProto* proto, a_u32 options) {
 		}
 	}
 	/* Dump sub functions. */
-	for (a_u32 i = 0; i < proto->_nsub; ++i) {
+	for (a_u32 i = 0; i < proto->nsub; ++i) {
 		aloi_show_newline();
-		dump_chunk(env, proto->_subs[i], options);
+		dump_chunk(env, proto->subs[i], options);
 	}
 }
 
 static void dump_native(a_henv env, GFun* fun, a_u32 options) {
 	quiet(env);
 	quiet(options);
-	aloi_show("fn %p ", fun->_fptr);
+	aloi_show("fn %p ", fun->fptr);
 	aloi_show("<native>");
 	aloi_show_flush();
 }
 
 static void dump_func(a_henv env, GFun* fun, a_u32 options) {
-	if (fun->_flags & FUN_FLAG_NATIVE) {
+	if (fun->flags & FUN_FLAG_NATIVE) {
 		dump_native(env, fun, options);
 	}
 	else {
-		dump_chunk(env, fun->_proto, options);
+		dump_chunk(env, fun->proto, options);
 	}
 	aloi_show_flush();
 }

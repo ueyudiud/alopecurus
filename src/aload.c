@@ -21,25 +21,25 @@ typedef struct InCtx InCtx;
 struct InCtx {
     GOBJ_STRUCT_HEADER;
 	union {
-		a_henv _env;
-		ZIn _in;
+        ZIn in;
+		a_henv env;
 	};
-    a_flags _flags;
-    RefQueue _rq;
+    a_flags flags;
+    RefQueue rq;
 };
 
 static void load_report(InCtx* ic, a_msg msg) {
     if (msg == ALO_EEMPTY) {
-        ai_err_raisef(ic->_env, ALO_ECHUNK, "unexpected ending of chunk");
+        ai_err_raisef(ic->env, ALO_ECHUNK, "unexpected ending of chunk");
     }
     else {
         assume(msg == ALO_EOUTER);
-        ai_err_raisef(ic->_env, msg, "foreign error, code: %d", ic->_in._err);
+        ai_err_raisef(ic->env, msg, "foreign error, code: %d", ic->in.err);
     }
 }
 
 static void load_input(InCtx* ic, void* dst, a_usize len) {
-    catch (ai_io_iget(&ic->_in, dst, len), msg) {
+    catch (ai_io_iget(&ic->in, dst, len), msg) {
         load_report(ic, msg);
     }
 }
@@ -59,7 +59,7 @@ static void load_input(InCtx* ic, void* dst, a_usize len) {
 
 static GStr* l_gets(InCtx* ic, a_usize len) {
     GStr* str;
-    catch (ai_str_load(ic->_env, cast(a_sbfun, ai_io_iget), len, &ic->_in, &str), msg) {
+    catch (ai_str_load(ic->env, cast(a_sbfun, ai_io_iget), len, &ic->in, &str), msg) {
         load_report(ic, msg);
     }
     return str;
@@ -93,12 +93,12 @@ static void load_const(InCtx* ic, Value* v) {
         case LVTAG_LSTR: {
             a_u32 len = l_getvi(ic, a_u32) + LVLSTR_LEN_BIAS;
             GStr* val = l_gets(ic, len);
-            v_set_obj(ic->_in._env, v, val);
+            v_set_obj(ic->in.env, v, val);
             break;
         }
         default: { /* For short string */
             GStr* val = l_gets(ic, tag);
-            v_set_obj(ic->_in._env, v, val);
+            v_set_obj(ic->in.env, v, val);
             break;
         }
     }
@@ -106,17 +106,17 @@ static void load_const(InCtx* ic, Value* v) {
 
 static void load_info(InCtx* ic, ProtoDesc* info, a_bool root) {
     init(info) {
-        ._nconst = l_getvi(ic, a_u32),
-        ._ninsn = l_getvi(ic, a_u32),
-        ._nsub = l_getvi(ic, a_u32),
-        ._nlocal = l_getvi(ic, a_u16),
-        ._nline = l_getvi(ic, a_u16),
-        ._ncap = l_get(ic, a_u8),
-        ._nstack = l_get(ic, a_u8),
-        ._flags = l_get(ic, a_u16) | (ic->_flags << 16)
+        .nconst = l_getvi(ic, a_u32),
+        .ninsn = l_getvi(ic, a_u32),
+        .nsub = l_getvi(ic, a_u32),
+        .nlocal = l_getvi(ic, a_u16),
+        .nline = l_getvi(ic, a_u16),
+        .ncap = l_get(ic, a_u8),
+        .nstack = l_get(ic, a_u8),
+        .flags = l_get(ic, a_u16) | (ic->flags << 16)
     };
-	if (root && !(info->_flags & FUN_FLAG_UNIQUE)) {
-        ai_err_raisef(ic->_env, ALO_ECHUNK, "chunk data verification failed");
+	if (root && !(info->flags & FUN_FLAG_UNIQUE)) {
+        ai_err_raisef(ic->env, ALO_ECHUNK, "chunk data verification failed");
     }
 }
 
@@ -126,17 +126,17 @@ static GProto* load_proto(InCtx* ic, a_bool root) {
     /* Load prototype header */
     load_info(ic, &info, root);
 
-    GProto* proto = ai_proto_alloc(ic->_env, &info);
+    GProto* proto = ai_proto_alloc(ic->env, &info);
 
     /* Noexcept code until here, add proto into object list. */
-	rq_push(&ic->_rq, proto);
+	rq_push(&ic->rq, proto);
     
-    for (a_u32 i = 0; i < info._nconst; ++i) {
-        load_const(ic, &proto->_consts[i]);
+    for (a_u32 i = 0; i < info.nconst; ++i) {
+        load_const(ic, &proto->consts[i]);
     }
-    l_getv(ic, proto->_code, info._ninsn);
-    for (a_u16 i = 0; i < info._nsub; ++i) {
-        proto->_subs[i] = load_proto(ic, false);
+    l_getv(ic, proto->code, info.ninsn);
+    for (a_u16 i = 0; i < info.nsub; ++i) {
+        proto->subs[i] = load_proto(ic, false);
     }
 
     return proto;
@@ -147,16 +147,16 @@ static void load_verify(InCtx* ic) {
     char header[CHUNK_HEADER_SIZE];
     l_getv(ic, header, CHUNK_HEADER_SIZE);
     if (memcmp(header, ai_fun_header, CHUNK_HEADER_SIZE) != 0) {
-        ai_err_raisef(ic->_env, ALO_ECHUNK, "not chunk file");
+        ai_err_raisef(ic->env, ALO_ECHUNK, "not chunk file");
     }
     /* Check version and variant */
     a_u16 variant = l_get(ic, a_u16);
     if (variant != ALO_VARIANT) {
-        ai_err_raisef(ic->_env, ALO_ECHUNK, "chunk file variant mismatched, expect %u, got %u", ALO_VARIANT, variant);
+        ai_err_raisef(ic->env, ALO_ECHUNK, "chunk file variant mismatched, expect %u, got %u", ALO_VARIANT, variant);
     }
     a_u16 version = l_get(ic, a_u16);
     if (version != ALO_VERSION_NUMBER) {
-        ai_err_raisef(ic->_env, ALO_ECHUNK, "chunk file version mismatched, expect %u, got %u", ALO_VERSION_NUMBER, version);
+        ai_err_raisef(ic->env, ALO_ECHUNK, "chunk file version mismatched, expect %u, got %u", ALO_VERSION_NUMBER, version);
     }
 }
 
@@ -167,15 +167,15 @@ static void load_chunk(unused a_henv env, void* ctx) {
     /* Load root prototype */
     load_proto(ic, true);
     /* Register prototypes into GC */
-	ai_gc_register_objects(ic->_in._env, &ic->_rq);
+	ai_gc_register_objects(ic->in.env, &ic->rq);
 }
 
 static void load_mark(Global* gbl, void* ctx) {
     InCtx* ic = ctx;
-	rq_for (obj, &ic->_rq) {
+	rq_for (obj, &ic->rq) {
 		GProto* meta = g_cast(GProto, obj);
-		for (a_u32 i = 0; i < meta->_nconst; ++i) {
-			ai_gc_trace_mark_val(gbl, meta->_consts[i]);
+		for (a_u32 i = 0; i < meta->nconst; ++i) {
+			ai_gc_trace_mark_val(gbl, meta->consts[i]);
 		}
 	}
     g_set_stack_white(ic);
@@ -183,16 +183,16 @@ static void load_mark(Global* gbl, void* ctx) {
 
 static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
     Global* gbl = G(env);
-	rq_for (obj, &ic->_rq) {
+	rq_for (obj, &ic->rq) {
 		GProto* meta = g_cast(GProto, obj);
-		ai_mem_ndealloc(gbl, meta, meta->_size);
+		ai_mem_ndealloc(gbl, meta, meta->size);
 	}
 }
 
 static VTable const load_vtable = {
-    ._stencil = V_STENCIL(T_USER),
-    ._flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
-    ._slots = {
+    .stencil = V_STENCIL(T_USER),
+    .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
+    .slots = {
         [vfp_slot(mark)] = load_mark,
         [vfp_slot(except)] = load_except
     }
@@ -200,22 +200,22 @@ static VTable const load_vtable = {
 
 a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags) {
     InCtx ic = {
-        ._vptr = &load_vtable,
-        ._flags = flags
+        .vptr = &load_vtable,
+        .flags = flags
     };
     g_set_stack_white(&ic);
-	rq_init(&ic._rq);
-    ai_io_iinit(env, fun, ctx, &ic._in);
+	rq_init(&ic.rq);
+    ai_io_iinit(env, fun, ctx, &ic.in);
 
-    Value* p = env->_stack._top++;
+    Value* p = env->stack.top++;
     v_set_obj(env, p, &ic);
 
     a_msg msg = ai_env_pcall(env, load_chunk, &ic, p);
 
-    v_set_nil(--env->_stack._top);
+    v_set_nil(--env->stack.top);
     
     if (likely(msg == ALO_SOK)) {
-        *pval = g_cast(GProto, ic._rq._head)->_cache;
+        *pval = g_cast(GProto, ic.rq.head)->cache;
     }
     return msg;
 }

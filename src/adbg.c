@@ -27,27 +27,27 @@ a_noret ai_dbg_panic(char const* fmt, ...) {
 #endif
 
 GFun* ai_dbg_get_func(a_henv env, Frame* frame) {
-	Value* bot = stk2val(env, frame->_stack_bot);
-	return bot > env->_stack._base ? v_as_func(bot[-1]) : null;
+	Value* bot = stk2val(env, frame->stack_bot);
+	return bot > env->stack.base ? v_as_func(bot[-1]) : null;
 }
 
 a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc) {
-	if (!(proto->_flags & FUN_FLAG_NATIVE) && proto->_dbg_lines != null) {
-		a_u32 disp = pc - proto->_code;
+	if (!(proto->flags & FUN_FLAG_NATIVE) && proto->dbg_lines != null) {
+		a_u32 disp = pc - proto->code;
 		a_u32 lo = 0;
-		a_u32 hi = proto->_nline - 1;
+		a_u32 hi = proto->nline - 1;
 		a_u32 mi;
 		while (lo < hi) {
 			mi = (lo + hi) >> 1;
-			LineInfo* info = &proto->_dbg_lines[mi];
-			if (disp >= info->_end) {
+			LineInfo* info = &proto->dbg_lines[mi];
+			if (disp >= info->lend) {
 				lo = mi + 1;
 			}
 			else {
 				hi = mi;
 			}
 		}
-		return proto->_dbg_lines[lo]._lineno;
+		return proto->dbg_lines[lo].line;
 	}
 	else {
 		return 0;
@@ -56,8 +56,8 @@ a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc) {
 
 static void l_get_source(alo_Debug* dbg, GFun* fun, a_insn const* pc) {
 	if (likely(fun != null)) {
-		GProto* proto = fun->_proto;
-		dbg->file = proto->_dbg_file != null ? str2ntstr(proto->_dbg_file) : null;
+		GProto* proto = fun->proto;
+		dbg->file = proto->dbg_file != null ? str2ntstr(proto->dbg_file) : null;
 		dbg->line = ai_dbg_get_line(proto, pc);
 	}
 	else {
@@ -70,12 +70,12 @@ static Frame* l_load_frame(a_henv env, Frame** pframe, a_enum n) {
     Frame* frame;
     switch (n) {
         case ALO_DEBUG_HEAD: {
-            frame = env->_frame;
+            frame = env->frame;
             break;
         }
         case ALO_DEBUG_NEXT: {
             frame = *pframe;
-            *pframe = frame->_prev;
+            *pframe = frame->prev;
             break;
         }
         case ALO_DEBUG_THIS: {
@@ -93,7 +93,7 @@ a_bool alo_debug(a_henv env, alo_Debug* dbg, a_enum n, a_flags w) {
 
     GFun* p = ai_dbg_get_func(env, frame);
     if (w & ALO_DEBUG_FLAG_SOURCE) {
-        l_get_source(dbg, p, frame->_pc);
+        l_get_source(dbg, p, frame->pc);
     }
 
     return true;

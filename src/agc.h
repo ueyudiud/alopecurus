@@ -8,54 +8,54 @@
 #include "aenv.h"
 
 typedef struct {
-	a_gclist _head;
-	a_gclist* _tail;
+	a_gclist head;
+	a_gclist* tail;
 } RefQueue;
 
 always_inline void rq_init(RefQueue* rq) {
-	rq->_tail = &rq->_head;
+	rq->tail = &rq->head;
 }
 
 always_inline void rq_push(RefQueue* rq, a_gptr p) {
-	*rq->_tail = p;
-	rq->_tail = &p->_gnext;
+	*rq->tail = p;
+	rq->tail = &p->gnext;
 }
 
 #define rq_push(rq,o) rq_push(rq, gobj_cast(o))
 
 #define rq_for(v,rq) for ( \
-	a_gptr *_p_##v = &(rq)->_head, v; \
-	_p_##v != (rq)->_tail && ((v) = *_p_##v, true); \
-	_p_##v = &(v)->_gnext \
+	a_gptr *_p_##v = &(rq)->head, v; \
+	_p_##v != (rq)->tail && ((v) = *_p_##v, true); \
+	_p_##v = &(v)->gnext \
 )
 
 always_inline void g_set_stack_white(a_gptr o) {
-    assume(vtable_has_flag(o->_vptr, VTABLE_FLAG_STACK_ALLOC));
-    o->_tnext = WHITE_COLOR;
+    assume(vtable_has_flag(o->vptr, VTABLE_FLAG_STACK_ALLOC));
+    o->tnext = WHITE_COLOR;
 }
 
 #define g_set_stack_white(o) g_set_stack_white(gobj_cast(o))
 
 always_inline void g_set_white(Global* gbl, a_gptr o) {
-    o->_tnext = white_color(gbl);
+    o->tnext = white_color(gbl);
 }
 
 #define g_set_white(gbl,o) g_set_white(gbl, gobj_cast(o))
 
 always_inline void g_set_gray(a_gptr v) {
-    v->_tnext = GRAY_NULL;
+    v->tnext = GRAY_NULL;
 }
 
 #define g_set_gray(o) g_set_gray(gobj_cast(o))
 
 always_inline void g_set_black(a_gptr o) {
-    o->_tnext = BLACK_COLOR;
+    o->tnext = BLACK_COLOR;
 }
 
 #define g_set_black(o) g_set_black(gobj_cast(o))
 
 always_inline void join_trace(a_trmark* list, a_gptr o) {
-    o->_tnext = *list;
+    o->tnext = *list;
 	*list = ptr2int(o);
 }
 
@@ -63,7 +63,7 @@ always_inline void join_trace(a_trmark* list, a_gptr o) {
 
 always_inline a_gptr strip_trace(a_trmark* list) {
     a_gptr o = int2ptr(GObj, *list);
-	*list = o->_tnext;
+	*list = o->tnext;
 	return o;
 }
 
@@ -91,7 +91,7 @@ always_inline void ai_gc_trace_mark_val(Global* gbl, Value v) {
 	if (v_is_obj(v)) ai_gc_trace_mark(gbl, v_as_obj(v));
 }
 
-#define ai_gc_should_run(gbl) unlikely((gbl)->_mem_debt >= 0)
+#define ai_gc_should_run(gbl) unlikely((gbl)->mem_debt >= 0)
 
 #ifdef ALOI_CHECK_GC
 # define ai_gc_trigger_(env,pre,post) ({ ai_gc_set_debt(G(env), 0); pre; ai_gc_incr_gc(env); post; })
@@ -102,22 +102,22 @@ always_inline void ai_gc_trace_mark_val(Global* gbl, Value v) {
 #define ai_gc_trigger(env) ai_gc_trigger_(env, (void) 0, (void) 0)
 
 always_inline void ai_gc_trace_work(Global* gbl, a_usize size) {
-	gbl->_mem_work -= cast(a_isize, size);
+	gbl->mem_work -= cast(a_isize, size);
 }
 
 always_inline a_bool ai_gc_is_tracing(Global* gbl) {
-    return gbl->_gcstep <= GCSTEP_PROPAGATE_ATOMIC;
+    return gbl->gcstep <= GCSTEP_PROPAGATE_ATOMIC;
 }
 
 always_inline a_bool ai_gc_is_sweeping(Global* gbl) {
-	return gbl->_gcstep >= GCSTEP_SWEEP_NORMAL && gbl->_gcstep <= GCSTEP_SWEEP_ATOMIC;
+	return gbl->gcstep >= GCSTEP_SWEEP_NORMAL && gbl->gcstep <= GCSTEP_SWEEP_ATOMIC;
 }
 
 always_inline void ai_gc_barrier_forward(a_henv env, a_gptr obj1, a_gptr obj2) {
 	Global* gbl = G(env);
 	if (g_has_black_color(obj1) && g_has_white_color_within_assume_alive(gbl, obj2)) {
 		if (ai_gc_is_tracing(gbl)) {
-			join_trace(&gbl->_tr_gray, obj2);
+			join_trace(&gbl->tr_gray, obj2);
 		}
 		else {
 			assume(ai_gc_is_sweeping(gbl));
@@ -139,7 +139,7 @@ always_inline void ai_gc_barrier_forward_val(a_henv env, a_gptr obj, Value val) 
 always_inline void ai_gc_barrier_backward(a_henv env, a_gptr obj1, a_gptr obj2) {
 	Global* gbl = G(env);
 	if (g_has_black_color(obj1) && g_has_white_color_within_assume_alive(gbl, obj2)) {
-		join_trace(&gbl->_tr_regray, obj1);
+		join_trace(&gbl->tr_regray, obj1);
 	}
 }
 

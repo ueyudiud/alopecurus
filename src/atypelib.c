@@ -19,7 +19,7 @@ static a_msg type___call__(a_henv env) { /* Should this function write in script
 
     if (aloL_gets(env, 0, "__new__") == ALO_EEMPTY) {
         GType* self = g_cast(GType, v_as_obj(api_elem(env, 0)));
-        aloL_raisef(env, "no entry for '%s.__new__'", str2ntstr(self->_name));
+        aloL_raisef(env, "no entry for '%s.__new__'", str2ntstr(self->name));
     }
 
     alo_pop(env, 0);

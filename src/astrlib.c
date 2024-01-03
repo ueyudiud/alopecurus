@@ -16,9 +16,9 @@
 #include "astrlib.h"
 
 typedef struct {
-    a_lstr _sub;
-    a_lstr _pat;
-    a_lstr _rep;
+    a_lstr sub;
+    a_lstr pat;
+    a_lstr rep;
 } RepCtx;
 
 static Buf* l_newbuf(a_henv env) {
@@ -30,17 +30,17 @@ static a_lstr ntstr2lstr(char const* str) {
 }
 
 static char const* lstrstr(a_lstr sub, a_lstr pat) {
-    assume(pat._len > 0, "pattern string length == 0");
+    assume(pat.len > 0, "pattern string length == 0");
 
-    if (sub._len < pat._len)
+    if (sub.len < pat.len)
         return null;
 
-    char ch = pat._ptr[0];
+    char ch = pat.ptr[0];
     char const* begin;
-    char const* match_end = sub._ptr + sub._len - pat._len;
+    char const* match_end = sub.ptr + sub.len - pat.len;
 
-    while ((begin = memchr(sub._ptr, ch, sub._len)) != null && begin <= match_end) {
-        if (memcmp(begin + 1, pat._ptr + 1, pat._len - 1) == 0) {
+    while ((begin = memchr(sub.ptr, ch, sub.len)) != null && begin <= match_end) {
+        if (memcmp(begin + 1, pat.ptr + 1, pat.len - 1) == 0) {
             return begin;
         }
     }
@@ -49,30 +49,30 @@ static char const* lstrstr(a_lstr sub, a_lstr pat) {
 }
 
 static void l_replace(a_henv env, RepCtx* ctx, Buf* buf) {
-    if (ctx->_pat._len <= ctx->_rep._len) {
-        at_buf_check(env, buf, ctx->_sub._len);
+    if (ctx->pat.len <= ctx->rep.len) {
+        at_buf_check(env, buf, ctx->sub.len);
     }
 
     char const* beg;
-    a_lstr str = ctx->_sub;
+    a_lstr str = ctx->sub;
 
-    while ((beg = lstrstr(str, ctx->_pat)) != null) {
-        at_buf_putls(env, buf, str._ptr, beg - str._ptr);
-        at_buf_putls(env, buf, ctx->_rep._ptr, ctx->_rep._len);
+    while ((beg = lstrstr(str, ctx->pat)) != null) {
+        at_buf_putls(env, buf, str.ptr, beg - str.ptr);
+        at_buf_putls(env, buf, ctx->rep.ptr, ctx->rep.len);
 
-        a_usize step = beg - str._ptr + ctx->_pat._len;
-        str._ptr += step;
-        str._len -= step;
+        a_usize step = beg - str.ptr + ctx->pat.len;
+        str.ptr += step;
+        str.len -= step;
     }
 
-    at_buf_putls(env, buf, str._ptr, ctx->_sub._ptr + ctx->_sub._len - str._ptr);
+    at_buf_putls(env, buf, str.ptr, ctx->sub.ptr + ctx->sub.len - str.ptr);
 }
 
 char const* aloS_replace(a_henv env, char const* sub, char const* pat, char const* rep) {
     RepCtx ctx = {
-        ._sub = ntstr2lstr(sub),
-        ._pat = ntstr2lstr(pat),
-        ._rep = ntstr2lstr(rep)
+        .sub = ntstr2lstr(sub),
+        .pat = ntstr2lstr(pat),
+        .rep = ntstr2lstr(rep)
     };
 
     api_check_slot(env, 2);
@@ -80,7 +80,7 @@ char const* aloS_replace(a_henv env, char const* sub, char const* pat, char cons
     Buf* buf = l_newbuf(env);
     l_replace(env, &ctx, buf);
 
-    char const* out = alo_pushstr(env, buf->_ptr, buf->_len);
+    char const* out = alo_pushstr(env, buf->ptr, buf->len);
     alo_erase(env, -2, 1); /* Drop buffer. */
     return out;
 }
@@ -88,24 +88,24 @@ char const* aloS_replace(a_henv env, char const* sub, char const* pat, char cons
 static a_msg str_replace(a_henv env) {
     RepCtx ctx;
 
-    ctx._sub._ptr = aloL_checklstr(env, 0, &ctx._sub._len);
-    ctx._pat._ptr = aloL_checklstr(env, 1, &ctx._pat._len);
-    ctx._rep._ptr = aloL_checklstr(env, 2, &ctx._rep._len);
+    ctx.sub.ptr = aloL_checklstr(env, 0, &ctx.sub.len);
+    ctx.pat.ptr = aloL_checklstr(env, 1, &ctx.pat.len);
+    ctx.rep.ptr = aloL_checklstr(env, 2, &ctx.rep.len);
 
-    char const* beg = lstrstr(ctx._sub, ctx._pat);
+    char const* beg = lstrstr(ctx.sub, ctx.pat);
     if (beg != null) {
         alo_settop(env, 3);
 
         Buf* buf = l_newbuf(env);
-        at_buf_putls(env, buf, ctx._sub._ptr, beg - ctx._sub._ptr);
-        at_buf_putls(env, buf, ctx._rep._ptr, ctx._rep._len);
+        at_buf_putls(env, buf, ctx.sub.ptr, beg - ctx.sub.ptr);
+        at_buf_putls(env, buf, ctx.rep.ptr, ctx.rep.len);
 
-        a_usize step = beg - ctx._sub._ptr + ctx._pat._len;
-        ctx._sub._ptr += step;
-        ctx._sub._len -= step;
+        a_usize step = beg - ctx.sub.ptr + ctx.pat.len;
+        ctx.sub.ptr += step;
+        ctx.sub.len -= step;
         l_replace(env, &ctx, buf);
 
-        alo_pushstr(env, buf->_ptr, buf->_len);
+        alo_pushstr(env, buf->ptr, buf->len);
     }
     else {
         alo_settop(env, 1);
@@ -115,10 +115,10 @@ static a_msg str_replace(a_henv env) {
 
 static a_msg str_trim(a_henv env) {
     a_lstr str;
-    str._ptr = aloL_checklstr(env, 0, &str._len);
+    str.ptr = aloL_checklstr(env, 0, &str.len);
 
-    char const* p = str._ptr;
-    char const* q = str._ptr + str._len;
+    char const* p = str.ptr;
+    char const* q = str.ptr + str.len;
 
     while (p < q) {
         if (!isspace(*p))
@@ -137,7 +137,7 @@ backward:
 
     assume(p < q);
 
-    if (p == str._ptr && q == str._ptr + str._len) {
+    if (p == str.ptr && q == str.ptr + str.len) {
         alo_settop(env, 1);
     }
     else {

@@ -48,8 +48,8 @@
 #define a_noret ALO_NORETURN void
 
 typedef struct {
-	char const* _ptr;
-	a_usize _len;
+	char const* ptr;
+	a_usize len;
 } a_lstr;
 
 typedef a_u32 a_uint;
@@ -181,7 +181,7 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 #define memclr(dst,len) memset(dst, 0, len)
 
 #if !ALO_C23
-/* Compact with C23 standard name. */
+/* Compact with C23 standard dbg_name. */
 # define ckd_add(d,a,b) __builtin_add_overflow(a, b, d)
 # define ckd_sub(d,a,b) __builtin_sub_overflow(a, b, d)
 # define ckd_mul(d,a,b) __builtin_mul_overflow(a, b, d)
@@ -189,7 +189,7 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 # define count_leading_zero(a) __builtin_clz(a)
 # define ceil_power_of_two(a) ((~((typeof(a)) 0) >> count_leading_zero(a)) + 1)
 #else
-/* Redirect to C23 defined function name. */
+/* Redirect to C23 defined function dbg_name. */
 # define count_leading_zero(a) stdc_leading_zeros(a)
 # define ceil_power_of_two(a) stdc_bit_ceil(a)
 #endif

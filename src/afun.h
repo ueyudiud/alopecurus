@@ -32,18 +32,18 @@ intern void ai_cap_clean(Global* gbl);
  ** The capture value using reference counter.
  */
 struct RcCap {
-	Value* _ptr;
-	a_u32 _rc;
+	Value* ptr;
+	a_u32 nref;
 	union {
-		a_u8 _flags;
+		a_u8 flags;
 		struct {
-			a_u8 _ftouch: 1;
-			a_u8 _ftbc: 1;
+			a_u8 ftouch: 1;
+			a_u8 ftbc: 1;
 		};
 	};
 	union {
-		Value _slot;
-		RcCap* _next;
+		Value slot;
+		RcCap* next;
 	};
 };
 
@@ -60,79 +60,79 @@ typedef struct {
  ** Function fixed sized information.
  */
 struct ProtoDesc {
-	a_u32 _nconst;
-	a_u32 _ninsn;
-    a_flags _flags;
-	a_u16 _nsub;
-	a_u16 _nlocal;
-	a_u16 _nline;
-	a_u8 _ncap;
-	a_u8 _nstack;
-	a_u8 _nparam;
+	a_u32 nconst;
+	a_u32 ninsn;
+    a_flags flags;
+	a_u16 nsub;
+	a_u16 nlocal;
+	a_u16 nline;
+	a_u8 ncap;
+	a_u8 nstack;
+	a_u8 nparam;
 };
 
 struct GFun {
     GOBJ_STRUCT_HEADER;
-    a_u32 _len;
-    a_u16 _flags;
-    /* Function name. */
-    a_u16 _fname;
+    a_u32 ncap;
+    a_u16 flags;
+    /* Function dbg_name. */
+    a_u16 fname;
     union {
-        a_cfun _fptr;
-        GProto* _proto;
+        a_cfun fptr;
+        GProto* proto;
     };
     union {
-        RcCap* _caps[0];
-        Value _vals[0];
+        RcCap* ref_caps[0];
+        Value val_caps[0];
     };
 };
 
 struct GProto {
     GOBJ_STRUCT_HEADER;
-    a_u32 _size;
-    a_u16 _flags;
-    a_u8 _nstack;
-    a_u8 _nparam;
-    Value* _consts;
-    a_insn* _code;
-    a_u16 _nconst;
-    a_u16 _ninsn;
-    a_u16 _nsub;
-    a_u16 _nlocal;
-    a_u16 _nline;
-    a_u8 _ncap;
-    CapInfo* _caps;
-    GFun* _cache;
-    GStr* _name;
-    GStr* _dbg_file;
-    a_u32 _dbg_lndef;
-    a_u32 _dbg_lnldef;
-    LineInfo* _dbg_lines;
-    LocalInfo* _dbg_locals;
-    GStr** _dbg_cap_names;
-    GProto* _subs[0];
+    a_u32 size;
+    a_u16 flags;
+    a_u8 nstack;
+    a_u8 nparam;
+    Value* consts;
+    a_insn* code;
+    a_u16 nconst;
+    a_u16 ninsn;
+    a_u16 nsub;
+    a_u16 nlocal;
+    a_u16 nline;
+    a_u8 ncap;
+    CapInfo* caps;
+    GFun* cache;
+    GStr* dbg_name;
+    GStr* dbg_file;
+    a_u32 dbg_lndef;
+    a_u32 dbg_lnldef;
+    LineInfo* dbg_lines;
+    LocalInfo* dbg_locals;
+    GStr** dbg_cap_names;
+    GProto* subs[0];
 };
 
 struct LocalInfo {
-    GStr* _name;
-    a_u32 _begin_label;
-    a_u32 _end_label;
-    a_u8 _reg;
+    GStr* name;
+    a_u32 lbegin;
+    a_u32 lend;
+    a_u8 reg;
 };
 
 struct CapInfo {
     union {
-        a_u8 _flags;
+        a_u8 flags;
         struct {
-            a_u8 _fup: 1; /* Capture from upper closure. */
+            a_u8 fup: 1; /* Capture from upper closure. */
         };
     };
-    a_u8 _reg;
+    a_u8 reg;
 };
 
 struct LineInfo {
-    a_u32 _end;
-    a_u32 _lineno;
+    a_u32 lend;
+    a_u32 line;
 };
 
 #define v_is_func(v) v_is(v, T_FUNC)

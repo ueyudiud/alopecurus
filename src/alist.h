@@ -24,9 +24,9 @@ intern a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v);
 
 struct GList {
     GOBJ_STRUCT_HEADER;
-    a_u32 _len;
-    a_u32 _cap;
-    Value* _ptr;
+    a_u32 len;
+    a_u32 cap;
+    Value* ptr;
 };
 
 #define v_is_list(v) v_is(v, T_LIST)

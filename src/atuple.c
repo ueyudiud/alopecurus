@@ -27,10 +27,10 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_ulen len) {
 
     GTuple* self = ai_mem_alloc(env, tuple_size(len));
 
-	self->_vptr = &tuple_vtable;
-    self->_len = len;
-	self->_hash = 0;
-	v_cpy_all(env, self->_ptr, src, len);
+	self->vptr = &tuple_vtable;
+    self->len = len;
+	self->hash = 0;
+	v_cpy_all(env, self->ptr, src, len);
 
     ai_gc_register_object(env, self);
     return self;
@@ -39,24 +39,24 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_ulen len) {
 a_bool ai_tuple_equals(a_henv env, GTuple* self, GTuple* o) {
 	if (self == o)
         return true;
-    if (self->_len != o->_len)
+    if (self->len != o->len)
 		return false;
-	for (a_u32 i = 0; i < self->_len; ++i) {
-		if (!ai_vm_equals(env, self->_ptr[i], o->_ptr[i]))
+	for (a_u32 i = 0; i < self->len; ++i) {
+		if (!ai_vm_equals(env, self->ptr[i], o->ptr[i]))
 			return false;
 	}
 	return true;
 }
 
 a_hash ai_tuple_hash(a_henv env, GTuple* self) {
-	if (self->_hash == 0) {
-		a_hash hash = G(env)->_seed;
-		for (a_u32 i = 0; i < self->_len; ++i) {
-            hash = hash * 31 + ai_vm_hash(env, self->_ptr[i]);
+	if (self->hash == 0) {
+		a_hash hash = G(env)->seed;
+		for (a_u32 i = 0; i < self->len; ++i) {
+            hash = hash * 31 + ai_vm_hash(env, self->ptr[i]);
 		}
-		self->_hash = hash != 0 ? hash : 1;
+		self->hash = hash != 0 ? hash : 1;
 	}
-	return self->_hash;
+	return self->hash;
 }
 
 Value ai_tuple_get(a_henv env, GTuple* self, Value vk) {
@@ -67,8 +67,8 @@ Value ai_tuple_get(a_henv env, GTuple* self, Value vk) {
 }
 
 static Value const* tuple_refi(unused a_henv env, GTuple* self, a_int key) {
-    a_uint i = obj_idx(key, self->_len, null);
-    return &self->_ptr[i];
+    a_uint i = obj_idx(key, self->len, null);
+    return &self->ptr[i];
 }
 
 Value ai_tuple_geti(a_henv env, GTuple* self, a_int k) {
@@ -80,8 +80,8 @@ Value ai_tuple_geti(a_henv env, GTuple* self, a_int k) {
 }
 
 a_msg ai_tuple_ugeti(a_henv env, GTuple* self, a_int k, Value* pv) {
-    a_uint i = obj_idx(k, self->_len, ALO_EINVAL);
-    v_set(env, pv, self->_ptr[i]);
+    a_uint i = obj_idx(k, self->len, ALO_EINVAL);
+    v_set(env, pv, self->ptr[i]);
     return ALO_SOK;
 }
 
@@ -91,23 +91,23 @@ a_msg ai_tuple_uget(a_henv env, GTuple* self, Value vk, Value* pv) {
 }
 
 static void tuple_drop(Global* gbl, GTuple* self) {
-    ai_mem_dealloc(gbl, self, tuple_size(self->_len));
+    ai_mem_dealloc(gbl, self, tuple_size(self->len));
 }
 
 static void tuple_mark(Global* gbl, GTuple* self) {
-    a_u32 len = self->_len;
+    a_u32 len = self->len;
     for (a_u32 i = 0; i < len; ++i) {
-        ai_gc_trace_mark_val(gbl, self->_ptr[i]);
+        ai_gc_trace_mark_val(gbl, self->ptr[i]);
     }
-    ai_gc_trace_work(gbl, tuple_size(self->_len));
+    ai_gc_trace_work(gbl, tuple_size(self->len));
 }
 
 static VTable const tuple_vtable = {
-    ._stencil = V_STENCIL(T_TUPLE),
-    ._tag = ALO_TTUPLE,
-    ._flags = VTABLE_FLAG_NONE,
-    ._type_ref = g_type_ref(ALO_TTUPLE),
-    ._slots = {
+    .stencil = V_STENCIL(T_TUPLE),
+    .tag = ALO_TTUPLE,
+    .flags = VTABLE_FLAG_NONE,
+    .type_ref = g_type_ref(ALO_TTUPLE),
+    .slots = {
         [vfp_slot(drop)] = tuple_drop,
         [vfp_slot(mark)] = tuple_mark
     }

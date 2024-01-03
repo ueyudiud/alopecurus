@@ -28,7 +28,7 @@ intern a_i32 ai_lex_forward(Lexer* lex);
 intern a_i32 ai_lex_peek(Lexer* lex);
 intern a_i32 ai_lex_peek2(Lexer* lex, a_u32 line);
 
-#define ai_lex_error(lex,fmt,args...) ai_par_error(cast(Parser*, lex), fmt, (lex)->_line, ##args)
+#define ai_lex_error(lex,fmt,args...) ai_par_error(cast(Parser*, lex), fmt, (lex)->line, ##args)
 
 enum {
     TK__NONE,
@@ -49,32 +49,32 @@ enum {
 static_assert(cast(a_u32, TK_if) == cast(a_u32, STR_if));
 
 struct Token {
-    a_i32 _tag;
-    a_line _line;
+    a_i32 tag;
+    a_line line;
     union {
-        a_int _int;
-        a_uint _uint;
-        a_float _float;
-        GStr* _str;
+        a_int as_int;
+        a_uint as_uint;
+        a_float as_float;
+        GStr* as_str;
     };
 };
 
 typedef struct {
-	GStr** _ptr;
-    a_u32 _len;
-	a_u32 _hmask;
+	GStr** ptr;
+    a_u32 len;
+	a_u32 hmask;
 } StrSet;
 
 struct Lexer {
 	union {
-		ZIn _in;
-		a_henv _env;
+		ZIn in;
+		a_henv env;
 	};
-    Buf _buf[1];
-    a_line _line;
+    Buf buf[1];
+    a_line line;
     a_i32 _char; /* Next character. */
-    Token _ahead[2];
-    StrSet _strs;
+    Token ahead[2];
+    StrSet strs;
 };
 
 #endif /* alex_h_ */

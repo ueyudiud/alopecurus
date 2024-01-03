@@ -19,12 +19,12 @@ intern void ai_type_clean(Global* gbl);
 struct GType {
     GMOD_STRUCT_HEADER;
     /* Type metadata (Optional). */
-    GStr* _name;
+    GStr* name;
 };
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
 
-#define mt_has_ftm(t,tm) (((t)->_ftmz & FTM_BIT(tm)) == 0)
+#define mt_has_ftm(t,tm) (((t)->ftmz & FTM_BIT(tm)) == 0)
 
 always_inline GMod* type2mt(GType* o) {
     return gmod_cast(o);

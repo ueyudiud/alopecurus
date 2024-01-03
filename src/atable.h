@@ -28,21 +28,21 @@ typedef struct TNode TNode;
  */
 struct GTable {
     GOBJ_STRUCT_HEADER;
-    a_u32 _len;
-    a_u32 _hmask;
-    TNode* _ptr;
+    a_u32 len;
+    a_u32 hmask;
+    TNode* ptr;
 };
 
 /**
  ** Table node.
  */
 struct TNode {
-    a_hash _hash;
-    a_i32 _hnext;
-    a_i32 _lprev;
-    a_i32 _lnext;
-    Value _key;
-    Value _value;
+    a_hash hash;
+    a_i32 hnext;
+    a_i32 lprev;
+    a_i32 lnext;
+    Value key;
+    Value value;
 };
 
 #define v_is_table(v) v_is(v, T_TABLE)

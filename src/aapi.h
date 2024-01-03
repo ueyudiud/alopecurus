@@ -26,34 +26,34 @@ intern char const ai_api_tagname[][8];
 
 always_inline Value* api_stack_limit(a_henv env) {
 #ifdef ALOI_CHECK_API
-    return stk2val(env, env->_frame->_stack_limit);
+    return stk2val(env, env->frame->stack_limit);
 #else
-    return env->_stack._limit;
+    return env->stack.limit;
 #endif
 }
 
 always_inline void api_check_slot(a_henv env, a_ulen size) {
-    api_check(env->_stack._top + size <= api_stack_limit(env), "no enough stack slot.");
+    api_check(env->stack.top + size <= api_stack_limit(env), "no enough stack slot.");
 }
 
 always_inline void api_check_elem(a_henv env, a_ulen size) {
-    api_check(ai_stk_bot(env) + size <= env->_stack._top, "no enough stack element.");
+    api_check(ai_stk_bot(env) + size <= env->stack.top, "no enough stack element.");
 }
 
 always_inline Value* api_incr_stack(a_henv env) {
     api_check_slot(env, 1);
-    Value* p = env->_stack._top++;
+    Value* p = env->stack.top++;
     v_check_alive(env, *p); /* Aliveness check. */
     return p;
 }
 
 always_inline Value api_pre_decr_stack(a_henv env) {
     api_check_elem(env, 1);
-    return *(env->_stack._top - 1);
+    return *(env->stack.top - 1);
 }
 
 always_inline void api_post_decr_stack(a_henv env) {
-    env->_stack._top -= 1;
+    env->stack.top -= 1;
 }
 
 always_inline Value api_decr_stack(a_henv env) {

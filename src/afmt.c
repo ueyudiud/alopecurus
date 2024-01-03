@@ -81,5 +81,5 @@ void ai_fmt_putp(a_henv env, Buf* buf, void* v) {
 	catch (ai_buf_ncheck(env, buf, BUFF_SIZE_FOR_PTR, 1, SIZE_MAX)) {
 		ai_mem_nomem(env);
 	}
-	buf->_len += ai_fmt_ptr2str(buf_end(buf) + BUFF_SIZE_FOR_PTR, v);
+	buf->len += ai_fmt_ptr2str(buf_end(buf) + BUFF_SIZE_FOR_PTR, v);
 }

@@ -25,13 +25,13 @@ struct ModHead { };
 #define GMOD_STRUCT_HEADER \
     struct ModHead _mod_head_mark[0]; \
     GOBJ_STRUCT_HEADER;    \
-    a_u32 _size;           \
-    a_u32 _sig;            \
-    a_u32 _len;            \
-    a_u32 _hmask;          \
-    MNode* _ptr;           \
-    a_u32 _nchg;           \
-    a_u32 _ftmz
+    a_u32 size;           \
+    a_u32 sig;            \
+    a_u32 len;            \
+    a_u32 hmask;          \
+    MNode* ptr;           \
+    a_u32 nchg;           \
+    a_u32 ftmz
 
 enum {
     FIELD_MOD_TACC = 0x01, /* Private accessibility */
@@ -43,13 +43,13 @@ enum {
 };
 
 struct MNode {
-    Value _value;
-    GStr* _key;
+    Value value;
+    GStr* key;
 };
 
 struct GMod {
     GMOD_STRUCT_HEADER;
-    a_byte _extra[];
+    a_byte extra[];
 };
 
 #define v_is_mod(v) v_is(v, T_MOD)

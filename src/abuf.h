@@ -11,7 +11,7 @@
 
 typedef struct { a_usize _; } BufHeadMark[0];
 
-#define BUF_STRUCT_BODY(t) BufHeadMark _buf_head_mark; t* _ptr; a_usize _len; a_usize _cap
+#define BUF_STRUCT_BODY(t) BufHeadMark _buf_head_mark; t* ptr; a_usize len; a_usize cap
 
 #define BUF_STRUCT_DECLARE(n,t,e...) \
     typedef struct n n; \
@@ -24,10 +24,10 @@ struct GBuf {
     BUF_STRUCT_BODY(char);
 };
 
-#define buf_end(b) cast(void*, (b)->_ptr + (b)->_len)
+#define buf_end(b) cast(void*, (b)->ptr + (b)->len)
 #define buf_cast(b) from_member(Buf, _buf_head_mark, &(b)->_buf_head_mark)
-#define buf_elem_type(b) typeof((b)->_ptr[0])
-#define buf_elem_size(b) sizeof((b)->_ptr[0])
+#define buf_elem_type(b) typeof((b)->ptr[0])
+#define buf_elem_size(b) sizeof((b)->ptr[0])
 #define buf_max_len(b) (SIZE_MAX / buf_elem_size(b))
 
 intern a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...);
@@ -36,39 +36,39 @@ intern GBuf* ai_buf_new(a_henv env);
 intern a_noret ai_buf_error(a_henv env, a_msg msg, char const* what);
 
 always_inline void ai_buf_init_(Buf* buf) {
-	buf->_ptr = null;
-	buf->_len = 0;
-	buf->_cap = 0;
+	buf->ptr = null;
+	buf->len = 0;
+	buf->cap = 0;
 }
 
 #define at_buf_init(b) ai_buf_init_(buf_cast(b))
 
 always_inline void ai_buf_deinit_(Global* gbl, Buf* buf, a_usize size) {
-	ai_mem_dealloc(gbl, buf->_ptr, buf->_cap * size);
-	buf->_ptr = null;
-	buf->_cap = 0;
+	ai_mem_dealloc(gbl, buf->ptr, buf->cap * size);
+	buf->ptr = null;
+	buf->cap = 0;
 }
 
 #define at_buf_deinit(gbl,b) ai_buf_deinit_(gbl, buf_cast(b), buf_elem_size(b))
 
 #define at_buf_for(b,v) for ( \
 	__auto_type               \
-    v = (b)->_ptr,            \
+    v = (b)->ptr,            \
 	_end_##v =                \
-    (b)->_ptr + (b)->_len;    \
+    (b)->ptr + (b)->len;    \
 	v < _end_##v;             \
 	v += 1                    \
 )
 
 always_inline a_bool ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize size) {
-    a_usize old_cap = buf->_cap;
+    a_usize old_cap = buf->cap;
     assume(old_cap <= SIZE_MAX / size && new_cap <= SIZE_MAX / size, "invalid capacity.");
 
-    void* ptr = ai_mem_nrealloc(env, buf->_ptr, size * old_cap, size * new_cap);
+    void* ptr = ai_mem_nrealloc(env, buf->ptr, size * old_cap, size * new_cap);
     if (unlikely(ptr == null)) return true;
 
-    buf->_ptr = ptr;
-	buf->_cap = new_cap;
+    buf->ptr = ptr;
+	buf->cap = new_cap;
     return false;
 }
 
@@ -92,9 +92,9 @@ always_inline a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usi
 }
 
 always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, a_usize lim) {
-	if (add > buf->_cap - buf->_len) {
-		a_usize cap = buf->_cap;
-		catch (ai_buf_nhint(&cap, buf->_len, add, lim)) { return ALO_EINVAL; }
+	if (add > buf->cap - buf->len) {
+		a_usize cap = buf->cap;
+		catch (ai_buf_nhint(&cap, buf->len, add, lim)) { return ALO_EINVAL; }
 		catch (ai_buf_ngrow(env, buf, cap, size)) { return ALO_ENOMEM; }
 	}
 	return ALO_SOK;
@@ -102,8 +102,8 @@ always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize siz
 
 always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize len, a_usize size, a_usize lim) {
 	try (ai_buf_ncheck(env, buf, len, size, lim));
-	memcpy(buf->_ptr + size * buf->_len, src, len * size);
-	buf->_len += len;
+	memcpy(buf->ptr + size * buf->len, src, len * size);
+	buf->len += len;
 	return ALO_SOK;
 }
 
@@ -113,18 +113,18 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 
 #define at_buf_push(env,b,v,w) ({ \
 	__auto_type _b = b;           \
-    a_usize _bid = _b->_len;      \
+    a_usize _bid = _b->len;       \
 	catch (at_buf_npush(env, _b, v)) { ai_buf_error(env, _e, w); } \
     _bid;                         \
 })
 
 #define at_buf_pop(env,b) ({ \
 	__auto_type _b = b;      \
-    assume(_b->_len > 0, "pop empty buf."); \
-    _b->_ptr[--_b->_len];    \
+    assume(_b->len > 0, "pop empty buf."); \
+    _b->ptr[--_b->len];    \
 })
 
-#define at_buf_clear(b) quiet((b)->_len = 0)
+#define at_buf_clear(b) quiet((b)->len = 0)
 
 /* String buffer specific functions. */
 
@@ -137,6 +137,6 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 #define at_buf_putls(env,b,s,l) catch (ai_buf_nputls(env, b, s, l), _msg) { ai_buf_error(env, _msg, "byte"); }
 #define at_buf_puts(env,b,s) at_buf_putls(env, b, s, strlen(s))
 #define at_buf_putc(env,b,c) at_buf_push(env, b, c, "char")
-#define at_buf_tostr(env,b) ai_str_get_or_new(env, (b)->_ptr, (b)->_len)
+#define at_buf_tostr(env,b) ai_str_get_or_new(env, (b)->ptr, (b)->len)
 
 #endif /* abuf_h_ */

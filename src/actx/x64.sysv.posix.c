@@ -19,19 +19,16 @@ a_msg ai_ctx_init(void) {
 
 a_noret ai_ctx_raise(a_henv env, a_msg msg) {
     Global* gbl = G(env);
-    if (gbl->_gexecpt != null) {
-        (*gbl->_gexecpt)(env, gbl->_gctx, msg);
+    if (env->pctx.stub != null) {
+        longjmp(env->pctx.stub->jbuf, msg);
     }
-    if (env->_pctx._stub != null) {
-        longjmp(env->_pctx._stub->_jbuf, msg);
-    }
-    else if (env->_from != null) {
-        env->_status = msg;
-        ai_ctx_jump(env->_from, env, msg);
+    else if (env->caller != null) {
+        env->status = msg;
+        ai_ctx_jump(env->caller, env, msg);
         trap();
     }
     else {
-        a_cfun panic = gbl->_panic;
+        a_cfun panic = gbl->panic_;
         if (panic != null) {
             (*panic)(env);
         }
@@ -40,13 +37,13 @@ a_noret ai_ctx_raise(a_henv env, a_msg msg) {
 }
 
 a_msg ai_ctx_catch(a_henv env, a_pfun pfun, void* pctx) {
-    JStub stub = { ._prev = env->_pctx._stub };
-    env->_pctx._stub = &stub;
-    a_msg msg = setjmp(stub._jbuf);
+    JStub stub = { .prev = env->pctx.stub };
+    env->pctx.stub = &stub;
+    a_msg msg = setjmp(stub.jbuf);
     if (msg == ALO_SOK) {
         (*pfun)(env, pctx);
     }
-    env->_pctx._stub = stub._prev;
+    env->pctx.stub = stub.prev;
     return msg;
 }
 
@@ -61,14 +58,14 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
     ref_of(void*, stack_base - 0x00) = null;
     ref_of(void*, stack_base - 0x08) = null;
     ref_of(void*, stack_base - 0x10) = ai_ctx_start;
-    env->_rctx = int2ptr(void, stack_base - 0x18);
-    env->_rctx_alloc = addr;
+    env->rctx = int2ptr(void, stack_base - 0x18);
+    env->rctx_alloc = addr;
 
     return ALO_SOK;
 }
 
 void ai_ctx_close(a_henv env) {
-    munmap(env->_rctx_alloc, 0);
+    munmap(env->rctx_alloc, 0);
 }
 
 #endif /* actx_x64_sysv_posix_h_ */

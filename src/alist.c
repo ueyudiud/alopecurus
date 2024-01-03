@@ -23,10 +23,10 @@ static VTable const list_vtable;
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, list_size());
 
-    self->_vptr = &list_vtable;
-    self->_ptr = null;
-    self->_cap = 0;
-    self->_len = 0;
+    self->vptr = &list_vtable;
+    self->ptr = null;
+    self->cap = 0;
+    self->len = 0;
 
     ai_gc_register_object(env, self);
 
@@ -34,19 +34,19 @@ GList* ai_list_new(a_henv env) {
 }
 
 static a_bool list_grow(a_henv env, GList* self, a_ulen add) {
-    a_ulen need = try_add(self->_len, add);
+    a_ulen need = try_add(self->len, add);
     if (unlikely(need > LIST_MAX_CAP)) return true;
 
-    assume(need >= self->_cap, "not need to grow.");
+    assume(need >= self->cap, "not need to grow.");
 
-    a_ulen old_cap = self->_cap;
+    a_ulen old_cap = self->cap;
     a_ulen new_cap = max(old_cap * 2, need + 4);
     if (unlikely(new_cap > LIST_MAX_CAP)) {
         new_cap = LIST_MAX_CAP;
     }
 
-    self->_ptr = ai_mem_vgrow(env, self->_ptr, old_cap, new_cap);
-    self->_cap = new_cap;
+    self->ptr = ai_mem_vgrow(env, self->ptr, old_cap, new_cap);
+    self->cap = new_cap;
 
     return false;
 }
@@ -58,7 +58,7 @@ void ai_list_grow(a_henv env, GList* self, a_usize add) {
 }
 
 void ai_list_hint(a_henv env, GList* self, a_usize add) {
-    if (add > self->_cap - self->_len) {
+    if (add > self->cap - self->len) {
         ai_list_grow(env, self, add);
     }
 }
@@ -66,8 +66,8 @@ void ai_list_hint(a_henv env, GList* self, a_usize add) {
 void ai_list_push(a_henv env, GList* self, Value v) {
     ai_list_hint(env, self, 1);
 
-    v_set(env, &self->_ptr[self->_len], v);
-    self->_len += 1;
+    v_set(env, &self->ptr[self->len], v);
+    self->len += 1;
 
 	ai_gc_barrier_backward_val(env, self, v);
 }
@@ -75,12 +75,12 @@ void ai_list_push(a_henv env, GList* self, Value v) {
 void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
     ai_list_hint(env, self, len);
 
-    v_cpy_all(env, &self->_ptr[self->_len], src, len);
-    self->_len += len;
+    v_cpy_all(env, &self->ptr[self->len], src, len);
+    self->len += len;
 
     /* We assume the elements in source has white value. */
 	if (g_has_black_color(self)) {
-		join_trace(&G(env)->_tr_regray, self);
+		join_trace(&G(env)->tr_regray, self);
 	}
 }
 
@@ -92,8 +92,8 @@ Value ai_list_get(a_henv env, GList* self, Value vk) {
 }
 
 Value ai_list_geti(unused a_henv env, GList* self, a_int k) {
-    a_u32 i = obj_idx(k, self->_len, v_of_nil());
-	return self->_ptr[i];
+    a_u32 i = obj_idx(k, self->len, v_of_nil());
+	return self->ptr[i];
 }
 
 void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
@@ -104,16 +104,16 @@ void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
 }
 
 void ai_list_seti(a_henv env, GList* self, a_int key, Value value) {
-    a_u32 i = obj_idx(key, self->_len,
+    a_u32 i = obj_idx(key, self->len,
         ai_err_raisef(env, ALO_EINVAL, "list index out of bound.")
     );
-	v_set(env, &self->_ptr[i], value);
+	v_set(env, &self->ptr[i], value);
 	ai_gc_barrier_forward_val(env, self, value);
 }
 
 a_msg ai_list_ugeti(a_henv env, GList* self, a_int k, Value* pv) {
-    a_uint i = obj_idx(k, self->_len, ALO_EEMPTY);
-    v_set(env, pv, self->_ptr[i]);
+    a_uint i = obj_idx(k, self->len, ALO_EEMPTY);
+    v_set(env, pv, self->ptr[i]);
     return ALO_SOK;
 }
 
@@ -123,9 +123,9 @@ a_msg ai_list_uget(a_henv env, GList* self, Value vk, Value* pv) {
 }
 
 a_msg ai_list_useti(a_henv env, GList* self, a_int k, Value v) {
-    a_uint i = obj_idx(k, self->_len, ALO_EEMPTY);
+    a_uint i = obj_idx(k, self->len, ALO_EEMPTY);
 
-    v_set(env, &self->_ptr[i], v);
+    v_set(env, &self->ptr[i], v);
 
     ai_gc_barrier_backward_val(env, self, v);
     return ALO_SOK;
@@ -137,24 +137,24 @@ a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v) {
 }
 
 static void list_mark(Global* gbl, GList* self) {
-    for (a_u32 i = 0; i < self->_len; ++i) {
-        ai_gc_trace_mark_val(gbl, self->_ptr[i]);
+    for (a_u32 i = 0; i < self->len; ++i) {
+        ai_gc_trace_mark_val(gbl, self->ptr[i]);
     }
-    ai_gc_trace_work(gbl, list_size() + sizeof(Value) * self->_cap);
+    ai_gc_trace_work(gbl, list_size() + sizeof(Value) * self->cap);
 }
 
 static void list_drop(Global* gbl, GList* self) {
-    if (self->_ptr != null) {
-        ai_mem_vdel(gbl, self->_ptr, self->_cap);
+    if (self->ptr != null) {
+        ai_mem_vdel(gbl, self->ptr, self->cap);
     }
     ai_mem_dealloc(gbl, self, list_size());
 }
 
 static VTable const list_vtable = {
-	._stencil = V_STENCIL(T_LIST),
-    ._tag = ALO_TLIST,
-    ._type_ref = g_type_ref(ALO_TLIST),
-	._slots = {
+	.stencil = V_STENCIL(T_LIST),
+    .tag = ALO_TLIST,
+    .type_ref = g_type_ref(ALO_TLIST),
+	.slots = {
         [vfp_slot(drop)] = list_drop,
         [vfp_slot(mark)] = list_mark
 	}

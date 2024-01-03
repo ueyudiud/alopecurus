@@ -18,19 +18,19 @@ intern void ai_io_oinit(a_henv env, a_ofun fun, void* ctx, ZOut* out);
 intern a_msg ai_io_oput(ZOut* out, void const* src, a_usize len);
 
 struct ZIn {
-    a_henv _env;
-    a_ifun _fun;
-    void* _ctx;
-    a_byte const* _ptr;
-    a_usize _len;
-    a_i32 _err;
+    a_henv env;
+    a_ifun fun;
+    void* ctx;
+    a_byte const* ptr;
+    a_usize len;
+    a_i32 err;
 };
 
 struct ZOut {
-    a_henv _env;
-    a_ofun _fun;
-    void* _ctx;
-    a_i32 _err;
+    a_henv env;
+    a_ofun fun;
+    void* ctx;
+    a_i32 err;
 };
 
 #endif /* aio_h_ */

@@ -25,15 +25,15 @@ a_noret ai_err_raisevf(a_henv env, a_msg msg, char const* fmt, va_list varg) {
 }
 
 a_noret ai_err_raise(a_henv env, a_msg msg, Value err) {
-	v_set(env, &env->_error, err); /* Push object into error slot. */
+	v_set(env, &env->error, err); /* Push object into error slot. */
 	ai_vm_hook(env, msg, ALO_HMRAISE);
 	ai_env_raise(env, msg);
 }
 
 void ai_err_except(a_henv env, a_msg msg) {
-    if (env->_errf == 0)
+    if (env->errf == 0)
         return;
-    Value errf = *stk2val(env, env->_errf);
+    Value errf = *stk2val(env, env->errf);
     if (!v_is_obj(errf))
         return;
     a_gptr obj = v_as_obj(errf);

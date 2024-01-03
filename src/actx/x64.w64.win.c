@@ -82,7 +82,7 @@ typedef enum ext(PROCESS_INFORMATION_CLASS) {
 WINSYSAPI HMODULE WINAPI GetModuleHandleA(LPCSTR);
 WINSYSAPI FARPROC WINAPI GetProcAddress(HANDLE, LPCSTR);
 
-#define CTX_DCL(name,owner,rtype,ptypes) static rtype (*WINAPI ext(name)) ptypes;
+#define CTX_DCL(dbg_name,owner,rtype,ptypes) static rtype (*WINAPI ext(dbg_name)) ptypes;
 IMPORT_LIST(CTX_DCL)
 #undef CTX_DCL
 
@@ -110,10 +110,10 @@ a_msg ai_ctx_init(void) {
 	HMODULE hntdll = GetModuleHandleA("ntdll.dll");
 	if (hntdll == null) return ALO_EOUTER;
 
-#define CTX_GET(name,mod,...) run { \
-	void* _addr = cast(void*, GetProcAddress(mod, #name)); \
+#define CTX_GET(dbg_name,mod,...) run { \
+	void* _addr = cast(void*, GetProcAddress(mod, #dbg_name)); \
 	if (_addr == null) return ALO_EOUTER; \
-	ext(name) = _addr; \
+	ext(dbg_name) = _addr; \
 }
 
 	IMPORT_LIST(CTX_GET)
@@ -170,17 +170,17 @@ EXCEPTION_DISPOSITION ai_ctx_start_catch(
 		_Inout_ PCONTEXT ContextRecord,
 		_Inout_ unused PDISPATCHER_CONTEXT DispatcherContext) {
 	a_henv callee = cast(a_henv, ContextRecord->Rbx);
-	a_henv caller = callee->_from;
+	a_henv caller = callee->caller;
 
 	if (!(ExceptionRecord->ExceptionFlags & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND))) {
         a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
         if (msg != ALO_SOK) {
-            callee->_status = msg;
+            callee->status = msg;
             ai_ctx_jump(caller, callee, msg);
         }
     }
 
-	route_recover(caller->_frame, ContextRecord, TRUE);
+	route_recover(caller->frame, ContextRecord, TRUE);
 	NtRaiseException(ExceptionRecord, ContextRecord, TRUE);
 	trap();
 }
@@ -263,8 +263,8 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
     ref_of(void*, stack_base - 0x00) = null;
     ref_of(void*, stack_base - 0x08) = null;
     ref_of(void*, stack_base - 0x10) = ai_ctx_start;
-    env->_rctx = int2ptr(void, stack_base - 0x18);
-	env->_rctx_alloc = addr;
+    env->rctx = int2ptr(void, stack_base - 0x18);
+	env->rctx_alloc = addr;
 
 	return ALO_SOK;
 
@@ -279,7 +279,7 @@ static void route_unwind(a_henv env) {
 	/* Load context. */
 	CONTEXT Context = { };
 
-	route_recover(env->_rctx, &Context, FALSE);
+	route_recover(env->rctx, &Context, FALSE);
 
 	/* Initialize unwind history table. */
 	UNWIND_HISTORY_TABLE UnwindHistoryTable = {};
@@ -318,7 +318,7 @@ static void route_unwind(a_henv env) {
 
 void ai_ctx_close(a_henv env) {
 	route_unwind(env);
-	VirtualFree(env->_rctx_alloc, 0, MEM_RELEASE);
+	VirtualFree(env->rctx_alloc, 0, MEM_RELEASE);
 }
 
 #endif /* actx_x64_w64_win_h_ */

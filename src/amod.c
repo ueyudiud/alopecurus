@@ -23,8 +23,8 @@ GMod* ai_mod_new(a_henv env, a_usize extra) {
     GMod* self = ai_mem_alloc(env, size);
 
     memclr(self, size);
-    self->_vptr = &mod_vtable;
-    self->_size = size;
+    self->vptr = &mod_vtable;
+    self->size = size;
 
     ai_gc_register_object(env, self);
 
@@ -32,21 +32,21 @@ GMod* ai_mod_new(a_henv env, a_usize extra) {
 }
 
 void ai_mod_mark(Global* gbl, GMod* self) {
-    if (self->_ptr != null) {
-        for (a_u32 i = 0; i <= self->_hmask; ++i) {
-            MNode* node = &self->_ptr[i];
-            if (node->_key > dead_key) {
-                ai_gc_trace_mark(gbl, node->_key);
-                ai_gc_trace_mark_val(gbl, node->_value);
+    if (self->ptr != null) {
+        for (a_u32 i = 0; i <= self->hmask; ++i) {
+            MNode* node = &self->ptr[i];
+            if (node->key > dead_key) {
+                ai_gc_trace_mark(gbl, node->key);
+                ai_gc_trace_mark_val(gbl, node->value);
             }
         }
-        ai_gc_trace_work(gbl, sizeof(MNode) * (self->_hmask + 1));
+        ai_gc_trace_work(gbl, sizeof(MNode) * (self->hmask + 1));
     }
 }
 
 void ai_mod_deinit(Global* gbl, GMod* self) {
-    if (self->_ptr != null) {
-        ai_mem_vdel(gbl, self->_ptr, self->_hmask + 1);
+    if (self->ptr != null) {
+        ai_mem_vdel(gbl, self->ptr, self->hmask + 1);
     }
 }
 
@@ -58,27 +58,27 @@ a_bool ai_mod_get(a_henv env, GMod* self, Value vk, Value* pv) {
 }
 
 a_bool ai_mod_gets(a_henv env, GMod* self, GStr* key, Value* pval) {
-    if (self->_len == 0) return true;
+    if (self->len == 0) return true;
 
-    a_u32 index = key->_hash & self->_hmask;
-    a_u32 perturb = key->_hash;
+    a_u32 index = key->hash & self->hmask;
+    a_u32 perturb = key->hash;
 
-    MNode* field = &self->_ptr[index];
-    if (field->_key == null) return true;
+    MNode* field = &self->ptr[index];
+    if (field->key == null) return true;
 
     loop {
-        if (field->_key == key) {
-            v_cpy(env, pval, &field->_value);
+        if (field->key == key) {
+            v_cpy(env, pval, &field->value);
             return false;
         }
-        if (field->_key == null) {
+        if (field->key == null) {
             return true;
         }
 
-        index = (index * 5 + perturb + 1) & self->_hmask;
+        index = (index * 5 + perturb + 1) & self->hmask;
         perturb >>= 5;
 
-        field = &self->_ptr[index];
+        field = &self->ptr[index];
     }
 }
 
@@ -94,75 +94,75 @@ a_bool ai_mod_getls(a_henv env, GMod* self, char const* src, a_usize len, Value*
 }
 
 static a_bool mod_needs_grow_one(GMod* self) {
-    return self->_len >= (self->_hmask + 1) / 4 * 3;
+    return self->len >= (self->hmask + 1) / 4 * 3;
 }
 
 a_bool ai_mod_refs_or_empty(unused a_henv env, GMod* self, GStr* key, MNode** pnode) {
-    if (self->_len == 0) {
+    if (self->len == 0) {
         *pnode = null;
         return true;
     }
 
-    a_u32 index = key->_hash & self->_hmask;
-    a_u32 perturb = key->_hash;
+    a_u32 index = key->hash & self->hmask;
+    a_u32 perturb = key->hash;
 
     a_bool can_put_inplace = !mod_needs_grow_one(self);
     MNode* first_empty_field = null;
 
-    MNode* field = &self->_ptr[index];
-    if (field->_key == null) {
+    MNode* field = &self->ptr[index];
+    if (field->key == null) {
         *pnode = can_put_inplace ? field : null;
         return true;
     }
 
     loop {
-        if (field->_key == key) {
+        if (field->key == key) {
             *pnode = field;
             return false;
         }
-        if (field->_key == null) {
+        if (field->key == null) {
             *pnode = can_put_inplace ? (first_empty_field ?: field) : null;
             return true;
         }
-        if (field->_key == dead_key && can_put_inplace && first_empty_field == null) {
+        if (field->key == dead_key && can_put_inplace && first_empty_field == null) {
             first_empty_field = field;
         }
 
-        index = (index * 5 + perturb + 1) & self->_hmask;
+        index = (index * 5 + perturb + 1) & self->hmask;
         perturb >>= 5;
 
-        field = &self->_ptr[index];
+        field = &self->ptr[index];
     }
 }
 
 static MNode* mod_ref_empty(GMod* self, GStr* key) {
-    a_u32 index = key->_hash & self->_hmask;
-    a_u32 perturb = key->_hash;
+    a_u32 index = key->hash & self->hmask;
+    a_u32 perturb = key->hash;
 
-    MNode* node = &self->_ptr[index];
-    if (node->_key == null) return node;
+    MNode* node = &self->ptr[index];
+    if (node->key == null) return node;
 
     loop {
-        if (node->_key <= dead_key) {
+        if (node->key <= dead_key) {
             return node;
         }
 
-        index = (index * 5 + perturb + 1) & self->_hmask;
+        index = (index * 5 + perturb + 1) & self->hmask;
         perturb >>= 5;
 
-        node = &self->_ptr[index];
+        node = &self->ptr[index];
     }
 }
 
 static void mod_put(a_henv env, GMod* self, GStr* key, Value val) {
     MNode* field = mod_ref_empty(self, key);
-    field->_key = key;
-    v_set(env, &field->_value, val);
+    field->key = key;
+    v_set(env, &field->value, val);
 }
 
 static void mod_grow(a_henv env, GMod* self) {
-    a_u32 old_cap = (self->_hmask + 1) & ~1;
-    MNode* old_ptr = self->_ptr;
+    a_u32 old_cap = (self->hmask + 1) & ~1;
+    MNode* old_ptr = self->ptr;
 
     if (unlikely(old_cap == MOD_MAX_CAP)) {
         ai_err_raisef(env, ALO_EINVAL, "too many fields");
@@ -173,14 +173,14 @@ static void mod_grow(a_henv env, GMod* self) {
 
     memclr(new_ptr, new_cap * sizeof(MNode));
 
-    self->_ptr = new_ptr;
-    self->_hmask = new_cap - 1;
+    self->ptr = new_ptr;
+    self->hmask = new_cap - 1;
 
     if (old_ptr != null) {
         for (a_u32 i = 0; i < old_cap; ++i) {
             MNode* field = &old_ptr[i];
-            if (field->_key > dead_key) {
-                mod_put(env, self, field->_key, field->_value);
+            if (field->key > dead_key) {
+                mod_put(env, self, field->key, field->value);
             }
         }
 
@@ -200,8 +200,8 @@ void ai_mod_sets(a_henv env, GMod* self, GStr* key, Value val) {
     MNode* node;
     if (ai_mod_refs_or_empty(env, self, key, &node)) {
         if (node != null) {
-            node->_key = key;
-            v_set(env, &node->_value, val);
+            node->key = key;
+            v_set(env, &node->value, val);
         }
         else {
             mod_grow(env, self);
@@ -211,18 +211,18 @@ void ai_mod_sets(a_henv env, GMod* self, GStr* key, Value val) {
         ai_gc_barrier_backward(env, self, key);
         ai_gc_barrier_backward_val(env, self, val);
 
-        self->_len += 1;
-        self->_nchg += 1;
-        self->_ftmz = 0;
+        self->len += 1;
+        self->nchg += 1;
+        self->ftmz = 0;
     }
     else {
         assume(node != null);
 
-        v_set(env, &node->_value, val);
+        v_set(env, &node->value, val);
 
         ai_gc_barrier_forward_val(env, self, val);
 
-        self->_nchg += 1;
+        self->nchg += 1;
     }
 }
 
@@ -233,7 +233,7 @@ Value* ai_mod_refls(a_henv env, GMod* self, char const* src, a_usize len) {
     GStr* str = ai_str_get_or_null_with_hash(env, src, len, hash);
     if (str != null) {
         if (!ai_mod_refs_or_empty(env, self, str, &node)) {
-            return &node->_value;
+            return &node->value;
         }
 
         if (node != null) {
@@ -250,33 +250,33 @@ Value* ai_mod_refls(a_henv env, GMod* self, char const* src, a_usize len) {
     node = mod_ref_empty(self, str);
 
 place:
-    node->_key = str;
+    node->key = str;
 
     ai_gc_barrier_backward(env, self, str);
 
-    self->_len += 1;
-    self->_nchg += 1;
-    self->_ftmz = 0;
+    self->len += 1;
+    self->nchg += 1;
+    self->ftmz = 0;
 
-    return &node->_value;
+    return &node->value;
 }
 
 static void mod_drop(Global* gbl, GMod* self) {
     ai_mod_deinit(gbl, self);
-    ai_mem_dealloc(gbl, self, self->_size);
+    ai_mem_dealloc(gbl, self, self->size);
 }
 
 static void mod_mark(Global* gbl, GMod* self) {
     ai_mod_mark(gbl, self);
-    ai_gc_trace_work(gbl, self->_size);
+    ai_gc_trace_work(gbl, self->size);
 }
 
 static VTable const mod_vtable = {
-    ._stencil = V_STENCIL(T_MOD),
-    ._type_ref = g_type_ref(ALO_TMOD),
-    ._tag = ALO_TMOD,
-    ._flags = VTABLE_FLAG_NONE,
-    ._slots = {
+    .stencil = V_STENCIL(T_MOD),
+    .type_ref = g_type_ref(ALO_TMOD),
+    .tag = ALO_TMOD,
+    .flags = VTABLE_FLAG_NONE,
+    .slots = {
         [vfp_slot(drop)] = mod_drop,
         [vfp_slot(mark)] = mod_mark
     }

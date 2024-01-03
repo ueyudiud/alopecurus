@@ -17,12 +17,12 @@
 typedef struct JStub JStub;
 
 struct PCtx {
-	JStub* _stub;
+	JStub* stub;
 };
 
 struct JStub {
-	jmp_buf _jbuf;
-	JStub* _prev;
+	jmp_buf jbuf;
+	JStub* prev;
 };
 
 /* Basic stack size alignment. */

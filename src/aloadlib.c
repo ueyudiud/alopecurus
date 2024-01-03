@@ -93,7 +93,7 @@ static void setprogdir(a_henv env) {
     return;
 
 bad_get:
-    aloL_raisef(env, "unable get module file name");
+    aloL_raisef(env, "unable get module file dbg_name");
 }
 
 #elif ALO_OS_POSIX
@@ -155,11 +155,11 @@ static void lib_close(a_hlib lib) {
 
 typedef struct GLib {
     GOBJ_STRUCT_HEADER;
-    a_hlib _lib;
+    a_hlib lib;
 } GLib;
 
 static void lib_drop(Global* gbl, GLib* self) {
-    lib_close(self->_lib);
+    lib_close(self->lib);
     ai_mem_dealloc(gbl, self, sizeof(GLib));
 }
 
@@ -170,7 +170,7 @@ static void lib_mark(Global* gbl, unused GLib* self) {
 static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
     GLib* self = ai_mem_alloc(env, sizeof(GLib));
 
-    catch (lib_open(env, file, &self->_lib), msg) {
+    catch (lib_open(env, file, &self->lib), msg) {
         ai_mem_dealloc(G(env), self, sizeof(GLib));
         return msg;
     }
@@ -186,16 +186,16 @@ static GLib* lib_cast(Value v) {
     if (!v_is_obj(v))
         return null;
     GObj* obj = v_as_obj(v);
-    if (obj->_vptr != &lib_vtable)
+    if (obj->vptr != &lib_vtable)
         return null;
     return g_cast(GLib, obj);
 }
 
 static VTable const lib_vtable = {
-    ._stencil = V_STENCIL(T_USER),
-    ._tag = ALO_TUSER,
-    ._flags = VTABLE_FLAG_GREEDY_MARK,
-    ._slots = {
+    .stencil = V_STENCIL(T_USER),
+    .tag = ALO_TUSER,
+    .flags = VTABLE_FLAG_GREEDY_MARK,
+    .slots = {
         [vfp_slot(drop)] = lib_drop,
         [vfp_slot(mark)] = lib_mark
     }
@@ -236,16 +236,19 @@ static a_msg load_clib(a_henv env, GMod* self, char const* file, GLib** plib) {
     GLib* lib;
     GTable* cache = check_ccache(env, self);
 
-    Value* pv = ai_table_refls(env, cache, file, strlen(file));
-    if (v_is_nil(*pv)) {
-        try (lib_new(env, file, &lib));
+    Value* r = ai_table_refls(env, cache, file, strlen(file));
+    if (v_is_nil(*r)) {
+        catch (lib_new(env, file, &lib), msg) {
+            ai_table_delr(env, cache, r);
+            return msg;
+        }
 
-        v_set_obj(env, pv, lib);
+        v_set_obj(env, r, lib);
 
         ai_gc_barrier_forward(env, cache, lib);
     }
     else {
-        lib = lib_cast(*pv);
+        lib = lib_cast(*r);
         if (lib == null) {
             alo_pushfstr(env, "library object expected for file '%s'", file);
             return ALO_EINVAL;
@@ -261,7 +264,7 @@ static a_msg load_cfunc(a_henv env, GMod* self, char const* file, char const* fu
     try (load_clib(env, self, file, &lib));
 
     a_cfun proc;
-    try (lib_load(env, lib->_lib, func, &proc));
+    try (lib_load(env, lib->lib, func, &proc));
 
     alo_newcfun(env, proc, 0);
     return ALO_SOK;
@@ -280,25 +283,25 @@ static GList* check_list(a_henv env, GMod* self, char const* str) {
 }
 
 static char const* check_path(a_henv env, GList* paths, a_u32 i) {
-    Value v = paths->_ptr[i];
+    Value v = paths->ptr[i];
     if (!v_is_str(v)) aloL_raisef(env, "library path must be string", v_nameof(env, v));
     return str2ntstr(v_as_str(v));
 }
 
 typedef struct {
-    char const* _file;
-    char const* _proc;
+    char const* file;
+    char const* proc;
 } CLibPath;
 
 static void resolve_clib_path(a_henv env, char const* base, char const* file, CLibPath* out) {
     /* File format like: X/Y-Z */
-    out->_file = aloS_replace(env, base, PATH_PLACEHOLDER, file);
+    out->file = aloS_replace(env, base, PATH_PLACEHOLDER, file);
 
     char const* p1 = strrchr(file, *ALO_DIR_SEP) ?: file;
     char const* p2 = strchr(p1, '-');
-    out->_proc = p2 != null ?
-        alo_pushfstr(env, "%s%.*s", CLIB_OPEN_FUNC_PREFIX, p2 - p1, p1) :
-        alo_pushfstr(env, "%s%s", CLIB_OPEN_FUNC_PREFIX, p1);
+    out->proc = p2 != null ?
+                alo_pushfstr(env, "%s%.*s", CLIB_OPEN_FUNC_PREFIX, p2 - p1, p1) :
+                alo_pushfstr(env, "%s%s", CLIB_OPEN_FUNC_PREFIX, p1);
 }
 
 static a_msg check_stat(a_henv env, a_msg msg) {
@@ -319,15 +322,15 @@ static a_msg loader_clib(a_henv env) {
 
     aloL_Buf* buf = aloL_newbuf(env);
 
-    for (a_u32 i = 0; i < paths->_len; ++i) {
+    for (a_u32 i = 0; i < paths->len; ++i) {
         char const* base = check_path(env, paths, i);
         CLibPath path;
         resolve_clib_path(env, base, file, &path);
 
-        a_msg msg = load_cfunc(env, self, path._file, path._proc);
+        a_msg msg = load_cfunc(env, self, path.file, path.proc);
         if (msg != ALO_EEMPTY) return check_stat(env, msg);
 
-        alo_pushfstr(env, "\n\tno file '%s'", path._file);
+        alo_pushfstr(env, "\n\tno file '%s'", path.file);
         aloL_bufpush(env, buf);
 
         alo_settop(env, 2);
@@ -346,7 +349,7 @@ static a_msg loader_alib(a_henv env) {
 
     aloL_Buf* buf = aloL_newbuf(env);
 
-    for (a_u32 i = 0; i < paths->_len; ++i) {
+    for (a_u32 i = 0; i < paths->len; ++i) {
         char const* base = check_path(env, paths, i);
         char const* path = aloS_replace(env, base, PATH_PLACEHOLDER, file);
 
@@ -392,8 +395,8 @@ static void load_module(a_henv env, GMod* self, GStr* name) {
     GList* loaders = check_list(env, self, LOADER_FIEND_NAME);
     aloL_Buf* buf = aloL_newbuf(env);
 
-    for (a_u32 i = 0; i < loaders->_len; ++i) {
-        vm_push_args(env, loaders->_ptr[i], v_of_str(name));
+    for (a_u32 i = 0; i < loaders->len; ++i) {
+        vm_push_args(env, loaders->ptr[i], v_of_str(name));
 
         catch (alo_pcall(env, 1, 2, ALO_STACK_INDEX_EMPTY)) {
             load_error(env, -1, str2ntstr(name));
