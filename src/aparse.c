@@ -377,6 +377,8 @@ struct Pat {
     union {
         a_u8 _flags;
         struct {
+            a_u8 _fmut: 1;
+            a_u8 _fuse: 1;
             a_u8 _fcpx: 1;
             a_u8 _fdfl: 1;
         };
@@ -416,10 +418,19 @@ enum SymKind {
 	SYM_VARARG,
 };
 
+enum SymStatus {
+    SYM_STATUS_AVAILABLE,
+    SYM_STATUS_UNINIT,
+    SYM_STATUS_BORROWED,
+    SYM_STATUS_MOVED,
+    SYM_STATUS_DELETED
+};
+
 typedef union {
-    a_u16 _;
+    a_u8 _;
     struct {
-        a_u16 _readonly: 1;
+        a_u8 _mut: 1;
+        a_u8 _use: 1;
     };
 } SymMods;
 
@@ -429,6 +440,7 @@ typedef union {
 struct Sym {
 	a_u8 _tag; /* The tag of symbol kind. */
 	a_u8 _scope; /* The scope of symbol belongs to. */
+    a_u8 _status; /* The status of symbol. */
     SymMods _mods; /* The modifiers of symbol. */
 	a_u32 _index; /* Variant uses for different symbol tag. */
 	GStr* _name; /* The symbol name. */
@@ -529,9 +541,6 @@ enum {
 	/* Mark unused operand. */
 	DMB = 0
 };
-
-/* Variable length of arguments. */
-#define VARARG cast(a_u32, -1)
 
 /**
  ** Load the index for constant.
@@ -2375,7 +2384,7 @@ static void sym_check_writable(Parser* par, InExpr e, a_line line) {
 	if (e->_fsym) {
 		a_u32 id = e->_d2;
 		Sym* sym = &par->_syms->_ptr[id];
-		if (sym->_mods._readonly) {
+		if (!sym->_mods._mut) {
 			ai_par_error(par, "cannot assign to readonly variable %s.", line, str2ntstr(sym->_name));
 		}
 	}
@@ -2681,7 +2690,7 @@ static void pat_bind_nils(Parser* par, Pat* p, a_line line) {
 	a_u32 label = l_emit_kn(par, reg, num, line);
 	for (Pat* pat = p->_child; pat != null; pat = pat->_sibling) {
         sym_local(par, pat->_name, reg++, label, (SymMods) {
-
+            ._mut = pat->_fmut
         });
 	}
 
@@ -2741,7 +2750,9 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 		}
 		case PAT_VAR: {
             expr_pin_reg(par, e, reg);
-            sym_local(par, pat->_name, reg, par->_head_label, (SymMods) {});
+            sym_local(par, pat->_name, reg, par->_head_label, (SymMods) {
+                ._mut = pat->_fmut
+            });
 			break;
 		}
 		case PAT_TUPLE: {
@@ -3206,7 +3217,7 @@ static void parser_start(Parser* par) {
 		._tag = SYM_CAPTURE,
 		._scope = SCOPE_DEPTH_ENV,
 		._mods = {
-			._readonly = true /* Predefined environment is always readonly variable. */
+			._mut = false /* Predefined environment is always readonly variable. */
 		},
 		._index = 0,
 		._name = par->_gname
@@ -4935,6 +4946,38 @@ static void l_scan_return_stat(Parser* par) {
 	expr_return(par, e, line);
 }
 
+static a_noret par_error_dup_mod(Parser* par, a_i32 tk) {
+    ai_par_error(par, "duplicate '%s' modifier", lex_line(par), ai_lex_tagname(tk));
+}
+
+static void l_scan_var_pattern(Parser* par, Pat* pat) {
+    loop {
+        switch (lex_peek(par)) {
+            case TK_mut: {
+                if (pat->_fmut) par_error_dup_mod(par, TK_mut);
+                pat->_fmut = true;
+                lex_skip(par);
+                break;
+            }
+            case TK_use: {
+                if (pat->_fuse) par_error_dup_mod(par, TK_use);
+                pat->_fuse = true;
+                lex_skip(par);
+                break;
+            }
+            default: {
+                pat->_kind = PAT_VAR;
+                pat->_name = lex_check_ident(par);
+                pat->_line = lex_line(par);
+                if (pat->_fmut && pat->_fuse) {
+                    ai_par_error(par, "mutable variable cannot capture resource", pat->_line);
+                }
+                return;
+            }
+        }
+    }
+}
+
 static void l_scan_pattern_recursive(Parser* par, PatInfo* info, Pat* parent, Pat** slot, a_u32 tag) {
     Pat pat_desc = { ._sec_ref = NIL_SEC_REF };
 
@@ -4954,11 +4997,11 @@ static void l_scan_pattern_recursive(Parser* par, PatInfo* info, Pat* parent, Pa
 
 branch_standard:
 	switch (lex_peek(par)) {
-		case TK_IDENT: {
-            pat->_kind = PAT_VAR;
-            pat->_name = lex_ident(par);
-            pat->_line = lex_line(par);
-			lex_skip(par);
+        case TK_IDENT:
+        /* Variable modifiers */
+        case TK_mut:
+        case TK_use: {
+            l_scan_var_pattern(par, pat);
 			break;
 		}
 		case TK__: {
@@ -5164,8 +5207,9 @@ static void l_scan_let_stat2(Parser* par, Pat* p, a_usize c) {
             }
 		}
 	}
-
-    pat_bind_nils(par, p, line);
+    else {
+        pat_bind_nils(par, p, line);
+    }
     stack_compact(par);
 }
 
