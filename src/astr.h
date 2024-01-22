@@ -52,7 +52,7 @@ always_inline void v_set_str(a_henv env, Value* d, GStr* p) {
     v_set(env, d, v_of_str(p));
 }
 
-#define str_size(l) pad_to_raw(sizeof(GStr) + sizeof(char) * (l) + 1, sizeof(a_usize))
+#define str_size(l) align_to(sizeof(GStr) + sizeof(char) * ((l) + 1), sizeof(a_usize))
 
 always_inline char const* str2ntstr(GStr* self) {
     return self->ptr;

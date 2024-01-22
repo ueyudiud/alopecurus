@@ -17,14 +17,14 @@
  */
 #define ALO_VARIANT 1
 
-#define M_false 0
-#define M_true 1
+#define ALO_C11 (__STDC_VERSION__ >= 201112L)
+#define ALO_C23 (__STDC_VERSION__ >= 202311L)
+
+#define ALO_FALSE 0
+#define ALO_TRUE 1
 
 #define M_cat0(a,b) a##b
 #define M_cat(a,b) M_cat0(a,b)
-
-#define M_str0(a) #a
-#define M_str(a) M_str0(a)
 
 #define ALO_COMP_OPT_LOSSEN 0x1000000
 #define ALO_COMP_OPT_EVAL 0x2000000
@@ -85,20 +85,8 @@ typedef void (*a_pfun)(a_henv, void*);
 /* Other literals. */
 
 #define null NULL
-#define false ((a_bool) M_false)
-#define true ((a_bool) !false)
-
-#if __STDC_VERSION__ >= 201112L
-# define ALO_C11 M_true
-#else
-# define ALO_C11 M_false
-#endif
-
-#if __STDC_VERSION__ >= 202311L
-# define ALO_C23 M_true
-#else
-# define ALO_C23 M_false
-#endif
+#define false ((a_bool) ALO_FALSE)
+#define true ((a_bool) ALO_TRUE)
 
 #if ALO_C11
 # ifndef static_assert
@@ -113,6 +101,11 @@ typedef void (*a_pfun)(a_henv, void*);
 # define static_assert(e) extern void (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
 #endif
 
+/* Special control flow. */
+
+#define run if (true)
+#define loop while (true)
+
 #if ALO_C23
 # include <stdchkint.h>
 # include <stdbit.h>
@@ -126,14 +119,23 @@ typedef void (*a_pfun)(a_henv, void*);
 #define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
 #define bit_cast(t,e) ({ __auto_type _b = e; t _t; static_assert(sizeof(_b) == sizeof(t)); memcpy(&_t, &_b, sizeof(t)); _t; })
-#define quiet(e...) ((void) ((void) 0, ##e))
-#define ptr2int(p) ((a_usize) (void const*) {p})
 #define addr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
 #define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
 #define ref_of(t,a) (*int2ptr(t, a))
 #define ptr_disp(t,p,d) int2ptr(t, ptr2int(p) + (d))
 #define from_member(t,f,v) ({ __auto_type _v = v; quiet(_v == &((t*) 0)->f); int2ptr(t, ptr2int(_v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
+
+always_inline a_usize ptr2int(void const* p) {
+    return bit_cast(a_usize, p);
+}
+
+#if ALO_C23
+always_inline void quiet(...) {}
+#else
+always_inline void quiet_(unused int dummy, ...) {}
+#define quiet(e...) quiet_(0, ##e)
+#endif
 
 /* Utility functions. */
 
@@ -143,8 +145,14 @@ typedef void (*a_pfun)(a_henv, void*);
 #define expect(e,v) __builtin_expect(e, v)
 #define likely(e) expect(!!(e), true)
 #define unlikely(e) expect(!!(e), false)
-#define trap() __builtin_trap()
-#define unreachable() __builtin_unreachable()
+
+always_inline a_noret unreachable() {
+    __builtin_unreachable();
+}
+
+always_inline a_noret trap() {
+    __builtin_trap();
+}
 
 /* Error handling functions. */
 
@@ -168,20 +176,17 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 # define panic(...) unreachable()
 #endif
 
-#define assume(e,m...) ((void) (!!(e) || (panic(m), false)))
-
-/* Special control flow. */
-
-#define run if (true)
-#define loop while (true)
+#define assume(e,m...) quiet(!!(e) || (panic(m), false))
 
 /**
  ** Fill memory with zero bits.
  */
-#define memclr(dst,len) memset(dst, 0, len)
+always_inline void memclr(void* dst, a_usize len) {
+    memset(dst, 0, len);
+}
 
 #if !ALO_C23
-/* Compact with C23 standard dbg_name. */
+/* Compact with C23 standard function. */
 # define ckd_add(d,a,b) __builtin_add_overflow(a, b, d)
 # define ckd_sub(d,a,b) __builtin_sub_overflow(a, b, d)
 # define ckd_mul(d,a,b) __builtin_mul_overflow(a, b, d)
@@ -189,7 +194,7 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 # define count_leading_zero(a) __builtin_clz(a)
 # define ceil_power_of_two(a) ((~((typeof(a)) 0) >> count_leading_zero(a)) + 1)
 #else
-/* Redirect to C23 defined function dbg_name. */
+/* Redirect to C23 defined function name. */
 # define count_leading_zero(a) stdc_leading_zeros(a)
 # define ceil_power_of_two(a) stdc_bit_ceil(a)
 #endif
@@ -198,11 +203,6 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 #define try_sub(a,b) ({ typeof((a) - (b)) _c; try (ckd_sub(&_c, a, b)); _c; })
 #define try_mul(a,b) ({ typeof((a) * (b)) _c; try (ckd_mul(&_c, a, b)); _c; })
 
-#define pad_to_raw(s,g) (((s) + (g) - 1) & ~((g) - 1))
-
-always_inline a_usize pad_to(a_usize size, a_usize granularity) {
-	assume(granularity != 0 && (granularity & (granularity - 1)) == 0, "bad granularity.");
-	return pad_to_raw(size, granularity);
-}
+#define align_to(s,g) (((s) + (g) - 1) & ~((g) - 1))
 
 #endif /* adef_h_ */

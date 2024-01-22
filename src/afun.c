@@ -41,7 +41,7 @@ static a_usize proto_size_with_head(ProtoDesc const* desc) {
 	if (desc->flags & FUN_FLAG_UNIQUE) {
 		size += fun_size(desc->ncap) - UNIQ_PROTO_OFFSET;
 	}
-	return pad_to(size, sizeof(a_usize));
+	return align_to(size, sizeof(a_usize));
 }
 
 GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
@@ -118,7 +118,7 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
 	self->code = int2ptr(a_insn, addr);
 	addr += sizeof(a_insn) * self->ninsn;
 
-    addr = pad_to(addr, sizeof(a_usize));
+    addr = align_to(addr, sizeof(a_usize));
 
 	assume(ptr2int(blk) + total_size == addr);
 

@@ -30,6 +30,6 @@ always_inline GMod* type2mt(GType* o) {
     return gmod_cast(o);
 }
 
-#define type_size(e) pad_to_raw(sizeof(GType) + (e), sizeof(a_usize))
+#define type_size(e) align_to(sizeof(GType) + (e), sizeof(a_usize))
 
 #endif /* atype_h_ */

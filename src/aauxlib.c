@@ -478,7 +478,7 @@ typedef struct {
     a_byte body[];
 } GBlock;
 
-#define block_size(s) pad_to(sizeof(GBlock) + (s), sizeof(a_usize))
+#define block_size(s) align_to(sizeof(GBlock) + (s), sizeof(a_usize))
 
 static void block_drop(Global* gbl, GBlock* self) {
     ai_mem_dealloc(gbl, self, block_size(self->size));

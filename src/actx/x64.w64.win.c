@@ -231,7 +231,7 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
 	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
 	if (header == null) return ALO_EINVAL;
 
-	a_usize commit = pad_to(stack_size, PAGE_SIZE);
+	a_usize commit = align_to(stack_size, PAGE_SIZE);
 	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
 
 	PVOID addr;

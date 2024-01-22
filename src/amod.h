@@ -61,6 +61,6 @@ always_inline GMod* v_as_mod(Value v) {
 
 #define gmod_cast(p) from_member(GMod, _mod_head_mark, &(p)->_mod_head_mark)
 
-#define mod_size(l) pad_to(sizeof(GMod) + (l), sizeof(a_usize))
+#define mod_size(l) align_to(sizeof(GMod) + (l), sizeof(a_usize))
 
 #endif /* amod_h_ */

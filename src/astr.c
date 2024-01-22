@@ -12,11 +12,18 @@
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
+#include "aerr.h"
 
 #include "astr.h"
 
 #ifndef ALOI_INIT_STR_CACHE_CAPACITY
 # define ALOI_INIT_STR_CACHE_CAPACITY 64
+#endif
+
+#if ALO_M64
+# define MAX_STR_CACHE_CAPACITY (((a_usize) UINT32_MAX) + 1)
+#else
+# define MAX_STR_CACHE_CAPACITY ((usizec(1) << 31) / sizeof(GStr*))
 #endif
 
 static VTable const str_vtable;
@@ -44,15 +51,19 @@ a_hash ai_str_hashof(a_henv env, char const* src, a_usize len) {
 }
 
 static void cache_grow(a_henv env, StrCache* cache) {
-    a_usize old_cap = cache->hmask + 1;
+    a_usize old_cap = cast(a_usize, cache->hmask) + 1;
     a_usize new_cap = old_cap * 2;
 
-    GStr** table = ai_mem_vgrow(env, cache->ptr, old_cap, new_cap);
+    if (unlikely(new_cap > MAX_STR_CACHE_CAPACITY)) {
+        ai_err_raisef(env, ALO_EINVAL, "too many strings.");
+    }
+
+    GStr** new_ptr = ai_mem_vgrow(env, cache->ptr, old_cap, new_cap);
 
     /* Move strings. */
     for (a_usize i = 0; i < old_cap; ++i) {
-        GStr** p = &table[i];
-        GStr** q = &table[i + old_cap];
+        GStr** p = &new_ptr[i];
+        GStr** q = &new_ptr[i + old_cap];
         GStr* s = *p;
         while (s != null) {
             if (s->hash & old_cap) {
@@ -68,7 +79,7 @@ static void cache_grow(a_henv env, StrCache* cache) {
         *p = *q = null;
     }
 
-	cache->ptr = table;
+	cache->ptr = new_ptr;
 	cache->hmask = new_cap - 1;
 }
 

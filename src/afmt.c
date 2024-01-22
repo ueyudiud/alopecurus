@@ -47,7 +47,8 @@ void ai_fmt_puti(a_henv env, Buf* buf, a_int v) {
 }
 
 a_usize ai_fmt_float2str(char* p, a_float v) {
-	a_usize n = cast(a_usize, snprintf(null, 0, "%g", v));
+    int n = snprintf(null, 0, "%g", v);
+    assume(n >= 0, "format failed.");
 	sprintf(cast(char*, p - n), "%g", v);
 	return n;
 }

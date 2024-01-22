@@ -19,9 +19,9 @@
 #endif
 
 enum {
-	INIT_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_INIT_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
-	MAX_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
-	MAX_OVERFLOWED_STACK_SIZE = pad_to_raw(sizeof(Value) * (ALOI_MAX_STACKSIZE + OVERFLOW_STACK_SIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY)
+	INIT_STACK_SIZE = align_to(sizeof(Value) * (ALOI_INIT_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
+	MAX_STACK_SIZE = align_to(sizeof(Value) * (ALOI_MAX_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
+	MAX_OVERFLOWED_STACK_SIZE = align_to(sizeof(Value) * (ALOI_MAX_STACKSIZE + OVERFLOW_STACK_SIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY)
 };
 
 a_bool ai_stk_init(a_henv env, Stack* stack) {
@@ -141,7 +141,7 @@ a_isize ai_stk_grow(a_henv env, Value* top) {
 		return STACK_GROW_FAILED;
 	}
 
-	a_usize size_new = pad_to(expect_size, STACK_GRANULARITY);
+	a_usize size_new = align_to(expect_size, STACK_GRANULARITY);
 	size_new = max(size_new, current_size + STACK_GRANULARITY);
 	size_new = min(size_new, MAX_STACK_SIZE);
 	return stack_grow(env, stack, size_new);

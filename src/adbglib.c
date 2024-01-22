@@ -325,7 +325,7 @@ static a_flags dump_option_parse(char const* str) {
  *@param id the function slot.
  *@param options the dump options, named with ALOE_DUMP_OPT_*.
  */
-void aloE_fdump(a_henv env, a_isize id, a_flags options) {
+void aloE_fdump(a_henv env, a_ilen id, a_flags options) {
 	Value const* v = api_rdslot(env, id);
 	api_check(v_is_func(*v), "only function can be dumped.");
 	dump_func(env, v_as_func(*v), options);

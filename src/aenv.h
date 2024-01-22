@@ -86,8 +86,8 @@ static_assert(offsetof(GRoute, stack.base) == 0x20);
 
 typedef struct {
     GStr** ptr;
-    a_usize len;
-    a_usize hmask; /* Hash code mask. */
+    a_u32 len;
+    a_u32 hmask; /* Hash code mask. */
 } StrCache;
 
 enum { TYPE__COUNT = ALO_TUSER };

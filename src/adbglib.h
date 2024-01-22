@@ -12,6 +12,6 @@
 #define ALOE_DUMP_OPT_LOCAL 0x2
 #define ALOE_DUMP_OPT_LINE 0x4
 
-ALO_EXPORT void aloE_fdump(a_henv env, a_isize id, a_flags options);
+ALO_EXPORT void aloE_fdump(a_henv env, a_ilen id, a_flags options);
 
 #endif
