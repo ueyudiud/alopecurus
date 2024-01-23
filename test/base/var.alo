@@ -12,7 +12,7 @@ do {
 -- Shadowing end.
 assert(a)
 
-let a = true
+let mut a = true
 
 fn f1() {
     -- Capture variable

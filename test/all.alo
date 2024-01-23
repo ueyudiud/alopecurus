@@ -1,0 +1,3 @@
+lib.load('base')
+
+print('Test Success!')
