@@ -78,7 +78,7 @@ always_inline void bc_store_sc(a_insn* ip, a_i32 c) { *ip = (*ip & ~BC_MASK_C) |
 always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
 
 #define ALO_BC_LIST(_) \
-/*        id,    dbg_name,  A,  B,  C, Ex,    description                             */ \
+/*        id,    name,  A,  B,  C, Ex,    description                             */ \
     _(   MOV,   "mov",reg,reg,___,___) /* R[a] := R[b]                            */ \
 /*================================================================================*/ \
     _(   LDC,   "ldc",reg,cap,___,___) /* R[a] := C[b]                            */ \
@@ -139,7 +139,7 @@ always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
     _(CSETSX,"csetsx",reg,cap,___,kst) /* C[b][K[ex]] := R[a]                     */ \
     _(   NEG,   "neg",reg,reg,___,___) /* R[a] := -R[b]                           */ \
     _(  BNOT,  "bnot",reg,reg,___,___) /* R[a] := ~R[b]                           */ \
-    _(   LEN,   "ncap",reg,reg,___,___) /* R[a] := #R[b]                           */ \
+    _(   LEN,   "len",reg,reg,___,___) /* R[a] := #R[b]                           */ \
     _( UNBOX, "unbox",reg,___,len,___) /* R[a:a+c] := *R[b]                       */ \
     _(UNBOXV,"unboxv",reg,___,___,___) /* R[a:] := *R[b]                          */ \
     _(  TNEW,  "tnew",reg,reg,len,___) /* R[a] := (R[b:b+c])                      */ \

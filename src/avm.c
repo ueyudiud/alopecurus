@@ -38,7 +38,7 @@ void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
 
 	a_u32 mask = ai_vm_lock_hook(gbl);
 
-	/* Load hook_ closure. */
+	/* Load hook closure. */
 	a_hfun fun = gbl->hook_;
 	a_hctx ctx = gbl->hook_ctx;
 

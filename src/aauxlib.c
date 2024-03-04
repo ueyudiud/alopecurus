@@ -457,7 +457,7 @@ void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 
 	for (a_usize i = 0; i < ne; ++i) {
 		aloL_Entry const* e = &es[i];
-		assume(e->name != null, "missing field dbg_name.");
+		assume(e->name != null, "name cannot be null.");
 
         Value* slot = ai_mod_refls(env, o, e->name, strlen(e->name));
         v_set_nil(slot);
