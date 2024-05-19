@@ -442,8 +442,8 @@ enum SymStatus {
 typedef union {
     a_u8 _;
     struct {
-        a_u8 mmut: 1;
-        a_u8 muse: 1;
+        a_u8 mmut: 1; /* Mark a variable is mutable. */
+        a_u8 muse: 1; /* Mark a variable is not copible. */
     };
 } SymMods;
 
@@ -2433,7 +2433,7 @@ static void sym_check_writable(Parser* par, InExpr e, a_line line) {
 	}
 }
 
-static void expr_write_unchecked(Parser* par, InExpr e1, InExpr e2, a_line line) {
+static void expr_write_unchecked(Parser* par, InExpr e1, InExpr e2) {
     assume(e1->tag == EXPR_REG, "value already initialized.");
     expr_pin_reg(par, e2, e1->udat1);
 }
@@ -2443,7 +2443,7 @@ assign:
 	switch (e1->tag) {
 		case EXPR_REG: {
 			sym_check_writable(par, e1, line);
-            expr_write_unchecked(par, e2, e1, line);
+            expr_write_unchecked(par, e2, e1);
 			break;
 		}
 		case EXPR_CAP: {
@@ -5291,7 +5291,6 @@ static void l_scan_let_stat(Parser* par) {
             lex_check_skip(par, TK_ASSIGN);
 
             l_scan_expr(par, e2);
-            expr_or_ret(par, e2, line);
             expr_write(par, e1, e2, line);
             expr_tbc(par, e1, line);
             break;
@@ -5306,7 +5305,7 @@ static void l_scan_let_stat(Parser* par) {
 
 				l_scan_function(par, e2, name, line);
 
-                expr_write_unchecked(par, e1, e2, line);
+                expr_write_unchecked(par, e1, e2);
 				break;
 			}
 			fallthrough;
@@ -5336,7 +5335,7 @@ static void l_scan_fun_def_stat(Parser* par) {
 
 	l_scan_function(par, ef, name, line);
 
-    expr_write_unchecked(par, en, ef, line);
+    expr_write_unchecked(par, en, ef);
 }
 
 static void l_scan_pub_stat(Parser* par) {
