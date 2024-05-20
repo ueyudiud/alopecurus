@@ -118,7 +118,7 @@ static GStr* str_get_or_null_with_hash(a_henv env, char const* src, a_usize len,
 
     /* Try lookup string in intern table. */
     for (GStr* str = cache->ptr[hash & cache->hmask]; str != null; str = str->snext) {
-        if (str->hash == hash && likely(ai_str_requals(str, src, len))) {
+        if (str->hash == hash && ai_str_requals(str, src, len)) {
             /* Revive string object if it is dead. */
             if (unlikely(g_has_other_color(gbl, str))) {
                 g_set_white(gbl, str);

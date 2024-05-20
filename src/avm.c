@@ -112,7 +112,7 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
 		else if (v_is_float(v1)) {
 			return ai_op_eq_float(v_as_float(v1), v_as_float(v2));
 		}
-		else if (likely(v_is_tuple(v1))) {
+		else if (v_is_tuple(v1)) {
 			return ai_tuple_equals(env, v_as_tuple(v1), v_as_tuple(v2));
 		}
 	}

@@ -55,7 +55,7 @@ a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc) {
 }
 
 static void l_get_source(alo_Debug* dbg, GFun* fun, a_insn const* pc) {
-	if (likely(fun != null)) {
+	if (fun != null) {
 		GProto* proto = fun->proto;
 		dbg->file = proto->dbg_file != null ? str2ntstr(proto->dbg_file) : null;
 		dbg->line = ai_dbg_get_line(proto, pc);

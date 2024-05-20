@@ -27,7 +27,7 @@ fn f1() {
     assert(a)
 
     fn f2(a) {
-        -- Parameter
+        -- Parameter shadowing
         assert(!a)
     }
 
@@ -35,6 +35,16 @@ fn f1() {
 }
 
 f1()
+
+fn f2(mut a) {
+    assert(!a)
+
+    -- Parameter updating
+    a = true
+    assert(a)
+}
+
+f2(false)
 
 -- Captured variable changed inside closure
 assert(!a)

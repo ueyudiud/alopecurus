@@ -818,7 +818,7 @@ a_bool alo_tobool(a_henv env, a_ilen id) {
 
 a_int alo_toint(a_henv env, a_ilen id) {
 	Value v = api_elem(env, id);
-    if (likely(v_is_int(v))) {
+    if (v_is_int(v)) {
         return v_as_int(v);
     }
     else if (v_is_num(v)) {

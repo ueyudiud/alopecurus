@@ -443,7 +443,7 @@ typedef union {
     a_u8 _;
     struct {
         a_u8 mmut: 1; /* Mark a variable is mutable. */
-        a_u8 muse: 1; /* Mark a variable is not copible. */
+        a_u8 muse: 1; /* Mark a variable need drop after leave scope. */
     };
 } SymMods;
 
@@ -529,7 +529,7 @@ typedef struct {
     a_u32 rel_label;
     a_u8 rel_reg_bot;
     a_u8 rel_reg_top;
-    a_insn code[][1];
+    a_insn code[];
 } SecHead;
 
 struct SecRecDesc {
@@ -559,7 +559,7 @@ enum {
 };
 
 /**
- ** Load the index for constant.
+ ** Get the index for constant, the value is distincted by trivial equality.
  *@return the index of constant in constant pool.
  */
 static a_u32 const_index(Parser* par, Value val) {
@@ -617,7 +617,7 @@ static a_u32 l_emit_direct(Parser* restrict par, a_insn i, a_u32 line) {
     return code_put(par, i);
 }
 
-static a_bool l_should_eval(Parser* par) {
+static a_bool l_should_emit(Parser* par) {
 	return likely(par->fscope->fpass || par->fscope->fland);
 }
 
@@ -727,7 +727,7 @@ static void l_redirect_leave(Parser* par, a_u32 label, a_insn i) {
  ** Emit an instruction to leave current function.
  */
 static void l_emit_leave(Parser* par, a_insn i, a_line line) {
-	if (l_should_eval(par)) {
+	if (l_should_emit(par)) {
 		FnScope* scope = par->fscope;
 
 		l_flush_close(par);
@@ -744,7 +744,7 @@ static void l_emit_leave(Parser* par, a_insn i, a_line line) {
 }
 
 static a_u32 l_emit(Parser* par, a_insn i, a_line line) {
-	if (l_should_eval(par)) {
+	if (l_should_emit(par)) {
 		l_flush_close(par);
         l_flush_jump(par);
 		l_flush_land(par, line);
@@ -819,7 +819,7 @@ static a_u32 l_emit_branch(Parser* par, a_insn i, a_u32 label, a_u32 line) {
 }
 
 static a_u32 l_emit_aby(Parser* par, a_enum op, a_u32 a, a_u32 b, a_u32 c, a_u32 line) {
-	if (likely(c <= BC_MAX_C)) {
+	if (c <= BC_MAX_C) {
 		return l_emit(par, bc_make_iabc(op, a, b, c), line);
 	}
 	else {
@@ -837,7 +837,7 @@ static void l_merge_branch(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line)
 	if (label1 == NO_LABEL) {
 		*plabel = label2;
 	}
-	else if (likely(label1 != label2)) {
+	else if (label1 != label2) {
 		if (label1 < label2) {
 			*plabel = label2;
 			swap(label1, label2);
@@ -939,7 +939,7 @@ static void stack_check_free_used(Scope* scope) {
 static void stack_realloc(Parser* par, a_u32 reg) {
 	Scope* scope = par->scope;
 	assume(l_is_in_tmp(par, reg), "cannot reallocate a using register twice.");
-	if (likely(scope->top_reg == reg)) {
+	if (scope->top_reg == reg) {
 		scope->top_reg += 1;
 		assume(scope->top_reg <= par->fscope->max_reg);
 	}
@@ -963,7 +963,7 @@ static void stack_free(Parser* par, a_u32 reg) {
 	Scope* scope = par->scope;
 	assume(reg < scope->top_reg && l_is_in_tmp(par, reg));
 	/* The registers are likely freed with the reversed order of allocation. */
-	if (likely(reg + 1 == scope->top_reg)) {
+	if (reg + 1 == scope->top_reg) {
 		scope->top_reg = reg;
 	}
 	else {
@@ -2318,11 +2318,11 @@ static a_insn l_leave_or_nop(Parser* par, a_u32 label) {
  *@param line the line number.
  */
 static void l_direct_jump(Parser* par, a_u32 label, a_line line) {
-	if (l_should_eval(par)) {
+	if (l_should_emit(par)) {
         l_flush_jump(par);
 
 		a_insn i = l_leave_or_nop(par, label);
-		if (likely(i == 0)) {
+		if (i == 0) {
 			if (par->fscope->fland) {
 				l_redirect_chain(par, par->fscope->head_land, label, line);
 				l_clear_land(par);
@@ -2339,7 +2339,7 @@ static void l_direct_jump(Parser* par, a_u32 label, a_line line) {
 }
 
 static a_u32 l_lazy_jump(Parser* par, a_u32 label, a_line line) {
-	if (l_should_eval(par)) {
+	if (l_should_emit(par)) {
 		l_flush_close(par); /* Force flush close. */
 		if (likely(par->fscope->fpass)) {
 			if (par->fscope->head_jump == NO_LABEL || label > par->fscope->head_jump) {
@@ -2433,7 +2433,7 @@ static void sym_check_writable(Parser* par, InExpr e, a_line line) {
 	}
 }
 
-static void expr_write_unchecked(Parser* par, InExpr e1, InExpr e2) {
+static void expr_pin(Parser* par, InExpr e1, InExpr e2) {
     assume(e1->tag == EXPR_REG, "value already initialized.");
     expr_pin_reg(par, e2, e1->udat1);
 }
@@ -2443,7 +2443,7 @@ assign:
 	switch (e1->tag) {
 		case EXPR_REG: {
 			sym_check_writable(par, e1, line);
-            expr_write_unchecked(par, e2, e1);
+            expr_pin(par, e1, e2);
 			break;
 		}
 		case EXPR_CAP: {
@@ -2487,7 +2487,7 @@ assign:
 			else {
 				a_u32 reg = stack_alloc_succ(par, 2, line);
 				a_u32 label = l_emit_iab(par, BC_LDC, reg, e1->udat1, line);
-				if (likely(label != NO_LABEL)) {
+				if (label != NO_LABEL) {
 					l_emit_fast(par, bc_make_iabx(BC_K, reg + 1, e1->udat2), line);
                     l_emit_aby(par, BC_SETS, e2->udat1, reg, reg + 1, line);
 				}
@@ -2596,24 +2596,24 @@ static a_u32 sec_record(Parser* par, SecRec rec) {
     return base;
 }
 
-static void l_emit_section(Parser* par, InoutExpr e, SecHead const* restrict sec, a_u32 abs_base, a_u32 line_call) {
+static void sec_emit(Parser* par, InoutExpr e, SecHead const* restrict sec, a_u32 abs_base, a_u32 line_call) {
     a_u32 reg_disp = abs_base - sec->rel_reg_bot;
     a_u32 label_disp = par->head_label - sec->rel_label;
 
-    LineInfo const* lines = sec->nline > 0 ? cast(LineInfo const*, sec->code + sec->ninsn) : null;
+    LineInfo const* lines = sec->nline > 0 ? cast(LineInfo const*, &sec->code[sec->ninsn]) : null;
     a_u32 line_info_index = 0;
-    a_u32 l_next_line = sec->nline > 0 ? lines[0].lend - sec->rel_label : UINT32_MAX;
+    a_u32 id_next_line = sec->nline > 0 ? lines[0].lend - sec->rel_label : UINT32_MAX;
     a_u32 line = line_call;
 
     l_flush_close(par);
 
     for (a_u32 l = 0; l < sec->ninsn; ++l) {
-        if (l == l_next_line) {
+        if (l == id_next_line) {
             LineInfo info = lines[++line_info_index];
             line = info.line;
-            l_next_line = info.lend;
+            id_next_line = info.lend;
         }
-        a_insn const* ip = sec->code[l];
+        a_insn const* ip = &sec->code[l];
 #define reloc(x) ({ a_u32 _r = bc_load_##x(ip); if (_r >= sec->rel_reg_bot) { bc_store_##x(&i, _r + reg_disp); } })
         a_enum op = bc_load_op(ip);
         assume(op < BC__MAX, "bad opcode.");
@@ -2719,26 +2719,26 @@ static a_u32 sym_local(Parser* par, GStr* name, a_u32 reg, a_u32 begin_label, Sy
 	});
 }
 
-static void pat_bind_nils(Parser* par, Pat* p, a_line line) {
+static void pat_bind_nils(Parser* par, Pat* pat, a_line line) {
 	Scope* scope = par->scope;
 
-	assume(p->kind == PAT_VARG);
+	assume(pat->kind == PAT_VARG);
 
 	/* If all node is bind. */
-	if (p->child == null)
+	if (pat->child == null)
 		return;
 
-	if (p->fcpx) {
+	if (pat->fcpx) {
 		ai_par_error(par, "nil binding is only available for plain pattern.", line);
 	}
 
 	assume(scope->top_ntr == scope->top_reg);
-	a_u32 num = p->nchild - p->child->index;
+	a_u32 num = pat->nchild - pat->child->index;
 	a_u32 reg = stack_alloc_succ(par, num, line);
 	a_u32 label = l_emit_kn(par, reg, num, line);
-	for (Pat* pat = p->child; pat != null; pat = pat->sibling) {
-        sym_local(par, pat->name, reg++, label, (SymMods) {
-            .mmut = pat->fmut
+	for (Pat* pat_child = pat->child; pat_child != null; pat_child = pat_child->sibling) {
+        sym_local(par, pat_child->name, reg++, label, (SymMods) {
+            .mmut = pat_child->fmut
         });
 	}
 
@@ -2755,7 +2755,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 
         if (pat->sec_ref != NIL_SEC_REF) {
             SecHead* sec = cast(SecHead*, par->secs->ptr + pat->sec_ref);
-            l_emit_section(par, pat->expr, sec, reg, pat->line);
+            sec_emit(par, pat->expr, sec, reg, pat->line);
         }
 
         expr_pin_reg(par, pat->expr, reg);
@@ -3364,7 +3364,7 @@ bind:
 			else {
 				a_u32 reg2 = stack_alloc(par, e->line);
 				a_u32 label = l_emit(par, bc_make_iabx(BC_K, reg2, k), e->line);
-				if (likely(label != NO_LABEL)) {
+				if (label != NO_LABEL) {
 					l_emit_fast(par, bc_make_iabc(BC_GET, reg, e->udat1, reg2), e->line);
 					label += 1;
 				}
@@ -3381,7 +3381,7 @@ bind:
 			else {
 				a_u32 reg2 = stack_alloc_succ(par, 2, e->line);
 				a_u32 label = l_emit(par, bc_make_iabx(BC_K, reg2, k), e->line);
-				if (likely(label != NO_LABEL)) {
+				if (label != NO_LABEL) {
 					l_emit_fast(par, bc_make_iab(BC_LDC, reg2 + 1, e->udat1), e->line);
 					l_emit_fast(par, bc_make_iabc(BC_GET, reg, reg2 + 1, reg2), e->line);
 					label += 2;
@@ -5305,7 +5305,7 @@ static void l_scan_let_stat(Parser* par) {
 
 				l_scan_function(par, e2, name, line);
 
-                expr_write_unchecked(par, e1, e2);
+                expr_pin(par, e1, e2);
 				break;
 			}
 			fallthrough;
@@ -5335,7 +5335,7 @@ static void l_scan_fun_def_stat(Parser* par) {
 
 	l_scan_function(par, ef, name, line);
 
-    expr_write_unchecked(par, en, ef);
+    expr_pin(par, en, ef);
 }
 
 static void l_scan_pub_stat(Parser* par) {
