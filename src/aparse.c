@@ -5291,7 +5291,7 @@ static void l_scan_let_stat(Parser* par) {
             lex_check_skip(par, TK_ASSIGN);
 
             l_scan_expr(par, e2);
-            expr_write(par, e1, e2, line);
+            expr_pin(par, e1, e2);
             expr_tbc(par, e1, line);
             break;
         }
