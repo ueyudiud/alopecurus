@@ -372,7 +372,7 @@ struct VTable {
 #define g_impl(p) cast(ImplTable*, (p)->vptr->slots)
 
 #define g_fetch(p,f) ({ \
-	__auto_type _f2 = g_impl(p)->f; \
+	auto _f2 = g_impl(p)->f; \
 	assume(_f2 != null, "method '"#f"' is null."); \
 	_f2;                    \
 })

@@ -15,7 +15,7 @@
 static VTable const tuple_vtable;
 
 #if ALO_M64
-# define TUPLE_MAX_LEN INT32_MAX
+# define TUPLE_MAX_LEN cast(a_u32, INT32_MAX)
 #else
 # define TUPLE_MAX_LEN ((UINT32_MAX - sizeof(GTuple)) / sizeof(Value))
 #endif

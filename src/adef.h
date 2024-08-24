@@ -88,6 +88,12 @@ typedef void (*a_pfun)(a_henv, void*);
 #define false ((a_bool) ALO_FALSE)
 #define true ((a_bool) ALO_TRUE)
 
+#if ALO_C23
+# define auto auto
+#else
+# define auto __auto_type
+#endif
+
 #if ALO_C11
 # ifndef static_assert
 #  define static_assert(e) _Static_assert(e, "assert failed.")
@@ -118,12 +124,12 @@ typedef void (*a_pfun)(a_henv, void*);
 
 #define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
-#define bit_cast(t,e) ({ __auto_type _b = e; t _t; static_assert(sizeof(_b) == sizeof(t)); memcpy(&_t, &_b, sizeof(t)); _t; })
+#define bit_cast(t,e) ({ auto _b = e; t _t; static_assert(sizeof(_b) == sizeof(t)); memcpy(&_t, &_b, sizeof(t)); _t; })
 #define addr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
 #define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
 #define ref_of(t,a) (*int2ptr(t, a))
 #define ptr_disp(t,p,d) int2ptr(t, ptr2int(p) + (d))
-#define from_member(t,f,v) ({ __auto_type _v = v; quiet(_v == &((t*) 0)->f); int2ptr(t, ptr2int(_v) - offsetof(t, f)); })
+#define from_member(t,f,v) ({ auto _v = v; quiet(_v == &((t*) 0)->f); int2ptr(t, ptr2int(_v) - offsetof(t, f)); })
 #define fallthrough __attribute__((__fallthrough__))
 
 always_inline a_usize ptr2int(void const* p) {
@@ -141,7 +147,7 @@ always_inline void quiet_(unused int dummy, ...) {}
 
 #define max(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a >= _b ? _a : _b; })
 #define min(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a <= _b ? _a : _b; })
-#define swap(a,b) ({ __auto_type _a = &(a); __auto_type _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
+#define swap(a,b) ({ auto _a = &(a); auto _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
 #define expect(e,v) __builtin_expect(e, v)
 #define likely(e) expect(!!(e), true)
 #define unlikely(e) expect(!!(e), false)
@@ -156,7 +162,7 @@ always_inline a_noret trap() {
 
 /* Error handling functions. */
 
-#define catch_(e,n,...) for (__auto_type n = (e); unlikely(n); n = 0)
+#define catch_(e,n,...) for (auto n = (e); unlikely(n); n = 0)
 
 /**
  ** Do the statement inside catch block if 'e' is not zero.

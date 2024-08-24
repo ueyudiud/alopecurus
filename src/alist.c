@@ -15,9 +15,9 @@
 static VTable const list_vtable;
 
 #if ALO_M64
-# define LIST_MAX_CAP INT32_MAX
+# define LIST_MAX_CAP cast(a_u32, INT32_MAX)
 #else
-# define LIST_MAX_CAP (UINT32_MAX / sizeof(Value))
+# define LIST_MAX_CAP ((UINT32_MAX - sizeof(GList)) / sizeof(Value))
 #endif
 
 GList* ai_list_new(a_henv env) {

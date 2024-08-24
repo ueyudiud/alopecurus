@@ -46,7 +46,7 @@ static void dump_const(Value v) {
 			}
 			break;
 		}
-		default: panic("Unexpected function constant type.");
+		default: panic("unexpected function constant type.");
 	}
 }
 

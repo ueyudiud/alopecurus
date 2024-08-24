@@ -52,10 +52,9 @@ always_inline void ai_buf_deinit_(Global* gbl, Buf* buf, a_usize size) {
 #define at_buf_deinit(gbl,b) ai_buf_deinit_(gbl, buf_cast(b), buf_elem_size(b))
 
 #define at_buf_for(b,v) for ( \
-	__auto_type               \
-    v = (b)->ptr,            \
+	auto v = (b)->ptr,        \
 	_end_##v =                \
-    (b)->ptr + (b)->len;    \
+        (b)->ptr + (b)->len;  \
 	v < _end_##v;             \
 	v += 1                    \
 )
@@ -112,16 +111,16 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 #define at_buf_npush(env,b,v) ({ buf_elem_type(b) _va = (v); at_buf_nappend(env, b, &_va, 1); })
 
 #define at_buf_push(env,b,v,w) ({ \
-	__auto_type _b = b;           \
+	auto _b = b;                  \
     a_usize _bid = _b->len;       \
 	catch (at_buf_npush(env, _b, v)) { ai_buf_error(env, _e, w); } \
     _bid;                         \
 })
 
 #define at_buf_pop(env,b) ({ \
-	__auto_type _b = b;      \
+	auto _b = b;             \
     assume(_b->len > 0, "pop empty buf."); \
-    _b->ptr[--_b->len];    \
+    _b->ptr[--_b->len];      \
 })
 
 #define at_buf_clear(b) quiet((b)->len = 0)

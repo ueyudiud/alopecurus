@@ -116,7 +116,8 @@ void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
  *@return the stack size.
  */
 a_ilen alo_stacksize(a_henv env) {
-	return env->stack.top - ai_stk_bot(env);
+    a_isize size = env->stack.top - ai_stk_bot(env);
+	return cast(a_ilen, size);
 }
 
 /**
@@ -167,9 +168,9 @@ void alo_settop(a_henv env, a_ilen n) {
 
 a_ilen alo_absindex(a_henv env, a_ilen id) {
 	if (id < 0 && id >= MIN_NEG_STACK_INDEX) {
-		Value* v = env->stack.top + id;
-		api_check(v >= ai_stk_bot(env));
-		id = v - ai_stk_bot(env);
+        a_ilen size = alo_stacksize(env);
+		api_check(id >= -size);
+		id += size;
 	}
 	return id;
 }
@@ -213,35 +214,31 @@ Value api_elem(a_henv env, a_ilen id) {
 }
 
 Value* api_wrslot(a_henv env, a_ilen id) {
-	Value* v;
 	if (id >= MIN_NEG_STACK_INDEX) {
-		v = api_stack(env, id);
+		return api_stack(env, id);
 	}
 	else if (id >= ALO_STACK_INDEX_CAPTURE_BASE) {
 		id -= ALO_STACK_INDEX_CAPTURE_BASE;
 		GFun* fun = v_as_func(*stk2val(env, env->frame->stack_bot - 1));
 		api_check(cast(a_u32, id) < fun->ncap);
-		v = unlikely(fun->flags & FUN_FLAG_NATIVE) ? &fun->val_caps[id] : fun->ref_caps[id]->ptr;
+		return unlikely(fun->flags & FUN_FLAG_NATIVE) ? &fun->val_caps[id] : fun->ref_caps[id]->ptr;
 	}
 	else {
-		v = null;
-		api_panic("bad slot index.");
+		api_panic("bad write slot index.");
 	}
-	return v;
 }
 
 Value* api_stack(a_henv env, a_ilen id) {
-    Value* v;
     if (id >= 0) {
-        v = ai_stk_bot(env) + id;
-        api_check(v < env->stack.top, "stack index out of bound.");
+        api_check(id < alo_stacksize(env), "stack index out of bound.");
+        return ai_stk_bot(env) + id;
     }
     else {
         api_check(id >= MIN_NEG_STACK_INDEX, "not valid stack index.");
-        v = env->stack.top + id;
-        api_check(v >= ai_stk_bot(env), "stack index out of bound.");
+        a_ilen size = alo_stacksize(env);
+        api_check(id >= -size, "stack index out of bound.");
+        return env->stack.top + id;
     }
-    return v;
 }
 
 void alo_push(a_henv env, a_ilen id) {
@@ -461,7 +458,9 @@ void alo_newtuple(a_henv env, a_ulen n) {
 void alo_newlist(a_henv env, a_ulen n) {
 	GList* val = ai_list_new(env);
 	v_set_obj(env, api_incr_stack(env), val);
-    ai_list_hint(env, val, n);
+    if (n > 0) {
+        ai_list_grow(env, val, n);
+    }
     ai_gc_trigger(env);
 }
 
