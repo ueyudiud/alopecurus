@@ -46,8 +46,7 @@ struct Parser {
     LineInfoBuf lines[1];
     Buf secs[1];
     Buf sbuf[1];
-    GStr* file; /* Source file dbg_name. */
-    GStr* name;
+    GStr* name; /* For dbg_name. */
 	GStr* gvar_name;
     Scope* scope;
     FnScope* fscope;
@@ -56,19 +55,10 @@ struct Parser {
 
 #define lex(par) (&(par)->lex)
 
+#define parse_error(par,fmt,args...) ai_lex_error(lex(par), fmt, args)
+
 #define NO_LABEL (~u32c(0))
 #define NIL_SEC_REF (~u32c(0))
-
-char const* ai_par_file(Parser* par) {
-    return par->file != null ? str2ntstr(par->file) : "<in>";
-}
-
-a_noret ai_par_report(Parser* par, char const* fmt, ...) {
-    va_list varg;
-    va_start(varg, fmt);
-    ai_err_raisevf(par->env, ALO_ECHUNK, fmt, varg);
-    va_end(varg);
-}
 
 /*=========================================================*/
 
@@ -576,7 +566,7 @@ static a_u32 const_index(Parser* par, Value val) {
 	}
 
 	if (unlikely(par->fscope->const_off + consts->len == BC_MAX_BX + 1)) {
-		ai_par_report(par, "too many constants.", 0);
+		parse_error(par, "too many constants.", 0);
 	}
 
 	return at_buf_push(par->env, consts, val, "constant") - off;
@@ -624,7 +614,7 @@ static a_bool l_should_emit(Parser* par) {
 static a_i32 l_jump_diff(Parser* par, a_u32 from, a_u32 to, a_line line) {
     a_i32 diff = cast(a_i32, to - from - 1);
     if (unlikely(diff < BC_MIN_SAX || diff > BC_MAX_SAX)) {
-        ai_par_error(par, "instruction jump out of bound.", line);
+        parse_error(par, "instruction jump out of bound.", line);
     }
     return diff;
 }
@@ -909,7 +899,7 @@ static a_u32 stack_alloc_succ(Parser* par, a_u32 num, a_u32 line) {
 	if (scope->top_reg > par->fscope->max_reg) {
 		par->fscope->max_reg = scope->top_reg;
 		if (reg > BC_MAX_A) {
-			ai_par_error(par, "too many register used.", line);
+			parse_error(par, "too many register used.", line);
 		}
 	}
 	return reg;
@@ -1517,7 +1507,7 @@ static void l_compute_int(Parser* par , a_int a, a_int b, OutExpr e, a_u32 op, a
 		case OP_DIV:
 		case OP_MOD: {
 			if (unlikely(b == 0)) {
-				ai_par_error(par, "attempt to divide by 0.", line);
+				parse_error(par, "attempt to divide by 0.", line);
 			}
 			e->tag = EXPR_INT;
 			e->idat = ai_op_bin_int(a, b, op);
@@ -2298,7 +2288,7 @@ static void expr_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 
 static void expr_unpack(Parser* par, InoutExpr e, a_line line) {
 	if (!e->fupk) {
-		ai_par_error(par, "the expression cannot be unpack.", line);
+		parse_error(par, "the expression cannot be unpack.", line);
 	}
 	e->tag += 1;
 	e->fupk = false;
@@ -2428,7 +2418,7 @@ static void sym_check_writable(Parser* par, InExpr e, a_line line) {
 		a_u32 id = e->udat2;
 		Sym* sym = &par->syms->ptr[id];
 		if (!sym->mods.mmut) {
-			ai_par_error(par, "cannot assign to readonly variable %s.", line, str2ntstr(sym->name));
+			parse_error(par, "cannot assign to readonly variable %s.", line, str2ntstr(sym->name));
 		}
 	}
 }
@@ -2503,7 +2493,7 @@ assign:
 			}
 			else if (!(par->options & ALO_COMP_OPT_LOSSEN)) {
 				GStr* name = v_as_str(const_at(par, e1->udat2));
-				ai_par_error(par, "cannot assign to anonymous variable '%s'", line, str2ntstr(name));
+				parse_error(par, "cannot assign to anonymous variable '%s'", line, str2ntstr(name));
 			}
 			expr_gvar(par, e1, line);
 			goto assign;
@@ -2729,7 +2719,7 @@ static void pat_bind_nils(Parser* par, Pat* pat, a_line line) {
 		return;
 
 	if (pat->fcpx) {
-		ai_par_error(par, "nil binding is only available for plain pattern.", line);
+		parse_error(par, "nil binding is only available for plain pattern.", line);
 	}
 
 	assume(scope->top_ntr == scope->top_reg);
@@ -3060,7 +3050,7 @@ static void scope_break(Parser* par, GStr* label, a_line line) {
                 return;
             }
         }
-        ai_par_error(par, "no block for break statement", line);
+        parse_error(par, "no block for break statement", line);
     }
     else {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
@@ -3069,10 +3059,10 @@ static void scope_break(Parser* par, GStr* label, a_line line) {
                     scope->end_label = l_lazy_jump(par, scope->end_label, line);
                     return;
                 }
-                ai_par_error(par, "cannot break at label '%s'", line, str2ntstr(label));
+                parse_error(par, "cannot break at label '%s'", line, str2ntstr(label));
             }
         }
-        ai_par_error(par, "label '%s' not found", line, str2ntstr(label));
+        parse_error(par, "label '%s' not found", line, str2ntstr(label));
     }
 }
 
@@ -3084,7 +3074,7 @@ static void scope_continue(Parser* par, GStr* label, a_line line) {
                 return;
             }
         }
-        ai_par_error(par, "no block for continue statement", line);
+        parse_error(par, "no block for continue statement", line);
     }
     else {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
@@ -3093,16 +3083,16 @@ static void scope_continue(Parser* par, GStr* label, a_line line) {
                     scope->begin_label = l_lazy_jump(par, scope->end_label, line);
                     return;
                 }
-                ai_par_error(par, "cannot continue at label '%s'", line, str2ntstr(label));
+                parse_error(par, "cannot continue at label '%s'", line, str2ntstr(label));
             }
         }
-        ai_par_error(par, "label '%s' not found", line, str2ntstr(label));
+        parse_error(par, "label '%s' not found", line, str2ntstr(label));
     }
 }
 
 static void fscope_prologue(Parser* par, FnScope* fscope, a_line line) {
 	if (par->scope_depth == UINT8_MAX) {
-		ai_par_error(par, "function nested level overflow.", line);
+		parse_error(par, "function nested level overflow.", line);
 	}
 
     code_put(par, INSN_NOP); /* Add barrier for instruction look ahead. */
@@ -3193,7 +3183,7 @@ static GProto* fscope_epilogue(Parser* par, GStr* name, a_bool root, a_line line
 	
 	proto->dbg_name = name;
 	if (desc.flags & FUN_FLAG_DEBUG) {
-		proto->dbg_file = par->file;
+		proto->dbg_file = ai_str_from_ntstr(par->env, par->lex.file);
 		proto->dbg_lndef = fscope->begin_line;
 		proto->dbg_lnldef = line;
 	}
@@ -3961,7 +3951,7 @@ static a_bool lex_test_skip(Parser* par, a_i32 tk) {
 
 #define lex_error_got(par,fmt,args...) ({ \
 	a_tkbuf _buf; \
-    ai_par_error(par, fmt", got %s", lex_line(par), ##args, ai_lex_tkrepr(lex_token(par), _buf)); \
+    parse_error(par, fmt", got %s", lex_line(par), ##args, ai_lex_tkrepr(lex_token(par), _buf)); \
 })
 
 static void lex_error_expected(Parser* par, a_i32 tk) {
@@ -4868,7 +4858,7 @@ static void l_scan_assign_or_call(Parser* par) {
 		l_scan_assign_lhs_tail(par, &lhs);
 	}
 	else if (lhs.head.expr->tag != EXPR_CALL) {
-		ai_par_error(par, "assignment or function call expected.", line);
+		parse_error(par, "assignment or function call expected.", line);
 	}
 
     lex_test_skip(par, TK_SEMI);
@@ -5007,7 +4997,7 @@ static void l_scan_return_stat(Parser* par) {
 }
 
 static a_noret par_error_dup_mod(Parser* par, a_i32 tk) {
-    ai_par_error(par, "duplicate '%s' modifier", lex_line(par), ai_lex_tagname(tk));
+    parse_error(par, "duplicate '%s' modifier", lex_line(par), ai_lex_tagname(tk));
 }
 
 static void l_scan_var_pattern(Parser* par, Pat* pat) {
@@ -5030,7 +5020,7 @@ static void l_scan_var_pattern(Parser* par, Pat* pat) {
                 pat->name = lex_check_ident(par);
                 pat->line = lex_line(par);
                 if (pat->fmut && pat->fuse) {
-                    ai_par_error(par, "mutable variable cannot capture resource", pat->line);
+                    parse_error(par, "mutable variable cannot capture resource", pat->line);
                 }
                 return;
             }
@@ -5532,19 +5522,18 @@ static VTable const parser_vtable = {
     }
 };
 
-static void parser_init(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, Parser* par) {
+static void parser_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
     init(par) {
         .vptr = &parser_vtable,
         .tnext = WHITE_COLOR,
         .options = options,
-        .file = file,
         .name = name
     };
-	ai_lex_init(env, &par->lex, fun, ctx);
+	ai_lex_init(env, &par->lex, fun, ctx, file);
 	rq_init(&par->rq);
 }
 
-a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, GStr* file, GStr* name, a_u32 options, GFun** pfun) {
+a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, GFun** pfun) {
 	Parser par;
     parser_init(env, fun, ctx, file, name, options, &par);
 

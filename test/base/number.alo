@@ -1,0 +1,7 @@
+-- Float-point number
+assert(10.0 == 1.0e1)
+assert(100.0 == 1.0e2)
+assert(100.0 == 0.01e4)
+
+assert(+1.0 ==   1.0)
+assert(-1.0 == - 1.0)

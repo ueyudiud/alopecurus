@@ -913,13 +913,12 @@ static GStr* l_get_str(a_henv env, a_ilen id) {
 }
 
 a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
-                  a_ilen id_env, a_ilen id_name, a_ilen id_file,
+                  a_ilen id_env, a_ilen id_name, char const* file,
                   a_flags options) {
 	GFun* out;
 	api_check_slot(env, 1);
 	id_env = alo_absindex(env, id_env);
 
-	GStr* file = l_get_str(env, id_file);
 	GStr* name = l_get_str(env, id_name);
 
 	a_msg msg = ai_parse(env, fun, ctx, file, name, options, &out);

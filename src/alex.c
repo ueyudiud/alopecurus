@@ -126,8 +126,8 @@ static void strs_alloc_array(a_henv env, StrSet* self, a_usize cap) {
 
 static void strs_grow(Lexer* lex, StrSet* self) {
     a_usize old_cap = self->hmask + 1;
-	if (old_cap == STRS_MAX_CAP) {
-		ai_lex_error(lex, "too many symbol and string in chunk.");
+	if (unlikely(old_cap == STRS_MAX_CAP)) {
+		ai_lex_error(lex, "too many symbol and string in chunk.", lex->line);
 	}
 
 	a_usize new_cap = old_cap * 2;
@@ -159,8 +159,10 @@ static GStr* l_to_str(Lexer* lex) {
     return str;
 }
 
-void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx) {
+void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx, char const* name) {
 	ai_io_iinit(env, fun, ctx, &lex->in);
+
+    lex->file = name ?: "<in>";
     lex->line = 1;
 
 	lex->strs.len = 0;
@@ -198,12 +200,12 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 		case TK_INTEGER: {
 			a_usize len = ai_fmt_int2str(buf + MAX_TOKEN_STR_BUF_SIZE, tk->as_int);
 			buf[MAX_TOKEN_STR_BUF_SIZE] = '\0';
-			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
+			return &buf[MAX_TOKEN_STR_BUF_SIZE - len];
 		}
 		case TK_FLOAT: {
 			a_usize len = ai_fmt_float2str(buf + MAX_TOKEN_STR_BUF_SIZE, tk->as_float);
 			buf[MAX_TOKEN_STR_BUF_SIZE] = '\0';
-			return cast(char const*, buf + MAX_TOKEN_STR_BUF_SIZE - len);
+			return &buf[MAX_TOKEN_STR_BUF_SIZE - len];
 		}
 		case TK_STRING: {
 			GStr* str = tk->as_str;
@@ -220,6 +222,13 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 			return ai_lex_tagname(tk->tag);
 		}
 	}
+}
+
+a_noret ai_lex_report(Lexer* lex, char const* fmt, ...) {
+    va_list varg;
+    va_start(varg, fmt);
+    ai_err_raisevf(lex->env, ALO_ECHUNK, fmt, varg);
+    va_end(varg);
 }
 
 GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
@@ -253,12 +262,15 @@ static a_i32 l_skip_line(Lexer* lex) {
 				lex->line += 1;
 				return TK__NONE;
 			}
-			default:
-				break;
+			default: break;
 		}
 	}
 }
 
+/**
+ ** Assume next token is an identifier or keyword.
+ *@return the ID of next token.
+ */
 static a_i32 l_scan_ident(Lexer* lex, Token* tk) {
     while (c_isibody(l_peek(lex))) {
         l_bput(lex, l_poll_unchecked(lex));
@@ -298,13 +310,19 @@ static a_float l_10pow(a_i32 i) {
     return neg ? 1.0 / f : f;
 }
 
+enum {
+    SIGN_NONE = 0,
+    SIGN_POS = +1,
+    SIGN_NEG = -1
+};
+
 /**
  ** Scan integer or float point number literal.
- * @param lex the lexer.
- * @param tk the output token.
- * @param sign the sign of number, 0 for unsigned number and 1 or -1 for positive or negative number.
- * @param ch the leading character.
- * @return the token kind.
+ *@param lex the lexer.
+ *@param tk the output token.
+ *@param sign the sign of number, 0 for unsigned number and 1 or -1 for positive or negative number.
+ *@param ch the leading character.
+ *@return the token kind.
  */
 static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
     a_i32 e; /* Exponent count. */
@@ -348,30 +366,13 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
         a_u32 i = 0;
         switch (ch = l_peek(lex)) {
             case '.': {
+                l_skip(lex);
                 ch = l_peek(lex);
                 j = c_ddigit(ch);
-                if (j > 0) {
+                if (j >= 0) {
                     e = 0;
-					n = 0;
-                    goto float_frag_base;
-                }
-                else if (j == 0) {
-                    eb = 1;
-                    loop {
-                        ch = l_peek(lex);
-                        if (ch != '0') {
-                            scan_sep();
-                            break;
-                        }
-                        eb += 1;
-                    }
-                    j = c_ddigit(ch);
-                    if (j >= 0) {
-						n = 0;
-						goto float_frag;
-					}
-                    tk->as_float = 0.0;
-                    return TK_FLOAT;
+                    n = 0;
+                    goto float_frag;
                 }
                 l_back(lex, '.');
                 tk->as_int = 0;
@@ -495,7 +496,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
     }
     else {
         switch (sign) {
-            case 0: { /* Unsigned number. */
+            case SIGN_NONE: { /* Unsigned number. */
                 a_u32 i = c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_u32 t;
@@ -511,7 +512,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     n = cast(a_u64, i);
                     ch = l_peek(lex);
                     j = c_ddigit(ch);
-                    if (j >= 0) goto float_frag_base;
+                    if (j >= 0) goto float_frag;
                     l_back(lex, '.');
                 }
                 else {
@@ -520,7 +521,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 tk->as_int = cast(a_int, i);
                 return TK_INTEGER;
             }
-            case 1: { /* Positive number. */
+            case SIGN_POS: { /* Positive number. */
                 a_i32 i = c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_i32 t;
@@ -535,7 +536,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     n = cast(a_u64, cast(a_i64, i));
                     ch = l_peek(lex);
                     j = c_ddigit(ch);
-                    if (j >= 0) goto float_frag_base;
+                    if (j >= 0) goto float_frag;
                     l_back(lex, '.');
                 }
                 else {
@@ -544,7 +545,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 tk->as_int = cast(a_int, i);
                 return TK_INTEGER;
             }
-            case -1: { /* Negative number. */
+            case SIGN_NEG: { /* Negative number. */
                 a_i32 i = -c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_i32 t;
@@ -559,7 +560,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     n = cast(a_u64, -cast(a_i64, i));
                     ch = l_peek(lex);
                     j = c_ddigit(ch);
-                    if (j >= 0) goto float_frag_base;
+                    if (j >= 0) goto float_frag;
                     l_back(lex, '.');
                 }
                 else {
@@ -584,10 +585,9 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 if (j < 0)
                     goto error_overflow;
 
-			float_frag_base:
+			float_frag:
                 eb = -1; /* For first digit. */
 
-            float_frag: /* Fragment part. */
 				l_skip(lex);
                 n = n * 10 + j;
                 scan_digits(c_ddigit) {
@@ -643,7 +643,10 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     e = eb;
                 }
                 a_float f = cast(a_float, n) * l_10pow(e);
-                if (unlikely(!isfinite(f))) goto error_overflow;
+                if (sign == -1)
+                    f = -f;
+                if (unlikely(!isfinite(f)))
+                    goto error_overflow;
                 check_gap();
                 tk->as_float = f;
                 return TK_FLOAT;
@@ -653,13 +656,13 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
     }
 
 error_overflow:
-    ai_lex_error(lex, "number overflow.");
+    ai_lex_error(lex, "number overflow.", lex->line);
 
 error_format:
-    ai_lex_error(lex, "bad number format.");
+    ai_lex_error(lex, "bad number format.", lex->line);
 
 error_no_gap:
-    ai_lex_error(lex, "separator expected between number and other identifier.");
+    ai_lex_error(lex, "separator expected between number and other identifier.", lex->line);
 
 #undef check_end_sep
 #undef check_gap
@@ -669,16 +672,16 @@ error_no_gap:
 
 static a_i32 l_scan_xdigit(Lexer* lex) {
     a_i32 i = c_xdigit(l_poll(lex));
-    if (i < 0) ai_lex_error(lex, "bad escape character.");
+    if (i < 0) ai_lex_error(lex, "bad escape character.", lex->line);
     return i;
 }
 
 static a_noret l_error_unclosed(Lexer* lex, a_u32 line) {
 	if (lex->line == line) {
-		ai_lex_error(lex, "unclosed string.");
+		ai_lex_error(lex, "unclosed string.", lex->line);
 	}
 	else {
-		ai_lex_error(lex, "unclosed string. (from line %u)", line);
+		ai_lex_error(lex, "unclosed string. (from line %u)", lex->line, line);
 	}
 }
 
@@ -818,7 +821,7 @@ static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
 					lex->line += 1;
 					break;
 				}
-				default: ai_lex_error(lex, "bad escape character '\\%c'.", ch);
+				default: ai_lex_error(lex, "bad escape character '\\%c'.", lex->line, ch);
 			}
 			break;
 		}
@@ -935,7 +938,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
 					return TK_BPLUS;
 				}
                 else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
-                    return l_scan_number(lex, tk, 1, l_poll_unchecked(lex));
+                    return l_scan_number(lex, tk, SIGN_POS, l_poll_unchecked(lex));
                 }
                 return TK_PLUS;
             }
@@ -945,7 +948,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
                     break;
                 }
                 else if (l_peek(lex) >= '0' && l_peek(lex) <= '9') {
-                    return l_scan_number(lex, tk, -1, l_poll_unchecked(lex));
+                    return l_scan_number(lex, tk, SIGN_NEG, l_poll_unchecked(lex));
                 }
                 return TK_MINUS;
             }
@@ -1028,7 +1031,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
                 return l_scan_ident(lex, tk);
             }
             case '0' ... '9': {
-                return l_scan_number(lex, tk, 0, ch);
+                return l_scan_number(lex, tk, SIGN_NONE, ch);
             }
             case '\'': {
                 return l_scan_sqstr(lex, tk);
@@ -1037,7 +1040,7 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
 				return TK_TSBEGIN;
 			}
             default: {
-				ai_lex_error(lex, "invalid character, got '%c'", ch);
+				ai_lex_error(lex, "invalid character, got '%c'", lex->line, ch);
             }
         }
     }

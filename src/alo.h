@@ -257,8 +257,7 @@ ALO_EXPORT void (alo_fullgc)(a_henv env);
 
 #define ALO_COMP_OPT_STOP_JIT 0x10000
 
-ALO_EXPORT a_msg (alo_compile)(a_henv env, a_ifun fun, void* ctx, a_ilen id_env,
-                               a_ilen id_name, a_ilen id_file, a_flags options);
+ALO_EXPORT a_msg (alo_compile)(a_henv env, a_ifun fun, void* ctx, a_ilen id_env, a_ilen id_name, char const* file, a_flags options);
 
 typedef struct {
 	unsigned char kind;
