@@ -394,7 +394,7 @@ static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, B
 
 a_msg aloL_traceerror(a_henv env, a_ilen id, a_usize level, a_usize limit) {
 	if (env->frame->prev != null) {
-		Buf buf[1];
+		Buf buf[1] = {};
 		at_buf_init(buf);
 		a_msg msg = l_wrap_error(env, id, level, limit, buf_cast(buf));
 		at_buf_deinit(G(env), buf);
@@ -408,7 +408,7 @@ a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
     api_check(v_is_mod(v), "module expected.");
 
-    GMod* o = v_as_mod(v);
+    GMod* o = v_as_meta(v);
 
     catch (ai_mod_getls(env, o, s, strlen(s), &v)) {
         return ALO_EEMPTY;
@@ -435,9 +435,9 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
 void aloL_puts(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
-    api_check(v_is_mod(v), "module expected.");
+    api_check(v_is_meta(v), "module expected.");
 
-    GMod* o = v_as_mod(v);
+    GMod* o = v_as_meta(v);
 
     Value* p = ai_mod_refls(env, o, s, strlen(s));
 
@@ -451,9 +451,9 @@ void aloL_puts(a_henv env, a_ilen id, char const* s) {
 
 void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 	Value v = api_elem(env, id);
-	api_check(v_is_mod(v), "module expected.");
+	api_check(v_is_meta(v), "module expected.");
 
-	GMod* o = v_as_mod(v);
+	GMod* o = v_as_meta(v);
 
 	for (a_usize i = 0; i < ne; ++i) {
 		aloL_Entry const* e = &es[i];
@@ -464,7 +464,7 @@ void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 
 		if (e->fptr != null) {
 			GFun* fun = ai_cfun_create(env, e->fptr, 0, null);
-            v_set_obj(env, slot, fun);
+            v_set_func(env, slot, fun);
             ai_gc_barrier_backward(env, o, fun);
         }
 	}
@@ -489,7 +489,6 @@ static void block_mark(Global* gbl, GBlock* self) {
 }
 
 static VTable const block_vtable = {
-    .stencil = V_STENCIL(T_USER),
     .tag = ALO_TUSER,
     .impl = {
         .drop = cast(void const*, block_drop),
@@ -516,7 +515,7 @@ static_assert(offsetof(aloL_Buf, cap) == offsetof(Buf, cap));
 
 static GBuf* from_buff(a_henv env, aloL_Buf* raw) {
     GBuf* self = from_member(GBuf, _buf_head_mark, cast(BufHeadMark*, raw));
-    v_check_alive(env, v_of_obj(self));
+    v_check_alive(env, v_of_buf(self));
     return self;
 }
 
@@ -524,7 +523,7 @@ aloL_Buf* aloL_newbuf(a_henv env) {
     api_check_slot(env, 1);
 
     GBuf* self = ai_buf_new(env);
-    v_set_obj(env, api_incr_stack(env), self);
+    v_set_buf(env, api_incr_stack(env), self);
     return cast(aloL_Buf*, self->_buf_head_mark);
 }
 

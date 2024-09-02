@@ -77,7 +77,6 @@ static void type_mark(Global* gbl, GType* self) {
 }
 
 static VTable const type_vtable = {
-	.stencil = V_STENCIL(T_MOD),
     .tag = ALO_TTYPE,
     .type_ref = g_type_ref(ALO_TTYPE),
 	.impl = {

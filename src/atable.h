@@ -45,11 +45,23 @@ struct TNode {
     Value value;
 };
 
+#define g_is_table(o) g_is(o, ALO_TTABLE)
+
 #define v_is_table(v) v_is(v, T_TABLE)
 
 always_inline GTable* v_as_table(Value v) {
     assume(v_is_table(v), "not table.");
     return g_cast(GTable, v_as_obj(v));
+}
+
+always_inline Value v_of_table(GTable* o) {
+    assume(g_is_table(o), "invalid instance.");
+    return v_of_obj_(o, T_TABLE);
+}
+
+always_inline void v_set_table(a_henv env, Value* d, GTable* o) {
+    Value v = v_of_table(o);
+    v_set(env, d, v);
 }
 
 #define table_size() sizeof(GTable)

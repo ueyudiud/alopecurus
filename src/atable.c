@@ -502,7 +502,6 @@ static void table_mark(Global* gbl, GTable* self) {
 }
 
 static VTable const table_vtable = {
-	.stencil = V_STENCIL(T_TABLE),
     .tag = ALO_TTABLE,
 	.type_ref = g_type_ref(ALO_TTABLE),
     .flags = VTABLE_FLAG_NONE,

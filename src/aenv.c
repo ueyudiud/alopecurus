@@ -113,7 +113,6 @@ static void route_drop(Global* gbl, GRoute* self) {
 }
 
 static VTable const route_vtable = {
-	.stencil = V_STENCIL(T_USER),
     .tag = ALO_TROUTE,
 	.flags = VTABLE_FLAG_NONE,
     .type_ref = g_type_ref(ALO_TROUTE),
@@ -180,7 +179,7 @@ static void global_init(a_henv env, unused void* ctx) {
     ai_str_boost2(env);
 
     GMod* gbl = ai_mod_new(env, 0);
-    v_set_obj(env, &G(env)->global_value, gbl);
+    v_set_mod(env, &G(env)->global_value, gbl);
 }
 
 static a_usize mroute_size() {

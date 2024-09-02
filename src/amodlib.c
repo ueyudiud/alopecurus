@@ -26,7 +26,7 @@ static a_msg mod___new__(a_henv env) {
         alo_newmod(env, 0);
 
         GTable* src = v_as_table(api_elem(env, 0));
-        GMod* dst = v_as_mod(api_elem(env, 1));
+        GMod* dst = v_as_meta(api_elem(env, 1));
 
         if (src->len > 0) {
             for (a_u32 i = 0; i <= src->hmask; ++i) {

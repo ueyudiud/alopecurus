@@ -52,11 +52,29 @@ struct GMod {
     a_byte extra[];
 };
 
-#define v_is_mod(v) v_is(v, T_MOD)
+#define g_is_mod(o) g_is(o, ALO_TMOD)
 
-always_inline GMod* v_as_mod(Value v) {
-    assume(v_is_mod(v), "not mod.");
+always_inline a_bool v_is_meta(Value v) {
+    return v_is(v, T_META);
+}
+
+always_inline a_bool v_is_mod(Value v) {
+    return v_is_meta(v) && g_is_mod(v_as_obj(v));
+}
+
+always_inline GMod* v_as_meta(Value v) {
+    assume(v_is_meta(v), "not meta.");
     return g_cast(GMod, v_as_obj(v));
+}
+
+always_inline Value v_of_mod(GMod* o) {
+    assume(g_is_mod(o), "invalid instance.");
+    return v_of_obj_(o, T_META);
+}
+
+always_inline void v_set_mod(a_henv env, Value* d, GMod* o) {
+    Value v = v_of_mod(o);
+    v_set(env, d, v);
 }
 
 #define gmod_cast(p) from_member(GMod, _mod_head_mark, &(p)->_mod_head_mark)

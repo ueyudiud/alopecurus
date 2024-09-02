@@ -31,7 +31,7 @@ struct GStr {
     char ptr[];
 };
 
-#define g_is_str(p) ((p)->vptr->tag == ALO_TSTR)
+#define g_is_str(o) g_is(o, ALO_TSTR)
 
 #define v_is_str(v) v_is(v, T_STR)
 
@@ -42,14 +42,14 @@ always_inline GStr* v_as_str(Value v) {
     return g_cast(GStr, p);
 }
 
-always_inline Value v_of_str(GStr* p) {
-    assume(g_is_str(p), "invalid instance.");
-    return v_new(v_stencil(T_STR) | ptr2int(p));
+always_inline Value v_of_str(GStr* o) {
+    assume(g_is_str(o), "invalid instance.");
+    return v_of_obj_(o, T_STR);
 }
 
-always_inline void v_set_str(a_henv env, Value* d, GStr* p) {
-    assume(g_is_str(p), "invalid instance.");
-    v_set(env, d, v_of_str(p));
+always_inline void v_set_str(a_henv env, Value* d, GStr* o) {
+    Value v = v_of_str(o);
+    v_set(env, d, v);
 }
 
 #define str_size(l) align_to(sizeof(GStr) + sizeof(char) * ((l) + 1), sizeof(a_usize))

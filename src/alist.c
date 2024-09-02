@@ -151,7 +151,6 @@ static void list_drop(Global* gbl, GList* self) {
 }
 
 static VTable const list_vtable = {
-	.stencil = V_STENCIL(T_LIST),
     .tag = ALO_TLIST,
     .type_ref = g_type_ref(ALO_TLIST),
 	.impl = {

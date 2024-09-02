@@ -230,7 +230,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vm;
 
     if (ai_tm_look(env, v, k, &vm)) {
-        catch (!v_is_mod(v) || ai_mod_gets(env, v_as_mod(v), k, &vm)) { //TODO only module can dispatch?
+        catch (!v_is_mod(v) || ai_mod_gets(env, v_as_meta(v), k, &vm)) { //TODO only module can dispatch?
             ai_err_bad_look(env, v_nameof(env, v), k);
         }
 
@@ -258,14 +258,14 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
             }
             return v;
         }
-        case T_MOD: {
+        case T_META: {
             Value v;
-            catch (ai_mod_get(env, v_as_mod(v1), v2, &v)) {
+            catch (ai_mod_get(env, v_as_meta(v1), v2, &v)) {
                 return v_of_nil();
             }
             return v;
         }
-		case T_USER: {
+		case T_OTHER: {
             Value v;
             if (!ai_tm_get(env, v1, v2, &v)) {
                 return v;
@@ -288,11 +288,11 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
             ai_table_set(env, v_as_table(v1), v2, v3);
             break;
         }
-        case T_MOD: {
-            ai_mod_set(env, v_as_mod(v1), v2, v3);
+        case T_META: {
+            ai_mod_set(env, v_as_meta(v1), v2, v3);
             break;
         }
-        case T_USER: {
+        case T_OTHER: {
             if (!ai_tm_set(env, v1, v2, v3)) {
                 return;
             }
@@ -318,10 +318,10 @@ static Value vm_len(a_henv env, Value v) {
         case T_TABLE: {
             return v_of_int(v_as_table(v)->len);
         }
-        case T_MOD: {
-            return v_of_int(v_as_mod(v)->len);
+        case T_META: {
+            return v_of_int(v_as_meta(v)->len);
         }
-        case T_USER: {
+        case T_OTHER: {
             a_uint i;
             if (!ai_tm_len(env, v, &i)) {
                 return v_of_int(i);
@@ -442,7 +442,7 @@ static a_bool vm_append(a_henv env, Buf* buf, Value v) {
             case T_LIST:
             case T_TABLE:
             case T_FUNC:
-            case T_USER: {
+            case T_OTHER: {
                 return true;
             }
             default: {
@@ -466,7 +466,7 @@ void ai_vm_append(a_henv env, GBuf* buf, Value v) {
 
 static GStr* vm_cat(a_henv env, Value* base, a_ulen n) {
 	GBuf* buf = ai_buf_new(env);
-	vm_push_args(env, v_of_obj(buf));
+	vm_push_args(env, v_of_buf(buf));
 
 	for (a_ulen i = 0; i < n; ++i) {
 	    Value v = base[i];
@@ -694,7 +694,7 @@ tail_call:
                 loadB();
 
                 GFun* v = ai_fun_new(env, fun->proto->subs[b]);
-                v_set_obj(env, &R[a], v);
+                v_set_func(env, &R[a], v);
 
                 check_gc();
                 break;
@@ -704,7 +704,7 @@ tail_call:
                 loadC();
 
                 GTuple* v = ai_tuple_new(env, &R[b], c);
-                v_set_obj(env, &R[a], v);
+                v_set_tuple(env, &R[a], v);
 
                 check_gc();
                 break;
@@ -714,7 +714,7 @@ tail_call:
 
                 a_u32 n = env->stack.top - &R[b];
                 GTuple* v = ai_tuple_new(env, &R[b], n);
-                v_set_obj(env, &R[a], v);
+                v_set_tuple(env, &R[a], v);
 
                 check_gc();
                 break;
@@ -723,7 +723,7 @@ tail_call:
                 loadBx();
 
                 GList* val = ai_list_new(env);
-                v_set_obj(env, &R[a], val);
+                v_set_list(env, &R[a], val);
                 ai_list_hint(env, val, b);
 
                 check_gc();
@@ -734,11 +734,11 @@ tail_call:
                 loadC();
 
                 GList* val = ai_list_new(env);
-                v_set_obj(env, env->stack.top, val);
+                v_set_list(env, env->stack.top, val);
                 env->stack.top += 1;
 
                 ai_list_push_all(env, val, &R[b], c);
-                v_set_obj(env, &R[a], val);
+                v_set_list(env, &R[a], val);
                 check_gc();
 
                 adjust_top();
@@ -750,11 +750,11 @@ tail_call:
                 a_u32 n = env->stack.top - &R[b];
 
                 GList* val = ai_list_new(env);
-                v_set_obj(env, env->stack.top, val);
+                v_set_list(env, env->stack.top, val);
                 env->stack.top += 1;
 
                 ai_list_push_all(env, val, &R[b], n);
-                v_set_obj(env, &R[a], val);
+                v_set_list(env, &R[a], val);
                 check_gc();
 
                 adjust_top();
@@ -785,7 +785,7 @@ tail_call:
                 loadBx();
 
                 GTable* val = ai_table_new(env);
-                v_set_obj(env, &R[a], val);
+                v_set_table(env, &R[a], val);
                 if (b > 0) {
                     ai_table_grow(env, val, b);
                 }

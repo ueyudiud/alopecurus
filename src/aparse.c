@@ -1134,7 +1134,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
         }
         case SYM_EXPORT: {
             init(e) {
-                .udat1 = const_index(par, v_of_obj(sym->name)),
+                .udat1 = const_index(par, v_of_str(sym->name)),
                 .udat2 = id,
                 .fsym = true
             };
@@ -2956,7 +2956,7 @@ static void sym_export(Parser* par, OutExpr e, GStr* name, a_line line) {
 	});
 	init(e) {
         .tag = EXPR_GBL,
-        .udat1 = const_index(par, v_of_obj(name)),
+        .udat1 = const_index(par, v_of_str(name)),
         .udat2 = id,
         .fsym = true,
         .line = line
@@ -5514,7 +5514,6 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 }
 
 static VTable const parser_vtable = {
-    .stencil = V_STENCIL(T_USER),
     .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
     .impl = {
         .mark = cast(void const*, parser_mark),

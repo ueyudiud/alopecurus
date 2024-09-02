@@ -272,7 +272,6 @@ static void mod_mark(Global* gbl, GMod* self) {
 }
 
 static VTable const mod_vtable = {
-    .stencil = V_STENCIL(T_MOD),
     .type_ref = g_type_ref(ALO_TMOD),
     .tag = ALO_TMOD,
     .flags = VTABLE_FLAG_NONE,

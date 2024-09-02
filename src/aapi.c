@@ -392,11 +392,11 @@ void alo_pushptype(a_henv env, a_msg tag) {
     api_check(tag < TYPE__COUNT, "not primitive type tag: %d", tag);
 
     GType* t = g_type(env, tag);
-    v_set_obj(env, api_incr_stack(env), t);
+    v_set_type(env, api_incr_stack(env), t);
 }
 
 void alo_pushroute(a_henv env) {
-	v_set_obj(env, api_incr_stack(env), env);
+	v_set_route(env, api_incr_stack(env), env);
 }
 
 void alo_copy(a_henv env, a_ilen id_src, a_ilen id_dst) {
@@ -451,13 +451,13 @@ void alo_newtuple(a_henv env, a_ulen n) {
 	api_check_elem(env, n);
 	GTuple* val = ai_tuple_new(env, env->stack.top - n, n);
 	env->stack.top -= n;
-	v_set_obj(env, api_incr_stack(env), val);
+	v_set_tuple(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 }
 
 void alo_newlist(a_henv env, a_ulen n) {
 	GList* val = ai_list_new(env);
-	v_set_obj(env, api_incr_stack(env), val);
+	v_set_list(env, api_incr_stack(env), val);
     if (n > 0) {
         ai_list_grow(env, val, n);
     }
@@ -466,7 +466,7 @@ void alo_newlist(a_henv env, a_ulen n) {
 
 void alo_newtable(a_henv env, a_ulen n) {
 	GTable* val = ai_table_new(env);
-	v_set_obj(env, api_incr_stack(env), val);
+	v_set_table(env, api_incr_stack(env), val);
 	if (n > 0) {
         ai_table_grow(env, val, n);
     }
@@ -477,20 +477,20 @@ void alo_newcfun(a_henv env, a_cfun f, a_ulen n) {
 	api_check_elem(env, n);
 	GFun* val = ai_cfun_create(env, f, n, env->stack.top - n);
 	env->stack.top -= n;
-	v_set_obj(env, api_incr_stack(env), val);
+	v_set_func(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 }
 
 a_henv alo_newroute(a_henv env, a_usize ss) {
 	GRoute* val = ai_env_new(env, ss);
-	v_set_obj(env, api_incr_stack(env), val);
+	v_set_route(env, api_incr_stack(env), val);
 	ai_gc_trigger(env);
 	return val;
 }
 
 void* alo_newmod(a_henv env, a_usize es) {
     GMod* val = ai_mod_new(env, es);
-    v_set_obj(env, api_incr_stack(env), val);
+    v_set_mod(env, api_incr_stack(env), val);
     ai_gc_trigger(env);
     return val->extra;
 }
@@ -866,9 +866,9 @@ void* alo_toptr(a_henv env, a_ilen id) {
         case T_PTR: {
             return v_as_ptr(v);
         }
-        case T_MOD: {
-            GMod* mod = v_as_mod(v);
-            return mod->extra;
+        case T_META: {
+            GMod* o = v_as_meta(v);
+            return o->extra;
         }
         default: {
             api_panic("cannot cast to pointer");
@@ -886,7 +886,7 @@ a_henv alo_toroute(a_henv env, a_ilen id) {
 void alo_typeof(a_henv env, a_ilen id) {
     api_check_slot(env, 1);
     Value v = api_elem(env, id);
-    v_set_obj(env, api_incr_stack(env), v_typeof(env, v));
+    v_set_type(env, api_incr_stack(env), v_typeof(env, v));
 }
 
 void alo_newtype(a_henv env, char const* n, a_flags flags) {
@@ -898,7 +898,7 @@ void alo_newtype(a_henv env, char const* n, a_flags flags) {
     v_set_str(env, pv, name);
 
 	GType* self = ai_type_new(env, name);
-	v_set_obj(env, pv, self);
+	v_set_type(env, pv, self);
 
 	ai_gc_trigger(env);
 }
@@ -923,7 +923,7 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
 
 	a_msg msg = ai_parse(env, fun, ctx, file, name, options, &out);
 	if (likely(msg == ALO_SOK)) {
-		v_set_obj(env, api_incr_stack(env), out);
+		v_set_func(env, api_incr_stack(env), out);
 		if (out->ncap > 0) {
             RcCap* cap = ai_cap_new(env);
             out->ref_caps[0] = cap;

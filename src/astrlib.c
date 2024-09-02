@@ -126,7 +126,7 @@ static a_msg str_trim(a_henv env) {
         p += 1;
     }
 
-    v_set_obj(env, api_incr_stack(env), g_str(env, STR_EMPTY));
+    v_set_str(env, api_incr_stack(env), g_str(env, STR_EMPTY));
 
 backward:
     while (p < q) {

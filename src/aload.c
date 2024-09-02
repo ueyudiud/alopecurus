@@ -93,12 +93,12 @@ static void load_const(InCtx* ic, Value* v) {
         case LVTAG_LSTR: {
             a_u32 len = l_getvi(ic, a_u32) + LVLSTR_LEN_BIAS;
             GStr* val = l_gets(ic, len);
-            v_set_obj(ic->in.env, v, val);
+            v_set_str(ic->in.env, v, val);
             break;
         }
         default: { /* For short string */
             GStr* val = l_gets(ic, tag);
-            v_set_obj(ic->in.env, v, val);
+            v_set_str(ic->in.env, v, val);
             break;
         }
     }
@@ -190,7 +190,6 @@ static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
 }
 
 static VTable const load_vtable = {
-    .stencil = V_STENCIL(T_USER),
     .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
     .impl = {
         .mark = cast(void const*, load_mark),

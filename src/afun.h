@@ -135,11 +135,23 @@ struct LineInfo {
     a_u32 line;
 };
 
+#define g_is_func(o) g_is(o, ALO_TFUNC)
+
 #define v_is_func(v) v_is(v, T_FUNC)
 
 always_inline GFun* v_as_func(Value v) {
     assume(v_is_func(v), "not function.");
     return g_cast(GFun, v_as_obj(v));
+}
+
+always_inline Value v_of_func(GFun* o) {
+    assume(g_is_func(o), "invalid instance.");
+    return v_of_obj_(o, T_FUNC);
+}
+
+always_inline void v_set_func(a_henv env, Value* d, GFun* o) {
+    Value v = v_of_func(o);
+    v_set(env, d, v);
 }
 
 #endif /* afun_h_ */

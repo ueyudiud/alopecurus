@@ -79,8 +79,7 @@ static void buf_drop(Global* gbl, a_gptr raw_self) {
 }
 
 static VTable const buf_vtable = {
-	.stencil = V_STENCIL(T_USER),
-    .tag = ALO_TUSER,
+    .tag = ALO_TBUF,
     .flags = VTABLE_FLAG_GREEDY_MARK,
     .impl = {
         .drop = cast(void const*, buf_drop),

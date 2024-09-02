@@ -42,6 +42,8 @@ struct Value { a_u64 _; };
 
 static_assert(sizeof(Value) == 8);
 
+#define ALO_TBUF 14
+
 #define VALUE_TAG_SHIFT 47
 
 enum {
@@ -53,22 +55,22 @@ enum {
     T_TABLE = 5,
     T_FUNC = 6,
     T_STR = 7,
-    T_MOD = 8,
+    T_META = 8,
     T_TUPLE = 10,
-    T_USER = 11,
+    T_OTHER = 11,
     T_INT = 14,
     T_NAN = 15,
 
     T__MAX_FAST = T_NAN,
 
     T__MIN_OBJ = T_LIST,
-    T__MAX_OBJ = T_USER,
+    T__MAX_OBJ = T_OTHER,
     T__MIN_FLT = 16,
     T__MAX_FLT = UINT32_MAX,
     T__MIN_NEQ = T_TUPLE,
-    T__MAX_NEQ = T_USER,
+    T__MAX_NEQ = T_OTHER,
     T__MIN_NHH = T_TUPLE,
-    T__MAX_NHH = T_USER,
+    T__MAX_NHH = T_OTHER,
 };
 
 #define T_OBJ T__MIN_OBJ ... T__MAX_OBJ
@@ -327,17 +329,12 @@ struct GObj {
     GOBJ_STRUCT_HEADER;
 };
 
-#define VTABLE_METHOD_LIST(_) \
-	_( 0, drop  ,    void, Global* gbl                                      ) \
-	_( 1, mark  ,    void, Global* gbl                                      ) \
-	_( 2, close ,    void, a_henv env                                       ) \
-	_( 3, except,    void, a_henv env, a_msg msg                            )
-
 /* Method Table. */
 typedef struct {
-#define DEF(i,n,r,p1,pn...) r (*n)(p1, a_gptr, ##pn);
-    VTABLE_METHOD_LIST(DEF)
-#undef DEF
+    void (*drop)(Global* gbl, a_gptr self);
+    void (*mark)(Global* gbl, a_gptr self);
+    void (*close)(a_henv env, a_gptr self);
+    void (*except)(a_henv env, a_gptr self, a_msg msg);
 } ImplTable;
 
 /**
@@ -345,17 +342,13 @@ typedef struct {
  ** Primitive types do not have virtual table.
  */
 struct VTable {
-    /* The stencil for value representation. */
-    a_u64 stencil;
     /* The API tag of object. */
     a_u32 tag;
     /* The flags for virtual table. */
     a_u32 flags;
-    /* The metadata used to describe virtual table. */
-    void const* meta;
     /* The handle of type object (optional). */
     a_usize type_ref;
-    /* The implement table. */
+    /* The implement method table. */
     ImplTable impl;
 };
 
@@ -365,10 +358,12 @@ struct VTable {
 
 #define vtable_has_flag(vt,f) (((vt)->flags & (f)) != 0)
 
-#define g_impl(p) (&(p)->vptr->impl)
+#define g_is(o,t) ((o)->vptr->tag == (t))
 
-#define g_fetch(p,f) ({ \
-	auto _f2 = g_impl(p)->f; \
+#define g_impl(o) (&(o)->vptr->impl)
+
+#define g_fetch(o,f) ({ \
+	auto _f2 = g_impl(o)->f; \
 	assume(_f2 != null, "method '"#f"' is null."); \
 	_f2;                    \
 })
@@ -390,16 +385,18 @@ always_inline a_gptr v_as_obj(Value v) {
     return int2ptr(GObj, v_get_payload(v));
 }
 
-always_inline Value v_of_obj(a_gptr o) {
-    return v_new(o->vptr->stencil | ptr2int(o));
+always_inline Value v_of_obj_(a_gptr o, a_enum t) {
+    return v_new(V_STENCIL(t) | ptr2int(o));
 }
 
-#define v_of_obj(o) v_of_obj(gobj_cast(o))
+#define v_of_obj_(o,t) v_of_obj_(gobj_cast(o), t)
+
+#define v_of_obj(o) v_of_obj_(o, T_OTHER)
 
 always_inline void v_set_obj(a_henv env, Value* d, a_gptr o) {
     v_set(env, d, v_of_obj(o));
 }
 
-#define v_set_obj(env,d,v) v_set_obj(env, d, gobj_cast(v))
+#define v_set_obj(env,d,o) v_set_obj(env, d, gobj_cast(o))
 
 #endif /* aobj_h_ */

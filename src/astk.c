@@ -119,7 +119,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 a_noret ai_stk_overflow(a_henv env, a_isize diff) {
 	if (diff & STACK_GROW_OVERFLOW) {
 		GStr* err = ai_str_from_ntstr(env, "stack overflow");
-		v_set_obj(env, &env->error, err);
+		v_set_str(env, &env->error, err);
 		ai_env_raise(env, ALO_ESTKOF);
 	}
 	else {

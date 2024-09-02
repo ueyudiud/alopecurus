@@ -29,11 +29,23 @@ struct GList {
     Value* ptr;
 };
 
+#define g_is_list(o) g_is(o, ALO_TLIST)
+
 #define v_is_list(v) v_is(v, T_LIST)
 
 always_inline GList* v_as_list(Value v) {
     assume(v_is_list(v), "not list.");
     return g_cast(GList, v_as_obj(v));
+}
+
+always_inline Value v_of_list(GList* o) {
+    assume(g_is_list(o), "invalid instance.");
+    return v_of_obj_(o, T_LIST);
+}
+
+always_inline void v_set_list(a_henv env, Value* d, GList* o) {
+    Value v = v_of_list(o);
+    v_set(env, d, v);
 }
 
 #define list_size() sizeof(GList)

@@ -103,7 +103,6 @@ static void tuple_mark(Global* gbl, GTuple* self) {
 }
 
 static VTable const tuple_vtable = {
-    .stencil = V_STENCIL(T_TUPLE),
     .tag = ALO_TTUPLE,
     .flags = VTABLE_FLAG_NONE,
     .type_ref = g_type_ref(ALO_TTUPLE),

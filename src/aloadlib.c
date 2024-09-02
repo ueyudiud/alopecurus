@@ -192,7 +192,6 @@ static GLib* lib_cast(Value v) {
 }
 
 static VTable const lib_vtable = {
-    .stencil = V_STENCIL(T_USER),
     .tag = ALO_TUSER,
     .flags = VTABLE_FLAG_GREEDY_MARK,
     .impl = {
@@ -213,7 +212,7 @@ static VTable const lib_vtable = {
 #define CAPTURED_SELF_INDEX ALO_STACK_INDEX_CAPTURE(0)
 
 static GMod* check_self(a_henv env, a_ilen id) {
-    return v_as_mod(api_elem(env, id));
+    return v_as_meta(api_elem(env, id));
 }
 
 /*=========================================================*
@@ -373,7 +372,7 @@ static GTable* check_cache(a_henv env, GMod* self) {
     if (v_is_nil(*pv)) {
         cache = ai_table_new(env);
 
-        v_set_obj(env, pv, cache);
+        v_set_table(env, pv, cache);
         ai_gc_barrier_forward(env, self, cache);
     }
     else if (!v_is_table(*pv)) {

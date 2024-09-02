@@ -22,11 +22,23 @@ struct GTuple {
     Value ptr[0];
 };
 
+#define g_is_tuple(o) g_is(o, ALO_TTUPLE)
+
 #define v_is_tuple(v) v_is(v, T_TUPLE)
 
 always_inline GTuple* v_as_tuple(Value v) {
     assume(v_is_tuple(v), "not tuple.");
     return g_cast(GTuple, v_as_obj(v));
+}
+
+always_inline Value v_of_tuple(GTuple* o) {
+    assume(g_is_tuple(o), "invalid instance.");
+    return v_of_obj_(o, T_TUPLE);
+}
+
+always_inline void v_set_tuple(a_henv env, Value* d, GTuple* o) {
+    Value v = v_of_tuple(o);
+    v_set(env, d, v);
 }
 
 #define tuple_size(l) (sizeof(GTuple) + sizeof(Value) * (l))

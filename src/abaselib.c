@@ -136,11 +136,11 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			aloi_show("<func:%p>", v_as_obj(v));
 			break;
 		}
-        case T_MOD: {
+        case T_META: {
             aloi_show("<mod:%p>", v_as_obj(v));
             break;
         }
-		case T_USER: {
+		case T_OTHER: {
 			aloi_show("<%s:%p>", v_nameof(env, v), v_as_obj(v));
 			break;
 		}
@@ -194,7 +194,7 @@ static a_msg base_assert(a_henv env) {
 static a_msg base_typeof(a_henv env) {
 	Value v = api_elem(env, 0);
 	alo_settop(env, 1);
-	v_set_obj(env, api_wrslot(env, 0), v_typeof(env, v));
+	v_set_type(env, api_wrslot(env, 0), v_typeof(env, v));
 	return 1;
 }
 

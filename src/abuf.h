@@ -30,6 +30,27 @@ struct GBuf {
 #define buf_elem_size(b) sizeof((b)->ptr[0])
 #define buf_max_len(b) (SIZE_MAX / buf_elem_size(b))
 
+#define g_is_buf(o) g_is(o, ALO_TBUF)
+
+always_inline a_bool v_is_buf(Value v) {
+    return v_is(v, T_OTHER) && g_is_buf(v_as_obj(v));
+}
+
+always_inline GBuf* v_as_buf(Value v) {
+    assume(v_is_buf(v), "not buffer.");
+    return g_cast(GBuf, v_as_obj(v));
+}
+
+always_inline Value v_of_buf(GBuf* o) {
+    assume(g_is_buf(o), "invalid instance.");
+    return v_of_obj_(o, T_OTHER);
+}
+
+always_inline void v_set_buf(a_henv env, Value* d, GBuf* o) {
+    Value v = v_of_buf(o);
+    v_set(env, d, v);
+}
+
 intern a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...);
 intern a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg);
 intern GBuf* ai_buf_new(a_henv env);

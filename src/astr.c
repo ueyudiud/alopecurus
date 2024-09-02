@@ -321,7 +321,6 @@ void ai_str_clean(Global* gbl) {
 }
 
 static VTable const str_vtable = {
-    .stencil = V_STENCIL(T_STR),
     .tag = ALO_TSTR,
     .flags = VTABLE_FLAG_GREEDY_MARK,
     .type_ref = g_type_ref(ALO_TSTR),

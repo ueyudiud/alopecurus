@@ -417,7 +417,7 @@ static void cfun_mark(Global* gbl, GFun* self) {
 }
 
 static void fun_except(a_henv env, GFun* self, unused a_msg msg) {
-    Value* bot = vm_push_args(env, v_of_obj(self), env->error);
+    Value* bot = vm_push_args(env, v_of_func(self), env->error);
     v_set_nil(&env->error);
     Value err = ai_vm_call_meta(env, bot);
     v_set(env, &env->error, err);
@@ -433,7 +433,6 @@ void ai_proto_drop(Global* gbl, GProto* self) {
 }
 
 static VTable const afun_vtable = {
-	.stencil = V_STENCIL(T_FUNC),
     .tag = ALO_TFUNC,
     .type_ref = g_type_ref(ALO_TFUNC),
 	.impl = {
@@ -444,7 +443,6 @@ static VTable const afun_vtable = {
 };
 
 static VTable const uniq_afun_vtable = {
-	.stencil = V_STENCIL(T_FUNC),
     .tag = ALO_TFUNC,
     .type_ref = g_type_ref(ALO_TFUNC),
 	.impl = {
@@ -455,7 +453,6 @@ static VTable const uniq_afun_vtable = {
 };
 
 static VTable const cfun_vtable = {
-	.stencil = V_STENCIL(T_FUNC),
     .tag = ALO_TFUNC,
     .type_ref = g_type_ref(ALO_TFUNC),
 	.impl = {
@@ -466,7 +463,6 @@ static VTable const cfun_vtable = {
 };
 
 static VTable const proto_vtable = {
-	.stencil = V_STENCIL(T_USER),
 	.impl = {
         .drop = cast(void const*, proto_drop),
         .mark = cast(void const*, proto_mark)

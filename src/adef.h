@@ -129,7 +129,7 @@ typedef void (*a_pfun)(a_henv, void*);
 #define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
 #define ref_of(t,a) (*int2ptr(t, a))
 #define ptr_disp(t,p,d) int2ptr(t, ptr2int(p) + (d))
-#define from_member(t,f,v) ({ auto _v = v; quiet(_v == &((t*) 0)->f); int2ptr(t, ptr2int(_v) - offsetof(t, f)); })
+#define from_member(t,f,v) int2ptr(t, ptr2int(v) - offsetof(t, f))
 #define fallthrough __attribute__((__fallthrough__))
 
 always_inline a_usize ptr2int(void const* p) {
@@ -182,7 +182,7 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 # define panic(...) unreachable()
 #endif
 
-#define assume(e,m...) quiet(!!(e) || (panic(m), false))
+#define assume(e,m...) quiet((e) || (panic(m), false))
 
 /**
  ** Fill memory with zero bits.

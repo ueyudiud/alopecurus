@@ -39,7 +39,7 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
                 GTuple* init_val = v_as_tuple(v);
 
                 GList* out = ai_list_new(env);
-                v_set_obj(env, api_incr_stack(env), out);
+                v_set_list(env, api_incr_stack(env), out);
                 ai_list_push_all(env, out, init_val->ptr, init_val->len);
 
                 ai_gc_trigger(env);
@@ -49,7 +49,7 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
                 GList* init_val = v_as_list(v);
 
                 GList* out = ai_list_new(env);
-                v_set_obj(env, api_incr_stack(env), out);
+                v_set_list(env, api_incr_stack(env), out);
                 ai_list_push_all(env, out, init_val->ptr, init_val->len);
 
                 ai_gc_trigger(env);
@@ -114,7 +114,7 @@ static a_msg list_mkstr(a_henv env) {
     }
 
     GBuf* buf = ai_buf_new(env);
-    v_set_obj(env, api_incr_stack(env), buf);
+    v_set_buf(env, api_incr_stack(env), buf);
 
     at_buf_putls(env, buf, pre.ptr, pre.len);
     for (a_ulen i = 0; i < self->len; ++i) {

@@ -140,17 +140,25 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
 #define g_type(env,f) (G(env)->fast_types[f])
 #define g_type_ref(f) offsetof(Global, fast_types[f])
 
-always_inline a_bool g_is_route(a_gptr p) {
-    return p->vptr->tag == ALO_TROUTE;
-}
+#define g_is_route(o) g_is(o, ALO_TROUTE)
 
 always_inline a_bool v_is_route(Value v) {
-    return v_is(v, T_USER) && g_is_route(v_as_obj(v));
+    return v_is(v, T_OTHER) && g_is_route(v_as_obj(v));
 }
 
 always_inline GRoute* v_as_route(Value v) {
     assume(v_is_route(v), "not route");
     return g_cast(GRoute, v_as_obj(v));
+}
+
+always_inline Value v_of_route(GRoute* o) {
+    assume(g_is_route(o), "invalid instance.");
+    return v_of_obj_(o, T_OTHER);
+}
+
+always_inline void v_set_route(a_henv env, Value* d, GRoute* o) {
+    Value v = v_of_route(o);
+    v_set(env, d, v);
 }
 
 #define route_size() sizeof(GRoute)
@@ -316,8 +324,7 @@ always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o
 always_inline void v_check_alive(a_henv env, Value v) {
     if (v_is_obj(v)) {
         a_gptr p = v_as_obj(v);
-        a_u64 stencil = v._ ^ p->vptr->stencil;
-        assume((stencil & V_TAG_MASK) == 0 && g_has_valid_color(G(env), p));
+        assume(g_has_valid_color(G(env), p));
     }
 }
 
