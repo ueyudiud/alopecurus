@@ -39,7 +39,7 @@ afmt.o: afmt.c afmt.h abuf.h amem.h aobj.h adef.h acfg.h aarch.h alo.h \
 afun.o: afun.c abc.h adef.h acfg.h aarch.h alo.h aauxlib.h aenv.h actx.h \
  actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h astrs.h aop.h asym/tm.h \
  asym/kw.h asym/pt.h asym/op.h aobj.h aio.h atype.h atable.h amod.h \
- astk.h amem.h agc.h afun.h
+ astk.h amem.h agc.h avm.h afun.h
 agc.o: agc.c aenv.h actx.h aarch.h adef.h acfg.h alo.h aauxlib.h \
  actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h astrs.h aop.h asym/tm.h \
  asym/kw.h asym/pt.h asym/op.h aobj.h aio.h atype.h atable.h amod.h \
@@ -49,6 +49,7 @@ aintlib.o: aintlib.c aapi.h aenv.h actx.h aarch.h adef.h acfg.h alo.h \
  asym/tm.h asym/kw.h asym/pt.h asym/op.h aobj.h aio.h atype.h atable.h \
  amod.h astk.h alolib.h
 aio.o: aio.c aio.h adef.h acfg.h aarch.h alo.h aauxlib.h
+aiolib.o: aiolib.c aarch.h aobj.h adef.h acfg.h alo.h aauxlib.h alolib.h
 alex.o: alex.c aenv.h actx.h aarch.h adef.h acfg.h alo.h aauxlib.h \
  actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h astrs.h aop.h asym/tm.h \
  asym/kw.h asym/pt.h asym/op.h aobj.h aio.h atype.h atable.h amod.h \
@@ -65,7 +66,7 @@ alo.o: alo.c adef.h acfg.h aarch.h alo.h aauxlib.h alolib.h abaselib.h
 aload.o: aload.c aio.h adef.h acfg.h aarch.h alo.h aauxlib.h astr.h \
  astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h aobj.h aenv.h \
  actx.h actx/x64.w64.win.h actx/x64.sysv.posix.h atype.h atable.h amod.h \
- astk.h amem.h agc.h aload.h afun.h
+ astk.h amem.h agc.h aerr.h aload.h afun.h
 aloadlib.o: aloadlib.c aarch.h alist.h aobj.h adef.h acfg.h alo.h \
  aauxlib.h atable.h amem.h agc.h aenv.h actx.h actx/x64.w64.win.h \
  actx/x64.sysv.posix.h astr.h astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h \
@@ -97,7 +98,7 @@ astk.o: astk.c aenv.h actx.h aarch.h adef.h acfg.h alo.h aauxlib.h \
 astr.o: astr.c aop.h adef.h acfg.h aarch.h alo.h aauxlib.h asym/tm.h \
  aenv.h actx.h actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h astrs.h \
  asym/kw.h asym/pt.h asym/op.h aobj.h aio.h atype.h atable.h amod.h \
- astk.h amem.h agc.h
+ astk.h amem.h agc.h aerr.h
 astrlib.o: astrlib.c abuf.h amem.h aobj.h adef.h acfg.h aarch.h alo.h \
  aauxlib.h astr.h astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h \
  aio.h aapi.h aenv.h actx.h actx/x64.w64.win.h actx/x64.sysv.posix.h \

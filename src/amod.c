@@ -276,8 +276,8 @@ static VTable const mod_vtable = {
     .type_ref = g_type_ref(ALO_TMOD),
     .tag = ALO_TMOD,
     .flags = VTABLE_FLAG_NONE,
-    .slots = {
-        [vfp_slot(drop)] = mod_drop,
-        [vfp_slot(mark)] = mod_mark
+    .impl = {
+        .drop = cast(void const*, mod_drop),
+        .mark = cast(void const*, mod_mark)
     }
 };

@@ -80,8 +80,8 @@ static VTable const type_vtable = {
 	.stencil = V_STENCIL(T_MOD),
     .tag = ALO_TTYPE,
     .type_ref = g_type_ref(ALO_TTYPE),
-	.slots = {
-        [vfp_slot(drop)] = type_drop,
-        [vfp_slot(mark)] = type_mark
+	.impl = {
+        .drop = cast(void const*, type_drop),
+        .mark = cast(void const*, type_mark)
 	}
 };

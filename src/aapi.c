@@ -488,8 +488,8 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 	return val;
 }
 
-void* alo_newmod(a_henv env, a_usize s) {
-    GMod* val = ai_mod_new(env, s);
+void* alo_newmod(a_henv env, a_usize es) {
+    GMod* val = ai_mod_new(env, es);
     v_set_obj(env, api_incr_stack(env), val);
     ai_gc_trigger(env);
     return val->extra;
@@ -731,10 +731,10 @@ void alo_call(a_henv env, a_ulen narg, a_ilen nres) {
 typedef struct {
 	a_u32 narg;
 	a_i32 nres;
-} PCallCtx;
+} PCall;
 
 static void l_pcall(a_henv env, void* rctx) {
-	PCallCtx* ctx = cast(PCallCtx*, rctx);
+	PCall* ctx = cast(PCall*, rctx);
 	l_call(env, ctx->narg, ctx->nres);
 }
 
@@ -756,7 +756,7 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
 	api_check(nres < 256, "result count overflow");
     api_check_elem(env, narg + 1);
 
-    PCallCtx ctx = {
+    PCall ctx = {
 		.narg = narg,
 		.nres = cast(a_i32, nres)
 	};
@@ -842,10 +842,10 @@ a_float alo_tofloat(a_henv env, a_ilen id) {
  ** Convert value into string value.
  ** The slot will be replaced by converted string value.
  **
- * @param env the runtime environment.
- * @param id the index of slot to convert.
- * @param plen the optional pointer to get length of string.
- * @return the pointer of string.
+ *@param env the runtime environment.
+ *@param id the index of slot to convert.
+ *@param plen the optional pointer to get length of string.
+ *@return the pointer of string.
  */
 char const* alo_tolstr(a_henv env, a_ilen id, a_usize* plen) {
 	Value v = api_elem(env, id);

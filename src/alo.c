@@ -218,7 +218,7 @@ again:
         &ctx,
         ALO_STACK_INDEX_GLOBAL,
         0,
-        1,
+        "stdin",
         ALO_COMP_OPT_LOSSEN | (*peval ? ALO_COMP_OPT_EVAL : 0));
 
 	switch (msg) {
@@ -246,7 +246,6 @@ again:
 
 static a_msg l_comp_reps(a_henv env, a_bool* peval) {
     alo_pushntstr(env, "__main__");
-    alo_pushntstr(env, "stdin");
 
 	try (l_try_comp_reps(env, "> ", peval));
 	loop try (l_try_comp_reps(env, ">> ", peval));

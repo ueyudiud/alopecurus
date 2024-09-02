@@ -491,9 +491,9 @@ static void block_mark(Global* gbl, GBlock* self) {
 static VTable const block_vtable = {
     .stencil = V_STENCIL(T_USER),
     .tag = ALO_TUSER,
-    .slots = {
-        [vfp_slot(drop)] = block_drop,
-        [vfp_slot(mark)] = block_mark
+    .impl = {
+        .drop = cast(void const*, block_drop),
+        .mark = cast(void const*, block_mark)
     }
 };
 

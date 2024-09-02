@@ -325,9 +325,9 @@ static VTable const str_vtable = {
     .tag = ALO_TSTR,
     .flags = VTABLE_FLAG_GREEDY_MARK,
     .type_ref = g_type_ref(ALO_TSTR),
-    .slots = {
-        [vfp_slot(drop)] = str_drop,
-        [vfp_slot(mark)] = str_mark
+    .impl = {
+        .drop = cast(void const*, str_drop),
+        .mark = cast(void const*, str_mark)
     }
 };
 

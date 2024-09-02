@@ -5516,9 +5516,9 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 static VTable const parser_vtable = {
     .stencil = V_STENCIL(T_USER),
     .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
-    .slots = {
-        [vfp_slot(mark)] = parser_mark,
-        [vfp_slot(except)] = parser_except
+    .impl = {
+        .mark = cast(void const*, parser_mark),
+        .except = cast(void const*, parser_except)
     }
 };
 

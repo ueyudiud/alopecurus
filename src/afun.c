@@ -436,10 +436,10 @@ static VTable const afun_vtable = {
 	.stencil = V_STENCIL(T_FUNC),
     .tag = ALO_TFUNC,
     .type_ref = g_type_ref(ALO_TFUNC),
-	.slots = {
-        [vfp_slot(drop)] = afun_drop,
-        [vfp_slot(mark)] = afun_mark,
-        [vfp_slot(except)] = fun_except
+	.impl = {
+        .drop = cast(void const*, afun_drop),
+        .mark = cast(void const*, afun_mark),
+        .except = cast(void const*, fun_except)
 	}
 };
 
@@ -447,10 +447,10 @@ static VTable const uniq_afun_vtable = {
 	.stencil = V_STENCIL(T_FUNC),
     .tag = ALO_TFUNC,
     .type_ref = g_type_ref(ALO_TFUNC),
-	.slots = {
-        [vfp_slot(drop)] = uniq_afun_drop,
-        [vfp_slot(mark)] = uniq_afun_mark,
-        [vfp_slot(except)] = fun_except
+	.impl = {
+        .drop = cast(void const*, uniq_afun_drop),
+        .mark = cast(void const*, uniq_afun_mark),
+        .except = cast(void const*, fun_except)
 	}
 };
 
@@ -458,17 +458,17 @@ static VTable const cfun_vtable = {
 	.stencil = V_STENCIL(T_FUNC),
     .tag = ALO_TFUNC,
     .type_ref = g_type_ref(ALO_TFUNC),
-	.slots = {
-        [vfp_slot(drop)] = cfun_drop,
-        [vfp_slot(mark)] = cfun_mark,
-        [vfp_slot(except)] = fun_except
+	.impl = {
+        .drop = cast(void const*, cfun_drop),
+        .mark = cast(void const*, cfun_mark),
+        .except = cast(void const*, fun_except)
 	}
 };
 
 static VTable const proto_vtable = {
 	.stencil = V_STENCIL(T_USER),
-	.slots = {
-        [vfp_slot(drop)] = proto_drop,
-        [vfp_slot(mark)] = proto_mark
+	.impl = {
+        .drop = cast(void const*, proto_drop),
+        .mark = cast(void const*, proto_mark)
 	}
 };

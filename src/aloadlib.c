@@ -195,9 +195,9 @@ static VTable const lib_vtable = {
     .stencil = V_STENCIL(T_USER),
     .tag = ALO_TUSER,
     .flags = VTABLE_FLAG_GREEDY_MARK,
-    .slots = {
-        [vfp_slot(drop)] = lib_drop,
-        [vfp_slot(mark)] = lib_mark
+    .impl = {
+        .drop = cast(void const*, lib_drop),
+        .mark = cast(void const*, lib_mark)
     }
 };
 

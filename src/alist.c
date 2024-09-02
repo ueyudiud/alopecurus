@@ -154,8 +154,8 @@ static VTable const list_vtable = {
 	.stencil = V_STENCIL(T_LIST),
     .tag = ALO_TLIST,
     .type_ref = g_type_ref(ALO_TLIST),
-	.slots = {
-        [vfp_slot(drop)] = list_drop,
-        [vfp_slot(mark)] = list_mark
+	.impl = {
+        .drop = cast(void const*, list_drop),
+        .mark = cast(void const*, list_mark)
 	}
 };

@@ -9,7 +9,7 @@
 #include "aobj.h"
 #include "aio.h"
 
-typedef a_msg (*a_sbfun)(void*, void*, a_usize);
+typedef a_msg (*a_sbfun)(void* ctx, void* dst, a_usize len);
 
 intern a_hash ai_str_hashof(a_henv env, char const* src, a_usize len);
 intern GStr* ai_str_get_or_null_with_hash(a_henv env, char const* src, a_usize len, a_hash hash);

@@ -117,9 +117,9 @@ static VTable const route_vtable = {
     .tag = ALO_TROUTE,
 	.flags = VTABLE_FLAG_NONE,
     .type_ref = g_type_ref(ALO_TROUTE),
-	.slots = {
-        [vfp_slot(drop)] = route_drop,
-        [vfp_slot(mark)] = route_mark
+	.impl = {
+        .drop = cast(void const*, route_drop),
+        .mark = cast(void const*, route_mark)
 	}
 };
 

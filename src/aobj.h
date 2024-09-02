@@ -319,7 +319,7 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
  * Object
  *=========================================================*/
 
-struct ObjHead { a_u64 _align; };
+struct ObjHead { a_u64 _; };
 
 #define GOBJ_STRUCT_HEADER struct ObjHead _obj_head_mark[0]; a_gcnext gnext; VTable const* vptr; a_trmark tnext
 
@@ -334,13 +334,11 @@ struct GObj {
 	_( 3, except,    void, a_henv env, a_msg msg                            )
 
 /* Method Table. */
-typedef union {
-#define DEF(i,n,r,p1,pn...) struct { void* M_cat(_off_,n)[i]; r (*n)(p1, a_gptr, ##pn);  };
+typedef struct {
+#define DEF(i,n,r,p1,pn...) r (*n)(p1, a_gptr, ##pn);
     VTABLE_METHOD_LIST(DEF)
 #undef DEF
 } ImplTable;
-
-#define vfp_slot(n) (offsetof(ImplTable, n) / sizeof(void*))
 
 /**
  ** The virtual table for type, used for fast dispatch.
@@ -349,18 +347,16 @@ typedef union {
 struct VTable {
     /* The stencil for value representation. */
     a_u64 stencil;
-    /* The type variant index. */
-    a_u32 vid;
     /* The API tag of object. */
-    a_u16 tag;
+    a_u32 tag;
     /* The flags for virtual table. */
-    a_u16 flags;
+    a_u32 flags;
     /* The metadata used to describe virtual table. */
     void const* meta;
     /* The handle of type object (optional). */
     a_usize type_ref;
-    /* The virtual slots. */
-    void* slots[];
+    /* The implement table. */
+    ImplTable impl;
 };
 
 #define VTABLE_FLAG_NONE        u8c(0x00)
@@ -369,7 +365,7 @@ struct VTable {
 
 #define vtable_has_flag(vt,f) (((vt)->flags & (f)) != 0)
 
-#define g_impl(p) cast(ImplTable*, (p)->vptr->slots)
+#define g_impl(p) (&(p)->vptr->impl)
 
 #define g_fetch(p,f) ({ \
 	auto _f2 = g_impl(p)->f; \

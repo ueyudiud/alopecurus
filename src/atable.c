@@ -506,8 +506,8 @@ static VTable const table_vtable = {
     .tag = ALO_TTABLE,
 	.type_ref = g_type_ref(ALO_TTABLE),
     .flags = VTABLE_FLAG_NONE,
-	.slots = {
-        [vfp_slot(drop)] = table_drop,
-        [vfp_slot(mark)] = table_mark
+	.impl = {
+        .drop = cast(void const*, table_drop),
+        .mark = cast(void const*, table_mark)
 	}
 };

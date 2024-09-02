@@ -198,6 +198,9 @@ Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op) {
 
 a_bool ai_vm_compare(a_henv env, Value v1, Value v2, a_enum op) {
     switch (op) {
+        case OP_EQ: {
+            return ai_vm_equals(env, v1, v2);
+        }
         case OP_LT: {
             if (v_is_int(v1) && v_is_int(v1)) {
                 return ai_op_cmp_int(v_as_int(v1), v_as_int(v2), OP_LT);

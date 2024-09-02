@@ -107,8 +107,8 @@ static VTable const tuple_vtable = {
     .tag = ALO_TTUPLE,
     .flags = VTABLE_FLAG_NONE,
     .type_ref = g_type_ref(ALO_TTUPLE),
-    .slots = {
-        [vfp_slot(drop)] = tuple_drop,
-        [vfp_slot(mark)] = tuple_mark
+    .impl = {
+        .drop = cast(void const*, tuple_drop),
+        .mark = cast(void const*, tuple_mark)
     }
 };

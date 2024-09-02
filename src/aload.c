@@ -192,9 +192,9 @@ static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
 static VTable const load_vtable = {
     .stencil = V_STENCIL(T_USER),
     .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
-    .slots = {
-        [vfp_slot(mark)] = load_mark,
-        [vfp_slot(except)] = load_except
+    .impl = {
+        .mark = cast(void const*, load_mark),
+        .except = cast(void const*, load_except)
     }
 };
 

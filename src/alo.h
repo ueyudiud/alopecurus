@@ -192,7 +192,7 @@ ALO_EXPORT void (alo_newlist)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newtable)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_ulen n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
-ALO_EXPORT void* (alo_newmod)(a_henv env, a_usize s);
+ALO_EXPORT void* (alo_newmod)(a_henv env, a_usize es);
 
 #define ALO_NEWTYPE_FLAG_STATIC 0x0001
 

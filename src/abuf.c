@@ -82,8 +82,8 @@ static VTable const buf_vtable = {
 	.stencil = V_STENCIL(T_USER),
     .tag = ALO_TUSER,
     .flags = VTABLE_FLAG_GREEDY_MARK,
-	.slots = {
-        [vfp_slot(drop)] = buf_drop,
-        [vfp_slot(mark)] = buf_mark
-	}
+    .impl = {
+        .drop = cast(void const*, buf_drop),
+        .mark = cast(void const*, buf_mark)
+    }
 };
