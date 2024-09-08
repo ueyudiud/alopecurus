@@ -21,7 +21,7 @@ always_inline void rq_push(RefQueue* rq, a_gptr p) {
 	rq->tail = &p->gnext;
 }
 
-#define rq_push(rq,o) rq_push(rq, gobj_cast(o))
+#define rq_push(rq,o) rq_push(rq, g_as_obj(o))
 
 #define rq_for(v,rq) for ( \
 	a_gptr *_p_##v = &(rq)->head, v; \
@@ -34,32 +34,32 @@ always_inline void g_set_stack_white(a_gptr o) {
     o->tnext = WHITE_COLOR;
 }
 
-#define g_set_stack_white(o) g_set_stack_white(gobj_cast(o))
+#define g_set_stack_white(o) g_set_stack_white(g_as_obj(o))
 
 always_inline void g_set_white(Global* gbl, a_gptr o) {
     o->tnext = white_color(gbl);
 }
 
-#define g_set_white(gbl,o) g_set_white(gbl, gobj_cast(o))
+#define g_set_white(gbl,o) g_set_white(gbl, g_as_obj(o))
 
 always_inline void g_set_gray(a_gptr v) {
     v->tnext = GRAY_NULL;
 }
 
-#define g_set_gray(o) g_set_gray(gobj_cast(o))
+#define g_set_gray(o) g_set_gray(g_as_obj(o))
 
 always_inline void g_set_black(a_gptr o) {
     o->tnext = BLACK_COLOR;
 }
 
-#define g_set_black(o) g_set_black(gobj_cast(o))
+#define g_set_black(o) g_set_black(g_as_obj(o))
 
 always_inline void join_trace(a_trmark* list, a_gptr o) {
     o->tnext = *list;
 	*list = ptr2int(o);
 }
 
-#define join_trace(list,o) join_trace(list, gobj_cast(o))
+#define join_trace(list,o) join_trace(list, g_as_obj(o))
 
 always_inline a_gptr strip_trace(a_trmark* list) {
     a_gptr o = int2ptr(GObj, *list);
@@ -76,8 +76,8 @@ intern void ai_gc_incr_gc(a_henv env);
 intern void ai_gc_full_gc(a_henv env, a_bool emergency);
 intern void ai_gc_clean(Global* gbl);
 
-#define ai_gc_register_object(env,obj) ai_gc_register_object_(env, gobj_cast(obj))
-#define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, gobj_cast(obj))
+#define ai_gc_register_object(env,obj) ai_gc_register_object_(env, g_as_obj(obj))
+#define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, g_as_obj(obj))
 
 always_inline void ai_gc_trace_mark(Global* gbl, a_gptr obj) {
 	if (g_has_white_color_within_assume_alive(gbl, obj)) {
@@ -85,7 +85,7 @@ always_inline void ai_gc_trace_mark(Global* gbl, a_gptr obj) {
 	}
 }
 
-#define ai_gc_trace_mark(gbl,obj) ai_gc_trace_mark(gbl, gobj_cast(obj))
+#define ai_gc_trace_mark(gbl,obj) ai_gc_trace_mark(gbl, g_as_obj(obj))
 
 always_inline void ai_gc_trace_mark_val(Global* gbl, Value v) {
 	if (v_is_obj(v)) ai_gc_trace_mark(gbl, v_as_obj(v));
@@ -126,7 +126,7 @@ always_inline void ai_gc_barrier_forward(a_henv env, a_gptr obj1, a_gptr obj2) {
 	}
 }
 
-#define ai_gc_barrier_forward(env,obj1,obj2) ai_gc_barrier_forward(env, gobj_cast(obj1), gobj_cast(obj2))
+#define ai_gc_barrier_forward(env,obj1,obj2) ai_gc_barrier_forward(env, g_as_obj(obj1), g_as_obj(obj2))
 
 always_inline void ai_gc_barrier_forward_val(a_henv env, a_gptr obj, Value val) {
 	if (v_is_obj(val)) {
@@ -134,7 +134,7 @@ always_inline void ai_gc_barrier_forward_val(a_henv env, a_gptr obj, Value val) 
 	}
 }
 
-#define ai_gc_barrier_forward_val(env,obj,val) ai_gc_barrier_forward_val(env, gobj_cast(obj), val)
+#define ai_gc_barrier_forward_val(env,obj,val) ai_gc_barrier_forward_val(env, g_as_obj(obj), val)
 
 always_inline void ai_gc_barrier_backward(a_henv env, a_gptr obj1, a_gptr obj2) {
 	Global* gbl = G(env);
@@ -143,7 +143,7 @@ always_inline void ai_gc_barrier_backward(a_henv env, a_gptr obj1, a_gptr obj2) 
 	}
 }
 
-#define ai_gc_barrier_backward(env,obj1,obj2) ai_gc_barrier_backward(env, gobj_cast(obj1), gobj_cast(obj2))
+#define ai_gc_barrier_backward(env,obj1,obj2) ai_gc_barrier_backward(env, g_as_obj(obj1), g_as_obj(obj2))
 
 always_inline void ai_gc_barrier_backward_val(a_henv env, a_gptr obj, Value val) {
 	if (v_is_obj(val)) {
@@ -151,6 +151,6 @@ always_inline void ai_gc_barrier_backward_val(a_henv env, a_gptr obj, Value val)
 	}
 }
 
-#define ai_gc_barrier_backward_val(env,obj,val) ai_gc_barrier_backward_val(env, gobj_cast(obj), val)
+#define ai_gc_barrier_backward_val(env,obj,val) ai_gc_barrier_backward_val(env, g_as_obj(obj), val)
 
 #endif /* agc_h_ */

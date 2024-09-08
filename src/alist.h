@@ -35,7 +35,7 @@ struct GList {
 
 always_inline GList* v_as_list(Value v) {
     assume(v_is_list(v), "not list.");
-    return g_cast(GList, v_as_obj(v));
+    return g_as(GList, v_as_obj(v));
 }
 
 always_inline Value v_of_list(GList* o) {

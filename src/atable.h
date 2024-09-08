@@ -51,7 +51,7 @@ struct TNode {
 
 always_inline GTable* v_as_table(Value v) {
     assume(v_is_table(v), "not table.");
-    return g_cast(GTable, v_as_obj(v));
+    return g_as(GTable, v_as_obj(v));
 }
 
 always_inline Value v_of_table(GTable* o) {

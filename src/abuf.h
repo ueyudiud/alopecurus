@@ -38,7 +38,7 @@ always_inline a_bool v_is_buf(Value v) {
 
 always_inline GBuf* v_as_buf(Value v) {
     assume(v_is_buf(v), "not buffer.");
-    return g_cast(GBuf, v_as_obj(v));
+    return g_as(GBuf, v_as_obj(v));
 }
 
 always_inline Value v_of_buf(GBuf* o) {

@@ -39,7 +39,7 @@ always_inline GStr* v_as_str(Value v) {
     assume(v_is_str(v), "not string.");
     a_gptr p = v_as_obj(v);
     assume(g_is_str(p), "invalid instance.");
-    return g_cast(GStr, p);
+    return g_as(GStr, p);
 }
 
 always_inline Value v_of_str(GStr* o) {

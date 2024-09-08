@@ -28,7 +28,7 @@ struct GTuple {
 
 always_inline GTuple* v_as_tuple(Value v) {
     assume(v_is_tuple(v), "not tuple.");
-    return g_cast(GTuple, v_as_obj(v));
+    return g_as(GTuple, v_as_obj(v));
 }
 
 always_inline Value v_of_tuple(GTuple* o) {

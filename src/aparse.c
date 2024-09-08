@@ -3243,7 +3243,7 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 	assume(env == par->env);
 	/* Destroy queued prototypes. */
 	rq_for(obj, &par->rq) {
-        proto_drop_recursive(par->env, g_cast(GProto, obj));
+        proto_drop_recursive(par->env, g_as(GProto, obj));
 	}
 	for (FnScope* scope = par->fscope; scope != null; scope = scope->fupscope) {
 		at_buf_deinit(G(par->env), scope->caps);
@@ -3286,7 +3286,7 @@ static void proto_register_recursive(a_henv env, GProto* proto) {
 }
 
 static GFun* func_build(Parser* par) {
-	GProto* proto = g_cast(GProto, par->rq.head); /* Get root prototype. */
+	GProto* proto = g_as(GProto, par->rq.head); /* Get root prototype. */
     proto_register_recursive(par->env, proto);
 	parser_close(par);
 

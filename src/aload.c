@@ -173,7 +173,7 @@ static void load_chunk(unused a_henv env, void* ctx) {
 static void load_mark(Global* gbl, void* ctx) {
     InCtx* ic = ctx;
 	rq_for (obj, &ic->rq) {
-		GProto* meta = g_cast(GProto, obj);
+		GProto* meta = g_as(GProto, obj);
 		for (a_u32 i = 0; i < meta->nconst; ++i) {
 			ai_gc_trace_mark_val(gbl, meta->consts[i]);
 		}
@@ -184,7 +184,7 @@ static void load_mark(Global* gbl, void* ctx) {
 static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
     Global* gbl = G(env);
 	rq_for (obj, &ic->rq) {
-		GProto* meta = g_cast(GProto, obj);
+		GProto* meta = g_as(GProto, obj);
 		ai_mem_ndealloc(gbl, meta, meta->size);
 	}
 }
@@ -214,7 +214,7 @@ a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags)
     v_set_nil(--env->stack.top);
     
     if (likely(msg == ALO_SOK)) {
-        *pval = g_cast(GProto, ic.rq.head)->cache;
+        *pval = g_as(GProto, ic.rq.head)->cache;
     }
     return msg;
 }

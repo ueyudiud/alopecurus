@@ -64,7 +64,7 @@ always_inline a_bool v_is_mod(Value v) {
 
 always_inline GMod* v_as_meta(Value v) {
     assume(v_is_meta(v), "not meta.");
-    return g_cast(GMod, v_as_obj(v));
+    return g_as(GMod, v_as_obj(v));
 }
 
 always_inline Value v_of_mod(GMod* o) {

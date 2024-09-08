@@ -148,7 +148,7 @@ always_inline a_bool v_is_route(Value v) {
 
 always_inline GRoute* v_as_route(Value v) {
     assume(v_is_route(v), "not route");
-    return g_cast(GRoute, v_as_obj(v));
+    return g_as(GRoute, v_as_obj(v));
 }
 
 always_inline Value v_of_route(GRoute* o) {
@@ -170,13 +170,13 @@ always_inline GType* g_typeof(a_henv env, a_gptr p) {
            g_type(env, ALO_TPTR);
 }
 
-#define g_typeof(env,p) g_typeof(env, gobj_cast(p))
+#define g_typeof(env,p) g_typeof(env, g_as_obj(p))
 
 always_inline char const* g_nameof(a_henv env, a_gptr p) {
     return str2ntstr(g_typeof(env, p)->name);
 }
 
-#define g_nameof(env,p) g_nameof(env, gobj_cast(p))
+#define g_nameof(env,p) g_nameof(env, g_as_obj(p))
 
 always_inline GType* v_typeof(a_henv env, Value v) {
     switch (v_get_tag(v)) {
@@ -290,25 +290,25 @@ always_inline a_bool g_has_black_color(a_gptr o) {
     return (o->tnext & BLACK_COLOR) != 0;
 }
 
-#define g_has_black_color(o) g_has_black_color(gobj_cast(o))
+#define g_has_black_color(o) g_has_black_color(g_as_obj(o))
 
 always_inline a_bool g_has_gray_color(a_gptr o) {
     return (o->tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
 
-#define g_has_gray_color(o) g_has_gray_color(gobj_cast(o))
+#define g_has_gray_color(o) g_has_gray_color(g_as_obj(o))
 
 always_inline a_bool g_has_white_color(Global* gbl, a_gptr o) {
     return (o->tnext & white_color(gbl)) != 0;
 }
 
-#define g_has_white_color(gbl,o) g_has_white_color(gbl, gobj_cast(o))
+#define g_has_white_color(gbl,o) g_has_white_color(gbl, g_as_obj(o))
 
 always_inline a_bool g_has_other_color(Global* gbl, a_gptr o) {
     return (o->tnext & other_color(gbl)) != 0;
 }
 
-#define g_has_other_color(gbl,v) g_has_other_color(gbl, gobj_cast(v))
+#define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_obj(v))
 
 always_inline a_bool g_has_valid_color(Global* gbl, a_gptr o) {
     return !g_has_other_color(gbl, o) || vtable_has_flag(o->vptr, VTABLE_FLAG_STACK_ALLOC);
@@ -319,7 +319,7 @@ always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o
     return (o->tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
 
-#define g_has_white_color_within_assume_alive(gbl,o) g_has_white_color_within_assume_alive(gbl, gobj_cast(o))
+#define g_has_white_color_within_assume_alive(gbl,o) g_has_white_color_within_assume_alive(gbl, g_as_obj(o))
 
 always_inline void v_check_alive(a_henv env, Value v) {
     if (v_is_obj(v)) {

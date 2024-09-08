@@ -188,7 +188,7 @@ static GLib* lib_cast(Value v) {
     GObj* obj = v_as_obj(v);
     if (obj->vptr != &lib_vtable)
         return null;
-    return g_cast(GLib, obj);
+    return g_as(GLib, obj);
 }
 
 static VTable const lib_vtable = {

@@ -19,7 +19,7 @@ always_inline a_bool v_is_user(Value v) {
 
 always_inline GUser* v_as_user(Value v) {
     assume(v_is_user(v), "not userdata.");
-    return g_cast(GUser, v_as_obj(v));
+    return g_as(GUser, v_as_obj(v));
 }
 
 #endif /* auser_h_ */

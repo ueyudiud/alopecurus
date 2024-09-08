@@ -141,7 +141,7 @@ struct LineInfo {
 
 always_inline GFun* v_as_func(Value v) {
     assume(v_is_func(v), "not function.");
-    return g_cast(GFun, v_as_obj(v));
+    return g_as(GFun, v_as_obj(v));
 }
 
 always_inline Value v_of_func(GFun* o) {

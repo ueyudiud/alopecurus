@@ -368,8 +368,8 @@ struct VTable {
 	_f2;                    \
 })
 
-#define g_cast(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)
-#define gobj_cast(o) g_cast(GObj, o)
+#define g_as(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)
+#define g_as_obj(o) g_as(GObj, o)
 
 #define obj_idx(k,l,f) ({ \
     a_int _k = k; a_uint _l = l; \
@@ -389,7 +389,7 @@ always_inline Value v_of_obj_(a_gptr o, a_enum t) {
     return v_new(V_STENCIL(t) | ptr2int(o));
 }
 
-#define v_of_obj_(o,t) v_of_obj_(gobj_cast(o), t)
+#define v_of_obj_(o,t) v_of_obj_(g_as_obj(o), t)
 
 #define v_of_obj(o) v_of_obj_(o, T_OTHER)
 
@@ -397,6 +397,6 @@ always_inline void v_set_obj(a_henv env, Value* d, a_gptr o) {
     v_set(env, d, v_of_obj(o));
 }
 
-#define v_set_obj(env,d,o) v_set_obj(env, d, gobj_cast(o))
+#define v_set_obj(env,d,o) v_set_obj(env, d, g_as_obj(o))
 
 #endif /* aobj_h_ */

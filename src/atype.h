@@ -38,7 +38,7 @@ always_inline a_bool v_is_type(Value v) {
 
 always_inline GType* v_as_type(Value v) {
     assume(v_is_type(v), "not type.");
-    return g_cast(GType, v_as_obj(v));
+    return g_as(GType, v_as_obj(v));
 }
 
 always_inline Value v_of_type(GType* o) {

@@ -31,7 +31,7 @@ always_inline void join_gc(a_gclist* list, a_gptr elem) {
 	*list = elem;
 }
 
-#define join_gc(list,elem) join_gc(list, gobj_cast(elem))
+#define join_gc(list,elem) join_gc(list, g_as_obj(elem))
 
 always_inline a_gptr strip_gc(a_gclist* list) {
 	a_gptr elem = *list;
