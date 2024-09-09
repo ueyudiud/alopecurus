@@ -13,15 +13,29 @@ intern GType* ai_type_new(a_henv env, GStr* name);
 intern void ai_type_boost(a_henv env);
 intern void ai_type_clean(Global* gbl);
 
+#define GTYPE_STRUCT_HEADER \
+    GMETA_STRUCT_HEADER;    \
+    /* Type metadata (Optional). */ \
+    GStr* name
+
 /**
  ** Type.
  */
 struct GType {
-    GMETA_STRUCT_HEADER;
-    /* Type metadata (Optional). */
-    GStr* name;
-    Impl body[0];
+    GTYPE_STRUCT_HEADER;
 };
+
+typedef struct {
+    GTYPE_STRUCT_HEADER;
+    Impl body;
+} GIType;
+
+typedef struct {
+    GTYPE_STRUCT_HEADER;
+    Impl body;
+    a_u32 block_size;
+    a_u32 num_slot;
+} GUType;
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
 

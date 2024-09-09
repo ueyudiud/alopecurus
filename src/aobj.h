@@ -61,7 +61,7 @@ enum {
     T_INT = 14,
     T_NAN = 15,
 
-    T__MAX_FAST = T_NAN,
+    T__MAX = T_NAN,
 
     T__MIN_OBJ = T_LIST,
     T__MAX_OBJ = T_OTHER,
@@ -90,7 +90,7 @@ always_inline void v_check_alive(a_henv env, Value v);
 #define V_IS(r,t) (((r) & V_TAG_MASK) == V_STENCIL(t))
 
 always_inline a_u64 v_stencil(a_enum tag) {
-    assume(tag <= T__MAX_FAST, "bad value tag.");
+    assume(tag <= T__MAX, "bad value tag.");
     return V_STENCIL(tag);
 }
 
