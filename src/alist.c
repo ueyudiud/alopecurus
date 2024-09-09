@@ -12,7 +12,7 @@
 
 #include "alist.h"
 
-static VTable const list_vtable;
+static Impl const list_impl;
 
 #if ALO_M64
 # define LIST_MAX_CAP cast(a_u32, INT32_MAX)
@@ -23,7 +23,7 @@ static VTable const list_vtable;
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, list_size());
 
-    self->vptr = &list_vtable;
+    self->impl = &list_impl;
     self->ptr = null;
     self->cap = 0;
     self->len = 0;
@@ -150,11 +150,8 @@ static void list_drop(Global* gbl, GList* self) {
     ai_mem_dealloc(gbl, self, list_size());
 }
 
-static VTable const list_vtable = {
+static Impl const list_impl = {
     .tag = ALO_TLIST,
-    .type_ref = g_type_ref(ALO_TLIST),
-	.impl = {
-        .drop = cast(void const*, list_drop),
-        .mark = cast(void const*, list_mark)
-	}
+    .drop = list_drop,
+    .mark = list_mark
 };

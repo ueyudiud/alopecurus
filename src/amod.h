@@ -20,17 +20,14 @@ intern a_bool ai_mod_set(a_henv env, GMod* self, Value vk, Value vv);
 intern void ai_mod_sets(a_henv env, GMod* self, GStr* key, Value val);
 intern Value* ai_mod_refls(a_henv env, GMod* self, char const* src, a_usize len);
 
-struct ModHead { };
-
-#define GMOD_STRUCT_HEADER \
-    struct ModHead _mod_head_mark[0]; \
-    GOBJ_STRUCT_HEADER;    \
-    a_u32 size;           \
-    a_u32 sig;            \
-    a_u32 len;            \
-    a_u32 hmask;          \
-    MNode* ptr;           \
-    a_u32 nchg;           \
+#define GMETA_STRUCT_HEADER \
+    GOBJ_STRUCT_HEADER;     \
+    a_u32 size;             \
+    a_u32 sig;              \
+    a_u32 len;              \
+    a_u32 hmask;            \
+    MNode* ptr;             \
+    a_u32 nchg;             \
     a_u32 ftmz
 
 enum {
@@ -48,7 +45,7 @@ struct MNode {
 };
 
 struct GMod {
-    GMOD_STRUCT_HEADER;
+    GMETA_STRUCT_HEADER;
     a_byte extra[];
 };
 
@@ -76,8 +73,6 @@ always_inline void v_set_mod(a_henv env, Value* d, GMod* o) {
     Value v = v_of_mod(o);
     v_set(env, d, v);
 }
-
-#define gmod_cast(p) from_member(GMod, _mod_head_mark, &(p)->_mod_head_mark)
 
 #define mod_size(l) align_to(sizeof(GMod) + (l), sizeof(a_usize))
 

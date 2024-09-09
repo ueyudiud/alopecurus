@@ -16,14 +16,14 @@
 
 #define dead_key ((GStr*) sizeof(a_usize))
 
-static VTable const mod_vtable;
+static Impl const mod_impl;
 
 GMod* ai_mod_new(a_henv env, a_usize extra) {
     a_usize size = mod_size(extra);
     GMod* self = ai_mem_alloc(env, size);
 
     memclr(self, size);
-    self->vptr = &mod_vtable;
+    self->impl = &mod_impl;
     self->size = size;
 
     ai_gc_register_object(env, self);
@@ -271,12 +271,9 @@ static void mod_mark(Global* gbl, GMod* self) {
     ai_gc_trace_work(gbl, self->size);
 }
 
-static VTable const mod_vtable = {
-    .type_ref = g_type_ref(ALO_TMOD),
+static Impl const mod_impl = {
     .tag = ALO_TMOD,
     .flags = VTABLE_FLAG_NONE,
-    .impl = {
-        .drop = cast(void const*, mod_drop),
-        .mark = cast(void const*, mod_mark)
-    }
+    .drop = mod_drop,
+    .mark = mod_mark
 };

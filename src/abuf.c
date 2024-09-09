@@ -12,7 +12,7 @@
 
 #include "abuf.h"
 
-static VTable const buf_vtable;
+static Impl const buf_impl;
 
 a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...) {
     va_list varg;
@@ -49,7 +49,7 @@ a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg) {
 GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
-	self->vptr = &buf_vtable;
+	self->impl = &buf_impl;
 	at_buf_init(self);
 
 	ai_gc_register_object(env, self);
@@ -78,11 +78,9 @@ static void buf_drop(Global* gbl, a_gptr raw_self) {
 	ai_mem_dealloc(gbl, self, sizeof(GBuf));
 }
 
-static VTable const buf_vtable = {
+static Impl const buf_impl = {
     .tag = ALO_TBUF,
     .flags = VTABLE_FLAG_GREEDY_MARK,
-    .impl = {
-        .drop = cast(void const*, buf_drop),
-        .mark = cast(void const*, buf_mark)
-    }
+    .drop = buf_drop,
+    .mark = buf_mark
 };

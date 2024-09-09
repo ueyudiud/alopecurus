@@ -32,7 +32,7 @@ a_msg api_tagof(unused a_henv env, Value v) {
         case T_PTR:
             return ALO_TPTR;
         case T_OBJ:
-            return v_as_obj(v)->vptr->tag;
+            return v_as_obj(v)->impl->tag;
         case T_FLOAT:
             return ALO_TFLOAT;
         default:

@@ -488,19 +488,17 @@ static void block_mark(Global* gbl, GBlock* self) {
     ai_gc_trace_work(gbl, block_size(self->size));
 }
 
-static VTable const block_vtable = {
+static Impl const block_impl = {
     .tag = ALO_TUSER,
-    .impl = {
-        .drop = cast(void const*, block_drop),
-        .mark = cast(void const*, block_mark)
-    }
+    .drop = block_drop,
+    .mark = block_mark
 };
 
 void* aloL_newblk(a_henv env, a_usize s) {
     api_check_slot(env, 1);
 
     GBlock* self = ai_mem_alloc(env, block_size(s));
-    self->vptr = &block_vtable;
+    self->impl = &block_impl;
     self->size = s;
     ai_gc_register_object(env, self);
 

@@ -36,8 +36,8 @@ void ai_err_except(a_henv env, a_msg msg) {
     Value errf = *stk2val(env, env->errf);
     if (!v_is_obj(errf))
         return;
-    a_gptr obj = v_as_obj(errf);
-    if (g_impl(obj)->except == null)
+    a_gptr o = v_as_obj(errf);
+    if (g_impl(o)->except == null)
         return;
-    (*g_fetch(obj, except))(env, obj, msg);
+    (*g_fetch(o, except))(env, o, msg);
 }

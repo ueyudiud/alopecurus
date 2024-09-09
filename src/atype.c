@@ -12,7 +12,7 @@
 
 #include "atype.h"
 
-static VTable const type_vtable;
+static Impl const type_impl;
 
 GType* ai_type_new(a_henv env, GStr* name) {
     a_usize size = type_size(0);
@@ -20,7 +20,7 @@ GType* ai_type_new(a_henv env, GStr* name) {
     GType* self = ai_mem_alloc(env, size);
     memclr(self, size);
 
-    self->vptr = &type_vtable;
+    self->impl = &type_impl;
     self->name = name;
 
     ai_gc_register_object(env, self);
@@ -49,7 +49,7 @@ void ai_type_boost(a_henv env) {
 
     for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
         init(gbl->fast_types[i]) {
-            .vptr = &type_vtable,
+            .impl = &type_impl,
             .name = g_str(env, l_name_tags[i])
         };
     }
@@ -76,11 +76,8 @@ static void type_mark(Global* gbl, GType* self) {
     ai_gc_trace_work(gbl, type_size(0));
 }
 
-static VTable const type_vtable = {
+static Impl const type_impl = {
     .tag = ALO_TTYPE,
-    .type_ref = g_type_ref(ALO_TTYPE),
-	.impl = {
-        .drop = cast(void const*, type_drop),
-        .mark = cast(void const*, type_mark)
-	}
+    .drop = type_drop,
+    .mark = type_mark
 };

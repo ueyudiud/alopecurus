@@ -17,9 +17,10 @@ intern void ai_type_clean(Global* gbl);
  ** Type.
  */
 struct GType {
-    GMOD_STRUCT_HEADER;
+    GMETA_STRUCT_HEADER;
     /* Type metadata (Optional). */
     GStr* name;
+    Impl body[0];
 };
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
@@ -27,7 +28,7 @@ struct GType {
 #define mt_has_ftm(t,tm) (((t)->ftmz & FTM_BIT(tm)) == 0)
 
 always_inline GMod* type2mt(GType* o) {
-    return gmod_cast(o);
+    return g_as(GMod, o);
 }
 
 #define g_is_type(o) g_is(o, ALO_TTYPE)

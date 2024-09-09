@@ -5513,17 +5513,16 @@ static void l_scan_root(unused a_henv env, void* ctx) {
     fscope_epilogue(par, par->name, true, lex_line(par));
 }
 
-static VTable const parser_vtable = {
+static Impl const parser_impl = {
+    .tag = ALO_TPTR,
     .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
-    .impl = {
-        .mark = cast(void const*, parser_mark),
-        .except = cast(void const*, parser_except)
-    }
+    .mark = parser_mark,
+    .except = parser_except
 };
 
 static void parser_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
     init(par) {
-        .vptr = &parser_vtable,
+        .impl = &parser_impl,
         .tnext = WHITE_COLOR,
         .options = options,
         .name = name

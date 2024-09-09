@@ -163,11 +163,9 @@ always_inline void v_set_route(a_henv env, Value* d, GRoute* o) {
 
 #define route_size() sizeof(GRoute)
 
-always_inline GType* g_typeof(a_henv env, a_gptr p) {
-    a_usize type_ref = p->vptr->type_ref;
-    return likely(type_ref) != 0 ?
-           ptr_disp(GType, G(env), p->vptr->type_ref) :
-           g_type(env, ALO_TPTR);
+always_inline GType* g_typeof(a_henv env, a_gptr o) {
+    a_u32 tag = o->impl->tag;
+    return tag < TYPE__COUNT ? g_type(env, tag) : from_member(GType, body, o->impl);
 }
 
 #define g_typeof(env,p) g_typeof(env, g_as_obj(p))
@@ -311,7 +309,7 @@ always_inline a_bool g_has_other_color(Global* gbl, a_gptr o) {
 #define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_obj(v))
 
 always_inline a_bool g_has_valid_color(Global* gbl, a_gptr o) {
-    return !g_has_other_color(gbl, o) || vtable_has_flag(o->vptr, VTABLE_FLAG_STACK_ALLOC);
+    return !g_has_other_color(gbl, o) || vtable_has_flag(o->impl, VTABLE_FLAG_STACK_ALLOC);
 }
 
 always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o) {

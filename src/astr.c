@@ -26,7 +26,7 @@
 # define MAX_STR_CACHE_CAPACITY ((usizec(1) << 31) / sizeof(GStr*))
 #endif
 
-static VTable const str_vtable;
+static Impl const str_impl;
 
 /**
  ** Compute hash code for string, use FNV-1 like algorithm.
@@ -105,7 +105,7 @@ static GStr* str_alloc(a_henv env, a_usize len) {
 }
 
 static void str_init(GStr* self, char const* src, a_usize len, a_hash hash) {
-	self->vptr = &str_vtable;
+	self->impl = &str_impl;
     self->len = len;
     self->hash = hash;
     memcpy(self->ptr, src, sizeof(char) * len);
@@ -154,7 +154,7 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 
 	self = buff;
 	/* Complete all fields. */
-	self->vptr = &str_vtable;
+	self->impl = &str_impl;
 	self->len = len;
 	self->hash = hash;
 	self->ptr[len] = '\0';
@@ -320,14 +320,11 @@ void ai_str_clean(Global* gbl) {
     ai_mem_vdel(gbl, cache->ptr, cache->hmask + 1);
 }
 
-static VTable const str_vtable = {
+static Impl const str_impl = {
     .tag = ALO_TSTR,
     .flags = VTABLE_FLAG_GREEDY_MARK,
-    .type_ref = g_type_ref(ALO_TSTR),
-    .impl = {
-        .drop = cast(void const*, str_drop),
-        .mark = cast(void const*, str_mark)
-    }
+    .drop = str_drop,
+    .mark = str_mark
 };
 
 char const ai_str_interns[] = {

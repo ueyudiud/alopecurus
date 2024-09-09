@@ -13,16 +13,16 @@
 
 #include "afun.h"
 
-static VTable const afun_vtable;
-static VTable const uniq_afun_vtable;
-static VTable const cfun_vtable;
-static VTable const proto_vtable;
+static Impl const afun_impl;
+static Impl const uniq_afun_impl;
+static Impl const cfun_impl;
+static Impl const proto_impl;
 
 static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
 }
 
-#define UNIQ_PROTO_OFFSET offsetof(GProto, size)
+#define UNIQ_PROTO_START_FIELD size
 
 static a_usize proto_size_with_head(ProtoDesc const* desc) {
 	a_usize size = sizeof(GProto) +
@@ -39,7 +39,7 @@ static a_usize proto_size_with_head(ProtoDesc const* desc) {
 		size += sizeof(LineInfo);
 	}
 	if (desc->flags & FUN_FLAG_UNIQUE) {
-		size += fun_size(desc->ncap) - UNIQ_PROTO_OFFSET;
+		size += fun_size(desc->ncap) - offsetof(GProto, UNIQ_PROTO_START_FIELD);
 	}
 	return align_to(size, sizeof(a_usize));
 }
@@ -52,11 +52,11 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
     GProto* self;
 
     if (desc->flags & FUN_FLAG_UNIQUE) {
-        self = blk - UNIQ_PROTO_OFFSET;
+        self = from_member(GProto, UNIQ_PROTO_START_FIELD, blk);
     }
     else {
         self = blk;
-        self->vptr = &proto_vtable;
+        self->impl = &proto_impl;
     }
 
     self->size = total_size;
@@ -105,7 +105,7 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
 		GFun* fun = int2ptr(GFun, addr);
 		addr += fun_size(desc->ncap);
 
-		fun->vptr = &uniq_afun_vtable;
+		fun->impl = &uniq_afun_impl;
 		fun->proto = self;
 		fun->ncap = desc->ncap;
 
@@ -128,7 +128,7 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 	GFun* self = ai_mem_alloc(env, fun_size(ncap));
 
-	self->vptr = &cfun_vtable;
+	self->impl = &cfun_impl;
 	self->ncap = ncap;
 	self->fptr = hnd;
 	self->flags = FUN_FLAG_NATIVE | FUN_FLAG_VARARG;
@@ -235,7 +235,7 @@ GFun* ai_fun_new(a_henv env, GProto* proto) {
 
 	GFun* self = ai_mem_alloc(env, fun_size(len));
 
-	self->vptr = &afun_vtable;
+	self->impl = &afun_impl;
 	self->proto = proto;
 	self->ncap = len;
 	self->flags = proto->flags;
@@ -395,7 +395,7 @@ static void uniq_afun_drop(Global* gbl, GFun* self) {
     }
 
     GProto* proto = self->proto;
-    void* block = cast(void*, proto) + UNIQ_PROTO_OFFSET;
+    void* block = &proto->UNIQ_PROTO_START_FIELD;
     ai_mem_dealloc(gbl, block, proto->size);
 }
 
@@ -432,39 +432,29 @@ void ai_proto_drop(Global* gbl, GProto* self) {
     }
 }
 
-static VTable const afun_vtable = {
+static Impl const afun_impl = {
     .tag = ALO_TFUNC,
-    .type_ref = g_type_ref(ALO_TFUNC),
-	.impl = {
-        .drop = cast(void const*, afun_drop),
-        .mark = cast(void const*, afun_mark),
-        .except = cast(void const*, fun_except)
-	}
+    .drop = afun_drop,
+    .mark = afun_mark,
+    .except = fun_except
 };
 
-static VTable const uniq_afun_vtable = {
+static Impl const uniq_afun_impl = {
     .tag = ALO_TFUNC,
-    .type_ref = g_type_ref(ALO_TFUNC),
-	.impl = {
-        .drop = cast(void const*, uniq_afun_drop),
-        .mark = cast(void const*, uniq_afun_mark),
-        .except = cast(void const*, fun_except)
-	}
+    .drop = uniq_afun_drop,
+    .mark = uniq_afun_mark,
+    .except = fun_except
 };
 
-static VTable const cfun_vtable = {
+static Impl const cfun_impl = {
     .tag = ALO_TFUNC,
-    .type_ref = g_type_ref(ALO_TFUNC),
-	.impl = {
-        .drop = cast(void const*, cfun_drop),
-        .mark = cast(void const*, cfun_mark),
-        .except = cast(void const*, fun_except)
-	}
+    .drop = cfun_drop,
+    .mark = cfun_mark,
+    .except = fun_except
 };
 
-static VTable const proto_vtable = {
-	.impl = {
-        .drop = cast(void const*, proto_drop),
-        .mark = cast(void const*, proto_mark)
-	}
+static Impl const proto_impl = {
+    .tag = ALO_TPTR,
+    .drop = proto_drop,
+    .mark = proto_mark
 };

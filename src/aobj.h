@@ -28,7 +28,7 @@ typedef a_usize a_trmark;
 typedef a_gptr a_gcnext;
 typedef a_gcnext a_gclist;
 
-typedef struct VTable VTable;
+typedef struct Impl Impl;
 typedef struct alo_Alloc Alloc;
 typedef struct RcCap RcCap;
 typedef struct Frame Frame;
@@ -146,14 +146,14 @@ always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restric
 }
 
 always_inline void v_mov_all_fwd(a_henv env, Value* d, Value const* s, a_usize n) {
-    assume(d <= s, "move regions not at forward.");
+    assume(d <= s, "move regions violate contract.");
     for (a_usize i = 0; i < n; ++i) {
         v_cpy(env, &d[i], &s[i]);
     }
 }
 
 always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n) {
-    assume(d >= s, "move regions not at backward.");
+    assume(d >= s, "move regions violate contract.");
     for (a_usize i = n - 1; i < n; --i) {
         v_cpy(env, &d[i], &s[i]);
     }
@@ -323,33 +323,45 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 
 struct ObjHead { a_u64 _; };
 
-#define GOBJ_STRUCT_HEADER struct ObjHead _obj_head_mark[0]; a_gcnext gnext; VTable const* vptr; a_trmark tnext
+#define GOBJ_STRUCT_HEADER \
+    struct ObjHead _obj_head_mark[0]; \
+    a_gcnext gnext;        \
+    union {                \
+        struct Impl const* impl;      \
+        struct Impl_ const* impl_;    \
+    };                     \
+    a_trmark tnext
 
 struct GObj {
     GOBJ_STRUCT_HEADER;
 };
 
-/* Method Table. */
-typedef struct {
-    void (*drop)(Global* gbl, a_gptr self);
-    void (*mark)(Global* gbl, a_gptr self);
-    void (*close)(a_henv env, a_gptr self);
-    void (*except)(a_henv env, a_gptr self, a_msg msg);
-} ImplTable;
+#define GOBJ_METHODS(_f,_m) \
+    _f(tag, a_u32) \
+    _f(flags, a_u32) \
+    _m(drop, void, Global* gbl, a_gptr self) \
+    _m(mark, void, Global* gbl, a_gptr self) \
+    _m(close, void, a_henv env, a_gptr self) \
+    _m(except, void, a_henv env, a_gptr self, a_msg msg)
 
 /**
  ** The virtual table for type, used for fast dispatch.
  ** Primitive types do not have virtual table.
  */
-struct VTable {
-    /* The API tag of object. */
-    a_u32 tag;
-    /* The flags for virtual table. */
-    a_u32 flags;
-    /* The handle of type object (optional). */
-    a_usize type_ref;
-    /* The implement method table. */
-    ImplTable impl;
+struct Impl {
+#define DEFF(n,t) t n;
+#define DEFM(n,r,p...) void const* n;
+    GOBJ_METHODS(DEFF, DEFM)
+#undef DEFF
+#undef DEFM
+};
+
+struct Impl_ {
+#define DEFF(n,t) t n;
+#define DEFM(n,r,p...) r (*n)(p);
+    GOBJ_METHODS(DEFF, DEFM)
+#undef DEFF
+#undef DEFM
 };
 
 #define VTABLE_FLAG_NONE        u8c(0x00)
@@ -358,9 +370,9 @@ struct VTable {
 
 #define vtable_has_flag(vt,f) (((vt)->flags & (f)) != 0)
 
-#define g_is(o,t) ((o)->vptr->tag == (t))
+#define g_impl(o) (o)->impl_
 
-#define g_impl(o) (&(o)->vptr->impl)
+#define g_is(o,t) (g_impl(o)->tag == (t))
 
 #define g_fetch(o,f) ({ \
 	auto _f2 = g_impl(o)->f; \

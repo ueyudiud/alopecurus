@@ -12,7 +12,7 @@
 
 #include "atuple.h"
 
-static VTable const tuple_vtable;
+static Impl const tuple_impl;
 
 #if ALO_M64
 # define TUPLE_MAX_LEN cast(a_u32, INT32_MAX)
@@ -27,7 +27,7 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_ulen len) {
 
     GTuple* self = ai_mem_alloc(env, tuple_size(len));
 
-	self->vptr = &tuple_vtable;
+	self->impl = &tuple_impl;
     self->len = len;
 	self->hash = 0;
 	v_cpy_all(env, self->ptr, src, len);
@@ -102,12 +102,9 @@ static void tuple_mark(Global* gbl, GTuple* self) {
     ai_gc_trace_work(gbl, tuple_size(self->len));
 }
 
-static VTable const tuple_vtable = {
+static Impl const tuple_impl = {
     .tag = ALO_TTUPLE,
     .flags = VTABLE_FLAG_NONE,
-    .type_ref = g_type_ref(ALO_TTUPLE),
-    .impl = {
-        .drop = cast(void const*, tuple_drop),
-        .mark = cast(void const*, tuple_mark)
-    }
+    .drop = tuple_drop,
+    .mark = tuple_mark
 };

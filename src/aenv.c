@@ -37,11 +37,11 @@ static a_bool route_is_active(a_henv env) {
 	return G(env)->active == env;
 }
 
-static VTable const route_vtable;
+static Impl const route_impl;
 
 static void route_new(GRoute* self, Global* gbl) {
     init(self) {
-        .vptr = &route_vtable,
+        .impl = &route_impl,
         .status = ALO_SYIELD,
         .flags = 0,
         .global = gbl,
@@ -112,14 +112,11 @@ static void route_drop(Global* gbl, GRoute* self) {
 	ai_mem_dealloc(gbl, self, route_size());
 }
 
-static VTable const route_vtable = {
+static Impl const route_impl = {
     .tag = ALO_TROUTE,
 	.flags = VTABLE_FLAG_NONE,
-    .type_ref = g_type_ref(ALO_TROUTE),
-	.impl = {
-        .drop = cast(void const*, route_drop),
-        .mark = cast(void const*, route_mark)
-	}
+    .drop = route_drop,
+    .mark = route_mark
 };
 
 a_msg ai_env_resume(a_henv env, GRoute* self) {

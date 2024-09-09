@@ -189,17 +189,16 @@ static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
 	}
 }
 
-static VTable const load_vtable = {
+static Impl const load_impl = {
+    .tag = ALO_TPTR,
     .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
-    .impl = {
-        .mark = cast(void const*, load_mark),
-        .except = cast(void const*, load_except)
-    }
+    .mark = load_mark,
+    .except = load_except
 };
 
 a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags) {
     InCtx ic = {
-        .vptr = &load_vtable,
+        .impl = &load_impl,
         .flags = flags
     };
     g_set_stack_white(&ic);

@@ -32,7 +32,7 @@
 
 #define setprogdir(env) quiet(env)
 
-static VTable const lib_vtable;
+static Impl const lib_impl;
 
 #if ALO_OS_WINDOWS
 
@@ -186,18 +186,16 @@ static GLib* lib_cast(Value v) {
     if (!v_is_obj(v))
         return null;
     GObj* obj = v_as_obj(v);
-    if (obj->vptr != &lib_vtable)
+    if (obj->impl != &lib_impl)
         return null;
     return g_as(GLib, obj);
 }
 
-static VTable const lib_vtable = {
+static Impl const lib_impl = {
     .tag = ALO_TUSER,
     .flags = VTABLE_FLAG_GREEDY_MARK,
-    .impl = {
-        .drop = cast(void const*, lib_drop),
-        .mark = cast(void const*, lib_mark)
-    }
+    .drop = lib_drop,
+    .mark = lib_mark
 };
 
 #define LOADED_FIELD_NAME "loaded"

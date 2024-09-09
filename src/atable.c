@@ -14,7 +14,7 @@
 
 #include "atable.h"
 
-static VTable const table_vtable;
+static Impl const table_impl;
 
 #if ALO_M64
 # define TABLE_MAX_CAP (cast(a_usize, INT32_MAX) + 1)
@@ -39,7 +39,7 @@ static void bucket_dealloc(Global* gbl, TNode* bucket, a_u32 cap) {
 GTable* ai_table_new(a_henv env) {
     GTable* self = ai_mem_alloc(env, table_size());
 
-	self->vptr = &table_vtable;
+	self->impl = &table_impl;
     self->ptr = null;
     self->hmask = 0;
     self->len = 0;
@@ -501,12 +501,9 @@ static void table_mark(Global* gbl, GTable* self) {
 	ai_gc_trace_work(gbl, table_size());
 }
 
-static VTable const table_vtable = {
+static Impl const table_impl = {
     .tag = ALO_TTABLE,
-	.type_ref = g_type_ref(ALO_TTABLE),
     .flags = VTABLE_FLAG_NONE,
-	.impl = {
-        .drop = cast(void const*, table_drop),
-        .mark = cast(void const*, table_mark)
-	}
+    .drop = table_drop,
+    .mark = table_mark
 };

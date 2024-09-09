@@ -30,7 +30,7 @@ always_inline void rq_push(RefQueue* rq, a_gptr p) {
 )
 
 always_inline void g_set_stack_white(a_gptr o) {
-    assume(vtable_has_flag(o->vptr, VTABLE_FLAG_STACK_ALLOC));
+    assume(vtable_has_flag(o->impl, VTABLE_FLAG_STACK_ALLOC));
     o->tnext = WHITE_COLOR;
 }
 
