@@ -193,7 +193,7 @@ static GLib* lib_cast(Value v) {
 
 static Impl const lib_impl = {
     .tag = ALO_TUSER,
-    .flags = VTABLE_FLAG_GREEDY_MARK,
+    .flags = IMPL_FLAG_GREEDY_MARK,
     .drop = lib_drop,
     .mark = lib_mark
 };

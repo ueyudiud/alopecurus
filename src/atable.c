@@ -503,7 +503,7 @@ static void table_mark(Global* gbl, GTable* self) {
 
 static Impl const table_impl = {
     .tag = ALO_TTABLE,
-    .flags = VTABLE_FLAG_NONE,
+    .flags = IMPL_FLAG_NONE,
     .drop = table_drop,
     .mark = table_mark
 };

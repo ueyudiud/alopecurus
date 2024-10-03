@@ -364,11 +364,11 @@ struct Impl_ {
 #undef DEFM
 };
 
-#define VTABLE_FLAG_NONE        u8c(0x00)
-#define VTABLE_FLAG_GREEDY_MARK u8c(0x01)
-#define VTABLE_FLAG_STACK_ALLOC u8c(0x02)
+#define IMPL_FLAG_NONE        u8c(0x00)
+#define IMPL_FLAG_GREEDY_MARK u8c(0x01)
+#define IMPL_FLAG_STACK_ALLOC u8c(0x02)
 
-#define vtable_has_flag(vt,f) (((vt)->flags & (f)) != 0)
+#define impl_has_flag(vt,f) (((vt)->flags & (f)) != 0)
 
 #define g_impl(o) (o)->impl_
 

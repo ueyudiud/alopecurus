@@ -191,7 +191,7 @@ static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
 
 static Impl const load_impl = {
     .tag = ALO_TPTR,
-    .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
+    .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
     .mark = load_mark,
     .except = load_except
 };

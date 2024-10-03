@@ -104,7 +104,7 @@ static void tuple_mark(Global* gbl, GTuple* self) {
 
 static Impl const tuple_impl = {
     .tag = ALO_TTUPLE,
-    .flags = VTABLE_FLAG_NONE,
+    .flags = IMPL_FLAG_NONE,
     .drop = tuple_drop,
     .mark = tuple_mark
 };

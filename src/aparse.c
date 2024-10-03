@@ -5514,7 +5514,7 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 
 static Impl const parser_impl = {
     .tag = ALO_TPTR,
-    .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
+    .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
     .mark = parser_mark,
     .except = parser_except
 };

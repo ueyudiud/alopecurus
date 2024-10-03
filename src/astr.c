@@ -322,7 +322,7 @@ void ai_str_clean(Global* gbl) {
 
 static Impl const str_impl = {
     .tag = ALO_TSTR,
-    .flags = VTABLE_FLAG_GREEDY_MARK,
+    .flags = IMPL_FLAG_GREEDY_MARK,
     .drop = str_drop,
     .mark = str_mark
 };

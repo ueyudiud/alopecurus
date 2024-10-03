@@ -114,7 +114,7 @@ static void route_drop(Global* gbl, GRoute* self) {
 
 static Impl const route_impl = {
     .tag = ALO_TROUTE,
-	.flags = VTABLE_FLAG_NONE,
+	.flags = IMPL_FLAG_NONE,
     .drop = route_drop,
     .mark = route_mark
 };

@@ -273,7 +273,7 @@ static void mod_mark(Global* gbl, GMod* self) {
 
 static Impl const mod_impl = {
     .tag = ALO_TMOD,
-    .flags = VTABLE_FLAG_NONE,
+    .flags = IMPL_FLAG_NONE,
     .drop = mod_drop,
     .mark = mod_mark
 };

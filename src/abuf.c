@@ -80,7 +80,7 @@ static void buf_drop(Global* gbl, a_gptr raw_self) {
 
 static Impl const buf_impl = {
     .tag = ALO_TBUF,
-    .flags = VTABLE_FLAG_GREEDY_MARK,
+    .flags = IMPL_FLAG_GREEDY_MARK,
     .drop = buf_drop,
     .mark = buf_mark
 };
