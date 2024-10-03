@@ -33,7 +33,6 @@ typedef struct alo_Alloc Alloc;
 typedef struct RcCap RcCap;
 typedef struct Frame Frame;
 typedef struct Stack Stack;
-typedef struct PFrame PFrame;
 typedef struct Global Global;
 
 typedef struct Value Value;

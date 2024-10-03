@@ -42,11 +42,6 @@ struct Frame {
 #endif
 };
 
-struct PFrame {
-    PFrame* _prev;
-    StkPtr _errf;
-};
-
 typedef void* a_rctx;
 
 struct alo_Env {
@@ -309,7 +304,7 @@ always_inline a_bool g_has_other_color(Global* gbl, a_gptr o) {
 #define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_obj(v))
 
 always_inline a_bool g_has_valid_color(Global* gbl, a_gptr o) {
-    return !g_has_other_color(gbl, o) || vtable_has_flag(o->impl, VTABLE_FLAG_STACK_ALLOC);
+    return !g_has_other_color(gbl, o) || impl_has_flag(o->impl, IMPL_FLAG_STACK_ALLOC);
 }
 
 always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o) {
