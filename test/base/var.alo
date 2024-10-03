@@ -1,10 +1,10 @@
 let a = true
 
--- Variable definition
+-- variable definition
 assert(a)
 
 do {
-    -- Variable shadowing inside block
+    -- variable shadowing inside block
     let a = false
     assert(!a)
 }
@@ -15,19 +15,19 @@ assert(a)
 let mut a = true
 
 fn f1() {
-    -- Capture variable
+    -- capture variable
     assert(a)
 
-    -- Variable assign
+    -- variable assign
     a = false
     assert(!a)
 
     let a = true
-    -- Capture variable shadowing
+    -- capture variable shadowing
     assert(a)
 
     fn f2(a) {
-        -- Parameter shadowing
+        -- parameter shadowing
         assert(!a)
     }
 
@@ -39,12 +39,12 @@ f1()
 fn f2(mut a) {
     assert(!a)
 
-    -- Parameter updating
+    -- parameter updating
     a = true
     assert(a)
 }
 
 f2(false)
 
--- Captured variable changed inside closure
+-- captured variable changed inside closure
 assert(!a)

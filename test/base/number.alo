@@ -1,4 +1,4 @@
--- Float-point number
+-- float-point number
 assert(10.0 == 1.0e1)
 assert(100.0 == 1.0e2)
 assert(100.0 == 0.01e4)

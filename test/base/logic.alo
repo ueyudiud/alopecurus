@@ -1,24 +1,24 @@
 let t = true
 let f = false
 
--- True test
+-- true test
 assert(t)
 
--- False test
+-- false test
 assert(!f)
 
--- Logical OR
+-- logical or
 assert(!(f || f))
 assert(f || t)
 assert(t || f)
 assert(t || t)
 
--- Logical AND
+-- logical and
 assert(!(f && f))
 assert(!(t && f))
 assert(!(f && t))
 assert(t && t)
 
--- Ternary predicate
+-- ternary predicate
 assert(t ? t : f)
 assert(f ? f : t)
