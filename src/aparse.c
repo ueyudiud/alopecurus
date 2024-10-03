@@ -596,7 +596,7 @@ static void l_emit_line(Parser* par, a_line line) {
 		LineInfo info = {UINT32_MAX, line};
 		a_u32 index = at_buf_push(par->env, par->lines, info, "line");
 		if (index > scope->line_off) { /* Settle end label for last line info. */
-			par->lines->ptr[index - 1].lend = par->head_label;
+			par->lines->ptr[index - 1].lend = par->head_label - par->fscope->begin_label;
 		}
 		scope->head_line = line;
 	}
@@ -3144,7 +3144,7 @@ static GProto* fscope_epilogue(Parser* par, GStr* name, a_line line) {
 
 	memcpy(proto->consts, par->consts->ptr + fscope->const_off, sizeof(Value) * desc.nconst);
 	memcpy(proto->code, par->code + fscope->begin_label, sizeof(a_insn) * desc.ninsn);
-	if (par->options & ALO_COMP_OPT_STRIP_DEBUG) {
+	if (!(par->options & ALO_COMP_OPT_STRIP_DEBUG)) {
 		proto->dbg_lndef = fscope->begin_line;
 		proto->dbg_lnldef = line;
 		memcpy(proto->dbg_lines, par->lines->ptr + fscope->line_off, sizeof(LineInfo) * desc.nline);
