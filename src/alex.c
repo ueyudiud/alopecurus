@@ -159,19 +159,24 @@ static GStr* l_to_str(Lexer* lex) {
     return str;
 }
 
-void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx, char const* name) {
+void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx, char const* file) {
 	ai_io_iinit(env, fun, ctx, &lex->in);
 
-    lex->file = name ?: "<in>";
+    lex->file = file;
     lex->line = 1;
 
 	lex->strs.len = 0;
-
-    l_poll_unchecked(lex);
 }
 
-void ai_lex_open(Lexer* lex) {
+void ai_lex_open(Lexer* lex, a_flags options) {
     strs_alloc_array(lex->env, &lex->strs, STRS_INIT_CAP);
+
+    if (!(options & ALO_COMP_OPT_STRIP_DEBUG) && lex->file != null) {
+        GStr* str = ai_lex_to_str(lex, lex->file, strlen(lex->file));
+        lex->file = str2ntstr(str);
+    }
+
+    l_poll_unchecked(lex); /* scan next char */
 }
 
 void ai_lex_close(Lexer* lex) {

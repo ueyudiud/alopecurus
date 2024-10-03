@@ -230,7 +230,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vm;
 
     if (ai_tm_look(env, v, k, &vm)) {
-        catch (!v_is_mod(v) || ai_mod_gets(env, v_as_meta(v), k, &vm)) { //TODO only module can dispatch?
+        catch (!v_is_meta(v) || ai_mod_gets(env, v_as_meta(v), k, &vm)) { //TODO only module can dispatch?
             ai_err_bad_look(env, v_nameof(env, v), k);
         }
 

@@ -1029,7 +1029,7 @@ static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line
 static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line);
 
 static void expr_resolve(Parser* par, OutExpr e, a_u32 id);
-static a_bool l_lookup_symbol(Parser* par, GStr* name, a_u32* pid);
+static a_u32 l_lookup_symbol(Parser* par, GStr* name);
 
 static void l_capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo* info) {
 	quiet(scope);
@@ -1075,14 +1075,12 @@ static a_u32 l_lookup_capture(Parser* par, Sym* sym) {
 	return l_lookup_capture_internal(par, par->fscope, sym, par->scope_depth);
 }
 
+#define nosym UINT32_MAX
+
 static void expr_env(Parser* par, OutExpr e) {
-	a_u32 id;
-    if (l_lookup_symbol(par, par->gvar_name, &id)) {
-        expr_resolve(par, e, id);
-    }
-    else {
-        panic("variable '_ENV' not defined.");
-    }
+	a_u32 id = l_lookup_symbol(par, par->gvar_name);
+    assume(id != nosym, "variable '_ENV' not defined.");
+    expr_resolve(par, e, id);
 }
 
 static void expr_gvar(Parser* par, InoutExpr e, a_line line) {
@@ -1144,16 +1142,17 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 	}
 }
 
-static a_bool l_lookup_symbol(Parser* par, GStr* name, a_u32* pid) {
+static a_u32 l_lookup_symbol(Parser* par, GStr* name) {
 	SymBuf* syms = par->syms;
 	for (a_u32 i = syms->len; i > 0; --i) {
-		Sym* sym = &syms->ptr[i - 1];
+        a_u32 id = i - 1;
+		Sym* sym = &syms->ptr[id];
 		if (sym->name == name) {
-			*pid = i - 1;
-			return true;
+            assume(id != nosym);
+			return id;
 		}
 	}
-	return false;
+	return nosym;
 }
 
 /**
@@ -1164,8 +1163,8 @@ static a_bool l_lookup_symbol(Parser* par, GStr* name, a_u32* pid) {
  *@param line the line number of dbg_name reference.
  */
 static void expr_symbol(Parser* par, OutExpr e, GStr* name, a_line line) {
-	a_u32 id;
-	if (l_lookup_symbol(par, name, &id)) {
+	a_u32 id = l_lookup_symbol(par, name);
+	if (id != nosym) {
 		expr_resolve(par, e, id);
         e->line = line;
 	}
@@ -3116,7 +3115,7 @@ static void fscope_prologue(Parser* par, FnScope* fscope, a_line line) {
 	par->scope_depth += 1;
 }
 
-static GProto* fscope_epilogue(Parser* par, GStr* name, a_bool root, a_line line) {
+static GProto* fscope_epilogue(Parser* par, GStr* name, a_line line) {
 	FnScope* fscope = par->fscope;
 
 	l_clear_close(par);
@@ -3135,7 +3134,7 @@ static GProto* fscope_epilogue(Parser* par, GStr* name, a_bool root, a_line line
 		.nline = par->lines->len - fscope->line_off,
 		.flags =
             (!(par->options & ALO_COMP_OPT_STRIP_DEBUG) ? FUN_FLAG_DEBUG : 0) |
-            (root ? FUN_FLAG_UNIQUE : 0)
+            (fscope->fupscope == null ? FUN_FLAG_UNIQUE : 0)
 	};
 
 	GProto* proto = ai_proto_alloc(par->env, &desc);
@@ -3145,7 +3144,7 @@ static GProto* fscope_epilogue(Parser* par, GStr* name, a_bool root, a_line line
 
 	memcpy(proto->consts, par->consts->ptr + fscope->const_off, sizeof(Value) * desc.nconst);
 	memcpy(proto->code, par->code + fscope->begin_label, sizeof(a_insn) * desc.ninsn);
-	if (desc.flags & FUN_FLAG_DEBUG) {
+	if (par->options & ALO_COMP_OPT_STRIP_DEBUG) {
 		proto->dbg_lndef = fscope->begin_line;
 		proto->dbg_lnldef = line;
 		memcpy(proto->dbg_lines, par->lines->ptr + fscope->line_off, sizeof(LineInfo) * desc.nline);
@@ -3183,7 +3182,7 @@ static GProto* fscope_epilogue(Parser* par, GStr* name, a_bool root, a_line line
 	
 	proto->dbg_name = name;
 	if (desc.flags & FUN_FLAG_DEBUG) {
-		proto->dbg_file = ai_str_from_ntstr(par->env, par->lex.file);
+		proto->dbg_file = from_member(GStr, ptr, par->lex.file);
 		proto->dbg_lndef = fscope->begin_line;
 		proto->dbg_lnldef = line;
 	}
@@ -3255,7 +3254,7 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 #define ENV_NAME "_ENV"
 
 static void parser_start(Parser* par) {
-    ai_lex_open(lex(par));
+    ai_lex_open(lex(par), par->options);
 
 	par->gvar_name = ai_lex_to_str(lex(par), ENV_NAME, sizeof(ENV_NAME) - 1);
 
@@ -4085,7 +4084,7 @@ static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
         default: lex_error_got(par, "function expected");
 	}
 
-	GProto* proto = fscope_epilogue(par, name, false, lex_line(par));
+	GProto* proto = fscope_epilogue(par, name, lex_line(par));
 	expr_func(par, e, proto);
 }
 
@@ -4114,7 +4113,7 @@ static void l_scan_lambda(Parser* par, OutExpr e) {
 		expr_return(par, e2, scope.begin_line);
 	}
 
-	GProto* proto = fscope_epilogue(par, null, false, lex_line(par));
+	GProto* proto = fscope_epilogue(par, null, lex_line(par));
 	expr_func(par, e, proto);
 }
 
@@ -5228,17 +5227,17 @@ static void l_scan_for_stat(Parser* par) {
 }
 
 static void l_scan_let_stat2(Parser* par, Pat* p, a_usize c) {
-	a_line line = cast(a_line, c);
+    a_line line = cast(a_line, c);
 
-	if (lex_test_skip(par, TK_ASSIGN)) {
-		Expr e;
-		Pat* pat = p->child;
+    if (lex_test_skip(par, TK_ASSIGN)) {
+        Expr e;
+        Pat* pat = p->child;
 
-		loop {
-			l_scan_expr(par, e);
-    	    pat_bind(par, pat, e);
-			
-			pat = pat->sibling;
+        loop {
+            l_scan_expr(par, e);
+            pat_bind(par, pat, e);
+
+            pat = pat->sibling;
             p->child = pat;
             p->nchild -= 1;
 
@@ -5255,8 +5254,8 @@ static void l_scan_let_stat2(Parser* par, Pat* p, a_usize c) {
                 stack_compact(par);
                 return;
             }
-		}
-	}
+        }
+    }
     else {
         pat_bind_nils(par, p, line);
     }
@@ -5510,12 +5509,13 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 		lex_error_got(par, "statement expected");
 	}
 
-    fscope_epilogue(par, par->name, true, lex_line(par));
+    fscope_epilogue(par, par->name, lex_line(par));
 }
 
 static Impl const parser_impl = {
     .tag = ALO_TPTR,
     .flags = VTABLE_FLAG_GREEDY_MARK | VTABLE_FLAG_STACK_ALLOC,
+    assume_only(.name = "<parse>",)
     .mark = parser_mark,
     .except = parser_except
 };
