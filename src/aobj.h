@@ -340,8 +340,7 @@ struct GObj {
     _f(flags, a_u32) \
     _m(drop, void, Global* gbl, a_gptr self) \
     _m(mark, void, Global* gbl, a_gptr self) \
-    _m(close, void, a_henv env, a_gptr self) \
-    _m(except, void, a_henv env, a_gptr self, a_msg msg)
+    _m(close, void, a_henv env, a_gptr self)
 
 /**
  ** The virtual table for type, used for fast dispatch.

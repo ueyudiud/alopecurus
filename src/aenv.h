@@ -21,7 +21,7 @@ intern GRoute* ai_env_new(a_henv env, a_usize stack_size);
 intern a_henv ai_env_mroute(Global* gbl);
 intern a_msg ai_env_resume(a_henv env, GRoute* self);
 intern void ai_env_yield(a_henv env);
-intern a_msg ai_env_pcall(a_henv env, a_pfun pfun, void* pctx, Value* errf);
+intern a_msg ai_env_protect(a_henv env, a_pfun pfun, a_efun efun, void* ctx);
 intern a_noret ai_env_raise(a_henv env, a_msg msg);
 
 #define FRAME_FLAG_NONE 0x00
@@ -52,7 +52,8 @@ struct alo_Env {
     GRoute* caller;
     Frame* frame;
     Stack stack;
-    StkPtr errf;
+    a_efun errf;
+    void* errc;
     Value error;
     a_u16 flags;
     a_u8 status;

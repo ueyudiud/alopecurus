@@ -181,7 +181,8 @@ static void load_mark(Global* gbl, void* ctx) {
     g_set_stack_white(ic);
 }
 
-static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
+static void load_except(a_henv env, void* ctx, unused a_msg msg) {
+    InCtx* ic = ctx;
     Global* gbl = G(env);
 	rq_for (obj, &ic->rq) {
 		GProto* meta = g_as(GProto, obj);
@@ -192,8 +193,7 @@ static void load_except(a_henv env, InCtx* ic, unused a_msg msg) {
 static Impl const load_impl = {
     .tag = ALO_TPTR,
     .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
-    .mark = load_mark,
-    .except = load_except
+    .mark = load_mark
 };
 
 a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags) {
@@ -208,7 +208,7 @@ a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags)
     Value* p = env->stack.top++;
     v_set_obj(env, p, &ic);
 
-    a_msg msg = ai_env_pcall(env, load_chunk, &ic, p);
+    a_msg msg = ai_env_protect(env, load_chunk, load_except, &ic);
 
     v_set_nil(--env->stack.top);
     

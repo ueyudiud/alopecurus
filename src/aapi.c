@@ -731,24 +731,22 @@ void alo_call(a_henv env, a_ulen narg, a_ilen nres) {
 typedef struct {
 	a_u32 narg;
 	a_i32 nres;
+    StkPtr errf;
 } PCall;
 
-static void l_pcall(a_henv env, void* rctx) {
-	PCall* ctx = cast(PCall*, rctx);
-	l_call(env, ctx->narg, ctx->nres);
+static void l_pcall(a_henv env, void* ctx) {
+	PCall* pc = ctx;
+	l_call(env, pc->narg, pc->nres);
 }
 
-static Value* load_errf(a_henv env, a_ilen id) {
-    if (id != ALO_STACK_INDEX_EMPTY) {
-        Value* v = api_stack(env, id);
-        if (v_is_obj(*v)) {
-            a_gptr o = v_as_obj(*v);
-            if (g_impl(o)->except != null) {
-                return v;
-            }
-        }
+static void l_ecall(a_henv env, void* ctx, unused a_msg msg) {
+    PCall* pc = ctx;
+    if (pc->errf != STACK_NULL) {
+        Value* bot = vm_push_args(env, *val2stk(env, pc->errf), env->error);
+        v_set_nil(&env->error);
+        Value err = ai_vm_call_meta(env, bot);
+        v_set(env, &env->error, err);
     }
-    return null;
 }
 
 a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
@@ -758,15 +756,14 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
 
     PCall ctx = {
 		.narg = narg,
-		.nres = cast(a_i32, nres)
+		.nres = cast(a_i32, nres),
+        .errf = id_errf != ALO_STACK_INDEX_EMPTY ? val2stk(env, api_stack(env, id_errf)) : STACK_NULL
 	};
 
     Frame* frame = env->frame;
-    Value* v_errf = load_errf(env, id_errf);
-
     StkPtr p_bot = val2stk(env, env->stack.top - (narg + 1));
 
-    catch (ai_env_pcall(env, l_pcall, &ctx, v_errf), msg) {
+    catch (ai_env_protect(env, l_pcall, l_ecall, &ctx), msg) {
         env->frame = frame; /* Recover frame. */
 
         Value* bot = stk2val(env, p_bot);

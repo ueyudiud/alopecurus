@@ -25,8 +25,10 @@ struct Stack {
  */
 #if ALO_STACK_RELOC
 typedef a_isize StkPtr;
+# define STACK_NULL ((StkPtr) -1)
 #else
 typedef Value* StkPtr;
+# define STACK_NULL null
 #endif
 
 #define STACK_GROW_FAILED isizec(1)

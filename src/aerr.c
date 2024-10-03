@@ -31,13 +31,7 @@ a_noret ai_err_raise(a_henv env, a_msg msg, Value err) {
 }
 
 void ai_err_except(a_henv env, a_msg msg) {
-    if (env->errf == 0)
-        return;
-    Value errf = *stk2val(env, env->errf);
-    if (!v_is_obj(errf))
-        return;
-    a_gptr o = v_as_obj(errf);
-    if (g_impl(o)->except == null)
-        return;
-    (*g_fetch(o, except))(env, o, msg);
+    if (env->errf != null) {
+        (*env->errf)(env, env->errc, msg);
+    }
 }

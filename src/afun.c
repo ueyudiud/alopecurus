@@ -435,22 +435,19 @@ void ai_proto_drop(Global* gbl, GProto* self) {
 static Impl const afun_impl = {
     .tag = ALO_TFUNC,
     .drop = afun_drop,
-    .mark = afun_mark,
-    .except = fun_except
+    .mark = afun_mark
 };
 
 static Impl const uniq_afun_impl = {
     .tag = ALO_TFUNC,
     .drop = uniq_afun_drop,
-    .mark = uniq_afun_mark,
-    .except = fun_except
+    .mark = uniq_afun_mark
 };
 
 static Impl const cfun_impl = {
     .tag = ALO_TFUNC,
     .drop = cfun_drop,
-    .mark = cfun_mark,
-    .except = fun_except
+    .mark = cfun_mark
 };
 
 static Impl const proto_impl = {

@@ -5515,8 +5515,7 @@ static void l_scan_root(unused a_henv env, void* ctx) {
 static Impl const parser_impl = {
     .tag = ALO_TPTR,
     .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
-    .mark = parser_mark,
-    .except = parser_except
+    .mark = parser_mark
 };
 
 static void parser_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
@@ -5537,7 +5536,7 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, 
     Value* p = env->stack.top++;
     v_set_obj(env, p, &par);
 
-	a_msg msg = ai_env_pcall(env, l_scan_root, &par, p);
+	a_msg msg = ai_env_protect(env, l_scan_root, parser_except, &par);
 
     v_set_nil(--env->stack.top);
 

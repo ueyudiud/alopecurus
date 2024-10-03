@@ -57,8 +57,10 @@ typedef a_u32 a_uint;
 typedef a_u32 a_hash;
 typedef a_u32 a_insn;
 
-/* Protected function type. */
+/* The protected function. */
 typedef void (*a_pfun)(a_henv, void*);
+/* The error catching function. */
+typedef void (*a_efun)(a_henv, void*, a_msg);
 
 /* Literal function. */
 
