@@ -32,7 +32,7 @@ GFun* ai_dbg_get_func(a_henv env, Frame* frame) {
 }
 
 a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc) {
-	if (!(proto->flags & FUN_FLAG_NATIVE) && proto->dbg_lines != null) {
+	if (proto->dbg_lines != null) {
 		a_u32 disp = pc - proto->code;
 		a_u32 lo = 0;
 		a_u32 hi = proto->nline - 1;
@@ -55,7 +55,7 @@ a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc) {
 }
 
 static void l_get_source(alo_Debug* dbg, GFun* fun, a_insn const* pc) {
-	if (fun != null) {
+	if (fun != null && !(fun->flags & FUN_FLAG_NATIVE)) {
 		GProto* proto = fun->proto;
 		dbg->file = proto->dbg_file != null ? str2ntstr(proto->dbg_file) : null;
 		dbg->line = ai_dbg_get_line(proto, pc);

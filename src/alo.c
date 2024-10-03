@@ -268,7 +268,7 @@ static a_msg l_pcomp_reps(a_henv env) {
 }
 
 static a_msg l_stack_trace(a_henv env) {
-    aloL_traceerror(env, 0, 1, 6);
+    aloL_traceerror(env, env, 0, 1, 6);
     return 1;
 }
 

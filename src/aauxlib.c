@@ -320,32 +320,32 @@ static Frame* virtual_unwind(a_henv env, a_usize level) {
     }
 }
 
-static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, Buf* buf) {
+static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usize limit, Buf* buf) {
     Trace trace;
-	Value* err = api_wrslot(env, id);
-    Frame* frame = virtual_unwind(env, level);
+	Value* err = api_wrslot(dst, id);
+    Frame* frame = virtual_unwind(src, level);
     if (frame == null) return ALO_EINVAL;
 
-    trace_fill(env, frame, &trace);
+    trace_fill(src, frame, &trace);
 
     if (trace.file != null) {
         if (trace.line != 0) {
-            try (ai_buf_nputfs(env, buf, "%s:%u: ", trace.file, trace.line));
+            try (ai_buf_nputfs(dst, buf, "%s:%u: ", trace.file, trace.line));
         }
         else {
-            try (ai_buf_nputfs(env, buf, "%s: ", trace.file));
+            try (ai_buf_nputfs(dst, buf, "%s: ", trace.file));
         }
     }
 
     switch (v_get_tag(*err)) {
         case T_STR: {
             GStr* str = v_as_str(*err);
-            try (ai_buf_nputls(env, buf, str->ptr, str->len));
+            try (ai_buf_nputls(dst, buf, str->ptr, str->len));
             break;
         }
         case T_INT: {
             a_u32 code = cast(a_u32, v_as_int(*err));
-            try (ai_buf_nputfs(env, buf, "error code: %08x", code));
+            try (ai_buf_nputfs(dst, buf, "error code: %08x", code));
             break;
         }
         default: {
@@ -354,25 +354,25 @@ static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, B
     }
 
     if (limit > 0) {
-        try (ai_buf_nputs(env, buf, "\nstack trace:\n\t"));
+        try (ai_buf_nputs(dst, buf, "\nstack trace:\n\t"));
         loop {
             if (trace.line != 0) {
-                try (ai_buf_nputfs(env, buf, "at %s:%u", trace.file, trace.line));
+                try (ai_buf_nputfs(dst, buf, "at %s:%u", trace.file, trace.line));
             }
             else {
-                try (ai_buf_nputfs(env, buf, "at %s", trace.file));
+                try (ai_buf_nputfs(dst, buf, "at %s", trace.file));
             }
 
             if (trace.name != null) {
-                try (ai_buf_nputfs(env, buf, " (%s)", trace.name));
+                try (ai_buf_nputfs(dst, buf, " (%s)", trace.name));
             }
 
 			if (limit-- == 0) {
-				try (ai_buf_nputs(env, buf, "\n\t..."));
+				try (ai_buf_nputs(dst, buf, "\n\t..."));
 				break;
 			}
 			else if (frame->flags & FRAME_FLAG_TAIL_CALL) {
-				try (ai_buf_nputs(env, buf, "\n\t... (tail call)"));
+				try (ai_buf_nputs(dst, buf, "\n\t... (tail call)"));
 				if (limit > 1) {
 					limit -= 1;
 				}
@@ -381,23 +381,24 @@ static a_msg l_wrap_error(a_henv env, a_ilen id, a_usize level, a_usize limit, B
             frame = frame->prev;
             if (frame->prev == null)
                 break;
-            trace_fill(env, frame, &trace);
+            trace_fill(dst, frame, &trace);
 
-			try (ai_buf_nputs(env, buf, "\n\t"));
+			try (ai_buf_nputs(dst, buf, "\n\t"));
         }
     }
 
-	GStr* str = ai_str_get_or_new(env, buf->ptr, buf->len);
-	v_set_str(env, err, str);
+	GStr* str = ai_str_get_or_new(dst, buf->ptr, buf->len);
+	v_set_str(dst, err, str);
 	return ALO_SOK;
 }
 
-a_msg aloL_traceerror(a_henv env, a_ilen id, a_usize level, a_usize limit) {
-	if (env->frame->prev != null) {
+a_msg aloL_traceerror(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usize limit) {
+    api_check(G(src) == G(dst), "not in same global context.");
+	if (src->frame->prev != null) {
 		Buf buf[1] = {};
 		at_buf_init(buf);
-		a_msg msg = l_wrap_error(env, id, level, limit, buf_cast(buf));
-		at_buf_deinit(G(env), buf);
+		a_msg msg = trace_error(dst, src, id, level, limit, buf_cast(buf));
+		at_buf_deinit(G(dst), buf);
 		return msg;
 	}
 

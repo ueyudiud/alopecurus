@@ -405,7 +405,7 @@ void alo_copy(a_henv env, a_ilen id_src, a_ilen id_dst) {
     v_cpy(env, d, s);
 }
 
-void alo_xmove(a_henv src, a_henv dst, a_ulen n) {
+void alo_xmove(a_henv dst, a_henv src, a_ulen n) {
 	api_check(src != dst, "same environment.");
 	api_check(G(src) == G(dst), "not in same global context.");
 	api_check_elem(src, n);

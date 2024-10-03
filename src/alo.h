@@ -183,7 +183,7 @@ ALO_EXPORT char const* (alo_pushvfstr)(a_henv env, char const* fmt, va_list varg
 ALO_EXPORT void (alo_pushptype)(a_henv env, a_msg tag);
 ALO_EXPORT void (alo_pushroute)(a_henv env);
 ALO_EXPORT void (alo_copy)(a_henv env, a_ilen id_src, a_ilen id_dst);
-ALO_EXPORT void (alo_xmove)(a_henv src, a_henv dst, a_ulen n);
+ALO_EXPORT void (alo_xmove)(a_henv dst, a_henv src, a_ulen n);
 ALO_EXPORT void (alo_pop)(a_henv env, a_ilen id);
 ALO_EXPORT a_ulen (alo_rotate)(a_henv env, a_ilen id, a_ilen n);
 ALO_EXPORT a_ulen (alo_erase)(a_henv env, a_ilen id, a_ulen n);
