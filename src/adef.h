@@ -1,5 +1,5 @@
-/*
- * adef.h
+/**
+ *@file adef.h
  */
 
 #ifndef adef_h_
@@ -78,6 +78,9 @@ typedef void (*a_pfun)(a_henv, void*);
 # define usizec u32c
 # define isizec i32c
 #endif
+
+#undef ISIZE_MAX
+#undef ISIZE_MIN
 
 #define ISIZE_MAX PTRDIFF_MAX
 #define ISIZE_MIN PTRDIFF_MIN
@@ -175,6 +178,12 @@ always_inline a_noret trap() {
 #define try(e) catch(e) { return _e; }
 
 intern a_noret ai_dbg_panic(char const* fmt, ...);
+
+#if defined(ALOI_CHECK_ASSUME)
+# define assume_only(s...) s
+#else
+# define assume_only(...)
+#endif
 
 #if defined(ALOI_CHECK_ASSUME) && defined(ALO_LIB)
 # define panic(m...) ai_dbg_panic(""m)

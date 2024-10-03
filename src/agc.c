@@ -1,5 +1,5 @@
-/*
- * agc.c
+/**
+ *@file agc.c
  */
 
 #define agc_c_
