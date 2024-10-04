@@ -184,11 +184,13 @@ ifeq (Windows,$(TARGET_OS))
   	TARGET_XDYLDFLAGS= -shared
 	TARGET_XLIBS+= -lntdll
 else 
-ifeq (Darwin,$(TARGET_OS))
-	TARGET_STRIP+= -x
-endif
-	TARGET_CCDEF+= -D ALOI_USE_READLINE
-	TARGET_XLIBS+= -lreadline
+	ifeq (Darwin,$(TARGET_OS))
+		TARGET_STRIP+= -x
+	endif
+	ifeq (enable,$(READLINE))
+		TARGET_CCDEF+= -D ALOI_USE_READLINE
+		TARGET_XLIBS+= -lreadline
+	endif
 endif
 
 ##############################################################
