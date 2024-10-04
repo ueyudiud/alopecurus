@@ -416,13 +416,6 @@ static void cfun_mark(Global* gbl, GFun* self) {
     ai_gc_trace_work(gbl, fun_size(len));
 }
 
-static void fun_except(a_henv env, GFun* self, unused a_msg msg) {
-    Value* bot = vm_push_args(env, v_of_func(self), env->error);
-    v_set_nil(&env->error);
-    Value err = ai_vm_call_meta(env, bot);
-    v_set(env, &env->error, err);
-}
-
 void ai_proto_drop(Global* gbl, GProto* self) {
     if (self->flags & FUN_FLAG_UNIQUE) {
         uniq_afun_drop(gbl, self->cache);

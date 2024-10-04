@@ -9,6 +9,7 @@
 
 #include "abuf.h"
 #include "astr.h"
+#include "agc.h"
 #include "aapi.h"
 
 #include "alo.h"
@@ -19,7 +20,7 @@ typedef struct {
     a_lstr sub;
     a_lstr pat;
     a_lstr rep;
-} RepCtx;
+} Sub;
 
 static Buf* l_newbuf(a_henv env) {
     return cast(Buf*, aloL_newbuf(env));
@@ -48,7 +49,7 @@ static char const* lstrstr(a_lstr sub, a_lstr pat) {
     return null;
 }
 
-static void l_replace(a_henv env, RepCtx* ctx, Buf* buf) {
+static void l_replace(a_henv env, Sub* ctx, Buf* buf) {
     if (ctx->pat.len <= ctx->rep.len) {
         at_buf_check(env, buf, ctx->sub.len);
     }
@@ -69,7 +70,7 @@ static void l_replace(a_henv env, RepCtx* ctx, Buf* buf) {
 }
 
 char const* aloS_replace(a_henv env, char const* sub, char const* pat, char const* rep) {
-    RepCtx ctx = {
+    Sub ctx = {
         .sub = ntstr2lstr(sub),
         .pat = ntstr2lstr(pat),
         .rep = ntstr2lstr(rep)
@@ -85,12 +86,29 @@ char const* aloS_replace(a_henv env, char const* sub, char const* pat, char cons
     return out;
 }
 
-static a_msg str_replace(a_henv env) {
-    RepCtx ctx;
+static a_lstr check_lstr(a_henv env, a_ilen id) {
+    a_lstr str;
+    str.ptr = aloL_checklstr(env, id, &str.len);
+    return str;
+}
 
-    ctx.sub.ptr = aloL_checklstr(env, 0, &ctx.sub.len);
-    ctx.pat.ptr = aloL_checklstr(env, 1, &ctx.pat.len);
-    ctx.rep.ptr = aloL_checklstr(env, 2, &ctx.rep.len);
+static a_lstr opt_lstr_(a_henv env, a_ilen id, a_lstr dfl) {
+    a_lstr str;
+    str.ptr = aloL_optlstr(env, id, &str.len);
+    if (str.ptr == null) {
+        str = dfl;
+    }
+    return str;
+}
+
+#define opt_lstr(env,id,dfl) opt_lstr_(env, id, (a_lstr) { ""dfl, sizeof(dfl) - 1 })
+
+static a_msg str_replace(a_henv env) {
+    Sub ctx;
+
+    ctx.sub = check_lstr(env, 0);
+    ctx.pat = check_lstr(env, 1);
+    ctx.rep = check_lstr(env, 2);
 
     char const* beg = lstrstr(ctx.sub, ctx.pat);
     if (beg != null) {
@@ -114,8 +132,7 @@ static a_msg str_replace(a_henv env) {
 }
 
 static a_msg str_trim(a_henv env) {
-    a_lstr str;
-    str.ptr = aloL_checklstr(env, 0, &str.len);
+    a_lstr str = check_lstr(env, 0);
 
     char const* p = str.ptr;
     char const* q = str.ptr + str.len;
@@ -147,9 +164,69 @@ backward:
     return 1;
 }
 
+typedef struct {
+    a_lstr str;
+    a_lstr sep;
+    a_u32 rep;
+} Rep;
+
+static a_msg l_repeat(void* rctx, void* dst, unused a_usize len) {
+    Rep* ctx = rctx;
+
+    memcpy(dst, ctx->str.ptr, ctx->str.len);
+    dst += ctx->str.len;
+
+    for (a_u32 i = 1; i < ctx->rep; ++i) {
+        memcpy(dst, ctx->sep.ptr, ctx->sep.len);
+        dst += ctx->sep.len;
+
+        memcpy(dst, ctx->str.ptr, ctx->str.len);
+        dst += ctx->str.len;
+    }
+
+    return ALO_SOK;
+}
+
+static a_bool get_rep_len(a_usize* l, a_usize a, a_usize b, a_usize r) {
+    a_usize al = try_mul(a, r);
+    a_usize bl = try_mul(b, r - 1);
+    return ckd_add(l, al, bl);
+}
+
+static a_msg str_repeat(a_henv env) {
+    Rep ctx = {
+        .str = check_lstr(env, 0),
+        .rep = cast(a_u32, aloL_checkint(env, 1)),
+        .sep = opt_lstr(env, 2, "")
+    };
+
+    if (ctx.rep == 0) {
+        v_set_str(env, api_incr_stack(env), g_str(env, STR_EMPTY));
+    }
+    else {
+        GStr* out;
+
+        a_usize len;
+        if (get_rep_len(&len, ctx.str.len, ctx.sep.len, ctx.rep)) {
+            alo_pushntstr(env, "result string too large.");
+            alo_raise(env);
+        }
+
+        a_msg msg = ai_str_load(env, l_repeat, len, &ctx, &out);
+        assume(msg == ALO_SOK);
+
+        v_set_str(env, api_incr_stack(env), out);
+        ai_gc_trigger(env);
+    }
+
+    return 1;
+}
+
 void aloopen_str(a_henv env) {
     static aloL_Entry const bindings[] = {
         { "__look__", null },
+        { "__mul__", str_repeat },
+        { "repeat", str_repeat },
         { "replace", str_replace },
         { "trim", str_trim }
     };
