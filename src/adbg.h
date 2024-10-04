@@ -1,5 +1,5 @@
-/*
- * adbg.h
+/**
+ *@file adbg.h
  */
 
 #ifndef adbg_h_

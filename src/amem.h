@@ -1,5 +1,5 @@
-/*
- * amem.h
+/**
+ *@file amem.h
  */
 
 #ifndef amem_h_

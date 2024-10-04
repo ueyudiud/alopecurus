@@ -1,5 +1,5 @@
-/*
- * agc.h
+/**
+ *@file agc.h
  */
 
 #ifndef agc_h_
