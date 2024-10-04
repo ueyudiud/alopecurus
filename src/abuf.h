@@ -5,8 +5,6 @@
 #ifndef abuf_h_
 #define abuf_h_
 
-#include <string.h>
-
 #include "amem.h"
 
 typedef struct { a_usize _; } BufHeadMark[0];

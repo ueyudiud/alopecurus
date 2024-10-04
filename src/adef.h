@@ -130,7 +130,7 @@ typedef void (*a_efun)(a_henv, void*, a_msg);
 #define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
 #define bit_cast(t,e) ({ auto _b = e; t _t; static_assert(sizeof(_b) == sizeof(t)); memcpy(&_t, &_b, sizeof(t)); _t; })
-#define addr_diff(p,q) ({ void *_p = (p), *_q = (q); _p - _q; })
+#define addr_diff(p,q) ({ void const *_p = (p), *_q = (q); _p - _q; })
 #define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
 #define ref_of(t,a) (*int2ptr(t, a))
 #define ptr_disp(t,p,d) int2ptr(t, ptr2int(p) + (d))

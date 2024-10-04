@@ -103,6 +103,57 @@ static a_lstr opt_lstr_(a_henv env, a_ilen id, a_lstr dfl) {
 
 #define opt_lstr(env,id,dfl) opt_lstr_(env, id, (a_lstr) { ""dfl, sizeof(dfl) - 1 })
 
+static char const* l_memfind(a_lstr str, a_lstr pat) {
+    if (pat.len == 0)
+        return pat.ptr;
+    if (pat.len > str.len)
+        return null;
+
+    char const* pi;
+    int ch = cast(int, *pat.ptr);
+
+    pat.len -= 1;
+    str.len -= pat.len;
+    while (str.len > 0 && (pi = memchr(str.ptr, ch, str.len)) != null) {
+        pi += 1;
+        if (memcmp(pi, pat.ptr + 1, pat.len) == 0)
+            return pi - 1;
+        str.len -= addr_diff(pi, str.ptr);
+        str.ptr = pi;
+    }
+    return null;  /* not found */
+}
+
+static a_msg str_find(a_henv env) {
+    a_lstr str = check_lstr(env, 0);
+    a_lstr pat = check_lstr(env, 1);
+
+    void const* found = l_memfind(str, pat);
+
+    if (found != null) {
+        a_isize off = addr_diff(found, str.ptr);
+        alo_pushint(env, cast(a_i32, off));
+        alo_pushint(env, cast(a_i32, off + pat.len));
+        return 2;
+    }
+
+    return 0;
+}
+
+static a_msg str_startswith(a_henv env) {
+    a_lstr str = check_lstr(env, 0);
+    a_lstr pat = check_lstr(env, 1);
+    alo_pushbool(env, str.len >= pat.len && memcmp(str.ptr, pat.ptr, pat.len) == 0);
+    return 1;
+}
+
+static a_msg str_endswith(a_henv env) {
+    a_lstr str = check_lstr(env, 0);
+    a_lstr pat = check_lstr(env, 1);
+    alo_pushbool(env, str.len >= pat.len && memcmp(str.ptr + str.len - pat.len, pat.ptr, pat.len) == 0);
+    return 1;
+}
+
 static a_msg str_replace(a_henv env) {
     Sub ctx;
 
@@ -128,6 +179,42 @@ static a_msg str_replace(a_henv env) {
     else {
         alo_settop(env, 1);
     }
+    return 1;
+}
+
+static a_msg str_split(a_henv env) {
+    a_lstr str = check_lstr(env, 0);
+    a_lstr pat = check_lstr(env, 1);
+    a_bool strip = aloL_optbool(env, 2, false);
+
+    alo_settop(env, 2);
+    alo_newlist(env, 0);
+
+    char const* ptr = l_memfind(str, pat);
+    if (ptr != null) {
+        do {
+            a_usize len = addr_diff(ptr, str.ptr);
+
+            if (len > 0 || !strip) {
+                alo_pushstr(env, str.ptr, len);
+                alo_put(env, 2);
+            }
+
+            str.len -= len + pat.len;
+            str.ptr += len + pat.len;
+        }
+        while ((ptr = l_memfind(str, pat)) != null);
+
+        if (str.len > 0 || !strip) {
+            alo_pushstr(env, str.ptr, str.len);
+            alo_put(env, 2);
+        }
+    }
+    else {
+        alo_push(env, 0);
+        alo_put(env, 2);
+    }
+
     return 1;
 }
 
@@ -226,8 +313,12 @@ void aloopen_str(a_henv env) {
     static aloL_Entry const bindings[] = {
         { "__look__", null },
         { "__mul__", str_repeat },
+        { "find", str_find },
         { "repeat", str_repeat },
         { "replace", str_replace },
+        { "startswith", str_startswith },
+        { "endswith", str_endswith },
+        { "split", str_split },
         { "trim", str_trim }
     };
 

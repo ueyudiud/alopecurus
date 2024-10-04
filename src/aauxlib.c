@@ -58,15 +58,14 @@ static a_ilen uid2sid(a_henv env, a_ulen id) {
 
 void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 	char const* name = ai_dbg_get_func_name(env, env->frame);
-    a_ilen sid = uid2sid(env, id);
-	if (name == null) aloL_raisef(env, "bad argument #%u, %s", sid, what);
-	aloL_raisef(env, "bad argument #%u to '%s', %s", sid, name, what);
+	if (name == null) aloL_raisef(env, "bad argument #%u, %s", id, what);
+	aloL_raisef(env, "bad argument #%u to '%s', %s", id, name, what);
 }
 
 void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
     a_ilen sid = uid2sid(env, id);
 	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, v_nameof(env, api_elem(env, sid)));
-	aloL_argerror(env, sid, what);
+	aloL_argerror(env, id, what);
 }
 
 void aloL_checktag(a_henv env, a_ulen id, a_msg tag) {
