@@ -272,7 +272,6 @@ typedef struct {
 #define ALO_DEBUG_NEXT 2
 
 #define ALO_DEBUG_FLAG_SOURCE 0x0001
-#define ALO_DEBUG_FLAG_THEN_NEXT 0x10000
 
 ALO_EXPORT a_bool (alo_debug)(a_henv env, alo_Debug* dbg, a_enum n, a_flags w);
 

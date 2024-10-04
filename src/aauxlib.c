@@ -35,7 +35,7 @@ static void aux_dealloc(unused void* ctx, void* blk, unused a_usize sz) {
 }
 
 a_henv aloL_create(void) {
-	alo_Alloc af = {
+	static alo_Alloc const af = {
 		.allocate = aux_alloc,
 		.reallocate = aux_realloc,
 		.deallocate = aux_dealloc
@@ -291,17 +291,17 @@ typedef struct {
 static void trace_fill(a_henv env, Frame* frame, Trace* trace) {
 	GFun* fun = ai_dbg_get_func(env, frame);
 	assume(fun != null, "cannot trace root frame.");
-	if (!(fun->flags & FUN_FLAG_NATIVE)) {
-		GProto* proto = fun->proto;
-		trace->name = proto->dbg_name != null ? str2ntstr(proto->dbg_name) : null;
-		trace->file = proto->dbg_file != null ? str2ntstr(proto->dbg_file) : TRACE_UNKNOWN_FILE;
-		trace->line = ai_dbg_get_line(proto, frame->pc - 1);
-	}
-	else {
-		trace->name = null;
-		trace->file = TRACE_NATIVE_FILE;
-		trace->line = 0;
-	}
+    if (fun->flags & FUN_FLAG_NATIVE) {
+        trace->name = null;
+        trace->file = TRACE_NATIVE_FILE;
+        trace->line = 0;
+    }
+    else {
+        GProto* proto = fun->proto;
+        trace->name = proto->dbg_name != null ? str2ntstr(proto->dbg_name) : null;
+        trace->file = proto->dbg_file != null ? str2ntstr(proto->dbg_file) : TRACE_UNKNOWN_FILE;
+        trace->line = ai_dbg_get_line(proto, frame->pc - 1);
+    }
 }
 
 static Frame* virtual_unwind(a_henv env, a_usize level) {
