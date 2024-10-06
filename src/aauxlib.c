@@ -405,7 +405,7 @@ a_msg aloL_traceerror(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usize 
 
 a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
-    api_check(v_is_type(v), "module expected.");
+    api_check(v_is_type(v), "type expected.");
 
     GType* o = v_as_type(v);
 

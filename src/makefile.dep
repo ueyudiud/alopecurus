@@ -71,10 +71,6 @@ amem.o: amem.c aenv.h actx.h aarch.h adef.h acfg.h alo.h aauxlib.h \
  actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h astrs.h aop.h asym/tm.h \
  asym/kw.h asym/pt.h asym/op.h aobj.h aio.h atype.h atable.h astk.h agc.h \
  aerr.h amem.h
-amodlib.o: amodlib.c adef.h acfg.h aarch.h alo.h aauxlib.h atable.h \
- aobj.h agc.h aenv.h actx.h actx/x64.w64.win.h actx/x64.sysv.posix.h \
- astr.h astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h aio.h \
- atype.h astk.h aapi.h alolib.h
 aparse.o: aparse.c abc.h adef.h acfg.h aarch.h alo.h aauxlib.h afun.h \
  aobj.h aenv.h actx.h actx/x64.w64.win.h actx/x64.sysv.posix.h astr.h \
  astrs.h aop.h asym/tm.h asym/kw.h asym/pt.h asym/op.h aio.h atype.h \

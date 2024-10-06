@@ -137,7 +137,13 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			break;
 		}
         case T_TYPE: {
-            aloi_show("<mod:%p>", v_as_obj(v));
+            GType* self = v_as_type(v);
+            if (self->name->len > 0) {
+                aloi_show("<type:%s>", str2ntstr(self->name));
+            }
+            else {
+                aloi_show("<type:%p>", self);
+            }
             break;
         }
 		case T_OTHER: {

@@ -15,7 +15,6 @@ typedef struct GTable GTable;
 typedef struct GFun GFun;
 typedef struct GUser GUser;
 typedef struct alo_Env GRoute;
-typedef struct GMod GMod;
 typedef struct GType GType;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
