@@ -54,7 +54,7 @@ enum {
     T_TABLE = 5,
     T_FUNC = 6,
     T_STR = 7,
-    T_META = 8,
+    T_TYPE = 8,
     T_TUPLE = 10,
     T_OTHER = 11,
     T_INT = 14,

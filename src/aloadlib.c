@@ -209,8 +209,8 @@ static Impl const lib_impl = {
 
 #define CAPTURED_SELF_INDEX ALO_STACK_INDEX_CAPTURE(0)
 
-static GMod* check_self(a_henv env, a_ilen id) {
-    return v_as_meta(api_elem(env, id));
+static GType* check_self(a_henv env, a_ilen id) {
+    return v_as_type(api_elem(env, id));
 }
 
 /*=========================================================*
@@ -221,15 +221,15 @@ static a_noret bad_state(a_henv env) {
     aloL_raisef(env, "invalid module loader state.");
 }
 
-static GTable* check_ccache(a_henv env, GMod* self) {
+static GTable* check_ccache(a_henv env, GType* self) {
     Value v;
-    catch (ai_mod_getls(env, self, CLIB_CACHE_FIELD_NAME, strlen(CLIB_CACHE_FIELD_NAME), &v) || !v_as_table(v)) {
+    catch (ai_type_getls(env, self, CLIB_CACHE_FIELD_NAME, strlen(CLIB_CACHE_FIELD_NAME), &v) || !v_as_table(v)) {
         bad_state(env);
     }
     return v_as_table(v);
 }
 
-static a_msg load_clib(a_henv env, GMod* self, char const* file, GLib** plib) {
+static a_msg load_clib(a_henv env, GType* self, char const* file, GLib** plib) {
     GLib* lib;
     GTable* cache = check_ccache(env, self);
 
@@ -256,7 +256,7 @@ static a_msg load_clib(a_henv env, GMod* self, char const* file, GLib** plib) {
     return ALO_SOK;
 }
 
-static a_msg load_cfunc(a_henv env, GMod* self, char const* file, char const* func) {
+static a_msg load_cfunc(a_henv env, GType* self, char const* file, char const* func) {
     GLib* lib;
     try (load_clib(env, self, file, &lib));
 
@@ -271,9 +271,9 @@ static a_msg load_cfunc(a_henv env, GMod* self, char const* file, char const* fu
  * 'use' function support
  *=========================================================*/
 
-static GList* check_list(a_henv env, GMod* self, char const* str) {
+static GList* check_list(a_henv env, GType* self, char const* str) {
     Value v;
-    catch (ai_mod_getls(env, self, str, strlen(str), &v) || !v_is_list(v)) {
+    catch (ai_type_getls(env, self, str, strlen(str), &v) || !v_is_list(v)) {
         bad_state(env);
     }
     return v_as_list(v);
@@ -314,7 +314,7 @@ static a_msg loader_clib(a_henv env) {
     char const* file = aloL_checkstr(env, 0);
     alo_settop(env, 1);
 
-    GMod* self = check_self(env, CAPTURED_SELF_INDEX);
+    GType* self = check_self(env, CAPTURED_SELF_INDEX);
     GList* paths = check_list(env, self, CLIB_PATH_FIEND_NAME);
 
     aloL_Buf* buf = aloL_newbuf(env);
@@ -341,7 +341,7 @@ static a_msg loader_alib(a_henv env) {
     char const* file = aloL_checkstr(env, 0);
     alo_settop(env, 1);
 
-    GMod* self = check_self(env, CAPTURED_SELF_INDEX);
+    GType* self = check_self(env, CAPTURED_SELF_INDEX);
     GList* paths = check_list(env, self, ALIB_PATH_FIELD_NAME);
 
     aloL_Buf* buf = aloL_newbuf(env);
@@ -363,8 +363,8 @@ static a_msg loader_alib(a_henv env) {
     return 1;
 }
 
-static GTable* check_cache(a_henv env, GMod* self) {
-    Value* pv = ai_mod_refls(env, self, LOADED_FIELD_NAME, strlen(LOADED_FIELD_NAME));
+static GTable* check_cache(a_henv env, GType* self) {
+    Value* pv = ai_type_refls(env, self, LOADED_FIELD_NAME, strlen(LOADED_FIELD_NAME));
 
     GTable* cache;
     if (v_is_nil(*pv)) {
@@ -388,7 +388,7 @@ static a_noret load_error(a_henv env, a_ilen id, char const* name) {
     aloL_raisef(env, "error loading module '%s':\n\t%s", name, cause);
 }
 
-static void load_module(a_henv env, GMod* self, GStr* name) {
+static void load_module(a_henv env, GType* self, GStr* name) {
     GList* loaders = check_list(env, self, LOADER_FIEND_NAME);
     aloL_Buf* buf = aloL_newbuf(env);
 
@@ -415,7 +415,7 @@ static void load_module(a_henv env, GMod* self, GStr* name) {
 }
 
 static a_msg load_load(a_henv env) {
-    GMod* self = check_self(env, CAPTURED_SELF_INDEX);
+    GType* self = check_self(env, CAPTURED_SELF_INDEX);
     GTable* cache = check_cache(env, self);
 
     GStr* name;

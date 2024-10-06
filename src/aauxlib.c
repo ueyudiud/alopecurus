@@ -12,7 +12,6 @@
 
 #include "abuf.h"
 #include "astr.h"
-#include "amod.h"
 #include "afun.h"
 #include "aenv.h"
 #include "agc.h"
@@ -406,11 +405,11 @@ a_msg aloL_traceerror(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usize 
 
 a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
-    api_check(v_is_mod(v), "module expected.");
+    api_check(v_is_type(v), "module expected.");
 
-    GMod* o = v_as_meta(v);
+    GType* o = v_as_type(v);
 
-    catch (ai_mod_getls(env, o, s, strlen(s), &v)) {
+    catch (ai_type_getls(env, o, s, strlen(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -424,7 +423,7 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_typeof(env, v);
 
-    catch (ai_mod_getls(env, type2mt(o), s, strlen(s), &v)) {
+    catch (ai_type_getls(env, o, s, strlen(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -435,11 +434,11 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
 void aloL_puts(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
-    api_check(v_is_meta(v), "module expected.");
+    api_check(v_is_type(v), "type expected.");
 
-    GMod* o = v_as_meta(v);
+    GType* o = v_as_type(v);
 
-    Value* p = ai_mod_refls(env, o, s, strlen(s));
+    Value* p = ai_type_refls(env, o, s, strlen(s));
 
     v = api_decr_stack(env);
     v_set(env, p, v);
@@ -451,15 +450,15 @@ void aloL_puts(a_henv env, a_ilen id, char const* s) {
 
 void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 	Value v = api_elem(env, id);
-	api_check(v_is_meta(v), "module expected.");
+	api_check(v_is_type(v), "type expected.");
 
-	GMod* o = v_as_meta(v);
+    GType* o = v_as_type(v);
 
 	for (a_usize i = 0; i < ne; ++i) {
 		aloL_Entry const* e = &es[i];
 		assume(e->name != null, "name cannot be null.");
 
-        Value* slot = ai_mod_refls(env, o, e->name, strlen(e->name));
+        Value* slot = ai_type_refls(env, o, e->name, strlen(e->name));
         v_set_nil(slot);
 
 		if (e->fptr != null) {
@@ -550,7 +549,6 @@ void aloL_openlibs(a_henv env) {
 
     static LibEntry const entries[] = {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
-        { ALO_LIB_MOD_NAME, aloopen_mod },
         { ALO_LIB_TYPE_NAME, aloopen_type },
         { ALO_LIB_STR_NAME, aloopen_str },
         { ALO_LIB_LIST_NAME, aloopen_list },

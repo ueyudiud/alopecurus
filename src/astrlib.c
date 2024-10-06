@@ -231,7 +231,7 @@ static a_msg str_trim(a_henv env) {
     }
 
     v_set_str(env, api_incr_stack(env), g_str(env, STR_EMPTY));
-    return 1;
+    goto finish;
 
 backward:
     while (p < q) {
@@ -249,6 +249,7 @@ backward:
         alo_pushstr(env, p, q - p);
     }
 
+finish:
     return 1;
 }
 

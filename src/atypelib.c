@@ -30,7 +30,7 @@ static a_msg type___call__(a_henv env) { /* Should this function write in script
 
 void aloopen_type(a_henv env) {
     static aloL_Entry const bindings[] = {
-        {"__call__", type___call__ }
+        { "__call__", type___call__ }
     };
 
     alo_pushptype(env, ALO_TTYPE);

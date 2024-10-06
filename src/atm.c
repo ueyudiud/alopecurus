@@ -17,7 +17,7 @@
 #define vm_call1(env,vf,va...) ai_vm_call_meta(env, vm_push_args(env, vf, ##va))
 
 static a_bool type_look(a_henv env, GType* type, GStr* k, Value* pv) {
-    return ai_mod_gets(env, type2mt(type), k, pv);
+    return ai_type_gets(env, type, k, pv);
 }
 
 static a_bool type_lookt(a_henv env, GType* type, a_enum tm, Value* pv) {

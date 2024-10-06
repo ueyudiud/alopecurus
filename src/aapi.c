@@ -10,7 +10,6 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
 #include "atype.h"
 #include "actx.h"
 #include "agc.h"
@@ -489,10 +488,12 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 }
 
 void* alo_newmod(a_henv env, a_usize es) {
-    GMod* val = ai_mod_new(env, es);
-    v_set_mod(env, api_incr_stack(env), val);
+    // TODO
+    assume(es == 0);
+    GType* val = ai_type_new(env, null);
+    v_set_type(env, api_incr_stack(env), val);
     ai_gc_trigger(env);
-    return val->extra;
+    return (void*) sizeof(a_usize);
 }
 
 a_msg alo_compute(a_henv env, a_enum op) {
@@ -863,9 +864,9 @@ void* alo_toptr(a_henv env, a_ilen id) {
         case T_PTR: {
             return v_as_ptr(v);
         }
-        case T_META: {
-            GMod* o = v_as_meta(v);
-            return o->extra;
+        case T_TYPE: {
+            GType* o = v_as_type(v);
+            return o; //TODO
         }
         default: {
             api_panic("cannot cast to pointer");

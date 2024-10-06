@@ -7,16 +7,41 @@
 
 #include "aobj.h"
 #include "atable.h"
-#include "amod.h"
+
+typedef struct MNode MNode;
 
 intern GType* ai_type_new(a_henv env, GStr* name);
 intern void ai_type_boost(a_henv env);
+intern a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
+intern a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
+intern a_bool ai_type_getls(a_henv env, GType* self, char const* src, a_usize len, Value* pv);
+intern a_bool ai_type_refs_or_empty(a_henv env, GType* self, GStr* k, MNode** pe);
+intern a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv);
+intern void ai_type_sets(a_henv env, GType* self, GStr* key, Value val);
+intern Value* ai_type_refls(a_henv env, GType* self, char const* src, a_usize len);
 intern void ai_type_clean(Global* gbl);
 
+struct MNode {
+    Value value;
+    GStr* key;
+};
+
 #define GTYPE_STRUCT_HEADER \
-    GMETA_STRUCT_HEADER;    \
-    /* Type metadata (Optional). */ \
-    GStr* name
+    GOBJ_STRUCT_HEADER;     \
+    /* Size of instance */  \
+    a_u32 size;             \
+    /* Type signature */    \
+    a_u32 sig;              \
+    /* Type name. */        \
+    GStr* name;             \
+    /* Named values */      \
+    MNode* ptr;             \
+    a_u32 len;              \
+    a_u32 hmask;            \
+    /* Changed counter */   \
+    a_u32 nchg;             \
+    /* Fast TM flags */     \
+    a_u32 ftmz
 
 /**
  ** Type.
@@ -41,14 +66,10 @@ typedef struct {
 
 #define mt_has_ftm(t,tm) (((t)->ftmz & FTM_BIT(tm)) == 0)
 
-always_inline GMod* type2mt(GType* o) {
-    return g_as(GMod, o);
-}
-
 #define g_is_type(o) g_is(o, ALO_TTYPE)
 
 always_inline a_bool v_is_type(Value v) {
-    return v_is(v, T_META) && g_is_type(v_as_obj(v));
+    return v_is(v, T_TYPE);
 }
 
 always_inline GType* v_as_type(Value v) {
@@ -58,7 +79,7 @@ always_inline GType* v_as_type(Value v) {
 
 always_inline Value v_of_type(GType* o) {
     assume(g_is_type(o), "invalid instance.");
-    return v_of_obj_(o, T_META);
+    return v_of_obj_(o, T_TYPE);
 }
 
 always_inline void v_set_type(a_henv env, Value* d, GType* o) {

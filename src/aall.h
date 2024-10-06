@@ -23,7 +23,6 @@
 #include "alo.h"
 #include "aload.h"
 #include "amem.h"
-#include "atype.h"
 #include "aobj.h"
 #include "aop.h"
 #include "aparse.h"
@@ -32,6 +31,7 @@
 #include "astrs.h"
 #include "atable.h"
 #include "atuple.h"
+#include "atype.h"
 #include "auser.h"
 #include "avm.h"
 

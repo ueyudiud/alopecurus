@@ -178,8 +178,8 @@ static void global_init(a_henv env, unused void* ctx) {
     ai_type_boost(env);
     ai_str_boost2(env);
 
-    GMod* gbl = ai_mod_new(env, 0);
-    v_set_mod(env, &G(env)->global_value, gbl);
+    GType* gbl = ai_type_new(env, 0);
+    v_set_type(env, &G(env)->global_value, gbl);
 }
 
 static a_usize mroute_size() {

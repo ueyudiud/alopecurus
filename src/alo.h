@@ -25,7 +25,7 @@
 #define ALO_VERSION_FULL_STRING(sep) ALO_VERSION_FULL_STRING_BUILDER(ALO_MAJOR_VERSION,ALO_MINOR_VERSION,ALO_PATCH_VERSION,sep)
 
 #define ALO_NAME "Alopecurus"
-#define ALO_COPYRIGHT ALO_NAME " " ALO_VERSION_FULL_STRING(".") " Copyright (C) 2022-2023 ueyudiud"
+#define ALO_COPYRIGHT ALO_NAME " " ALO_VERSION_FULL_STRING(".") " Copyright (C) 2022-2024 ueyudiud"
 
 typedef unsigned char a_byte;
 

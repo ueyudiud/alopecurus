@@ -11,7 +11,6 @@
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
-#include "amod.h"
 #include "atype.h"
 #include "afmt.h"
 #include "aenv.h"
@@ -230,7 +229,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vm;
 
     if (ai_tm_look(env, v, k, &vm)) {
-        catch (!v_is_meta(v) || ai_mod_gets(env, v_as_meta(v), k, &vm)) { //TODO only module can dispatch?
+        catch (!v_is_type(v) || ai_type_gets(env, v_as_type(v), k, &vm)) {
             ai_err_bad_look(env, v_nameof(env, v), k);
         }
 
@@ -258,9 +257,9 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
             }
             return v;
         }
-        case T_META: {
+        case T_TYPE: {
             Value v;
-            catch (ai_mod_get(env, v_as_meta(v1), v2, &v)) {
+            catch (ai_type_get(env, v_as_type(v1), v2, &v)) {
                 return v_of_nil();
             }
             return v;
@@ -288,8 +287,8 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
             ai_table_set(env, v_as_table(v1), v2, v3);
             break;
         }
-        case T_META: {
-            ai_mod_set(env, v_as_meta(v1), v2, v3);
+        case T_TYPE: {
+            ai_type_set(env, v_as_type(v1), v2, v3);
             break;
         }
         case T_OTHER: {
@@ -318,8 +317,8 @@ static Value vm_len(a_henv env, Value v) {
         case T_TABLE: {
             return v_of_int(v_as_table(v)->len);
         }
-        case T_META: {
-            return v_of_int(v_as_meta(v)->len);
+        case T_TYPE: {
+            return v_of_int(v_as_type(v)->len);
         }
         case T_OTHER: {
             a_uint i;
