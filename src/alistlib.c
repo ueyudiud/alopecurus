@@ -145,8 +145,27 @@ static a_msg list_reverse(a_henv env) {
     return 0;
 }
 
+static a_msg list_repeat(a_henv env) {
+    GList* self = check_self(env);
+    a_u32 n = aloL_checkint(env, 1);
+    alo_settop(env, 1);
+
+    a_u32 len;
+    if (ckd_mul(&len, self->len, n)) {
+        aloL_raisef(env, "too many elements");
+    }
+
+    alo_newlist(env, len);
+    GList* result = v_as_list(api_elem(env, 1));
+    for (a_u32 i = 0; i < n; ++i) {
+        ai_list_push_all(env, result, self->ptr, self->len);
+    }
+
+    return 1;
+}
+
 /**
- ** Timsort
+ ** list.sort implementation
  */
 
 #define MIN_MERGE_SHIFT 5
@@ -647,11 +666,13 @@ static a_msg list_sort(a_henv env) {
 void aloopen_list(a_henv env) {
     static aloL_Entry const bindings[] = {
         { "__look__", null },
-        {"__new__", list___new__ },
+        { "__new__", list___new__ },
+        { "__mul__", list_repeat },
         { "clear", list_clear },
         { "get", list_get },
         { "mkstr", list_mkstr },
         { "push", list_push },
+        { "repeat", list_repeat },
         { "reverse", list_reverse },
         { "sort", list_sort }
     };
