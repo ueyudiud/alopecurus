@@ -86,7 +86,7 @@ static void route_mark_stack(Global* gbl, GRoute* self) {
 	if (gbl->gcstep == GCSTEP_PROPAGATE_ATOMIC) {
 		v_set_nil_ranged(stack->top, stack->limit); /* Clear no-marked stack slice. */
 	}
-	else if (!(gbl->flags & GLOBAL_FLAG_EMERGENCYGC)) {
+	else if (!gbl->gcflags.emergency) {
 		ai_stk_shrink(self);
 	}
 #if ALO_STACK_INNER
@@ -178,8 +178,12 @@ static void global_init(a_henv env, unused void* ctx) {
     ai_type_boost(env);
     ai_str_boost2(env);
 
-    GType* gbl = ai_type_new(env, 0);
-    v_set_type(env, &G(env)->global_value, gbl);
+    /* Initialize global scope. */
+    v_set_type(env, &G(env)->global_value, ai_type_new(env, 0));
+
+    /* Clear memory debt and start GC. */
+    ai_gc_set_debt(&m->global, 0);
+    m->global.gcflags.enable = true;
 }
 
 static a_usize mroute_size() {
@@ -206,7 +210,7 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
         .alloc_ctx = ac,
         .active = env,
         .mem_base = size,
-        .flags = GLOBAL_FLAG_DISABLE_GC,
+        .gcflags = { .enable = false },
         .gcpausemul = ALOI_DFL_GCPAUSEMUL,
         .gcstepmul = ALOI_DFL_GCSTEPMUL,
         .white_bit = WHITE1_COLOR,

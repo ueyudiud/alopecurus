@@ -64,6 +64,7 @@ static void cache_grow(a_henv env, StrCache* cache) {
     for (a_usize i = 0; i < old_cap; ++i) {
         GStr** p = &new_ptr[i];
         GStr** q = &new_ptr[i + old_cap];
+        /* Split string in same slot in old array into two slots by hash. */
         GStr* s = *p;
         while (s != null) {
             if (s->hash & old_cap) {
@@ -81,6 +82,28 @@ static void cache_grow(a_henv env, StrCache* cache) {
 
 	cache->ptr = new_ptr;
 	cache->hmask = new_cap - 1;
+}
+
+static void cache_shrink(Global* gbl, StrCache* cache) {
+    a_usize old_cap = cast(a_usize, cache->hmask) + 1;
+    a_usize new_cap = old_cap / 2;
+
+    GStr** old_ptr = cache->ptr;
+
+    /* Move strings. */
+    for (a_usize i = 0; i < new_cap; ++i) {
+        GStr** p = &old_ptr[i];
+        GStr** q = &old_ptr[i + new_cap];
+        /* Merge string from two slots into one slot. */
+        GStr* s;
+        while ((s = *p) != null) {
+            p = &s->snext;
+        }
+        *p = *q;
+    }
+
+    cache->ptr = ai_mem_vshrink(gbl, old_ptr, old_cap, new_cap);
+    cache->hmask = new_cap - 1;
 }
 
 static void cache_hint(a_henv env, StrCache* cache) {
@@ -311,6 +334,13 @@ void ai_str_boost2(a_henv env) {
     run {
         gbl->nomem_error = ai_str_from_ntstr(env, "out of memory.");
         ai_gc_fix_object(env, gbl->nomem_error);
+    }
+}
+
+void ai_str_cache_shrink_if_need(Global* gbl) {
+    StrCache* cache = &gbl->str_cache;
+    if (!gbl->gcflags.emergency && cache->len <= cache->hmask / 4) {
+        cache_shrink(gbl, cache);
     }
 }
 

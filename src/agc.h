@@ -7,6 +7,10 @@
 
 #include "aenv.h"
 
+#ifndef ALOI_MIN_GCSTEPSIZE
+# define ALOI_MIN_GCSTEPSIZE usizec(4096)
+#endif
+
 typedef struct {
 	a_gclist head;
 	a_gclist* tail;

@@ -12,11 +12,9 @@
 
 #define trmark_null GRAY_NULL
 
-#define GCUNIT 256
+#define GCUNITSIZE 256
 
-#ifndef ALOI_MIN_MEM_WORK
-# define ALOI_MIN_MEM_WORK usizec(4096)
-#endif
+#define GC_STOP_WORK (ISIZE_MIN / 2)
 
 #ifndef ALOI_SWEEP_COST
 # define ALOI_SWEEP_COST usizec(64)
@@ -240,6 +238,8 @@ static void propagate_atomic(Global* gbl) {
 
 	propagate_all(gbl, &gbl->tr_gray);
 
+    ai_str_cache_shrink_if_need(gbl);
+
 	gbl->mem_estimate = gbl_mem_total(gbl);
 	flip_color(gbl);
 	gbl->mem_work = old_work;
@@ -313,7 +313,7 @@ void ai_gc_set_debt(Global* gbl, a_isize debt) {
 
 static void compute_work(Global* gbl) {
 #if ALO_M64
-    a_usize work = (gbl->mem_work + gbl->mem_debt) * gbl->gcstepmul / GCUNIT;
+    a_usize work = (gbl->mem_work + gbl->mem_debt) * gbl->gcstepmul / GCUNITSIZE;
     /* We assume address space only use 47-bits, so maximum work will never overflow. */
     assume(work <= ISIZE_MAX);
 #elif ALO_M32
@@ -321,9 +321,9 @@ static void compute_work(Global* gbl) {
     if (ckd_mul(&work, gbl->mem_work + gbl->mem_debt, gbl->gcstepmul)) {
         work = ISIZE_MAX;
     }
-    work /= GCUNIT;
+    work /= GCUNITSIZE;
 #endif
-	gbl->mem_work = cast(a_isize, max(work, ALOI_MIN_MEM_WORK));
+	gbl->mem_work = cast(a_isize, max(work, ALOI_MIN_GCSTEPSIZE));
 }
 
 static void compute_step_debt(Global* gbl, a_isize work) {
@@ -336,7 +336,7 @@ static void compute_step_debt(Global* gbl, a_isize work) {
 
 static void compute_pause_debt(Global* gbl) {
 #if ALO_M64
-    a_usize debt = gbl->mem_estimate * gbl->gcpausemul / GCUNIT;
+    a_usize debt = gbl->mem_estimate * gbl->gcpausemul / GCUNITSIZE;
     /* We assume address space only use 47-bits, so maximum work will never overflow. */
     assume(debt <= ISIZE_MAX);
 #elif ALO_M32
@@ -344,7 +344,7 @@ static void compute_pause_debt(Global* gbl) {
     if (unlikely(ckd_mul(&work, gbl->mem_estimate, gbl->gcpausemul))) {
         work = ISIZE_MAX;
     }
-    debt /= GCUNIT;
+    debt /= GCUNITSIZE;
 #endif
 	gbl->mem_work = cast(a_isize, debt);
 	ai_gc_set_debt(gbl, cast(a_isize, debt));
@@ -353,12 +353,15 @@ static void compute_pause_debt(Global* gbl) {
 void ai_gc_incr_gc(a_henv env) {
 	Global* gbl = G(env);
 	assume(gbl->mem_debt >= 0);
-	assume(!(gbl->flags & GLOBAL_FLAG_INCRGC));
-	if (gbl->flags & GLOBAL_FLAG_DISABLE_GC) return;
+	assume(!gbl->gcflags.incremental, "incremental gc already start.");
+	if (!gbl->gcflags.enable) {
+        ai_gc_set_debt(gbl, GC_STOP_WORK);
+        return;
+    }
 	a_isize work = gbl->mem_work;
-	gbl->flags |= GLOBAL_FLAG_INCRGC;
+    gbl->gcflags.incremental = true;
 	compute_work(gbl);
-	gbl->flags &= ~GLOBAL_FLAG_INCRGC;
+    gbl->gcflags.incremental = false;
 	a_bool finish = run_incr_gc(gbl);
 	if (finish) {
 		compute_pause_debt(gbl);
@@ -370,12 +373,12 @@ void ai_gc_incr_gc(a_henv env) {
 
 void ai_gc_full_gc(a_henv env, a_bool emergency) {
 	Global* gbl = G(env);
-	a_u16 old_flags = gbl->flags;
-	gbl->flags |= GLOBAL_FLAG_FULLGC;
-	if (emergency) gbl->flags |= GLOBAL_FLAG_EMERGENCYGC;
+	GcFlags old_flags = gbl->gcflags;
+    gbl->gcflags.full = true;
+    gbl->gcflags.emergency = emergency;
 	run_full_gc(gbl);
 	compute_pause_debt(gbl);
-	gbl->flags = old_flags;
+	gbl->gcflags = old_flags;
 }
 
 void ai_gc_clean(Global* gbl) {

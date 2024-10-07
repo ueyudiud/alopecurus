@@ -45,6 +45,7 @@ always_inline void ai_mem_vdealloc(alo_Alloc const* af, void* ac, void* blk, a_u
 
 #define ai_mem_vnew(env,type,size) cast(typeof(type)*, ai_mem_alloc(env, sizeof(type) * (size)))
 #define ai_mem_vgrow(env,vec,size_old,size_new) cast(typeof(vec), ai_mem_realloc(env, vec, sizeof((vec)[0]) * (size_old), sizeof((vec)[0]) * (size_new)))
+#define ai_mem_vshrink(gbl,vec,size_old,size_new) cast(typeof(vec), ai_mem_realloc((gbl)->active, vec, sizeof((vec)[0]) * (size_old), sizeof((vec)[0]) * (size_new)))
 #define ai_mem_vdel(gbl,vec,size) ai_mem_dealloc(gbl, vec, sizeof((vec)[0]) * (size))
 
 /* Direct memory support. */

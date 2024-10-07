@@ -159,10 +159,12 @@ ALO_EXPORT void (alo_destroy)(a_henv env);
 ALO_EXPORT void (alo_setpanic)(a_henv env, a_cfun f);
 ALO_EXPORT void (alo_sethook)(a_henv env, a_hfun kf, a_hctx kc, a_flags mask);
 
-#define ALO_ATTR_VERSION 0x0001
-#define ALO_ATTR_VARIANT 0x0002
+#define ALO_ATTR_VERSION 1
+#define ALO_ATTR_VARIANT 2
+#define ALO_ATTR_YIELD 3
+#define ALO_ATTR_ASYNC 4
 
-ALO_EXPORT a_bool (alo_attri)(a_henv env, a_enum n, a_i32* pi);
+ALO_EXPORT a_bool (alo_attri)(a_henv env, a_enum n, a_int* pi);
 
 ALO_EXPORT a_ilen (alo_stacksize)(a_henv env);
 ALO_EXPORT a_bool (alo_ensure)(a_henv env, a_ulen n);
@@ -194,7 +196,7 @@ ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_ulen n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 ALO_EXPORT void* (alo_newmod)(a_henv env, a_usize es);
 
-#define ALO_NEWTYPE_FLAG_STATIC 0x0001
+#define ALO_NEWTYPE_STATIC 0x0001
 
 ALO_EXPORT void (alo_newtype)(a_henv env, char const* n, a_flags flags);
 
@@ -220,11 +222,6 @@ ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
 
-#define ALO_FATTR_YIELD 0x0001
-#define ALO_FATTR_ASYNC 0x0002
-
-ALO_EXPORT a_bool (alo_fattrz)(a_henv env, a_enum n);
-
 #define alo_canyield(env) alo_fattrz(env, ALO_FATTR_YIELD)
 #define alo_isasync(env) alo_fattrz(env, ALO_FATTR_ASYNC)
 
@@ -246,7 +243,13 @@ ALO_EXPORT a_henv (alo_toroute)(a_henv env, a_ilen id);
 #define alo_istable(env,id) (alo_tagof(env, id) == ALO_TTABLE)
 #define alo_isfunc(env,id) (alo_tagof(env, id) == ALO_TFUNC)
 
-ALO_EXPORT void (alo_fullgc)(a_henv env);
+#define ALO_GCHINT_STOP 1
+#define ALO_GCHINT_START 2
+#define ALO_GCHINT_FULL 3
+#define ALO_GCHINT_STEP 4
+#define ALO_GCHINT_TOTAL 5
+
+ALO_EXPORT a_usize (alo_gchint)(a_henv env, a_enum n, a_usize s);
 
 #define ALO_COMP_OPT_NOTHING 0x0
 #define ALO_COMP_OPT_STATIC_LINK 0x1

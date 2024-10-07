@@ -88,6 +88,13 @@ typedef struct {
 
 enum { TYPE__COUNT = ALO_TUSER };
 
+typedef struct {
+    a_u8 enable: 1;
+    a_u8 incremental: 1;
+    a_u8 full: 1;
+    a_u8 emergency: 1;
+} GcFlags;
+
 struct Global {
     Alloc alloc_;
     void* alloc_ctx;
@@ -113,7 +120,7 @@ struct Global {
     a_hash seed;
     a_u16 gcpausemul;
     a_u16 gcstepmul;
-    a_u16 flags;
+    GcFlags gcflags;
     a_u8 white_bit;
     a_u8 gcstep;
     volatile atomic_uint_fast8_t hookm;

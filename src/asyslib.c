@@ -6,6 +6,7 @@
 #define ALO_LIB
 
 #include <stdlib.h>
+#include <time.h>
 #include <errno.h>
 
 #include "agc.h"
@@ -64,13 +65,26 @@ static a_msg sys_getenv(a_henv env) {
 	return 1;
 }
 
+static a_msg sys_gc(a_henv env) {
+    alo_gchint(env, ALO_GCHINT_FULL, 0);
+    return 0;
+}
+
+static a_msg sys_clock(a_henv env) {
+    clock_t time = clock();
+    alo_pushfloat(env, cast(a_float, time) / cast(a_float, CLOCKS_PER_SEC));
+    return 1;
+}
+
 void aloopen_sys(a_henv env) {
 	static aloL_Entry const bindings[] = {
+        { "clock", sys_clock },
 		{ "command", sys_command },
 		{ "exit", sys_exit },
+        { "gc", sys_gc },
 		{ "getenv", sys_getenv }
 	};
 
-    alo_newtype(env, ALO_LIB_SYS_NAME, ALO_NEWTYPE_FLAG_STATIC);
+    alo_newtype(env, ALO_LIB_SYS_NAME, ALO_NEWTYPE_STATIC);
     aloL_putalls(env, -1, bindings);
 }

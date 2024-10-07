@@ -41,13 +41,15 @@ a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv) {
 }
 
 a_bool ai_type_gets(a_henv env, GType* self, GStr* key, Value* pval) {
-    if (self->len == 0) return true;
+    if (self->len == 0)
+        return true;
 
     a_u32 index = key->hash & self->hmask;
     a_u32 perturb = key->hash;
 
     MNode* field = &self->ptr[index];
-    if (field->key == null) return true;
+    if (field->key == null)
+        return true;
 
     loop {
         if (field->key == key) {
@@ -69,9 +71,8 @@ a_bool ai_type_getls(a_henv env, GType* self, char const* src, a_usize len, Valu
     a_hash hash = ai_str_hashof(env, src, len);
 
     GStr* str = ai_str_get_or_null_with_hash(env, src, len, hash);
-    if (str == null) {
+    if (str == null)
         return true;
-    }
 
     return ai_type_gets(env, self, str, pval);
 }

@@ -21,6 +21,7 @@ intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
 intern a_bool ai_str_requals(GStr* self, void const* dat, a_usize len);
 intern void ai_str_boost1(a_henv env, void* block);
 intern void ai_str_boost2(a_henv env);
+intern void ai_str_cache_shrink_if_need(Global* gbl);
 intern void ai_str_clean(Global* gbl);
 
 struct GStr {

@@ -58,11 +58,11 @@ a_msg alo_init(void) {
 /**
  ** Load integer attribute.
  *@param env the optional runtime environment.
- *@param n the attribute dbg_name.
+ *@param n the attribute name.
  *@param pi the pointer to store result.
- *@return false if attribute dbg_name is valid and true for otherwise.
+ *@return false if attribute name is valid and true for otherwise.
  */
-a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
+a_bool alo_attri(unused a_henv env, a_enum n, a_int* pi) {
 	switch (n) {
 		case ALO_ATTR_VERSION:
 			*pi = ALO_VERSION_NUMBER;
@@ -70,6 +70,12 @@ a_bool alo_attri(unused a_henv env, a_enum n, a_i32* pi) {
 		case ALO_ATTR_VARIANT:
 			*pi = ALO_VARIANT;
 			return false;
+        case ALO_ATTR_YIELD:
+            *pi = true;
+            return false;
+        case ALO_ATTR_ASYNC:
+            *pi = true;
+            return false;
 		default:
 			return true;
 	}
@@ -791,16 +797,48 @@ void alo_yield(a_henv env) {
 	ai_env_yield(env);
 }
 
-a_bool alo_fattrz(a_henv env, a_enum n) {
-	quiet(env);
-	switch (n) {
-		case ALO_FATTR_YIELD:
-			return true;
-        case ALO_FATTR_ASYNC:
-            return false;
-		default:
-			return false;
-	}
+a_usize alo_gchint(a_henv env, a_enum n, a_usize s) {
+    Global* gbl = G(env);
+    switch (n) {
+        case ALO_GCHINT_STOP: {
+            gbl->gcflags.enable = false;
+            return 0;
+        }
+        case ALO_GCHINT_START: {
+            gbl->gcflags.enable = true;
+            return 0;
+        }
+        case ALO_GCHINT_FULL: {
+            quiet(s);
+            if (!gbl->gcflags.full) { /* Avoid start GC recursively */
+                ai_gc_full_gc(env, false);
+            }
+            return 0;
+        }
+        case ALO_GCHINT_STEP: {
+            if (!gbl->gcflags.incremental && !gbl->gcflags.full) { /* Avoid start GC recursively */
+                GcFlags old_flags = gbl->gcflags;
+                gbl->gcflags.enable = true;
+                if (s == 0) {
+                    ai_gc_set_debt(gbl, ALOI_MIN_GCSTEPSIZE);
+                    ai_gc_incr_gc(env);
+                }
+                else {
+                    ai_gc_set_debt(gbl, cast(a_isize, s) + gbl->mem_debt);
+                    ai_gc_trigger(env);
+                }
+                gbl->gcflags = old_flags;
+            }
+            return 0;
+        }
+        case ALO_GCHINT_TOTAL: {
+            quiet(s);
+            return gbl_mem_total(gbl);
+        }
+        default: {
+            return 0;
+        }
+    }
 }
 
 a_msg alo_tagof(a_henv env, a_ilen id) {
@@ -899,10 +937,6 @@ void alo_newtype(a_henv env, char const* n, a_flags flags) {
 	v_set_type(env, pv, self);
 
 	ai_gc_trigger(env);
-}
-
-void alo_fullgc(a_henv env) {
-	ai_gc_full_gc(env, false);
 }
 
 static GStr* l_get_str(a_henv env, a_ilen id) {

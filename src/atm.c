@@ -79,6 +79,7 @@ a_bool ai_tm_len(a_henv env, Value v, a_uint* pi) {
     if (!meta_int(vr, pi)) {
         ai_err_raisef(env, ALO_EINVAL, "result for '__len__' should be int.");
     }
+
     return false;
 }
 
@@ -89,12 +90,12 @@ a_bool ai_tm_look(a_henv env, Value v, GStr* k, Value* pv) {
     if (v_is_func(vf)) {
         Value vr = vm_call1(env, vf, v, v_of_str(k));
         v_set(env, pv, vr);
-        return false;
     }
     else {
         v_set(env, pv, ai_vm_get(env, vf, v_of_str(k)));
-        return false;
     }
+
+    return false;
 }
 
 a_bool ai_tm_str(a_henv env, Value v, GStr** ps) {
@@ -124,6 +125,7 @@ a_bool ai_tm_get(a_henv env, Value v1, Value v2, Value* pv) {
 
     Value vr = vm_call1(env, vf, v1, v2);
     v_set(env, pv, vr);
+
     return false;
 }
 
@@ -134,6 +136,7 @@ a_bool ai_tm_set(a_henv env, Value v1, Value v2, Value v3) {
     try (type_lookft(env, g_typeof(env, p), TM___set__, &vf));
 
     vm_call0(env, vf, v1, v2, v3);
+
     return false;
 }
 
@@ -143,6 +146,7 @@ a_bool ai_tm_unary(a_henv env, a_enum tm, Value v, Value* pv) {
 
     Value vr = vm_call1(env, vf, v);
     v_set(env, pv, vr);
+
     return false;
 }
 
@@ -152,6 +156,7 @@ a_bool ai_tm_binary(a_henv env, a_enum tm, Value v1, Value v2, Value* pv) {
 
     Value vr = vm_call1(env, vf, v1, v2);
     v_set(env, pv, vr);
+
     return false;
 }
 
@@ -161,6 +166,7 @@ a_bool ai_tm_relation(a_henv env, a_enum tm, Value v1, Value v2, a_bool* pz) {
 
     Value vr = vm_call1(env, vf, v1, v2);
     *pz = v_to_bool(vr);
+
     return false;
 }
 
@@ -169,5 +175,6 @@ a_bool ai_tm_precall(a_henv env, Value v, Value* pv) {
     try (type_lookt(env, v_typeof(env, v), TM___call__, &vf));
 
     v_set(env, pv, vf);
+
     return false;
 }
