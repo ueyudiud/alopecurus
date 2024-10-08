@@ -15,7 +15,7 @@
 
 static Impl const type_impl;
 
-#define MOD_MAX_CAP (u32c(1) << 31)
+#define TYPE_MAX_CAP (u32c(1) << 31)
 
 #define dead_key ((GStr*) sizeof(a_usize))
 
@@ -29,7 +29,7 @@ GType* ai_type_new(a_henv env, GStr* name) {
     self->name = name ?: g_str(env, STR_EMPTY);
     self->size = size;
 
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
     return self;
 }
 
@@ -145,10 +145,10 @@ static void type_put(a_henv env, GType* self, GStr* key, Value val) {
 }
 
 static void type_grow(a_henv env, GType* self) {
-    a_u32 old_cap = (self->hmask + 1) & ~1;
+    a_u32 old_cap = (self->hmask + 1) & ~u32c(1);
     MNode* old_ptr = self->ptr;
 
-    if (unlikely(old_cap == MOD_MAX_CAP)) {
+    if (unlikely(old_cap == TYPE_MAX_CAP)) {
         ai_err_raisef(env, ALO_EINVAL, "too many fields");
     }
 

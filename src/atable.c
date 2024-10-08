@@ -44,7 +44,7 @@ GTable* ai_table_new(a_henv env) {
     self->hmask = 0;
     self->len = 0;
 
-	ai_gc_register_object(env, self);
+	ai_gc_register_normal(env, self);
     return self;
 }
 

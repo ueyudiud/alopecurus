@@ -162,7 +162,7 @@ GStr* ai_str_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash
     str_init(self, src, len, hash);
 
     cache_emplace_in_place(cache, self);
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
     return self;
 }
 
@@ -185,7 +185,7 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	StrCache* cache = &G(env)->str_cache;
 	cache_hint(env, cache);
 	cache_emplace_in_place(cache, self);
-	ai_gc_register_object(env, self);
+	ai_gc_register_normal(env, self);
 
 	return self;
 }
@@ -326,11 +326,6 @@ void ai_str_boost2(a_henv env) {
         for (a_u32 i = 0; i < STR__COUNT; ++i) {
             cache_emplace_in_place(cache, gbl->fast_strs[i]);
         }
-    }
-
-    run {
-        gbl->nomem_error = ai_str_from_ntstr(env, "out of memory.");
-        ai_gc_fix_object(env, gbl->nomem_error);
     }
 }
 

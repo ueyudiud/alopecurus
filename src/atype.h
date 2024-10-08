@@ -53,11 +53,6 @@ struct GType {
 typedef struct {
     GTYPE_STRUCT_HEADER;
     Impl body;
-} GIType;
-
-typedef struct {
-    GTYPE_STRUCT_HEADER;
-    Impl body;
     a_u32 block_size;
     a_u32 num_slot;
 } GUType;

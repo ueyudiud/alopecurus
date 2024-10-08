@@ -499,7 +499,7 @@ void* aloL_newblk(a_henv env, a_usize s) {
     GBlock* self = ai_mem_alloc(env, block_size(s));
     self->impl = &block_impl;
     self->size = s;
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
 
     v_set_obj(env, api_incr_stack(env), self);
 

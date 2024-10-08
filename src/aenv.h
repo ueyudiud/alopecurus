@@ -107,7 +107,6 @@ struct Global {
     a_isize mem_work;
     a_usize mem_estimate;
     a_gclist gc_normal;
-    a_gclist gc_fixed;
     a_gclist gc_closable;
     a_gclist gc_toclose;
     a_gcnext* gc_sweep;
@@ -168,7 +167,7 @@ always_inline void v_set_route(a_henv env, Value* d, GRoute* o) {
 
 always_inline GType* g_typeof(a_henv env, a_gptr o) {
     a_u32 tag = o->impl->tag;
-    return tag < TYPE__COUNT ? g_type(env, tag) : g_as(GType, from_member(GIType, body, o->impl));
+    return tag < TYPE__COUNT ? g_type(env, tag) : g_as(GType, from_member(GUType, body, o->impl));
 }
 
 #define g_typeof(env,p) g_typeof(env, g_as_obj(p))

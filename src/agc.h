@@ -71,17 +71,15 @@ always_inline a_gptr strip_trace(a_trmark* list) {
 	return o;
 }
 
-intern void ai_gc_register_object_(a_henv env, a_gptr obj);
-intern void ai_gc_register_objects(a_henv env, RefQueue* rq);
-intern void ai_gc_fix_object_(a_henv env, a_gptr obj);
+intern void ai_gc_register_normal_(a_henv env, a_gptr obj);
+intern void ai_gc_register_normals(a_henv env, RefQueue* rq);
 intern void ai_gc_trace_mark_(Global* gbl, a_gptr obj);
 intern void ai_gc_set_debt(Global* gbl, a_isize debt);
 intern void ai_gc_incr_gc(a_henv env);
 intern void ai_gc_full_gc(a_henv env, a_bool emergency);
 intern void ai_gc_clean(Global* gbl);
 
-#define ai_gc_register_object(env,obj) ai_gc_register_object_(env, g_as_obj(obj))
-#define ai_gc_fix_object(env,obj) ai_gc_fix_object_(env, g_as_obj(obj))
+#define ai_gc_register_normal(env,obj) ai_gc_register_normal_(env, g_as_obj(obj))
 
 always_inline void ai_gc_trace_mark(Global* gbl, a_gptr obj) {
 	if (g_has_white_color_within_assume_alive(gbl, obj)) {

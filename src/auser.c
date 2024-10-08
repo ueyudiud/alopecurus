@@ -22,7 +22,7 @@ GUser* ai_user_new(a_henv env, GUType* type) {
     memclr(self->block, type->block_size);
     v_set_nil_ranged(self->slot - type->num_slot, self->slot);
 
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
 
     return self;
 }
@@ -35,7 +35,7 @@ GUser* ai_user_clone(a_henv env, GUser* proto) {
     memcpy(self->block, proto->block, type->block_size);
     v_cpy_all(env, self->slot - type->num_slot, proto->slot - type->num_slot, type->num_slot);
 
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
 
     return self;
 }

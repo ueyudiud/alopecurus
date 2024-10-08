@@ -41,14 +41,14 @@ always_inline void flip_color(Global* gbl) {
 	gbl->white_bit = cast(a_u8, other_color(gbl));
 }
 
-void ai_gc_register_object_(a_henv env, a_gptr obj) {
+void ai_gc_register_normal_(a_henv env, a_gptr obj) {
 	g_fetch(obj, drop); /* Only collectable object need be registered. */
 	Global* gbl = G(env);
 	join_gc(&gbl->gc_normal, obj);
 	g_set_white(gbl, obj);
 }
 
-void ai_gc_register_objects(a_henv env, RefQueue* rq) {
+void ai_gc_register_normals(a_henv env, RefQueue* rq) {
 	Global* gbl = G(env);
 
 #ifdef ALOI_CHECK_ASSUME
@@ -59,13 +59,6 @@ void ai_gc_register_objects(a_henv env, RefQueue* rq) {
 
 	*rq->tail = gbl->gc_normal;
 	gbl->gc_normal = rq->head;
-}
-
-void ai_gc_fix_object_(a_henv env, a_gptr obj) {
-	Global* gbl = G(env);
-	assume(gbl->gc_normal == obj, "object not registered.");
-	strip_gc(&gbl->gc_normal);
-	join_gc(&gbl->gc_fixed, obj);
 }
 
 static void really_mark_object(Global* gbl, a_gptr obj) {
@@ -385,5 +378,4 @@ void ai_gc_clean(Global* gbl) {
 	drop_all(gbl, &gbl->gc_closable);
 	drop_all(gbl, &gbl->gc_toclose);
 	drop_all(gbl, &gbl->gc_normal);
-	drop_all(gbl, &gbl->gc_fixed);
 }

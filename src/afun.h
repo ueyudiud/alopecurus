@@ -47,15 +47,6 @@ struct RcCap {
 	};
 };
 
-typedef struct {
-	a_u8 _fdebug: 1;
-    /**
-     ** The prototype create with prototype flag will also create
-     ** a unique function.
-     */
-	a_u8 _funiq: 1;
-} ProtoFlags;
-
 /**
  ** Function fixed sized information.
  */

@@ -175,7 +175,7 @@ static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
         return msg;
     }
 
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
     v_set_obj(env, api_incr_stack(env), self);
 
     *plib = self;

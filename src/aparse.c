@@ -3273,11 +3273,11 @@ static void parser_start(Parser* par) {
 static void proto_register_recursive(a_henv env, GProto* proto) {
     if (proto->flags & FUN_FLAG_UNIQUE) {
         assume(proto->cache != null, "no unique instance given");
-        ai_gc_register_object(env, proto->cache);
+        ai_gc_register_normal(env, proto->cache);
     }
     else {
         assume(proto->gnext == null, "children function not collected");
-        ai_gc_register_object(env, proto);
+        ai_gc_register_normal(env, proto);
     }
 	for (a_u32 i = 0; i < proto->nsub; ++i) {
         proto_register_recursive(env, proto->subs[i]);

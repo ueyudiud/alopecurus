@@ -136,7 +136,7 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 
 	v_cpy_all(env, self->val_caps, pcap, ncap);
 
-	ai_gc_register_object(env, self);
+	ai_gc_register_normal(env, self);
 
 	return self;
 }
@@ -247,7 +247,7 @@ GFun* ai_fun_new(a_henv env, GProto* proto) {
 		self->ref_caps[i] = cap_load(env, &infos[i], parent->ref_caps, base);
 	}
 
-	ai_gc_register_object(env, self);
+	ai_gc_register_normal(env, self);
 
 	return self;
 }

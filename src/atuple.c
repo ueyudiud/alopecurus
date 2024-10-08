@@ -32,7 +32,7 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_ulen len) {
 	self->hash = 0;
 	v_cpy_all(env, self->ptr, src, len);
 
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
     return self;
 }
 

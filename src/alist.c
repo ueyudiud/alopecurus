@@ -28,7 +28,7 @@ GList* ai_list_new(a_henv env) {
     self->cap = 0;
     self->len = 0;
 
-    ai_gc_register_object(env, self);
+    ai_gc_register_normal(env, self);
 
     return self;
 }

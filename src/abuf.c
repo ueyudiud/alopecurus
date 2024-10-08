@@ -52,7 +52,7 @@ GBuf* ai_buf_new(a_henv env) {
 	self->impl = &buf_impl;
 	at_buf_init(self);
 
-	ai_gc_register_object(env, self);
+	ai_gc_register_normal(env, self);
 
 	return self;
 }

@@ -167,7 +167,7 @@ static void load_chunk(unused a_henv env, void* ctx) {
     /* Load root prototype */
     load_proto(ic, true);
     /* Register prototypes into GC */
-	ai_gc_register_objects(ic->in.env, &ic->rq);
+    ai_gc_register_normals(ic->in.env, &ic->rq);
 }
 
 static void load_mark(Global* gbl, void* ctx) {
