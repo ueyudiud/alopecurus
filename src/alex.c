@@ -186,12 +186,9 @@ void ai_lex_close(Lexer* lex) {
 
 char const* ai_lex_tagname(a_i32 tag) {
 	static a_u16 const l_offs[] = {
-#define STRDEF(n) [TK_##n] = STR_POS_##n,
-#define STRDEF2(n,r) [TK_##n] = STR_POS_##n,
-# include "asym/kw.h"
-# include "asym/op.h"
-#undef STRDEF
-#undef STRDEF2
+#define SYMLIST SYMLIST_TOKEN
+#define SYMDEF(n,r) [TK_##n] = STR_POS_##n,
+#include "asym.h"
 	};
 
 	return &ai_str_interns[l_offs[tag]];

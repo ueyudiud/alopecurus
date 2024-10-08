@@ -6,6 +6,7 @@
 #define aerr_h_
 
 #include "aobj.h"
+#include "astrs.h"
 
 intern a_noret ai_err_raisef(a_henv env, a_msg msg, char const* fmt, ...);
 intern a_noret ai_err_raisevf(a_henv env, a_msg msg, char const* fmt, va_list varg);

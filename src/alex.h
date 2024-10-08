@@ -37,12 +37,9 @@ enum {
     TK__FIRST,
     TK__STUB = TK__FIRST - 1,
 
-#define STRDEF(n) TK_##n,
-#define STRDEF2(n,r) TK_##n,
-# include "asym/kw.h"
-# include "asym/op.h"
-#undef STRDEF
-#undef STRDEF2
+#define SYMLIST SYMLIST_TOKEN
+#define SYMDEF(n,r) TK_##n,
+#include "asym.h"
 
     TK__MAX
 };
