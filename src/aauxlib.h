@@ -24,10 +24,12 @@ ALO_EXPORT a_int (aloL_checkint)(a_henv env, a_ulen id);
 ALO_EXPORT a_float (aloL_checknum)(a_henv env, a_ulen id);
 ALO_EXPORT void* (aloL_checkptr)(a_henv env, a_ulen id);
 ALO_EXPORT char const* (aloL_checklstr)(a_henv env, a_ulen id, a_usize* plen);
+ALO_EXPORT a_u32 (aloL_checkenum)(a_henv env, a_ulen id, char const* const* es, char const* what);
 ALO_EXPORT a_bool (aloL_optbool)(a_henv env, a_ulen id, a_bool dfl);
 ALO_EXPORT a_bool (aloL_optint_)(a_henv env, a_ulen id, a_int* pval);
 ALO_EXPORT a_bool (aloL_optnum_)(a_henv env, a_ulen id, a_float* pval);
 ALO_EXPORT char const* (aloL_optlstr)(a_henv env, a_ulen id, a_usize* plen);
+ALO_EXPORT a_u32 (aloL_optenum)(a_henv env, a_ulen id, char const* const* es, char const* what, a_u32 dfl);
 
 #define aloL_checkstr(env,id) aloL_checklstr(env, id, NULL)
 #define aloL_optstr(env,id) aloL_optlstr(env, id, NULL)

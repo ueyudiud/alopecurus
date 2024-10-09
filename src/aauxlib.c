@@ -63,7 +63,7 @@ void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 
 void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
     a_ilen sid = uid2sid(env, id);
-	char const* what = alo_pushfstr(env, "'%s' expected, got '%s'", name, v_nameof(env, api_elem(env, sid)));
+	char const* what = alo_pushfstr(env, "%s expected, got %s", name, v_nameof(env, api_elem(env, sid)));
 	aloL_argerror(env, id, what);
 }
 
@@ -118,6 +118,19 @@ char const* aloL_checklstr(a_henv env, a_ulen id, a_usize* plen) {
 	return str2ntstr(str);
 }
 
+a_u32 aloL_checkenum(a_henv env, a_ulen id, char const* const* es, char const* what) {
+    char const* v = aloL_checkstr(env, id);
+    char const* e;
+
+    for (a_u32 i = 0; (e = es[i]) != null; ++i) {
+        if (strcmp(v, e) == 0)
+            return i;
+    }
+
+    what = alo_pushfstr(env, "%s expected, got '%s'", what, v);
+    aloL_argerror(env, id, what);
+}
+
 a_bool aloL_optbool(a_henv env, a_ulen id, a_bool dfl) {
     Value v = api_elem(env, uid2sid(env, id));
     return !v_is_nil(v) ? v_to_bool(v) : dfl;
@@ -160,6 +173,22 @@ char const* aloL_optlstr(a_henv env, a_ulen id, a_usize* plen) {
 		*plen = str->len;
 	}
 	return str2ntstr(str);
+}
+
+a_u32 aloL_optenum(a_henv env, a_ulen id, char const* const* es, char const* what, a_u32 dfl) {
+    char const* v = aloL_optstr(env, id);
+    char const* e;
+
+    if (v == null)
+        return dfl;
+
+    for (a_u32 i = 0; (e = es[i]) != null; ++i) {
+        if (strcmp(v, e) == 0)
+            return i;
+    }
+
+    what = alo_pushfstr(env, "%s expected, got '%s'", what, v);
+    aloL_argerror(env, id, what);
 }
 
 a_msg aloL_resultcx(a_henv env, a_bool stat, int err, char const* what) {
@@ -501,7 +530,7 @@ void* aloL_newblk(a_henv env, a_usize s) {
     self->size = s;
     ai_gc_register_normal(env, self);
 
-    v_set_obj(env, api_incr_stack(env), self);
+    v_set_other(env, api_incr_stack(env), self);
 
     return self->body;
 }
@@ -549,11 +578,11 @@ void aloL_openlibs(a_henv env) {
 
     static LibEntry const entries[] = {
 		{ ALO_LIB_BASE_NAME, aloopen_base },
-        { ALO_LIB_TYPE_NAME, aloopen_type },
+        { ALO_LIB_INT_NAME, aloopen_int },
         { ALO_LIB_STR_NAME, aloopen_str },
         { ALO_LIB_LIST_NAME, aloopen_list },
+        { ALO_LIB_TYPE_NAME, aloopen_type },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
-		{ ALO_LIB_INT_NAME, aloopen_int },
 		{ ALO_LIB_SYS_NAME, aloopen_sys },
         { ALO_LIB_LOAD_NAME, aloopen_load }
 	};
