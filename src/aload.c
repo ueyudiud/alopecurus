@@ -206,7 +206,7 @@ a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags)
     ai_io_iinit(env, fun, ctx, &ic.in);
 
     Value* p = env->stack.top++;
-    v_set_obj(env, p, &ic);
+    v_set_other(env, p, &ic);
 
     a_msg msg = ai_env_protect(env, load_chunk, load_except, &ic);
 

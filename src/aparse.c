@@ -5538,7 +5538,7 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, 
     parser_init(env, fun, ctx, file, name, options, &par);
 
     Value* p = env->stack.top++;
-    v_set_obj(env, p, &par);
+    v_set_other(env, p, &par);
 
 	a_msg msg = ai_env_protect(env, l_scan_root, parser_except, &par);
 

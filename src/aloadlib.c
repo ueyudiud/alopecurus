@@ -176,7 +176,7 @@ static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
     }
 
     ai_gc_register_normal(env, self);
-    v_set_obj(env, api_incr_stack(env), self);
+    v_set_other(env, api_incr_stack(env), self);
 
     *plib = self;
     return ALO_SOK;
@@ -240,7 +240,7 @@ static a_msg load_clib(a_henv env, GType* self, char const* file, GLib** plib) {
             return msg;
         }
 
-        v_set_obj(env, r, lib);
+        v_set_other(env, r, lib);
 
         ai_gc_barrier_forward(env, cache, lib);
     }

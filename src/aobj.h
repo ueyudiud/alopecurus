@@ -402,12 +402,12 @@ always_inline Value v_of_obj_(a_gptr o, a_enum t) {
 
 #define v_of_obj_(o,t) v_of_obj_(g_as_obj(o), t)
 
-#define v_of_obj(o) v_of_obj_(o, T_OTHER)
+#define v_of_other(o) v_of_obj_(o, T_OTHER)
 
-always_inline void v_set_obj(a_henv env, Value* d, a_gptr o) {
-    v_set(env, d, v_of_obj(o));
+always_inline void v_set_other(a_henv env, Value* d, a_gptr o) {
+    v_set(env, d, v_of_other(o));
 }
 
-#define v_set_obj(env,d,o) v_set_obj(env, d, g_as_obj(o))
+#define v_set_other(env,d,o) v_set_other(env, d, g_as_obj(o))
 
 #endif /* aobj_h_ */
