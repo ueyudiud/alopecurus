@@ -154,7 +154,7 @@ static void strs_close(a_henv env, StrSet* strs) {
 
 static GStr* l_to_str(Lexer* lex) {
     Buf* buf = lex->buf;
-    GStr* str = ai_lex_to_str(lex, buf->ptr, buf->len);
+    GStr* str = ai_lex_to_str(lex, buf->str);
 	at_buf_clear(lex->buf);
     return str;
 }
@@ -172,7 +172,7 @@ void ai_lex_open(Lexer* lex, a_flags options) {
     strs_alloc_array(lex->env, &lex->strs, STRS_INIT_CAP);
 
     if (!(options & ALO_COMP_OPT_STRIP_DEBUG) && lex->file != null) {
-        GStr* str = ai_lex_to_str(lex, lex->file, strlen(lex->file));
+        GStr* str = ai_lex_to_str(lex, nt2lstr(lex->file));
         lex->file = str2ntstr(str);
     }
 
@@ -233,11 +233,11 @@ a_noret ai_lex_report(Lexer* lex, char const* fmt, ...) {
     va_end(varg);
 }
 
-GStr* ai_lex_to_str(Lexer* lex, void const* src, a_usize len) {
+GStr* ai_lex_to_str(Lexer* lex, a_lstr src) {
 	a_henv env = lex->env;
 	StrSet* set = &lex->strs;
 
-    GStr* str = ai_str_get_or_new(env, src, len);
+    GStr* str = ai_str_get_or_new(env, src);
 
     if (strs_put(set, str)) {
         set->len += 1;

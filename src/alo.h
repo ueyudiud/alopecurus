@@ -194,11 +194,19 @@ ALO_EXPORT void (alo_newlist)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newtable)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_ulen n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
-ALO_EXPORT void* (alo_newmod)(a_henv env, a_usize es);
+ALO_EXPORT void* (alo_newuser)(a_henv env, a_ilen id);
 
 #define ALO_NEWTYPE_STATIC 0x0001
 
-ALO_EXPORT void (alo_newtype)(a_henv env, char const* n, a_flags flags);
+typedef struct {
+    a_flags flags;
+    char const* name;
+    a_u32 extra_size;
+    a_u32 block_size;
+    a_u32 num_slot;
+} alo_NewType;
+
+ALO_EXPORT void (alo_newtype)(a_henv env, alo_NewType const* info);
 
 #define alo_insert(env,id) alo_rotate(env, id, -1)
 
@@ -207,6 +215,8 @@ ALO_EXPORT a_bool (alo_compare)(a_henv env, a_ilen id1, a_ilen id2, a_enum op);
 
 #define alo_equals(env,id1,id2) alo_compare(env, id1, id2, ALO_OPEQ)
 
+ALO_EXPORT a_msg (alo_userget)(a_henv env, a_ilen id, a_ulen n);
+ALO_EXPORT a_msg (alo_userset)(a_henv env, a_ilen id, a_ulen n);
 ALO_EXPORT a_int (alo_rawlen)(a_henv env, a_ilen id);
 ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_ilen id, a_int key);
 ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_ilen id);

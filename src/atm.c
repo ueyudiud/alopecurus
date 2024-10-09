@@ -7,6 +7,7 @@
 
 #include "atable.h"
 #include "afun.h"
+#include "auser.h"
 #include "agc.h"
 #include "aerr.h"
 #include "avm.h"
@@ -177,4 +178,15 @@ a_bool ai_tm_precall(a_henv env, Value v, Value* pv) {
     v_set(env, pv, vf);
 
     return false;
+}
+
+void ai_tm_close(a_henv env, a_gptr o) {
+    assume(g_is_user(o) || g_is(o, T_OTHER), "unexpected close dispatch.");
+
+    Value vf;
+    GType* type = g_typeof(env, o);
+    if (type_lookft(env, type, TM___close__, &vf))
+        return;
+
+    ai_vm_call_meta(env, vm_push_args(env, vf, v_of_obj_(o, T_OTHER)));
 }

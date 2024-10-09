@@ -179,7 +179,7 @@ static void global_init(a_henv env, unused void* ctx) {
     ai_str_boost2(env);
 
     /* Initialize global scope. */
-    v_set_type(env, &G(env)->global_value, ai_type_new(env, 0));
+    v_set_type(env, &G(env)->global_value, ai_type_new(env, null, 0, 0, 0));
 
     /* Clear memory debt and start GC. */
     ai_gc_set_debt(&m->global, 0);

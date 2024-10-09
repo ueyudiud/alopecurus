@@ -11,6 +11,7 @@
 #include "acfg.h"
 #include "alo.h"
 #include "aauxlib.h"
+#include "asym.h"
 
 /**
  ** The implement variant index.
@@ -194,6 +195,10 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 #endif
 
 #define assume(e,m...) quiet((e) || (panic(m), false))
+
+always_inline a_lstr nt2lstr(char const* str) {
+    return (a_lstr) { str, strlen(str) };
+}
 
 /**
  ** Fill memory with zero bits.

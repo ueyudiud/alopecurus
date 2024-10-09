@@ -5,20 +5,17 @@
 #ifndef astr_h_
 #define astr_h_
 
-#include "astrs.h"
 #include "aobj.h"
-#include "aio.h"
 
 typedef a_msg (*a_sbfun)(void* ctx, void* dst, a_usize len);
 
-intern a_hash ai_str_hashof(a_henv env, char const* src, a_usize len);
-intern GStr* ai_str_get_or_null_with_hash(a_henv env, char const* src, a_usize len, a_hash hash);
-intern GStr* ai_str_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash);
-intern GStr* ai_str_get_or_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash);
-intern GStr* ai_str_get_or_new(a_henv env, char const* src, a_usize len);
+intern a_hash ai_str_hashof(a_henv env, a_lstr src);
+intern GStr* ai_str_get_or_null_with_hash(a_henv env, a_lstr src, a_hash hash);
+intern GStr* ai_str_new_with_hash(a_henv env, a_lstr src, a_hash hash);
+intern GStr* ai_str_get_or_new_with_hash(a_henv env, a_lstr src, a_hash hash);
+intern GStr* ai_str_get_or_new(a_henv env, a_lstr src);
 intern a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr);
 intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
-intern a_bool ai_str_requals(GStr* self, void const* dat, a_usize len);
 intern void ai_str_boost1(a_henv env, void* block);
 intern void ai_str_boost2(a_henv env);
 intern void ai_str_cache_shrink_if_need(Global* gbl);
@@ -31,6 +28,26 @@ struct GStr {
     GStr* snext;
     char ptr[];
 };
+
+enum {
+#define SYMLIST SYMLIST_SSTRS
+#define SYMDEF(n,r) STR_POS_##n, STR_EPOS_##n = STR_POS_##n + sizeof(r) - 1,
+#include "asym.h"
+    STR__TOTAL_LEN,
+
+    STR_POS__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
+};
+
+always_inline a_enum str_id(GStr* o) {
+    return bit_cast(a_usize, o->gnext) >> 48;
+}
+
+#define str_iskw(str) (str_id(str) >= STR_KW__FIRST && str_id(str) <= STR_KW__LAST)
+#define str_istm(str) (str_id(str) >= STR_TM__FIRST && str_id(str) <= STR_TM__LAST)
+#define str_totk(str) (str_id(str) - STR_KW__FIRST + TK_KW__FIRST)
+#define str_totm(str) (str_id(str) - STR_TM__FIRST)
+
+#define str_id_set(str,id) quiet((str)->gnext = bit_cast(a_gcnext, cast(a_usize, id) << 48))
 
 #define g_is_str(o) g_is(o, ALO_TSTR)
 
@@ -59,7 +76,7 @@ always_inline char const* str2ntstr(GStr* self) {
     return self->ptr;
 }
 
-#define ai_str_from_ntstr(env,src) ai_str_get_or_new(env, src, strlen(src))
+#define ai_str_from_ntstr(env,src) ai_str_get_or_new(env, nt2lstr(src))
 
 intern char const ai_str_interns[STR__TOTAL_LEN];
 

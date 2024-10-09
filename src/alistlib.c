@@ -5,6 +5,7 @@
 #define alistlib_c_
 #define ALO_LIB
 
+#include "aop.h"
 #include "aobj.h"
 #include "atuple.h"
 #include "alist.h"

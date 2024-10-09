@@ -37,13 +37,13 @@ static Impl const str_impl;
  *@param len the data length.
  *@return the hash code.
  */
-a_hash ai_str_hashof(a_henv env, char const* src, a_usize len) {
+a_hash ai_str_hashof(a_henv env, a_lstr str) {
     a_hash hash = G(env)->seed;
-	if (len > 0) {
-		char const* l = src;
-		a_usize step = 1 + (len >> 4);
-		assume(src != null);
-		for (char const* p = src + len - 1; p >= l; p -= step) {
+	if (str.len > 0) {
+		char const* begin = str.ptr;
+		a_usize step = 1 + (str.len >> 4);
+		assume(str.ptr != null);
+		for (char const* p = str.ptr + str.len - 1; p >= begin; p -= step) {
 			hash = (hash ^ cast(a_hash, *p)) * 0x1000193;
 		}
 	}
@@ -127,21 +127,21 @@ static GStr* str_alloc(a_henv env, a_usize len) {
 	return ai_mem_alloc(env, str_size(len));
 }
 
-static void str_init(GStr* self, char const* src, a_usize len, a_hash hash) {
+static void str_init(GStr* self, a_lstr src, a_hash hash) {
 	self->impl = &str_impl;
-    self->len = len;
+    self->len = src.len;
     self->hash = hash;
-    memcpy(self->ptr, src, sizeof(char) * len);
-    self->ptr[len] = '\0';
+    memcpy(self->ptr, src.ptr, sizeof(char) * src.len);
+    self->ptr[src.len] = '\0';
 }
 
-static GStr* str_get_or_null_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
+static GStr* str_get_or_null_with_hash(a_henv env, a_lstr src, a_hash hash) {
     Global* gbl = G(env);
     StrCache* cache = &gbl->str_cache;
 
     /* Try lookup string in intern table. */
     for (GStr* str = cache->ptr[hash & cache->hmask]; str != null; str = str->snext) {
-        if (str->hash == hash && ai_str_requals(str, src, len)) {
+        if (str->hash == hash && str->len == src.len && memcmp(str->ptr, src.ptr, src.len) == 0) {
             /* Revive string object if it is dead. */
             if (unlikely(g_has_other_color(gbl, str))) {
                 g_set_white(gbl, str);
@@ -153,13 +153,13 @@ static GStr* str_get_or_null_with_hash(a_henv env, char const* src, a_usize len,
 	return null;
 }
 
-GStr* ai_str_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
+GStr* ai_str_new_with_hash(a_henv env, a_lstr src, a_hash hash) {
     /* Force create new string into string cache. */
     StrCache* cache = &G(env)->str_cache;
     cache_hint(env, cache);
 
-    GStr* self = str_alloc(env, len);
-    str_init(self, src, len, hash);
+    GStr* self = str_alloc(env, src.len);
+    str_init(self, src, hash);
 
     cache_emplace_in_place(cache, self);
     ai_gc_register_normal(env, self);
@@ -167,8 +167,9 @@ GStr* ai_str_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash
 }
 
 static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
-	a_hash hash = ai_str_hashof(env, buff->ptr, len);
-	GStr* self = str_get_or_null_with_hash(env, buff->ptr, len, hash);
+    a_lstr src = { buff->ptr, len };
+	a_hash hash = ai_str_hashof(env, src);
+	GStr* self = str_get_or_null_with_hash(env, src, hash);
 	
 	if (self != null) {
 		ai_mem_dealloc(G(env), buff, str_size(len));
@@ -190,17 +191,17 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	return self;
 }
 
-GStr* ai_str_get_or_null_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
-    return str_get_or_null_with_hash(env, src, len, hash);
+GStr* ai_str_get_or_null_with_hash(a_henv env, a_lstr src, a_hash hash) {
+    return str_get_or_null_with_hash(env, src, hash);
 }
 
-GStr* ai_str_get_or_new_with_hash(a_henv env, char const* src, a_usize len, a_hash hash) {
-    return ai_str_get_or_null_with_hash(env, src, len, hash) ?: ai_str_new_with_hash(env, src, len, hash);
+GStr* ai_str_get_or_new_with_hash(a_henv env, a_lstr src, a_hash hash) {
+    return ai_str_get_or_null_with_hash(env, src, hash) ?: ai_str_new_with_hash(env, src, hash);
 }
 
-GStr* ai_str_get_or_new(a_henv env, char const* src, a_usize len) {
-    a_hash hash = ai_str_hashof(env, src, len);
-    return ai_str_get_or_new_with_hash(env, src, len, hash);
+GStr* ai_str_get_or_new(a_henv env, a_lstr src) {
+    a_hash hash = ai_str_hashof(env, src);
+    return ai_str_get_or_new_with_hash(env, src, hash);
 }
 
 #define MAX_STACK_BUFFER_SIZE (256-1)
@@ -208,20 +209,20 @@ GStr* ai_str_get_or_new(a_henv env, char const* src, a_usize len) {
 a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) {
 	if (likely(len < MAX_STACK_BUFFER_SIZE)) {
         /* Allocate buffer on stack. */
-        char buff[MAX_STACK_BUFFER_SIZE + 1];
-		try ((*fun)(ctx, buff, len));
-		*pstr = ai_str_get_or_new(env, buff, len);
+        char buf[MAX_STACK_BUFFER_SIZE + 1];
+		try ((*fun)(ctx, buf, len));
+		*pstr = ai_str_get_or_new(env, (a_lstr) {buf, len });
 		return ALO_SOK;
 	}
 	else {
         /* Allocate buffer on heap. */
-		GStr* buff = str_alloc(env, len);
-        catch ((*fun)(ctx, buff->ptr, len), msg) {
-            ai_mem_dealloc(G(env), buff, str_size(len));
+		GStr* buf = str_alloc(env, len);
+        catch ((*fun)(ctx, buf->ptr, len), msg) {
+            ai_mem_dealloc(G(env), buf, str_size(len));
             return msg;
         }
 		
-		*pstr = str_get_and_drop_buff_or_put(env, buff, len);
+		*pstr = str_get_and_drop_buff_or_put(env, buf, len);
 		return ALO_SOK;
 	}
 }
@@ -238,7 +239,7 @@ GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
 	va_end(varg2);
 
     if (len <= MAX_STACK_BUFFER_SIZE) {
-        return ai_str_get_or_new(env, buf, len);
+        return ai_str_get_or_new(env, (a_lstr) { buf, len });
     }
     else {
         GStr* buff = str_alloc(env, len);
@@ -249,10 +250,6 @@ GStr* ai_str_format(a_henv env, char const* fmt, va_list varg) {
         
 		return str_get_and_drop_buff_or_put(env, buff, len);
     }
-}
-
-a_bool ai_str_requals(GStr* self, void const* dat, a_usize len) {
-    return self->len == len && memcmp(self->ptr, dat, len) == 0;
 }
 
 static void str_mark(Global* gbl, GStr* self) {
@@ -297,11 +294,12 @@ void ai_str_boost1(a_henv env, void* block) {
             a_u32 len = l_str_len[i];
 
             GStr* self = block;
-            a_hash hash = ai_str_hashof(env, src, len);
+            a_lstr str = { src, len };
+            a_hash hash = ai_str_hashof(env, str);
 
             g_set_gray(self);
 
-            str_init(self, src, len, hash);
+            str_init(self, str, hash);
             str_id_set(self, i);
 
             gbl->fast_strs[i] = self;

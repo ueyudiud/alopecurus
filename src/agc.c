@@ -42,7 +42,8 @@ always_inline void flip_color(Global* gbl) {
 }
 
 void ai_gc_register_normal_(a_henv env, a_gptr obj) {
-	g_fetch(obj, drop); /* Only collectable object need be registered. */
+	g_fetch(obj, drop);
+
 	Global* gbl = G(env);
 	join_gc(&gbl->gc_normal, obj);
 	g_set_white(gbl, obj);
@@ -59,6 +60,15 @@ void ai_gc_register_normals(a_henv env, RefQueue* rq) {
 
 	*rq->tail = gbl->gc_normal;
 	gbl->gc_normal = rq->head;
+}
+
+void ai_gc_register_closable_(a_henv env, a_gptr obj) {
+    g_fetch(obj, drop);
+    g_fetch(obj, close);
+
+    Global* gbl = G(env);
+    join_gc(&gbl->gc_closable, obj);
+    g_set_white(gbl, obj);
 }
 
 static void really_mark_object(Global* gbl, a_gptr obj) {

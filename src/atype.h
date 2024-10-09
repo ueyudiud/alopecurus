@@ -6,19 +6,18 @@
 #define atype_h_
 
 #include "aobj.h"
-#include "atable.h"
 
 typedef struct MNode MNode;
 
-intern GType* ai_type_new(a_henv env, GStr* name);
+intern GType* ai_type_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot);
 intern void ai_type_boost(a_henv env);
 intern a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
 intern a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
-intern a_bool ai_type_getls(a_henv env, GType* self, char const* src, a_usize len, Value* pv);
+intern a_bool ai_type_getls(a_henv env, GType* self, a_lstr k, Value* pv);
 intern a_bool ai_type_refs_or_empty(a_henv env, GType* self, GStr* k, MNode** pe);
 intern a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv);
 intern void ai_type_sets(a_henv env, GType* self, GStr* key, Value val);
-intern Value* ai_type_refls(a_henv env, GType* self, char const* src, a_usize len);
+intern Value* ai_type_refls(a_henv env, GType* self, a_lstr k);
 intern void ai_type_clean(Global* gbl);
 
 struct MNode {
@@ -43,19 +42,23 @@ struct MNode {
     /* Fast TM flags */     \
     a_u32 ftmz
 
-/**
- ** Type.
- */
-struct GType {
-    GTYPE_STRUCT_HEADER;
-};
-
 typedef struct {
     GTYPE_STRUCT_HEADER;
     Impl body;
     a_u32 block_size;
     a_u32 num_slot;
+    a_usize user[0];
 } GUType;
+
+/**
+ ** Type.
+ */
+union GType {
+    struct {
+        GTYPE_STRUCT_HEADER;
+    };
+    GUType as_utype[1];
+};
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
 
@@ -82,6 +85,6 @@ always_inline void v_set_type(a_henv env, Value* d, GType* o) {
     v_set(env, d, v);
 }
 
-#define type_size(e) align_to(sizeof(GType) + (e), sizeof(a_usize))
+#define type_size(e) align_to(sizeof(GUType) + (e), sizeof(a_usize))
 
 #endif /* atype_h_ */

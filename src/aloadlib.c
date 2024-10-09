@@ -223,7 +223,7 @@ static a_noret bad_state(a_henv env) {
 
 static GTable* check_ccache(a_henv env, GType* self) {
     Value v;
-    catch (ai_type_getls(env, self, CLIB_CACHE_FIELD_NAME, strlen(CLIB_CACHE_FIELD_NAME), &v) || !v_as_table(v)) {
+    catch (ai_type_getls(env, self, nt2lstr(CLIB_CACHE_FIELD_NAME), &v) || !v_as_table(v)) {
         bad_state(env);
     }
     return v_as_table(v);
@@ -233,7 +233,7 @@ static a_msg load_clib(a_henv env, GType* self, char const* file, GLib** plib) {
     GLib* lib;
     GTable* cache = check_ccache(env, self);
 
-    Value* r = ai_table_refls(env, cache, file, strlen(file));
+    Value* r = ai_table_refls(env, cache, nt2lstr(file));
     if (v_is_nil(*r)) {
         catch (lib_new(env, file, &lib), msg) {
             ai_table_delr(env, cache, r);
@@ -273,7 +273,7 @@ static a_msg load_cfunc(a_henv env, GType* self, char const* file, char const* f
 
 static GList* check_list(a_henv env, GType* self, char const* str) {
     Value v;
-    catch (ai_type_getls(env, self, str, strlen(str), &v) || !v_is_list(v)) {
+    catch (ai_type_getls(env, self, nt2lstr(str), &v) || !v_is_list(v)) {
         bad_state(env);
     }
     return v_as_list(v);
@@ -364,7 +364,7 @@ static a_msg loader_alib(a_henv env) {
 }
 
 static GTable* check_cache(a_henv env, GType* self) {
-    Value* pv = ai_type_refls(env, self, LOADED_FIELD_NAME, strlen(LOADED_FIELD_NAME));
+    Value* pv = ai_type_refls(env, self, nt2lstr(LOADED_FIELD_NAME));
 
     GTable* cache;
     if (v_is_nil(*pv)) {
@@ -521,7 +521,11 @@ void aloopen_load(a_henv env) {
         { CLIB_CACHE_FIELD_NAME, null }
     };
 
-    alo_newmod(env, 0);
+    alo_NewType info = {
+        .name = "load"
+    };
+
+    alo_newtype(env, &info);
     aloL_putalls(env, -1, bindings);
 
     build_paths(env, ALIB_PATH_FIELD_NAME, ALO_PATH_VAR, ALO_PATH_VAR ALO_VERSIONED_SUFFIX, ALO_ALIB_PATH);

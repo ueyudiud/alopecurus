@@ -5,7 +5,6 @@
 #ifndef adbg_h_
 #define adbg_h_
 
-#include "astr.h"
 #include "afun.h"
 
 ALO_EXPORT GFun* ai_dbg_get_func(a_henv env, Frame* frame);

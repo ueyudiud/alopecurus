@@ -85,6 +85,11 @@ void aloopen_sys(a_henv env) {
 		{ "getenv", sys_getenv }
 	};
 
-    alo_newtype(env, ALO_LIB_SYS_NAME, ALO_NEWTYPE_STATIC);
+    alo_NewType const info = {
+        .name = ALO_LIB_SYS_NAME,
+        .flags = ALO_NEWTYPE_STATIC
+    };
+
+    alo_newtype(env, &info);
     aloL_putalls(env, -1, bindings);
 }

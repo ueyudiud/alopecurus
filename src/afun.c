@@ -214,16 +214,14 @@ RcCap* ai_cap_new(a_henv env) {
     return self;
 }
 
-void ai_cap_mark_tbc(a_henv env, Value* pv) {
-	RcCap* cap = cap_nload_from_stack(env, pv);
-    if (!cap->ftbc) {
-        if (unlikely(cap == null)) {
-            /* Call close function immediately if cannot create capture. */
-			v_close(env, *pv);
-            ai_mem_nomem(env);
-        }
-        cap->ftbc = true;
+void ai_cap_mark_tbc(a_henv env, Value* p) {
+	RcCap* cap = cap_nload_from_stack(env, p);
+    if (unlikely(cap == null)) {
+        /* Call close function immediately. */
+        v_close(env, *p);
+        ai_mem_nomem(env);
     }
+    cap->ftbc = true;
 }
 
 GFun* ai_fun_new(a_henv env, GProto* proto) {

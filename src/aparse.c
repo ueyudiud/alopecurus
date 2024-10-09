@@ -5,11 +5,14 @@
 #define aparse_c_
 #define ALO_LIB
 
+#include "aop.h"
 #include "abc.h"
 #include "afun.h"
 #include "aenv.h"
 #include "afmt.h"
+#include "agc.h"
 #include "aerr.h"
+#include "alex.h"
 
 #include "aparse.h"
 
@@ -17,6 +20,7 @@ typedef struct Sym Sym;
 typedef struct FnScope FnScope;
 typedef struct Scope Scope;
 typedef struct RichCapInfo RichCapInfo;
+typedef struct Parser Parser;
 
 BUF_STRUCT_DECLARE(SymBuf, Sym);
 BUF_STRUCT_DECLARE(ConstBuf, Value);
@@ -2244,7 +2248,7 @@ static a_bool l_try_fold_append(Parser* par, InExpr e) {
 
 static GStr* buf_to_str(Parser* par, ConExpr* ce) {
     Buf* buf = par->sbuf;
-	GStr* str = ai_lex_to_str(lex(par), buf->ptr + ce->off, buf->len - ce->off);
+	GStr* str = ai_lex_to_str(lex(par), (a_lstr) { buf->ptr + ce->off, buf->len - ce->off });
 	at_buf_clear(buf);
 	return str;
 }
@@ -3256,7 +3260,7 @@ static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
 static void parser_start(Parser* par) {
     ai_lex_open(lex(par), par->options);
 
-	par->gvar_name = ai_lex_to_str(lex(par), ENV_NAME, sizeof(ENV_NAME) - 1);
+	par->gvar_name = ai_lex_to_str(lex(par), nt2lstr(ENV_NAME));
 
 	/* Add predefined '_ENV' dbg_name. */
 	syms_push(par, (Sym) {

@@ -18,6 +18,25 @@
 #define SYMLIST_ISTRS (SYM_EMPTY | SYM_KW | SYM_TM | SYM_PT | SYM_EM)
 #define SYMLIST_TOKEN (SYM_KW | SYM_OP)
 
+enum {
+#define SYMLIST SYMLIST_ISTRS
+#define PROLOGUE(g) STR_##g##__FIRST, STR_##g##__STUB1 = STR_##g##__FIRST - 1,
+#define EPILOGUE(g) STR_##g##__STUB2, STR_##g##__LAST = STR_##g##__STUB2 - 1,
+#define SYMDEF(n,r) STR_##n,
+#include "asym.h"
+    STR__COUNT
+};
+
+enum {
+    TK__NONE,
+#define SYMLIST SYMLIST_TOKEN
+#define PROLOGUE(g) TK_##g##__FIRST, TK_##g##__STUB1 = TK_##g##__FIRST - 1,
+#define EPILOGUE(g) TK_##g##__STUB2, TK_##g##__LAST = TK_##g##__STUB2 - 1,
+#define SYMDEF(n,r) TK_##n,
+#include "asym.h"
+    TK__MAX
+};
+
 #endif /* asym_h_ */
 
 #if defined(SYMDEF)

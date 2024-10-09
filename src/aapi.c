@@ -5,11 +5,13 @@
 #define aapi_c_
 #define ALO_LIB
 
+#include "aop.h"
 #include "astr.h"
 #include "atuple.h"
 #include "alist.h"
 #include "atable.h"
 #include "afun.h"
+#include "auser.h"
 #include "atype.h"
 #include "actx.h"
 #include "agc.h"
@@ -366,7 +368,7 @@ void alo_pushptr(a_henv env, void const* val) {
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
     api_check(src != null || len == 0, "string source violates contract.");
-	GStr* str = ai_str_get_or_new(env, src, len);
+	GStr* str = ai_str_get_or_new(env, (a_lstr) { src, len });
 	v_set_str(env, api_incr_stack(env), str);
 	ai_gc_trigger(env);
 	return str2ntstr(str);
@@ -493,13 +495,35 @@ a_henv alo_newroute(a_henv env, a_usize ss) {
 	return val;
 }
 
-void* alo_newmod(a_henv env, a_usize es) {
-    // TODO
-    assume(es == 0);
-    GType* val = ai_type_new(env, null);
-    v_set_type(env, api_incr_stack(env), val);
+void* alo_newuser(a_henv env, a_ilen id) {
+    api_check_slot(env, 1);
+
+    Value v = api_elem(env, id);
+    api_check(v_is_type(v) && g_impl(v_as_obj(v))->flags & IMPL_FLAG_USER_DEF, "not user type.");
+    GUser* val = ai_user_new(env, v_as_type(v)->as_utype);
+    v_set_user(env, api_incr_stack(env), val);
     ai_gc_trigger(env);
-    return (void*) sizeof(a_usize);
+    return val->block;
+}
+
+void alo_newtype(a_henv env, alo_NewType const* info) {
+    api_check_slot(env, 1);
+
+    Value* pv = api_incr_stack(env);
+
+    GStr* name;
+    if (info->name != null) {
+        name = ai_str_from_ntstr(env, info->name);
+        v_set_str(env, pv, name);
+    }
+    else {
+        name = g_str(env, STR_EMPTY);
+    }
+
+    GType* self = ai_type_new(env, name, info->extra_size, info->block_size, info->num_slot);
+    v_set_type(env, pv, self);
+
+    ai_gc_trigger(env);
 }
 
 a_msg alo_compute(a_henv env, a_enum op) {
@@ -553,6 +577,27 @@ a_bool alo_compare(a_henv env, a_ilen id1, a_ilen id2, a_enum op) {
         }
         default: api_panic("bad opcode for alo_compare: %u", op);
     }
+}
+
+a_msg alo_userget(a_henv env, a_ilen id, a_ulen n) {
+    Value vo = api_elem(env, id);
+    assume(v_is_user(vo));
+    GUser* val = v_as_user(vo);
+
+    Value v = *user_slot(val, n);
+    v_set(env, api_incr_stack(env), v);
+    return api_tagof(env, v);
+}
+
+a_msg alo_userset(a_henv env, a_ilen id, a_ulen n) {
+    Value vo = api_elem(env, id);
+    assume(v_is_user(vo));
+    GUser* val = v_as_user(vo);
+
+    Value v = api_decr_stack(env);
+    v_set(env, user_slot(val, n), v);
+    ai_gc_barrier_backward_val(env, val, v);
+    return api_tagof(env, v);
 }
 
 a_msg alo_get(a_henv env, a_ilen id) {
@@ -904,7 +949,17 @@ void* alo_toptr(a_henv env, a_ilen id) {
         }
         case T_TYPE: {
             GType* o = v_as_type(v);
-            return o; //TODO
+            if (o->impl->flags & IMPL_FLAG_USER_DEF) {
+                return o->as_utype->user;
+            }
+            else {
+                api_panic("primitive type has no userdata");
+                return null;
+            }
+        }
+        case T_USER: {
+            GUser* o = v_as_user(v);
+            return o->block;
         }
         default: {
             api_panic("cannot cast to pointer");
@@ -923,20 +978,6 @@ void alo_typeof(a_henv env, a_ilen id) {
     api_check_slot(env, 1);
     Value v = api_elem(env, id);
     v_set_type(env, api_incr_stack(env), v_typeof(env, v));
-}
-
-void alo_newtype(a_henv env, char const* n, a_flags flags) {
-	api_check_slot(env, 1);
-
-    Value* pv = api_incr_stack(env);
-
-    GStr* name = ai_str_from_ntstr(env, n);
-    v_set_str(env, pv, name);
-
-	GType* self = ai_type_new(env, name);
-	v_set_type(env, pv, self);
-
-	ai_gc_trigger(env);
 }
 
 static GStr* l_get_str(a_henv env, a_ilen id) {

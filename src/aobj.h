@@ -15,7 +15,7 @@ typedef struct GTable GTable;
 typedef struct GFun GFun;
 typedef struct GUser GUser;
 typedef struct alo_Env GRoute;
-typedef struct GType GType;
+typedef union GType GType;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 
@@ -56,6 +56,7 @@ enum {
     T_TYPE = 8,
     T_TUPLE = 10,
     T_OTHER = 11,
+    T_USER = 12,
     T_INT = 14,
     T_NAN = 15,
 
@@ -364,6 +365,7 @@ struct Impl_ {
 #define IMPL_FLAG_NONE        u8c(0x00)
 #define IMPL_FLAG_GREEDY_MARK u8c(0x01)
 #define IMPL_FLAG_STACK_ALLOC u8c(0x02)
+#define IMPL_FLAG_USER_DEF    u8c(0x04) /* Marked for basic user defined type and object. */
 
 #define impl_has_flag(vt,f) (((vt)->flags & (f)) != 0)
 

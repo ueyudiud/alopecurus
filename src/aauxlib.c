@@ -385,7 +385,7 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
         }
     }
 
-	GStr* str = ai_str_get_or_new(dst, buf->ptr, buf->len);
+	GStr* str = ai_str_get_or_new(dst, buf->str);
 	v_set_str(dst, err, str);
 	return ALO_SOK;
 }
@@ -409,7 +409,7 @@ a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_as_type(v);
 
-    catch (ai_type_getls(env, o, s, strlen(s), &v)) {
+    catch (ai_type_getls(env, o, nt2lstr(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -423,7 +423,7 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_typeof(env, v);
 
-    catch (ai_type_getls(env, o, s, strlen(s), &v)) {
+    catch (ai_type_getls(env, o, nt2lstr(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -438,7 +438,7 @@ void aloL_puts(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_as_type(v);
 
-    Value* p = ai_type_refls(env, o, s, strlen(s));
+    Value* p = ai_type_refls(env, o, nt2lstr(s));
 
     v = api_decr_stack(env);
     v_set(env, p, v);
@@ -458,7 +458,7 @@ void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 		aloL_Entry const* e = &es[i];
 		assume(e->name != null, "name cannot be null.");
 
-        Value* slot = ai_type_refls(env, o, e->name, strlen(e->name));
+        Value* slot = ai_type_refls(env, o, nt2lstr(e->name));
         v_set_nil(slot);
 
 		if (e->fptr != null) {

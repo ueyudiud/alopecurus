@@ -5,8 +5,7 @@
 #ifndef aerr_h_
 #define aerr_h_
 
-#include "aobj.h"
-#include "astrs.h"
+#include "astr.h"
 
 intern a_noret ai_err_raisef(a_henv env, a_msg msg, char const* fmt, ...);
 intern a_noret ai_err_raisevf(a_henv env, a_msg msg, char const* fmt, va_list varg);
@@ -18,7 +17,7 @@ always_inline a_noret ai_err_bad_key(a_henv env, char const* coll, char const* k
 }
 
 always_inline a_noret ai_err_bad_look(a_henv env, char const* type, GStr* key) {
-	ai_err_raisef(env, ALO_EINVAL, "method '%s' not found for %s.", str2ntstr(key), type);
+	ai_err_raisef(env, ALO_EINVAL, "method '%s.%s' not found.", type, str2ntstr(key));
 }
 
 always_inline a_noret ai_err_bad_tm(a_henv env, a_u32 tm) {

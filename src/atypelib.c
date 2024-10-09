@@ -14,12 +14,16 @@
 #include "aauxlib.h"
 #include "alolib.h"
 
+static GType* check_type(a_henv env, a_ilen id) {
+    aloL_checktag(env, id, ALO_TTYPE);
+    return v_as_type(api_elem(env, id));
+}
+
 static a_msg type___call__(a_henv env) { /* Should this function write in script? */
-    aloL_checktag(env, 0, ALO_TTYPE);
+    GType* self = check_type(env, 0);
 
     if (aloL_gets(env, 0, "__new__") == ALO_EEMPTY) {
-        GType* self = g_as(GType, v_as_obj(api_elem(env, 0)));
-        aloL_raisef(env, "no entry for '%s.__new__'", str2ntstr(self->name));
+        aloL_raisef(env, "method '%s.__new__' not found.", str2ntstr(self->name));
     }
 
     alo_pop(env, 0);

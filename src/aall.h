@@ -28,7 +28,6 @@
 #include "aparse.h"
 #include "astk.h"
 #include "astr.h"
-#include "astrs.h"
 #include "atable.h"
 #include "atuple.h"
 #include "atype.h"

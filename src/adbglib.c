@@ -356,6 +356,11 @@ void aloopen_debug(a_henv env) {
 		{ "dump", debug_dump }
 	};
 
-    alo_newtype(env, ALO_LIB_DEBUG_NAME, ALO_NEWTYPE_STATIC);
+    alo_NewType const info = {
+        .name = ALO_LIB_DEBUG_NAME,
+        .flags = ALO_NEWTYPE_STATIC
+    };
+
+    alo_newtype(env, &info);
     aloL_putalls(env, -1, bindings);
 }

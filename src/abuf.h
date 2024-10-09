@@ -9,18 +9,24 @@
 
 typedef struct { a_usize _; } BufHeadMark[0];
 
+#define CHAR_BUF_STRUCT_BODY BufHeadMark _buf_head_mark; union { a_lstr str; struct { char* ptr; a_usize len; }; }; a_usize cap
 #define BUF_STRUCT_BODY(t) BufHeadMark _buf_head_mark; t* ptr; a_usize len; a_usize cap
 
 #define BUF_STRUCT_DECLARE(n,t,e...) \
     typedef struct n n; \
     struct n { BUF_STRUCT_BODY(t); e; }
 
-BUF_STRUCT_DECLARE(Buf, char);
+typedef struct Buf {
+    CHAR_BUF_STRUCT_BODY;
+} Buf;
 
 struct GBuf {
     GOBJ_STRUCT_HEADER;
-    BUF_STRUCT_BODY(char);
+    CHAR_BUF_STRUCT_BODY;
 };
+
+static_assert(offsetof(Buf, str.ptr) == offsetof(Buf, ptr));
+static_assert(offsetof(Buf, str.len) == offsetof(Buf, len));
 
 #define buf_end(b) cast(void*, (b)->ptr + (b)->len)
 #define buf_cast(b) from_member(Buf, _buf_head_mark, &(b)->_buf_head_mark)
@@ -155,6 +161,5 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 #define at_buf_putls(env,b,s,l) catch (ai_buf_nputls(env, b, s, l), _msg) { ai_buf_error(env, _msg, "byte"); }
 #define at_buf_puts(env,b,s) at_buf_putls(env, b, s, strlen(s))
 #define at_buf_putc(env,b,c) at_buf_push(env, b, c, "char")
-#define at_buf_tostr(env,b) ai_str_get_or_new(env, (b)->ptr, (b)->len)
 
 #endif /* abuf_h_ */

@@ -480,7 +480,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_ulen n) {
         }
 	}
 
-	GStr* result = at_buf_tostr(env, buf);
+	GStr* result = ai_str_get_or_new(env, buf->str);
 	at_buf_deinit(G(env), buf);
 
 	return result;

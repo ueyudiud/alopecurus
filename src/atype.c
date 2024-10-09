@@ -6,28 +6,42 @@
 #define ALO_LIB
 
 #include "atable.h"
+#include "auser.h"
 #include "aenv.h"
 #include "amem.h"
 #include "agc.h"
 #include "aerr.h"
+#include "atm.h"
 
 #include "atype.h"
 
-static Impl const type_impl;
+static Impl const ptype_impl;
+static Impl const utype_impl;
 
 #define TYPE_MAX_CAP (u32c(1) << 31)
 
 #define dead_key ((GStr*) sizeof(a_usize))
 
-GType* ai_type_new(a_henv env, GStr* name) {
-    a_usize size = type_size(0);
+GType* ai_type_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot) {
+    a_usize size = type_size(extra_size);
 
     GType* self = ai_mem_alloc(env, size);
     memclr(self, size);
 
-    self->impl = &type_impl;
-    self->name = name ?: g_str(env, STR_EMPTY);
-    self->size = size;
+    init(self->as_utype) {
+        .impl = &utype_impl,
+        .name = name ?: g_str(env, STR_EMPTY),
+        .size = size,
+        .body = {
+            .tag = ALO_TUSER,
+            .flags = (num_slot == 0 ? IMPL_FLAG_GREEDY_MARK : 0) | IMPL_FLAG_USER_DEF,
+            .mark = ai_user_mark,
+            .close = ai_tm_close,
+            .drop = ai_user_drop
+        },
+        .num_slot = num_slot,
+        .block_size = block_size
+    };
 
     ai_gc_register_normal(env, self);
     return self;
@@ -67,10 +81,10 @@ a_bool ai_type_gets(a_henv env, GType* self, GStr* key, Value* pval) {
     }
 }
 
-a_bool ai_type_getls(a_henv env, GType* self, char const* src, a_usize len, Value* pval) {
-    a_hash hash = ai_str_hashof(env, src, len);
+a_bool ai_type_getls(a_henv env, GType* self, a_lstr k, Value* pval) {
+    a_hash hash = ai_str_hashof(env, k);
 
-    GStr* str = ai_str_get_or_null_with_hash(env, src, len, hash);
+    GStr* str = ai_str_get_or_null_with_hash(env, k, hash);
     if (str == null)
         return true;
 
@@ -210,11 +224,11 @@ void ai_type_sets(a_henv env, GType* self, GStr* key, Value val) {
     }
 }
 
-Value* ai_type_refls(a_henv env, GType* self, char const* src, a_usize len) {
-    a_hash hash = ai_str_hashof(env, src, len);
+Value* ai_type_refls(a_henv env, GType* self, a_lstr k) {
+    a_hash hash = ai_str_hashof(env, k);
     MNode* node;
 
-    GStr* str = ai_str_get_or_null_with_hash(env, src, len, hash);
+    GStr* str = ai_str_get_or_null_with_hash(env, k, hash);
     if (str != null) {
         if (!ai_type_refs_or_empty(env, self, str, &node)) {
             return &node->value;
@@ -230,7 +244,7 @@ Value* ai_type_refls(a_henv env, GType* self, char const* src, a_usize len) {
         type_grow(env, self);
     }
 
-    str = ai_str_get_or_new(env, src, len);
+    str = ai_str_get_or_new(env, k);
     node = type_ref_empty(self, str);
 
 place:
@@ -267,7 +281,7 @@ void ai_type_boost(a_henv env) {
 
     for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
         init(gbl->fast_types[i]) {
-            .impl = &type_impl,
+            .impl = &ptype_impl,
             .size = 0,
             .name = g_str(env, l_name_tags[i])
         };
@@ -286,12 +300,7 @@ void ai_type_clean(Global* gbl) {
     }
 }
 
-static void type_drop(Global* gbl, GType* self) {
-    type_clean(gbl, self);
-    ai_mem_dealloc(gbl, self, self->size);
-}
-
-static void type_mark(Global* gbl, GType* self) {
+static void type_mark_dict(Global* gbl, GType* self) {
     if (self->ptr != null) {
         for (a_u32 i = 0; i <= self->hmask; ++i) {
             MNode* node = &self->ptr[i];
@@ -302,12 +311,31 @@ static void type_mark(Global* gbl, GType* self) {
         }
         ai_gc_trace_work(gbl, sizeof(MNode) * (self->hmask + 1));
     }
+}
+
+static void ptype_mark(Global* gbl, GType* self) {
+    type_mark_dict(gbl, self);
+}
+
+static void utype_drop(Global* gbl, GType* self) {
+    type_clean(gbl, self);
+    ai_mem_dealloc(gbl, self, self->size);
+}
+
+static void utype_mark(Global* gbl, GType* self) {
+    type_mark_dict(gbl, self);
     ai_gc_trace_mark(gbl, self->name);
     ai_gc_trace_work(gbl, self->size);
 }
 
-static Impl const type_impl = {
+static Impl const ptype_impl = {
     .tag = ALO_TTYPE,
-    .drop = type_drop,
-    .mark = type_mark
+    .mark = ptype_mark
+};
+
+static Impl const utype_impl = {
+    .tag = ALO_TTYPE,
+    .flags = IMPL_FLAG_USER_DEF,
+    .drop = utype_drop,
+    .mark = utype_mark
 };
