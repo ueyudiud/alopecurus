@@ -24,6 +24,8 @@
 #define ALO_FALSE 0
 #define ALO_TRUE 1
 
+#define M_void(...)
+
 #define M_cat0(a,b) a##b
 #define M_cat(a,b) M_cat0(a,b)
 

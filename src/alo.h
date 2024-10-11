@@ -209,17 +209,7 @@ ALO_EXPORT void (alo_newtype)(a_henv env, alo_NewType const* info);
 
 #define alo_insert(env,id) alo_rotate(env, id, -1)
 
-ALO_EXPORT a_msg (alo_compute)(a_henv env, a_enum op);
-ALO_EXPORT a_bool (alo_compare)(a_henv env, a_ilen id1, a_ilen id2, a_enum op);
-
-#define alo_equals(env,id1,id2) alo_compare(env, id1, id2, ALO_OPEQ)
-
-ALO_EXPORT a_msg (alo_userget)(a_henv env, a_ilen id, a_ulen n);
-ALO_EXPORT a_msg (alo_userset)(a_henv env, a_ilen id, a_ulen n);
-ALO_EXPORT a_int (alo_rawlen)(a_henv env, a_ilen id);
-ALO_EXPORT a_msg (alo_rawgeti)(a_henv env, a_ilen id, a_int key);
-ALO_EXPORT a_msg (alo_rawget)(a_henv env, a_ilen id);
-ALO_EXPORT a_msg (alo_rawset)(a_henv env, a_ilen id);
+ALO_EXPORT a_int (alo_len)(a_henv env, a_ilen id);
 ALO_EXPORT a_msg (alo_get)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_set)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_put)(a_henv env, a_ilen id);
@@ -227,6 +217,13 @@ ALO_EXPORT a_hiter (alo_iter)(a_henv env, a_ilen id);
 ALO_EXPORT a_bool (alo_next)(a_henv env, a_hiter itr);
 ALO_EXPORT void (alo_call)(a_henv env, a_ulen narg, a_ilen nres);
 ALO_EXPORT a_msg (alo_pcall)(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf);
+ALO_EXPORT a_msg (alo_compute)(a_henv env, a_enum op);
+ALO_EXPORT a_bool (alo_compare)(a_henv env, a_ilen id1, a_ilen id2, a_enum op);
+
+#define alo_equals(env,id1,id2) alo_compare(env, id1, id2, ALO_OPEQ)
+
+ALO_EXPORT a_msg (alo_userget)(a_henv env, a_ilen id, a_ulen n);
+ALO_EXPORT a_msg (alo_userset)(a_henv env, a_ilen id, a_ulen n);
 ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
@@ -236,6 +233,7 @@ ALO_EXPORT void (alo_yield)(a_henv env);
 
 ALO_EXPORT a_msg (alo_tagof)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_typeof)(a_henv env, a_ilen id);
+ALO_EXPORT char const* (alo_typename)(a_henv env, a_ilen id);
 ALO_EXPORT a_bool (alo_tobool)(a_henv env, a_ilen id);
 ALO_EXPORT a_int (alo_toint)(a_henv env, a_ilen id);
 ALO_EXPORT a_float (alo_tofloat)(a_henv env, a_ilen id);

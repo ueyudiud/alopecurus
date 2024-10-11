@@ -8,9 +8,9 @@
 #include "adef.h"
 
 enum {
-#define SYMLIST SYM_TM
 #define SYMDEF(n,r) TM_##n,
-#include "asym.h"
+    SYM_TM(SYMDEF, M_void, M_void)
+#undef SYMDEF
     TM__LIMIT,
 	TM__FAST_MAX = TM___eq__
 };

@@ -188,9 +188,9 @@ static void global_init(a_henv env, unused void* ctx) {
 
 static a_usize mroute_size() {
 	a_usize size = sizeof(MRoute) + str_size(0)
-#define SYMLIST SYMLIST_ISTRS
 #define SYMDEF(n,r) + str_size(sizeof(r) - 1)
-#include "asym.h"
+    SYM_ISTRS(SYMDEF, M_void, M_void)
+#undef SYMDEF
 	;
 	return size;
 }

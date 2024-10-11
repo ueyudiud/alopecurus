@@ -5,190 +5,169 @@
 #ifndef asym_h_
 #define asym_h_
 
-/* Symbol collection flags. */
-#define SYM_EMPTY 0x01
-#define SYM_KW 0x02 /* Keyword */
-#define SYM_TM 0x04 /* Tagged method */
-#define SYM_EM 0x08 /* Error message */
-#define SYM_OP 0x10 /* Operator */
+#define SYM_NIL(_d,_b,_e) \
+_b(NIL)                   \
+_d(NIL, "")               \
+_e(NIL)
 
-/* Symbol collection bundle flags. */
-#define SYMLIST_SSTRS (SYM_EMPTY | SYM_KW | SYM_TM | SYM_EM | SYM_OP)
-#define SYMLIST_ISTRS (SYM_EMPTY | SYM_KW | SYM_TM | SYM_EM)
-#define SYMLIST_TOKEN (SYM_KW | SYM_OP)
+#define SYM_KW(_d,_b,_e) \
+_b(KW)                   \
+_d(as      , "as"      ) \
+_d(break   , "break"   ) \
+_d(case    , "case"    ) \
+_d(const   , "const"   ) \
+_d(continue, "continue") \
+_d(do      , "do"      ) \
+_d(else    , "else"    ) \
+_d(false   , "false"   ) \
+_d(fn      , "fn"      ) \
+_d(for     , "for"     ) \
+_d(if      , "if"      ) \
+_d(import  , "import"  ) \
+_d(in      , "in"      ) \
+_d(is      , "is"      ) \
+_d(let     , "let"     ) \
+_d(loop    , "loop"    ) \
+_d(match   , "match"   ) \
+_d(mut     , "mut"     ) \
+_d(nil     , "nil"     ) \
+_d(pub     , "pub"     ) \
+_d(return  , "return"  ) \
+_d(true    , "true"    ) \
+_d(try     , "try"     ) \
+_d(use     , "use"     ) \
+_d(while   , "while"   ) \
+_d(_       , "_"       ) \
+_e(KW)
+
+#define SYM_TM(_d,_b,_e) \
+_b(TM)                   \
+_d(__get__  , "__get__"  ) \
+_d(__set__  , "__set__"  ) \
+_d(__look__ , "__look__" ) \
+_d(__len__  , "__len__"  ) \
+_d(__close__, "__close__") \
+_d(__hash__ , "__hash__" ) \
+_d(__eq__   , "__eq__"   ) \
+_d(__lt__   , "__lt__"   ) \
+_d(__le__   , "__le__"   ) \
+_d(__in__   , "__in__"   ) \
+_d(__add__  , "__add__"  ) \
+_d(__sub__  , "__sub__"  ) \
+_d(__mul__  , "__mul__"  ) \
+_d(__div__  , "__div__"  ) \
+_d(__mod__  , "__mod__"  ) \
+_d(__shl__  , "__shl__"  ) \
+_d(__shr__  , "__shr__"  ) \
+_d(__band__ , "__band__" ) \
+_d(__bor__  , "__bor__"  ) \
+_d(__bxor__ , "__bxor__" ) \
+_d(__neg__  , "__neg__"  ) \
+_d(__bnot__ , "__bnot__" ) \
+_d(__call__ , "__call__" ) \
+_d(__iter__ , "__iter__" ) \
+_d(__next__ , "__next__" ) \
+_d(__str__  , "__str__"  ) \
+_e(TM)
+
+#define SYM_EM(_d,_b,_e) \
+_b(EM)                   \
+_d(NOMEM    , "out of memory.") \
+_e(EM)
+
+#define SYM_OP(_d,_b,_e) \
+_b(OP)                   \
+_d(LBK      , "'('"          ) \
+_d(RBK      , "')'"          ) \
+_d(LSQ      , "'['"          ) \
+_d(RSQ      , "']'"          ) \
+_d(LBR      , "'{'"          ) \
+_d(RBR      , "'}'"          ) \
+_d(SHARP    , "'#'"          ) \
+_d(AT       , "'@'"          ) \
+_d(TILDE    , "'~'"          ) \
+_d(COMMA    , "','"          ) \
+_d(SEMI     , "';'"          ) \
+_d(DOT      , "'.'"          ) \
+_d(BDOT     , "'..'"         ) \
+_d(TDOT     , "'...'"        ) \
+_d(COLON    , "':'"          ) \
+_d(PLUS     , "'+'"          ) \
+_d(BPLUS    , "'++'"         ) \
+_d(MINUS    , "'-'"          ) \
+_d(STAR     , "'*'"          ) \
+_d(LSLASH   , "'/'"          ) \
+_d(PERCENT  , "'%'"          ) \
+_d(ASSIGN   , "'='"          ) \
+_d(EQ       , "'=='"         ) \
+_d(BANG     , "'!'"          ) \
+_d(BBANG    , "'!!'"         ) \
+_d(NE       , "'!='"         ) \
+_d(GT       , "'>'"          ) \
+_d(GE       , "'>='"         ) \
+_d(SHL      , "'<<'"         ) \
+_d(LT       , "'<'"          ) \
+_d(LE       , "'<='"         ) \
+_d(SHR      , "'>>'"         ) \
+_d(HAT      , "'^'"          ) \
+_d(AMP      , "'&'"          ) \
+_d(BAMP     , "'&&'"         ) \
+_d(BAR      , "'|'"          ) \
+_d(BBAR     , "'||'"         ) \
+_d(QUESTION , "'?'"          ) \
+_d(BQUESTION, "'??\'"        ) \
+_d(QDOT     , "'?.'"         ) \
+_d(ELVIS    , "'?:'"         ) \
+_d(ARROW    , "'->'"         ) \
+_d(QARROW   , "'?->'"        ) \
+_d(IDENT    , "<ident>"      ) \
+_d(INTEGER  , "<integer>"    ) \
+_d(FLOAT    , "<float>"      ) \
+_d(STRING   , "<string>"     ) \
+_d(TSBEGIN  , "<string>"     ) \
+_d(TSESCAPE , "'$'"          ) \
+_d(TSEND    , "<string>"     ) \
+_d(EOF      , "<eof>"        ) \
+_e(OP)
+
+#define SYM_ALL(_d,_b,_e) \
+SYM_NIL(_d,_b,_e)         \
+SYM_KW(_d,_b,_e)          \
+SYM_TM(_d,_b,_e)          \
+SYM_EM(_d,_b,_e)          \
+SYM_OP(_d,_b,_e)
+
+#define SYM_ISTRS(_d,_b,_e) \
+SYM_NIL(_d,_b,_e)           \
+SYM_KW(_d,_b,_e)            \
+SYM_TM(_d,_b,_e)            \
+SYM_EM(_d,_b,_e)
+
+#define SYM_TOKEN(_d,_b,_e) \
+SYM_KW(_d,_b,_e)            \
+SYM_OP(_d,_b,_e)
 
 enum {
-#define SYMLIST SYMLIST_ISTRS
-#define PROLOGUE(g) STR_##g##__FIRST, STR_##g##__STUB1 = STR_##g##__FIRST - 1,
-#define EPILOGUE(g) STR_##g##__STUB2, STR_##g##__LAST = STR_##g##__STUB2 - 1,
 #define SYMDEF(n,r) STR_##n,
-#include "asym.h"
+#define SYMBEGIN(g) STR__##g##_BEGIN,STR__##g##_STUB1 = STR__##g##_BEGIN - 1,
+#define SYMEND(g) STR__##g##_END,STR__##g##_STUB2 = STR__##g##_END - 1,
+    SYM_ISTRS(SYMDEF,SYMBEGIN,SYMEND)
+#undef SYMDEF
+#undef SYMBEGIN
+#undef SYMEND
     STR__COUNT
 };
 
 enum {
     TK__NONE,
-#define SYMLIST SYMLIST_TOKEN
-#define PROLOGUE(g) TK_##g##__FIRST, TK_##g##__STUB1 = TK_##g##__FIRST - 1,
-#define EPILOGUE(g) TK_##g##__STUB2, TK_##g##__LAST = TK_##g##__STUB2 - 1,
 #define SYMDEF(n,r) TK_##n,
-#include "asym.h"
+#define SYMBEGIN(g) TK__##g##_BEGIN,TK__##g##_STUB1 = TK__##g##_BEGIN - 1,
+#define SYMEND(g) TK__##g##_END,TK__##g##_STUB2 = TK__##g##_END - 1,
+    SYM_TOKEN(SYMDEF, SYMBEGIN, SYMEND)
+#undef SYMDEF
+#undef SYMBEGIN
+#undef SYMEND
     TK__MAX
 };
 
 #endif /* asym_h_ */
-
-#if defined(SYMDEF)
-
-#define SYMDEF1(n,...) SYMDEF(__VA_ARGS__##n, #n)
-#define SYMDEF2 SYMDEF
-
-#ifndef PROLOGUE
-# define PROLOGUE(...)
-#endif
-
-#ifndef EPILOGUE
-# define EPILOGUE(...)
-#endif
-
-#if SYMLIST & SYM_EMPTY
-PROLOGUE(EMPTY)
-
-SYMDEF2(EMPTY, "")
-
-EPILOGUE(EMPTY)
-#endif
-
-#if SYMLIST & SYM_KW
-PROLOGUE(KW)
-
-SYMDEF1(as      )
-SYMDEF1(break   )
-SYMDEF1(case    )
-SYMDEF1(const   )
-SYMDEF1(continue)
-SYMDEF1(do      )
-SYMDEF1(else    )
-SYMDEF1(false   )
-SYMDEF1(fn      )
-SYMDEF1(for     )
-SYMDEF1(if      )
-SYMDEF1(import  )
-SYMDEF1(in      )
-SYMDEF1(is      )
-SYMDEF1(let     )
-SYMDEF1(loop    )
-SYMDEF1(match   )
-SYMDEF1(mut     )
-SYMDEF1(nil     )
-SYMDEF1(pub     )
-SYMDEF1(return  )
-SYMDEF1(true    )
-SYMDEF1(try     )
-SYMDEF1(use     )
-SYMDEF1(while   )
-SYMDEF1(_       )
-
-EPILOGUE(KW)
-#endif
-
-#if SYMLIST & SYM_TM
-PROLOGUE(TM)
-
-SYMDEF1(__get__  )
-SYMDEF1(__set__  )
-SYMDEF1(__look__ )
-SYMDEF1(__len__  )
-SYMDEF1(__close__)
-SYMDEF1(__hash__ )
-SYMDEF1(__eq__   )
-SYMDEF1(__lt__   )
-SYMDEF1(__le__   )
-SYMDEF1(__in__   )
-SYMDEF1(__add__  )
-SYMDEF1(__sub__  )
-SYMDEF1(__mul__  )
-SYMDEF1(__div__  )
-SYMDEF1(__mod__  )
-SYMDEF1(__shl__  )
-SYMDEF1(__shr__  )
-SYMDEF1(__band__ )
-SYMDEF1(__bor__  )
-SYMDEF1(__bxor__ )
-SYMDEF1(__neg__  )
-SYMDEF1(__bnot__ )
-SYMDEF1(__call__ )
-SYMDEF1(__iter__ )
-SYMDEF1(__next__ )
-SYMDEF1(__str__  )
-
-EPILOGUE(TM)
-#endif
-
-#if SYMLIST & SYM_OP
-PROLOGUE(OP)
-
-SYMDEF2(LBK      , "'('"          )
-SYMDEF2(RBK      , "')'"          )
-SYMDEF2(LSQ      , "'['"          )
-SYMDEF2(RSQ      , "']'"          )
-SYMDEF2(LBR      , "'{'"          )
-SYMDEF2(RBR      , "'}'"          )
-SYMDEF2(SHARP    , "'#'"          )
-SYMDEF2(AT       , "'@'"          )
-SYMDEF2(TILDE    , "'~'"          )
-SYMDEF2(COMMA    , "','"          )
-SYMDEF2(SEMI     , "';'"          )
-SYMDEF2(DOT      , "'.'"          )
-SYMDEF2(BDOT     , "'..'"         )
-SYMDEF2(TDOT     , "'...'"        )
-SYMDEF2(COLON    , "':'"          )
-SYMDEF2(PLUS     , "'+'"          )
-SYMDEF2(BPLUS    , "'++'"         )
-SYMDEF2(MINUS    , "'-'"          )
-SYMDEF2(STAR     , "'*'"          )
-SYMDEF2(LSLASH   , "'/'"          )
-SYMDEF2(PERCENT  , "'%'"          )
-SYMDEF2(ASSIGN   , "'='"          )
-SYMDEF2(EQ       , "'=='"         )
-SYMDEF2(BANG     , "'!'"          )
-SYMDEF2(BBANG    , "'!!'"         )
-SYMDEF2(NE       , "'!='"         )
-SYMDEF2(GT       , "'>'"          )
-SYMDEF2(GE       , "'>='"         )
-SYMDEF2(SHL      , "'<<'"         )
-SYMDEF2(LT       , "'<'"          )
-SYMDEF2(LE       , "'<='"         )
-SYMDEF2(SHR      , "'>>'"         )
-SYMDEF2(HAT      , "'^'"          )
-SYMDEF2(AMP      , "'&'"          )
-SYMDEF2(BAMP     , "'&&'"         )
-SYMDEF2(BAR      , "'|'"          )
-SYMDEF2(BBAR     , "'||'"         )
-SYMDEF2(QUESTION , "'?'"          )
-SYMDEF2(BQUESTION, "'??\'"        )
-SYMDEF2(QDOT     , "'?.'"         )
-SYMDEF2(ELVIS    , "'?:'"         )
-SYMDEF2(ARROW    , "'->'"         )
-SYMDEF2(QARROW   , "'?->'"        )
-SYMDEF2(IDENT    , "<ident>"      )
-SYMDEF2(INTEGER  , "<integer>"    )
-SYMDEF2(FLOAT    , "<float>"      )
-SYMDEF2(STRING   , "<string>"     )
-/* For template string. */
-SYMDEF2(TSBEGIN  , "<string>"     )
-SYMDEF2(TSESCAPE , "'$'"          )
-SYMDEF2(TSEND    , "<string>"     )
-SYMDEF2(EOF      , "<eof>"        )
-
-EPILOGUE(OP)
-#endif
-
-#undef SYMDEF1
-#undef SYMDEF2
-#undef SYMDEF
-#undef PROLOGUE
-#undef EPILOGUE
-#undef SYMLIST
-
-#endif

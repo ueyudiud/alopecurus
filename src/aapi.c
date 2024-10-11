@@ -517,7 +517,7 @@ void alo_newtype(a_henv env, alo_NewType const* info) {
         v_set_str(env, pv, name);
     }
     else {
-        name = g_str(env, STR_EMPTY);
+        name = g_str(env, STR_NIL);
     }
 
     GType* self = ai_type_new(env, name, info->extra_size, info->block_size, info->num_slot);
@@ -600,6 +600,14 @@ a_msg alo_userset(a_henv env, a_ilen id, a_ulen n) {
     return api_tagof(env, v);
 }
 
+a_int alo_len(a_henv env, a_ilen id) {
+    Value v = api_elem(env, id);
+
+    a_ulen l = ai_vm_len(env, v);
+
+    return cast(a_int, l);
+}
+
 a_msg alo_get(a_henv env, a_ilen id) {
     api_check_elem(env, 1);
 
@@ -623,123 +631,6 @@ void alo_set(a_henv env, a_ilen id) {
     ai_vm_set(env, v, vk, vv);
 
     env->stack.top -= 2;
-}
-
-/**
- ** Get length of value without call meta method.
- **
- *@param env the runtime environment.
- *@param id the value index.
- *@return a non-negative number for the length of object, or 0 for method not implemented.
- */
-a_int alo_rawlen(a_henv env, a_ilen id) {
-	Value v = api_elem(env, id);
-
-	switch (v_get_tag(v)) {
-		case T_TUPLE: {
-			GTuple* p = v_as_tuple(v);
-			return cast(a_int, p->len);
-		}
-		case T_LIST: {
-			GList* p = v_as_list(v);
-            return cast(a_int, p->len);
-		}
-		case T_TABLE: {
-			GTable* p = v_as_table(v);
-            return cast(a_int, p->len);
-		}
-		default: {
-			return 0;
-		}
-	}
-}
-
-a_msg alo_rawgeti(a_henv env, a_ilen id, a_int key) {
-	api_check_elem(env, 1);
-
-	Value v = api_elem(env, id);
-
-	switch (v_get_tag(v)) {
-		case T_TUPLE: {
-			GTuple* p = v_as_tuple(v);
-			try (ai_tuple_ugeti(env, p, key, &v));
-			break;
-		}
-		case T_LIST: {
-			GList* p = v_as_list(v);
-			try (ai_list_ugeti(env, p, key, &v));
-			break;
-		}
-		case T_TABLE: {
-			GTable* p = v_as_table(v);
-			try (ai_table_geti(env, p, key, &v));
-			break;
-		}
-		default: {
-			return ALO_EXIMPL;
-		}
-	}
-
-	v_set(env, api_incr_stack(env), v);
-	return api_tagof(env, v);
-}
-
-a_msg alo_rawget(a_henv env, a_ilen id) {
-	api_check_elem(env, 1);
-
-	Value v = api_elem(env, id);
-	Value vk = api_decr_stack(env);
-
-    switch (v_get_tag(v)) {
-        case T_TUPLE: {
-            GTuple* p = v_as_tuple(v);
-            try (ai_tuple_uget(env, p, vk, &v));
-            break;
-        }
-        case T_LIST: {
-            GList* p = v_as_list(v);
-            try (ai_list_uget(env, p, vk, &v));
-            break;
-        }
-        case T_TABLE: {
-            GTable* p = v_as_table(v);
-            try (ai_table_get(env, p, vk, &v));
-            break;
-        }
-        default: {
-            return ALO_EXIMPL;
-        }
-    }
-
-	v_set(env, api_incr_stack(env), v);
-	return api_tagof(env, v);
-}
-
-a_msg alo_rawset(a_henv env, a_ilen id) {
-	api_check_elem(env, 2);
-
-	Value v = api_elem(env, id);
-	Value vk = env->stack.top[-2];
-    Value vv = env->stack.top[-1];
-
-    switch (v_get_tag(v)) {
-        case T_LIST: {
-            GList* p = v_as_list(v);
-            try (ai_list_uset(env, p, vk, vv));
-            break;
-        }
-        case T_TABLE: {
-            GTable* p = v_as_table(v);
-            try (ai_table_uset(env, p, vk, vv));
-            break;
-        }
-        default: {
-            return ALO_EXIMPL;
-        }
-    }
-
-    env->stack.top -= 2;
-    return ALO_SOK;
 }
 
 void alo_put(a_henv env, a_ilen id) {
@@ -767,7 +658,7 @@ a_bool alo_next(a_henv env, a_hiter itr) {
     return ai_vm_next(env, p) >= 0;
 }
 
-static void l_call(a_henv env, a_ulen narg, a_ilen nres) {
+static void do_call(a_henv env, a_ulen narg, a_ilen nres) {
 	Value* base = env->stack.top - narg - 1;
 
 	ai_vm_call(env, base, nres);
@@ -777,7 +668,7 @@ void alo_call(a_henv env, a_ulen narg, a_ilen nres) {
 	api_check(nres < 256, "too much result expected.");
 	api_check_elem(env, narg + 1);
 	if (nres > 0) api_check_slot(env, nres);
-	l_call(env, narg, cast(a_i32, nres));
+    do_call(env, narg, cast(a_i32, nres));
 }
 
 typedef struct {
@@ -786,12 +677,13 @@ typedef struct {
     StkPtr errf;
 } PCall;
 
-static void l_pcall(a_henv env, void* ctx) {
+static void do_pcall(a_henv env, void* ctx) {
 	PCall* pc = ctx;
-	l_call(env, pc->narg, pc->nres);
+
+    do_call(env, pc->narg, pc->nres);
 }
 
-static void l_ecall(a_henv env, void* ctx, unused a_msg msg) {
+static void do_ecall(a_henv env, void* ctx, unused a_msg msg) {
     PCall* pc = ctx;
     if (pc->errf != STACK_NULL) {
         Value* bot = vm_push_args(env, *val2stk(env, pc->errf), env->error);
@@ -815,7 +707,7 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
     Frame* frame = env->frame;
     StkPtr p_bot = val2stk(env, env->stack.top - (narg + 1));
 
-    catch (ai_env_protect(env, l_pcall, l_ecall, &ctx), msg) {
+    catch (ai_env_protect(env, do_pcall, do_ecall, &ctx), msg) {
         env->frame = frame; /* Recover frame. */
 
         Value* bot = stk2val(env, p_bot);
@@ -898,29 +790,18 @@ a_bool alo_tobool(a_henv env, a_ilen id) {
 
 a_int alo_toint(a_henv env, a_ilen id) {
 	Value v = api_elem(env, id);
-    if (v_is_int(v)) {
-        return v_as_int(v);
-    }
-    else if (v_is_num(v)) {
-        return cast(a_int, v_as_float(v));
-    }
-    else {
-        api_panic("cannot convert to integer");
-    }
+    api_check(v_is_num(v), "cannot convert to integer.");
+    return v_is_int(v) ? v_as_int(v) : cast(a_int, v_as_float(v));
 }
 
 a_float alo_tofloat(a_henv env, a_ilen id) {
 	Value v = api_elem(env, id);
-    if (likely(v_is_num(v))) {
-        return v_as_num(v);
-    }
-    else {
-        api_panic("cannot convert to float");
-    }
+    api_check(v_is_num(v), "cannot convert to float.");
+    return v_as_num(v);
 }
 
 /**
- ** Convert value into string value.
+ ** Convert value into string.
  ** The slot will be replaced by converted string value.
  **
  *@param env the runtime environment.
@@ -978,6 +859,11 @@ void alo_typeof(a_henv env, a_ilen id) {
     api_check_slot(env, 1);
     Value v = api_elem(env, id);
     v_set_type(env, api_incr_stack(env), v_type(env, v));
+}
+
+char const* alo_typename(a_henv env, a_ilen id) {
+    Value v = api_elem(env, id);
+    return v_name(env, v);
 }
 
 static GStr* l_get_str(a_henv env, a_ilen id) {

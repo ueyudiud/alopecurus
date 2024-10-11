@@ -30,9 +30,9 @@ struct GStr {
 };
 
 enum {
-#define SYMLIST SYMLIST_SSTRS
 #define SYMDEF(n,r) BEGIN_STR_##n, END_STR_##n = BEGIN_STR_##n + sizeof(r) - 1,
-#include "asym.h"
+    SYM_ALL(SYMDEF, M_void, M_void)
+#undef SYMDEF
     STR__TOTAL_LEN,
 
     STR_POS__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
@@ -40,16 +40,12 @@ enum {
 
 intern char const ai_str_interns[STR__TOTAL_LEN];
 
-#define str_ntstr(id) &ai_str_interns[BEGIN_##id]
-
 always_inline a_enum str_id(GStr* o) {
     return bit_cast(a_usize, o->gnext) >> 48;
 }
 
-#define str_iskw(str) (str_id(str) >= STR_KW__FIRST && str_id(str) <= STR_KW__LAST)
-#define str_istm(str) (str_id(str) >= STR_TM__FIRST && str_id(str) <= STR_TM__LAST)
-#define str_totk(str) (str_id(str) - STR_KW__FIRST + TK_KW__FIRST)
-#define str_totm(str) (str_id(str) - STR_TM__FIRST)
+#define str_iskw(str) (str_id(str) >= STR__KW_BEGIN && str_id(str) <= STR__KW_END)
+#define str_totk(str) (str_id(str) - STR__KW_BEGIN + TK__KW_BEGIN)
 
 #define str_id_set(str,id) quiet((str)->gnext = bit_cast(a_gcnext, cast(a_usize, id) << 48))
 

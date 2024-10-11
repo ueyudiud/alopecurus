@@ -23,7 +23,7 @@ static a_bool type_look(a_henv env, GType* type, GStr* k, Value* pv) {
 
 static a_bool type_lookt(a_henv env, GType* type, a_enum tm, Value* pv) {
     assume(tm <= TM__LIMIT, "bad tag of method.");
-    GStr* k = g_str(env, STR_TM__FIRST + tm);
+    GStr* k = g_str(env, STR__TM_BEGIN + tm);
     return type_look(env, type, k, pv);
 }
 

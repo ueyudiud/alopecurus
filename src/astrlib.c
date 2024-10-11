@@ -230,7 +230,7 @@ static a_msg str_trim(a_henv env) {
         p += 1;
     }
 
-    v_set_str(env, api_incr_stack(env), g_str(env, STR_EMPTY));
+    v_set_str(env, api_incr_stack(env), g_str(env, STR_NIL));
     goto finish;
 
 backward:
@@ -290,7 +290,7 @@ static a_msg str_repeat(a_henv env) {
     };
 
     if (ctx.rep == 0) {
-        v_set_str(env, api_incr_stack(env), g_str(env, STR_EMPTY));
+        v_set_str(env, api_incr_stack(env), g_str(env, STR_NIL));
     }
     else {
         GStr* out;

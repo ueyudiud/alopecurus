@@ -14,6 +14,7 @@ intern a_bool ai_vm_equals(a_henv env, Value v1, Value v2);
 intern Value ai_vm_unary(a_henv env, Value v, a_enum op);
 intern Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op);
 intern a_bool ai_vm_compare(a_henv env, Value v1, Value v2, a_enum op);
+intern a_uint ai_vm_len(a_henv env, Value v);
 intern Value ai_vm_get(a_henv env, Value v1, Value v2);
 intern void ai_vm_set(a_henv env, Value v1, Value v2, Value v3);
 intern void ai_vm_iter(a_henv env, Value* vs, Value v);

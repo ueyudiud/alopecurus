@@ -283,9 +283,9 @@ void ai_str_boost1(a_henv env, void* block) {
         /* Initialize builtin string first, but not put them into the cache. */
 
         static a_u8 const l_str_len[STR__COUNT] = {
-#define SYMLIST SYMLIST_ISTRS
 #define SYMDEF(n,r) sizeof(r)-1,
-#include "asym.h"
+            SYM_ISTRS(SYMDEF, M_void, M_void)
+#undef SYMDEF
         };
 
         char const* src = ai_str_interns;
@@ -349,9 +349,9 @@ static Impl const str_impl = {
 };
 
 char const ai_str_interns[] = {
-#define SYMLIST SYMLIST_SSTRS
 #define SYMDEF(n,r) r"\0"
-#include "asym.h"
+    SYM_ALL(SYMDEF, M_void, M_void)
+#undef SYMDEF
 };
 
 static_assert(sizeof(ai_str_interns) == STR__TOTAL_LEN);

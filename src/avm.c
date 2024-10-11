@@ -21,11 +21,6 @@
 
 #include "avm.h"
 
-static void l_call_hook(a_henv env, a_msg msg, a_hfun fun, a_hctx ctx) {
-	/* Call hook_ function. */
-	(*fun)(env, msg, ctx);
-}
-
 a_u32 ai_vm_lock_hook(Global* gbl) {
 	atomic_uint_fast8_t mask = gbl->hookm;
 	while (((mask & ALO_HMSWAP) != 0) | !atomic_compare_exchange_weak(&gbl->hookm, &mask, ALO_HMSWAP));
@@ -45,7 +40,7 @@ void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
 	gbl->hookm = mask;
 
 	if (fun != null && (mask & test)) {
-		l_call_hook(env, msg, fun, ctx);
+        (*fun)(env, msg, ctx);
 	}
 }
 
@@ -242,6 +237,36 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     }
 }
 
+a_uint ai_vm_len(a_henv env, Value v) {
+    switch (v_get_tag(v)) {
+        case T_STR: {
+            return v_as_str(v)->len;
+        }
+        case T_TUPLE: {
+            return v_as_tuple(v)->len;
+        }
+        case T_LIST: {
+            return v_as_list(v)->len;
+        }
+        case T_TABLE: {
+            return v_as_table(v)->len;
+        }
+        case T_TYPE: {
+            return v_as_type(v)->len;
+        }
+        case T_OTHER: {
+            a_uint i;
+            if (!ai_tm_len(env, v, &i)) {
+                return i;
+            }
+            fallthrough;
+        }
+        default: {
+            ai_err_bad_tm(env, TM___len__);
+        }
+    }
+}
+
 Value ai_vm_get(a_henv env, Value v1, Value v2) {
 	switch (v_get_tag(v1)) {
 		case T_TUPLE: {
@@ -299,36 +324,6 @@ void ai_vm_set(a_henv env, Value v1, Value v2, Value v3) {
         }
         default: {
             ai_err_bad_tm(env, TM___set__);
-        }
-    }
-}
-
-static Value vm_len(a_henv env, Value v) {
-	switch (v_get_tag(v)) {
-        case T_STR: {
-            return v_of_int(v_as_str(v)->len);
-        }
-        case T_TUPLE: {
-            return v_of_int(v_as_tuple(v)->len);
-        }
-        case T_LIST: {
-            return v_of_int(v_as_list(v)->len);
-        }
-        case T_TABLE: {
-            return v_of_int(v_as_table(v)->len);
-        }
-        case T_TYPE: {
-            return v_of_int(v_as_type(v)->len);
-        }
-        case T_OTHER: {
-            a_uint i;
-            if (!ai_tm_len(env, v, &i)) {
-                return v_of_int(i);
-            }
-            fallthrough;
-        }
-        default: {
-            ai_err_bad_tm(env, TM___len__);
         }
     }
 }
@@ -1025,9 +1020,9 @@ tail_call:
 
                 Value vb = R[b];
 
-                Value vt = vm_len(env, vb);
+                a_uint t = ai_vm_len(env, vb);
                 reload_stack();
-                v_set(env, &R[a], vt);
+                v_set_int(&R[a], cast(a_int, t));
                 break;
             }
             case BC_UNBOX: { //TODO
