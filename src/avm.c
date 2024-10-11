@@ -230,7 +230,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
 
     if (ai_tm_look(env, v, k, &vm)) {
         catch (!v_is_type(v) || ai_type_gets(env, v_as_type(v), k, &vm)) {
-            ai_err_bad_look(env, v_nameof(env, v), k);
+            ai_err_bad_look(env, v_name(env, v), k);
         }
 
         v_set(env, &pv[0], v_of_call());
@@ -457,7 +457,7 @@ void ai_vm_append(a_henv env, GBuf* buf, Value v) {
     if (vm_append(env, buf_cast(buf), v)) {
         GStr* str;
         catch (ai_tm_str(env, v, &str)) {
-            ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+            ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_name(env, v));
         }
         at_buf_putls(env, buf, str->ptr, str->len);
     }
@@ -473,7 +473,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_ulen n) {
             GStr* str;
             StkPtr bptr = val2stk(env, base);
             catch (ai_tm_str(env, v, &str)) {
-                ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_nameof(env, v));
+                ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_name(env, v));
             }
             base = stk2val(env, bptr);
             at_buf_putls(env, buf, str->ptr, str->len);
@@ -1045,7 +1045,7 @@ tail_call:
 					v_mov_all_with_nil(env, &R[a], c, val->ptr, val->len);
                 }
                 else {
-					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_nameof(env, vb));
+					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_name(env, vb));
                 }
                 break;
             }
@@ -1067,7 +1067,7 @@ tail_call:
                     env->stack.top = &R[a + val->len];
                 }
                 else {
-					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_nameof(env, vb));
+					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_name(env, vb));
                 }
                 break;
             }

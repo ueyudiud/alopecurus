@@ -43,16 +43,16 @@ GUser* ai_user_clone(a_henv env, GUser* proto) {
 
 void ai_user_mark(Global* gbl, a_gptr obj) {
     GUser* self = g_as(GUser, obj);
-    GUType* type = g_typeof(gbl->active, self)->as_utype;
+    GUType* type = g_type(gbl, self)->as_utype;
     for (a_u32 i = 0; i < type->num_slot; ++i) {
         ai_gc_trace_mark_val(gbl, *user_slot(self, i));
     }
     ai_gc_trace_work(gbl, user_size(type));
-    ai_gc_trace_mark(gbl, g_typeof(gbl->active, obj));
+    ai_gc_trace_mark(gbl, g_type(gbl, obj));
 }
 
 void ai_user_drop(Global* gbl, a_gptr obj) {
     GUser* self = g_as(GUser, obj);
-    GUType* type = g_typeof(gbl->active, self)->as_utype;
+    GUType* type = g_type(gbl, self)->as_utype;
     ai_mem_dealloc(gbl, self->slot - type->num_slot, user_size(type));
 }

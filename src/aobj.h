@@ -55,8 +55,8 @@ enum {
     T_STR = 7,
     T_TYPE = 8,
     T_TUPLE = 10,
-    T_OTHER = 11,
-    T_USER = 12,
+    T_USER = 11,
+    T_OTHER = 12,
     T_INT = 14,
     T_NAN = 15,
 
@@ -67,9 +67,9 @@ enum {
     T__MIN_FLT = 16,
     T__MAX_FLT = UINT32_MAX,
     T__MIN_NEQ = T_TUPLE,
-    T__MAX_NEQ = T_OTHER,
+    T__MAX_NEQ = T_USER,
     T__MIN_NHH = T_TUPLE,
-    T__MAX_NHH = T_OTHER,
+    T__MAX_NHH = T_USER,
 };
 
 #define T_OBJ T__MIN_OBJ ... T__MAX_OBJ
@@ -320,10 +320,8 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
  * Object
  *=========================================================*/
 
-struct ObjHead { a_u64 _; };
-
 #define GOBJ_STRUCT_HEADER \
-    struct ObjHead _obj_head_mark[0]; \
+    a_byte _obj_head_mark[0]; \
     a_gcnext gnext;        \
     union {                \
         struct Impl const* impl;      \
@@ -336,8 +334,9 @@ struct GObj {
 };
 
 #define GOBJ_METHODS(_f,_m) \
-    _f(tag, a_u32) \
-    _f(flags, a_u32) \
+    _f(name, char const*)   \
+    _f(tag, a_u32)          \
+    _f(flags, a_u32)        \
     _m(drop, void, Global* gbl, a_gptr self) \
     _m(mark, void, Global* gbl, a_gptr self) \
     _m(close, void, a_henv env, a_gptr self)
@@ -365,11 +364,11 @@ struct Impl_ {
 #define IMPL_FLAG_NONE        u8c(0x00)
 #define IMPL_FLAG_GREEDY_MARK u8c(0x01)
 #define IMPL_FLAG_STACK_ALLOC u8c(0x02)
-#define IMPL_FLAG_USER_DEF    u8c(0x04) /* Marked for basic user defined type and object. */
+#define IMPL_FLAG_DYNAMIC     u8c(0x04) /* Marked for dynamic-created impl block. */
 
 #define impl_has_flag(vt,f) (((vt)->flags & (f)) != 0)
 
-#define g_impl(o) (o)->impl_
+#define g_impl(o) ((o)->impl_)
 
 #define g_is(o,t) (g_impl(o)->tag == (t))
 

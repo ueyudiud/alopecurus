@@ -138,8 +138,8 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 		}
         case T_TYPE: {
             GType* self = v_as_type(v);
-            if (self->name->len > 0) {
-                aloi_show("<type:%s>", str2ntstr(self->name));
+            if (self->name != null) {
+                aloi_show("<type:%s>", self->name);
             }
             else {
                 aloi_show("<type:%p>", self);
@@ -147,7 +147,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
             break;
         }
 		case T_OTHER: {
-			aloi_show("<%s:%p>", v_nameof(env, v), v_as_obj(v));
+			aloi_show("<%s:%p>", v_name(env, v), v_as_obj(v));
 			break;
 		}
 		default: {
@@ -200,7 +200,7 @@ static a_msg base_assert(a_henv env) {
 static a_msg base_typeof(a_henv env) {
 	Value v = api_elem(env, 0);
 	alo_settop(env, 1);
-	v_set_type(env, api_wrslot(env, 0), v_typeof(env, v));
+	v_set_type(env, api_wrslot(env, 0), v_type(env, v));
 	return 1;
 }
 

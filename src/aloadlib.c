@@ -169,6 +169,7 @@ static void lib_mark(Global* gbl, unused GLib* self) {
 
 static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
     GLib* self = ai_mem_alloc(env, sizeof(GLib));
+    self->impl = &lib_impl;
 
     catch (lib_open(env, file, &self->lib), msg) {
         ai_mem_dealloc(G(env), self, sizeof(GLib));
@@ -281,7 +282,7 @@ static GList* check_list(a_henv env, GType* self, char const* str) {
 
 static char const* check_path(a_henv env, GList* paths, a_u32 i) {
     Value v = paths->ptr[i];
-    if (!v_is_str(v)) aloL_raisef(env, "library path must be string", v_nameof(env, v));
+    if (!v_is_str(v)) aloL_raisef(env, "library path must be string", v_name(env, v));
     return str2ntstr(v_as_str(v));
 }
 

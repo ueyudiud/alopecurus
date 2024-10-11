@@ -396,9 +396,9 @@ char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
 }
 
 void alo_pushptype(a_henv env, a_msg tag) {
-    api_check(tag < TYPE__COUNT, "not primitive type tag: %d", tag);
+    api_check(tag < PTYPE_COUNT, "not primitive type tag: %d", tag);
 
-    GType* t = g_type(env, tag);
+    GType* t = g_ptype(env, tag);
     v_set_type(env, api_incr_stack(env), t);
 }
 
@@ -499,7 +499,7 @@ void* alo_newuser(a_henv env, a_ilen id) {
     api_check_slot(env, 1);
 
     Value v = api_elem(env, id);
-    api_check(v_is_type(v) && g_impl(v_as_obj(v))->flags & IMPL_FLAG_USER_DEF, "not user type.");
+    api_check(v_is_type(v) && g_impl(v_as_obj(v))->flags & IMPL_FLAG_DYNAMIC, "not user type.");
     GUser* val = ai_user_new(env, v_as_type(v)->as_utype);
     v_set_user(env, api_incr_stack(env), val);
     ai_gc_trigger(env);
@@ -949,7 +949,7 @@ void* alo_toptr(a_henv env, a_ilen id) {
         }
         case T_TYPE: {
             GType* o = v_as_type(v);
-            if (o->impl->flags & IMPL_FLAG_USER_DEF) {
+            if (o->impl->flags & IMPL_FLAG_DYNAMIC) {
                 return o->as_utype->user;
             }
             else {
@@ -977,7 +977,7 @@ a_henv alo_toroute(a_henv env, a_ilen id) {
 void alo_typeof(a_henv env, a_ilen id) {
     api_check_slot(env, 1);
     Value v = api_elem(env, id);
-    v_set_type(env, api_incr_stack(env), v_typeof(env, v));
+    v_set_type(env, api_incr_stack(env), v_type(env, v));
 }
 
 static GStr* l_get_str(a_henv env, a_ilen id) {
@@ -1020,7 +1020,6 @@ char const ai_api_tagname[][8] = {
 	[ALO_TLIST] = "list",
 	[ALO_TTABLE] = "table",
 	[ALO_TFUNC] = "func",
-    [ALO_TMOD] = "mod",
 	[ALO_TTYPE] = "type",
 	[ALO_TUSER] = "user"
 };

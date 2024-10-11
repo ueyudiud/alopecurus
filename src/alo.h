@@ -97,9 +97,8 @@ typedef a_u32 a_flags;
 #define ALO_TTABLE 8
 #define ALO_TFUNC 9
 #define ALO_TROUTE 10
-#define ALO_TMOD 11
-#define ALO_TTYPE 12
-#define ALO_TUSER 13
+#define ALO_TTYPE 11
+#define ALO_TUSER 12
 
 #define ALO_OPADD 0
 #define ALO_OPSUB 1

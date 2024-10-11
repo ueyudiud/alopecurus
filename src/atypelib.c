@@ -23,7 +23,7 @@ static a_msg type___call__(a_henv env) { /* Should this function write in script
     GType* self = check_type(env, 0);
 
     if (aloL_gets(env, 0, "__new__") == ALO_EEMPTY) {
-        aloL_raisef(env, "method '%s.__new__' not found.", str2ntstr(self->name));
+        aloL_raisef(env, "method '%s.__new__' not found.", self->as_utype->body.name);
     }
 
     alo_pop(env, 0);

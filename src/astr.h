@@ -31,12 +31,16 @@ struct GStr {
 
 enum {
 #define SYMLIST SYMLIST_SSTRS
-#define SYMDEF(n,r) STR_POS_##n, STR_EPOS_##n = STR_POS_##n + sizeof(r) - 1,
+#define SYMDEF(n,r) BEGIN_STR_##n, END_STR_##n = BEGIN_STR_##n + sizeof(r) - 1,
 #include "asym.h"
     STR__TOTAL_LEN,
 
     STR_POS__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
 };
+
+intern char const ai_str_interns[STR__TOTAL_LEN];
+
+#define str_ntstr(id) &ai_str_interns[BEGIN_##id]
 
 always_inline a_enum str_id(GStr* o) {
     return bit_cast(a_usize, o->gnext) >> 48;
@@ -77,7 +81,5 @@ always_inline char const* str2ntstr(GStr* self) {
 }
 
 #define ai_str_from_ntstr(env,src) ai_str_get_or_new(env, nt2lstr(src))
-
-intern char const ai_str_interns[STR__TOTAL_LEN];
 
 #endif /* astr_h_ */

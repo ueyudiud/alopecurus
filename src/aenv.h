@@ -76,9 +76,9 @@ static_assert(offsetof(GRoute, stack.base) == 0x20);
 #endif
 
 /**
- ** Get global context from environment.
+ ** Get global from context.
  */
-#define G(env) ((env)->global)
+#define G(env) cast(Global*, (env)->global)
 
 typedef struct {
     GStr** ptr;
@@ -86,7 +86,7 @@ typedef struct {
     a_u32 hmask; /* Hash code mask. */
 } StrCache;
 
-enum { TYPE__COUNT = ALO_TUSER };
+enum { PTYPE_COUNT = ALO_TUSER };
 
 typedef struct {
     a_u8 enable: 1;
@@ -96,6 +96,7 @@ typedef struct {
 } GcFlags;
 
 struct Global {
+    a_byte global[0];
     Alloc alloc_;
     void* alloc_ctx;
     a_hfun hook_;
@@ -124,7 +125,7 @@ struct Global {
     a_u8 gcstep;
     volatile atomic_uint_fast8_t hookm;
     GStr* fast_strs[STR__COUNT];
-    GType fast_types[TYPE__COUNT][1];
+    GBType fast_types[PTYPE_COUNT];
 };
 
 #define RFLAG_COUNT_VARARG UINT8_MAX
@@ -139,8 +140,7 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
     return G(env)->fast_strs[tag];
 }
 
-#define g_type(env,f) (G(env)->fast_types[f])
-#define g_type_ref(f) offsetof(Global, fast_types[f])
+#define g_ptype(env,f) g_as(GType, &G(env)->fast_types[f])
 
 #define g_is_route(o) g_is(o, ALO_TROUTE)
 
@@ -165,44 +165,51 @@ always_inline void v_set_route(a_henv env, Value* d, GRoute* o) {
 
 #define route_size() sizeof(GRoute)
 
-always_inline GType* g_typeof(a_henv env, a_gptr o) {
+always_inline GType* g_type(Global* gbl, a_gptr o) {
     a_u32 tag = o->impl->tag;
-    return tag < TYPE__COUNT ? g_type(env, tag) : g_as(GType, from_member(GUType, body, o->impl));
+    if (likely(tag < PTYPE_COUNT)) {
+        return g_ptype(gbl, tag);
+    }
+    return g_as(GType, from_member(GUType, body, o->impl));
 }
 
-#define g_typeof(env,p) g_typeof(env, g_as_obj(p))
+#define g_type(env,p) g_type(G(env), g_as_obj(p))
 
-always_inline char const* g_nameof(a_henv env, a_gptr p) {
-    return str2ntstr(g_typeof(env, p)->name);
+always_inline char const* g_name(unused Global* gbl, a_gptr p) {
+    return g_impl(p)->name ?: "user";
 }
 
-#define g_nameof(env,p) g_nameof(env, g_as_obj(p))
+#define g_name(env,p) g_name(G(env), g_as_obj(p))
 
-always_inline GType* v_typeof(a_henv env, Value v) {
+always_inline GType* v_type(Global* gbl, Value v) {
     switch (v_get_tag(v)) {
-        case T_NIL: return g_type(env, ALO_TNIL);
+        case T_NIL: return g_ptype(gbl, ALO_TNIL);
         case T_FALSE:
-        case T_TRUE: return g_type(env, ALO_TBOOL);
-        case T_INT: return g_type(env, ALO_TINT);
-        case T_PTR: return g_type(env, ALO_TPTR);
-        case T_OBJ: return g_typeof(env, v_as_obj(v));
-        case T_FLOAT: return g_type(env, ALO_TFLOAT);
+        case T_TRUE: return g_ptype(gbl, ALO_TBOOL);
+        case T_INT: return g_ptype(gbl, ALO_TINT);
+        case T_PTR: return g_ptype(gbl, ALO_TPTR);
+        case T_OBJ: return g_type(gbl, v_as_obj(v));
+        case T_FLOAT: return g_ptype(gbl, ALO_TFLOAT);
         default: unreachable();
     }
 }
 
-always_inline char const* v_nameof(a_henv env, Value v) {
+#define v_type(env,v) v_type(G(env), v)
+
+always_inline char const* v_name(Global* gbl, Value v) {
     switch (v_get_tag(v)) {
         case T_NIL: return "nil";
         case T_FALSE:
         case T_TRUE: return "bool";
         case T_INT: return "int";
         case T_PTR: return "ptr";
-        case T_OBJ: return g_nameof(env, v_as_obj(v));
+        case T_OBJ: return g_name(gbl, v_as_obj(v));
         case T_FLOAT: return "float";
         default: unreachable();
     }
 }
+
+#define v_name(env,v) v_name(G(env), v)
 
 #ifndef ALOI_DFL_GCSTEPMUL
 # define ALOI_DFL_GCSTEPMUL usizec(384)

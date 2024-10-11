@@ -8,14 +8,13 @@
 /* Symbol collection flags. */
 #define SYM_EMPTY 0x01
 #define SYM_KW 0x02 /* Keyword */
-#define SYM_PT 0x04 /* Primitive type */
-#define SYM_TM 0x08 /* Tagged method */
-#define SYM_EM 0x10 /* Error message */
-#define SYM_OP 0x20 /* Operator */
+#define SYM_TM 0x04 /* Tagged method */
+#define SYM_EM 0x08 /* Error message */
+#define SYM_OP 0x10 /* Operator */
 
 /* Symbol collection bundle flags. */
-#define SYMLIST_SSTRS (SYM_EMPTY | SYM_KW | SYM_TM | SYM_PT | SYM_EM | SYM_OP)
-#define SYMLIST_ISTRS (SYM_EMPTY | SYM_KW | SYM_TM | SYM_PT | SYM_EM)
+#define SYMLIST_SSTRS (SYM_EMPTY | SYM_KW | SYM_TM | SYM_EM | SYM_OP)
+#define SYMLIST_ISTRS (SYM_EMPTY | SYM_KW | SYM_TM | SYM_EM)
 #define SYMLIST_TOKEN (SYM_KW | SYM_OP)
 
 enum {
@@ -91,26 +90,6 @@ SYMDEF1(while   )
 SYMDEF1(_       )
 
 EPILOGUE(KW)
-#endif
-
-#if SYMLIST & SYM_PT
-PROLOGUE(PT)
-
-/* nil is already defined in KW section */
-SYMDEF1(bool )
-SYMDEF1(int  )
-SYMDEF1(float)
-SYMDEF1(ptr  )
-SYMDEF1(str  )
-SYMDEF1(tuple)
-SYMDEF1(list )
-SYMDEF1(table)
-SYMDEF1(func )
-SYMDEF1(route)
-SYMDEF1(type )
-SYMDEF1(mod  )
-
-EPILOGUE(PT)
 #endif
 
 #if SYMLIST & SYM_TM

@@ -86,7 +86,7 @@ void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
 
 Value ai_list_get(a_henv env, GList* self, Value vk) {
 	if (unlikely(!v_is_int(vk))) {
-        ai_err_bad_key(env, "list", v_nameof(env, vk));
+        ai_err_bad_key(env, "list", v_name(env, vk));
 	}
 	return ai_list_geti(env, self, v_as_int(vk));
 }
@@ -98,7 +98,7 @@ Value ai_list_geti(unused a_henv env, GList* self, a_int k) {
 
 void ai_list_set(a_henv env, GList* self, Value vk, Value vv) {
 	if (unlikely(!v_is_int(vk))) {
-        ai_err_bad_key(env, "list", v_nameof(env, vv));
+        ai_err_bad_key(env, "list", v_name(env, vv));
 	}
 	ai_list_seti(env, self, v_as_int(vk), vv);
 }
@@ -152,6 +152,7 @@ static void list_drop(Global* gbl, GList* self) {
 
 static Impl const list_impl = {
     .tag = ALO_TLIST,
+    .name = "list",
     .drop = list_drop,
     .mark = list_mark
 };

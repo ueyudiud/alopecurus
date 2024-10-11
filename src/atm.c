@@ -50,7 +50,7 @@ a_bool ai_tm_hash(a_henv env, Value v, a_hash* ph) {
     a_gptr p = v_as_obj(v);
 
     Value vf;
-    try (type_lookft(env, g_typeof(env, p), TM___hash__, &vf));
+    try (type_lookft(env, g_type(env, p), TM___hash__, &vf));
 
     Value vr = vm_call1(env, vf, v);
     if (!meta_int(vr, ph)) {
@@ -63,7 +63,7 @@ a_bool ai_tm_equals(a_henv env, Value v1, Value v2, a_bool* pz) {
     a_gptr p = v_as_obj(v1);
 
     Value vf;
-    try (type_lookft(env, g_typeof(env, p), TM___eq__, &vf));
+    try (type_lookft(env, g_type(env, p), TM___eq__, &vf));
 
     Value vr = vm_call1(env, vf, v1, v2);
     *pz = v_to_bool(vr);
@@ -74,7 +74,7 @@ a_bool ai_tm_len(a_henv env, Value v, a_uint* pi) {
     a_gptr p = v_as_obj(v);
 
     Value vf;
-    try (type_lookft(env, g_typeof(env, p), TM___len__, &vf));
+    try (type_lookft(env, g_type(env, p), TM___len__, &vf));
 
     Value vr = vm_call1(env, vf, v);
     if (!meta_int(vr, pi)) {
@@ -86,7 +86,7 @@ a_bool ai_tm_len(a_henv env, Value v, a_uint* pi) {
 
 a_bool ai_tm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vf;
-    try (type_lookft(env, v_typeof(env, v), TM___look__, &vf));
+    try (type_lookft(env, v_type(env, v), TM___look__, &vf));
 
     if (v_is_func(vf)) {
         Value vr = vm_call1(env, vf, v, v_of_str(k));
@@ -103,7 +103,7 @@ a_bool ai_tm_str(a_henv env, Value v, GStr** ps) {
     a_gptr p = v_as_obj(v);
 
     Value vf;
-    try (type_lookt(env, g_typeof(env, p), TM___str__, &vf));
+    try (type_lookt(env, g_type(env, p), TM___str__, &vf));
 
     if (v_is_str(vf)) {
         *ps = v_as_str(vf);
@@ -122,7 +122,7 @@ a_bool ai_tm_get(a_henv env, Value v1, Value v2, Value* pv) {
     a_gptr p = v_as_obj(v1);
 
     Value vf;
-    try (type_lookft(env, g_typeof(env, p), TM___get__, &vf));
+    try (type_lookft(env, g_type(env, p), TM___get__, &vf));
 
     Value vr = vm_call1(env, vf, v1, v2);
     v_set(env, pv, vr);
@@ -134,7 +134,7 @@ a_bool ai_tm_set(a_henv env, Value v1, Value v2, Value v3) {
     a_gptr p = v_as_obj(v1);
 
     Value vf;
-    try (type_lookft(env, g_typeof(env, p), TM___set__, &vf));
+    try (type_lookft(env, g_type(env, p), TM___set__, &vf));
 
     vm_call0(env, vf, v1, v2, v3);
 
@@ -143,7 +143,7 @@ a_bool ai_tm_set(a_henv env, Value v1, Value v2, Value v3) {
 
 a_bool ai_tm_unary(a_henv env, a_enum tm, Value v, Value* pv) {
     Value vf;
-    try (type_lookt(env, v_typeof(env, v), tm, &vf));
+    try (type_lookt(env, v_type(env, v), tm, &vf));
 
     Value vr = vm_call1(env, vf, v);
     v_set(env, pv, vr);
@@ -153,7 +153,7 @@ a_bool ai_tm_unary(a_henv env, a_enum tm, Value v, Value* pv) {
 
 a_bool ai_tm_binary(a_henv env, a_enum tm, Value v1, Value v2, Value* pv) {
     Value vf;
-    try (type_lookt(env, v_typeof(env, v1), tm, &vf));
+    try (type_lookt(env, v_type(env, v1), tm, &vf));
 
     Value vr = vm_call1(env, vf, v1, v2);
     v_set(env, pv, vr);
@@ -163,7 +163,7 @@ a_bool ai_tm_binary(a_henv env, a_enum tm, Value v1, Value v2, Value* pv) {
 
 a_bool ai_tm_relation(a_henv env, a_enum tm, Value v1, Value v2, a_bool* pz) {
     Value vf;
-    try (type_lookt(env, v_typeof(env, v1), tm, &vf));
+    try (type_lookt(env, v_type(env, v1), tm, &vf));
 
     Value vr = vm_call1(env, vf, v1, v2);
     *pz = v_to_bool(vr);
@@ -173,7 +173,7 @@ a_bool ai_tm_relation(a_henv env, a_enum tm, Value v1, Value v2, a_bool* pz) {
 
 a_bool ai_tm_precall(a_henv env, Value v, Value* pv) {
     Value vf;
-    try (type_lookt(env, v_typeof(env, v), TM___call__, &vf));
+    try (type_lookt(env, v_type(env, v), TM___call__, &vf));
 
     v_set(env, pv, vf);
 
@@ -184,7 +184,7 @@ void ai_tm_close(a_henv env, a_gptr o) {
     assume(g_is_user(o) || g_is(o, T_OTHER), "unexpected close dispatch.");
 
     Value vf;
-    GType* type = g_typeof(env, o);
+    GType* type = g_type(env, o);
     if (type_lookft(env, type, TM___close__, &vf))
         return;
 

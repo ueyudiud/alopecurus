@@ -12,6 +12,7 @@
 #include "agc.h"
 #include "aerr.h"
 #include "atm.h"
+#include "aapi.h"
 
 #include "atype.h"
 
@@ -30,11 +31,11 @@ GType* ai_type_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a
 
     init(self->as_utype) {
         .impl = &utype_impl,
-        .name = name ?: g_str(env, STR_EMPTY),
         .size = size,
         .body = {
             .tag = ALO_TUSER,
-            .flags = (num_slot == 0 ? IMPL_FLAG_GREEDY_MARK : 0) | IMPL_FLAG_USER_DEF,
+            .name = name != null ? str2ntstr(name) : null,
+            .flags = (num_slot == 0 ? IMPL_FLAG_GREEDY_MARK : 0) | IMPL_FLAG_DYNAMIC,
             .mark = ai_user_mark,
             .close = ai_tm_close,
             .drop = ai_user_drop
@@ -49,7 +50,7 @@ GType* ai_type_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a
 
 a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv) {
     if (!v_is_str(vk)) {
-        ai_err_bad_key(env, "type", v_nameof(env, vk));
+        ai_err_bad_key(env, "type", v_name(env, vk));
     }
     return ai_type_gets(env, self, v_as_str(vk), pv);
 }
@@ -188,7 +189,7 @@ static void type_grow(a_henv env, GType* self) {
 
 a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv) {
     if (!v_is_str(vk)) {
-        ai_err_bad_key(env, "type", v_nameof(env, vk));
+        ai_err_bad_key(env, "type", v_name(env, vk));
     }
     ai_type_sets(env, self, v_as_str(vk), vv);
     return false;
@@ -262,28 +263,11 @@ place:
 void ai_type_boost(a_henv env) {
     Global* gbl = G(env);
 
-    static a_u8 const l_name_tags[] = {
-        [ALO_TNIL] = STR_nil,
-        [ALO_TBOOL] = STR_bool,
-        [ALO_TINT] = STR_int,
-        [ALO_TFLOAT] = STR_float,
-        [ALO_TPTR] = STR_ptr,
-        [ALO_TSTR] = STR_str,
-        [ALO_TTUPLE] = STR_tuple,
-        [ALO_TLIST] = STR_list,
-        [ALO_TTABLE] = STR_table,
-        [ALO_TFUNC] = STR_func,
-        [ALO_TTYPE] = STR_type,
-        [ALO_TROUTE] = STR_route
-    };
-
-    static_assert(sizeof(l_name_tags) == TYPE__COUNT);
-
-    for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
-        init(gbl->fast_types[i]) {
+    for (a_u32 i = 0; i < PTYPE_COUNT; ++i) {
+        init(&gbl->fast_types[i]) {
             .impl = &ptype_impl,
             .size = 0,
-            .name = g_str(env, l_name_tags[i])
+            .name = ai_api_tagname[i]
         };
     }
 }
@@ -295,8 +279,8 @@ static void type_clean(Global* gbl, GType* self) {
 }
 
 void ai_type_clean(Global* gbl) {
-    for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
-        type_clean(gbl, gbl->fast_types[i]);
+    for (a_u32 i = 0; i < PTYPE_COUNT; ++i) {
+        type_clean(gbl, g_ptype(gbl, i));
     }
 }
 
@@ -324,18 +308,22 @@ static void utype_drop(Global* gbl, GType* self) {
 
 static void utype_mark(Global* gbl, GType* self) {
     type_mark_dict(gbl, self);
-    ai_gc_trace_mark(gbl, self->name);
+    if (self->name != null) {
+        ai_gc_trace_mark(gbl, from_member(GStr, ptr, self->name));
+    }
     ai_gc_trace_work(gbl, self->size);
 }
 
 static Impl const ptype_impl = {
     .tag = ALO_TTYPE,
+    .name = "type",
     .mark = ptype_mark
 };
 
 static Impl const utype_impl = {
     .tag = ALO_TTYPE,
-    .flags = IMPL_FLAG_USER_DEF,
+    .name = "type",
+    .flags = IMPL_FLAG_DYNAMIC,
     .drop = utype_drop,
     .mark = utype_mark
 };

@@ -63,7 +63,7 @@ void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 
 void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
     a_ilen sid = uid2sid(env, id);
-	char const* what = alo_pushfstr(env, "%s expected, got %s", name, v_nameof(env, api_elem(env, sid)));
+	char const* what = alo_pushfstr(env, "%s expected, got %s", name, v_name(G(env), api_elem(env, sid)));
 	aloL_argerror(env, id, what);
 }
 
@@ -450,7 +450,7 @@ a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
 a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
     Value v = api_elem(env, id);
 
-    GType* o = v_typeof(env, v);
+    GType* o = v_type(env, v);
 
     catch (ai_type_getls(env, o, nt2lstr(s), &v)) {
         return ALO_EEMPTY;

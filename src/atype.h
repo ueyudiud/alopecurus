@@ -31,8 +31,6 @@ struct MNode {
     a_u32 size;             \
     /* Type signature */    \
     a_u32 sig;              \
-    /* Type name. */        \
-    GStr* name;             \
     /* Named values */      \
     MNode* ptr;             \
     a_u32 len;              \
@@ -40,8 +38,19 @@ struct MNode {
     /* Changed counter */   \
     a_u32 nchg;             \
     /* Fast TM flags */     \
-    a_u32 ftmz
+    a_u32 ftmz;             \
 
+#define TYPE_CAT_BASIC u16c(0x0001)
+
+/* Basic type */
+typedef struct {
+    GTYPE_STRUCT_HEADER;
+    char const* name;
+    a_u32 tag;
+    a_u32 flags;
+} GBType;
+
+/* User defined type */
 typedef struct {
     GTYPE_STRUCT_HEADER;
     Impl body;
@@ -56,9 +65,15 @@ typedef struct {
 union GType {
     struct {
         GTYPE_STRUCT_HEADER;
+        char const* name;
     };
+    GBType as_btype[1];
     GUType as_utype[1];
 };
+
+static_assert(offsetof(GBType, name) == offsetof(GUType, body.name));
+static_assert(offsetof(GBType, tag) == offsetof(GUType, body.tag));
+static_assert(offsetof(GBType, flags) == offsetof(GUType, body.flags));
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
 

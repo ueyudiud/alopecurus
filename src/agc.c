@@ -202,8 +202,8 @@ static void begin_propagate(Global* gbl) {
 	if (v_is_obj(gbl->global_value)) {
 		join_trace(&gbl->tr_gray, v_as_obj(gbl->global_value));
 	}
-    for (a_u32 i = 0; i < TYPE__COUNT; ++i) {
-        join_trace(&gbl->tr_gray, gbl->fast_types[i]);
+    for (a_u32 i = 0; i < PTYPE_COUNT; ++i) {
+        join_trace(&gbl->tr_gray, g_ptype(gbl, i));
     }
 	gbl->gcstep = GCSTEP_PROPAGATE;
 }

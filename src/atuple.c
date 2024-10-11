@@ -61,7 +61,7 @@ a_hash ai_tuple_hash(a_henv env, GTuple* self) {
 
 Value ai_tuple_get(a_henv env, GTuple* self, Value vk) {
 	if (unlikely(!v_is_int(vk))) {
-        ai_err_bad_key(env, "tuple", v_nameof(env, vk));
+        ai_err_bad_key(env, "tuple", v_name(env, vk));
 	}
 	return ai_tuple_geti(env, self, v_as_int(vk));
 }
@@ -104,6 +104,7 @@ static void tuple_mark(Global* gbl, GTuple* self) {
 
 static Impl const tuple_impl = {
     .tag = ALO_TTUPLE,
+    .name = "tuple",
     .flags = IMPL_FLAG_NONE,
     .drop = tuple_drop,
     .mark = tuple_mark
