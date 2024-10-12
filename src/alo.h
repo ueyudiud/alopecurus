@@ -228,9 +228,6 @@ ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
 
-#define alo_canyield(env) alo_fattrz(env, ALO_FATTR_YIELD)
-#define alo_isasync(env) alo_fattrz(env, ALO_FATTR_ASYNC)
-
 ALO_EXPORT a_msg (alo_tagof)(a_henv env, a_ilen id);
 ALO_EXPORT void (alo_typeof)(a_henv env, a_ilen id);
 ALO_EXPORT char const* (alo_typename)(a_henv env, a_ilen id);

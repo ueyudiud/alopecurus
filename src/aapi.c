@@ -866,35 +866,6 @@ char const* alo_typename(a_henv env, a_ilen id) {
     return v_name(env, v);
 }
 
-static GStr* l_get_str(a_henv env, a_ilen id) {
-	Value const* v = api_roslot(env, id);
-	return v != null ? v_as_str(*v) : null;
-}
-
-a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
-                  a_ilen id_env, a_ilen id_name, char const* file,
-                  a_flags options) {
-	GFun* out;
-	api_check_slot(env, 1);
-	id_env = alo_absindex(env, id_env);
-
-	GStr* name = l_get_str(env, id_name);
-
-	a_msg msg = ai_parse(env, fun, ctx, file, name, options, &out);
-	if (likely(msg == ALO_SOK)) {
-		v_set_func(env, api_incr_stack(env), out);
-		if (out->ncap > 0) {
-            RcCap* cap = ai_cap_new(env);
-            out->ref_caps[0] = cap;
-            v_cpy(env, cap->ptr, api_rdslot(env, id_env));
-		}
-	}
-	else {
-		ai_env_pop_error(env, api_incr_stack(env));
-	}
-	return msg;
-}
-
 char const ai_api_tagname[][8] = {
 	[ALO_TNIL] = "nil",
 	[ALO_TBOOL] = "bool",
