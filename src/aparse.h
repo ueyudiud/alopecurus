@@ -43,7 +43,7 @@ struct Parser {
     LineInfoBuf lines[1];
     Buf secs[1];
     Buf sbuf[1];
-    GStr* name; /* For dbg_name. */
+    GStr* name; /* For debug name. */
     GStr* gvar_name;
     Scope* scope;
     FnScope* fscope;
@@ -341,12 +341,12 @@ struct PatInfo {
 enum SymKind {
     /**
      ** Local variable.
-     *@param _index the register index.
+     *@param index the register index.
      */
     SYM_LOCAL,
     /**
      ** The top capture value.
-     *@param _index the capture index in top as_scope.
+     *@param index the capture index in top as_scope.
      */
     SYM_CAPTURE,
     /**

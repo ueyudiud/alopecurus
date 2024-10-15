@@ -18,9 +18,9 @@
 
 /*=========================================================*/
 
-static void l_direct_jump(Parser* par, a_u32 label, a_line line);
-static a_u32 l_lazy_jump(Parser* par, a_u32 label, a_line line);
-static a_u32 l_mark_label(Parser* par, a_u32 label, a_line line);
+static void jump_direct(Parser* par, a_u32 label, a_line line);
+static a_u32 jump_lazily(Parser* par, a_u32 label, a_line line);
+static a_u32 mark_label(Parser* par, a_u32 label, a_line line);
 
 static void expr_index_str(Parser* par, InoutExpr e, GStr* name, a_line line);
 static void expr_discard(Parser* par, InExpr e);
@@ -128,7 +128,7 @@ static a_u32 code_put(Parser* par, a_insn i) {
     return at_buf_push(par->env, par->insns, i, "code");
 }
 
-static void l_emit_line(Parser* par, a_line line) {
+static void emit_line(Parser* par, a_line line) {
 	FnScope* scope = par->fscope;
 	if (scope->head_line != line) {
 		LineInfo info = {UINT32_MAX, line};
@@ -140,16 +140,16 @@ static void l_emit_line(Parser* par, a_line line) {
 	}
 }
 
-static a_u32 l_emit_direct(Parser* restrict par, a_insn i, a_u32 line) {
-	l_emit_line(par, line);
+static a_u32 emit_direct(Parser* restrict par, a_insn i, a_u32 line) {
+    emit_line(par, line);
     return code_put(par, i);
 }
 
-static a_bool l_should_emit(Parser* par) {
+static a_bool should_emit(Parser* par) {
 	return likely(par->fscope->fpass || par->fscope->fland);
 }
 
-static a_i32 l_jump_diff(Parser* par, a_u32 from, a_u32 to, a_line line) {
+static a_i32 compute_jump_diff(Parser* par, a_u32 from, a_u32 to, a_line line) {
     a_i32 diff = cast(a_i32, to - from - 1);
     if (unlikely(diff < BC_MIN_SAX || diff > BC_MAX_SAX)) {
         parse_error(par, "instruction jump out of bound.", line);
@@ -157,12 +157,12 @@ static a_i32 l_jump_diff(Parser* par, a_u32 from, a_u32 to, a_line line) {
     return diff;
 }
 
-static a_u32 l_emit_jump_direct(Parser* par, a_u32 label, a_line line) {
-	a_i32 d = label != NO_LABEL ? l_jump_diff(par, par->head_label, label, line) : -1;
-	return l_emit_direct(par, bc_make_isax(BC_J, d), line);
+static a_u32 emit_jump_direct(Parser* par, a_u32 label, a_line line) {
+	a_i32 d = label != NO_LABEL ? compute_jump_diff(par, par->head_label, label, line) : -1;
+	return emit_direct(par, bc_make_isax(BC_J, d), line);
 }
 
-static a_u32 l_next_jump(Parser* par, a_u32 label) {
+static a_u32 next_jump(Parser* par, a_u32 label) {
 	assume(label <= par->head_label, "not valid label.");
 	if (label == par->head_label)
 		return par->fscope->head_land;
@@ -174,12 +174,12 @@ static a_u32 l_next_jump(Parser* par, a_u32 label) {
 	return disp != -1 ? label + 1 + cast(a_u32, disp) : NO_LABEL;
 }
 
-static void l_redirect(Parser* par, a_u32 from, a_u32 to, a_line line) {
+static void redirect_jump(Parser* par, a_u32 from, a_u32 to, a_line line) {
 	a_insn* ip = code_at(par, from);
 
 	assume(bc_load_op(ip) == BC_J);
 
-    bc_store_sax(ip, l_jump_diff(par, from, to, line));
+    bc_store_sax(ip, compute_jump_diff(par, from, to, line));
 }
 
 /**
@@ -189,61 +189,61 @@ static void l_redirect(Parser* par, a_u32 from, a_u32 to, a_line line) {
  *@param to the destination.
  *@param line the line number for operation.
  */
-static void l_redirect_chain(Parser* par, a_u32 from, a_u32 to, a_line line) {
+static void redirect_jump_chain(Parser* par, a_u32 from, a_u32 to, a_line line) {
 	loop {
-		a_u32 next = l_next_jump(par, from);
-		l_redirect(par, from, to, line);
+		a_u32 next = next_jump(par, from);
+        redirect_jump(par, from, to, line);
 		if (next == NO_LABEL) break;
 		from = next;
 	}
 }
 
-static void l_clear_close(Parser* par) {
+static void clear_close(Parser* par) {
 	par->fscope->fclose = false;
 }
 
-static void l_clear_jump(Parser* par) {
+static void clear_jump(Parser* par) {
 	par->fscope->fjump = false;
 	par->fscope->head_jump = NO_LABEL;
 }
 
-static void l_clear_land(Parser* par) {
+static void clear_land(Parser* par) {
 	par->fscope->fland = false;
 	par->fscope->head_land = NO_LABEL;
 }
 
-static void l_emit_fast(Parser* par, a_insn i, a_line line) {
+static void emit_fast(Parser* par, a_insn i, a_line line) {
 	if (par->fscope->fpass) {
-		l_emit_direct(par, i, line);
+        emit_direct(par, i, line);
 	}
 }
 
-static void l_flush_close(Parser* par) {
+static void flush_close(Parser* par) {
 	if (par->fscope->fclose) {
-		l_emit_direct(par, bc_make_ia(BC_CLOSE, par->scope->top_ntr), par->fscope->close_line);
-		l_clear_close(par);
+        emit_direct(par, bc_make_ia(BC_CLOSE, par->scope->top_ntr), par->fscope->close_line);
+        clear_close(par);
 	}
 }
 
-static void l_flush_jump(Parser *par) {
+static void flush_jump(Parser *par) {
 	if (par->fscope->fjump) {
 		assume(par->fscope->fland); /* When jump is defined, the branch is reachable only if land is also defined. */
 		/* Link to previous jump instruction. */
-		l_emit_jump_direct(par, par->fscope->head_jump, par->fscope->head_jump_line);
-		l_clear_jump(par);
+        emit_jump_direct(par, par->fscope->head_jump, par->fscope->head_jump_line);
+        clear_jump(par);
 	}
 }
 
-static void l_flush_land(Parser* par, a_line line) {
+static void flush_land(Parser* par, a_line line) {
 	if (par->fscope->fland) {
-		l_redirect_chain(par, par->fscope->head_land, par->head_label, line);
-		l_clear_land(par);
+        redirect_jump_chain(par, par->fscope->head_land, par->head_label, line);
+        clear_land(par);
 	}
 }
 
-static void l_redirect_leave(Parser* par, a_u32 label, a_insn i) {
+static void redirect_leave(Parser* par, a_u32 label, a_insn i) {
 	loop {
-		a_u32 next = l_next_jump(par, label);
+		a_u32 next = next_jump(par, label);
 		bc_store(par->code[label], i);
 		if (next == NO_LABEL)
 			break;
@@ -254,69 +254,69 @@ static void l_redirect_leave(Parser* par, a_u32 label, a_insn i) {
 /**
  ** Emit an instruction to leave current function.
  */
-static void l_emit_leave(Parser* par, a_insn i, a_line line) {
-	if (l_should_emit(par)) {
+static void emit_leave(Parser* par, a_insn i, a_line line) {
+	if (should_emit(par)) {
 		FnScope* scope = par->fscope;
 
-		l_flush_close(par);
-        l_flush_jump(par);
+        flush_close(par);
+        flush_jump(par);
 		if (scope->fland) {
-			l_redirect_leave(par, scope->head_land, i);
-			l_clear_land(par);
+            redirect_leave(par, scope->head_land, i);
+            clear_land(par);
 		}
 		if (scope->fpass) {
-			l_emit_direct(par, i, line);
+            emit_direct(par, i, line);
 		}
 		scope->fpass = false;
 	}
 }
 
-static a_u32 l_emit(Parser* par, a_insn i, a_line line) {
-	if (l_should_emit(par)) {
-		l_flush_close(par);
-        l_flush_jump(par);
-		l_flush_land(par, line);
+static a_u32 emit(Parser* par, a_insn i, a_line line) {
+	if (should_emit(par)) {
+        flush_close(par);
+        flush_jump(par);
+        flush_land(par, line);
 		par->fscope->fpass = true;
-		return l_emit_direct(par, i, line);
+		return emit_direct(par, i, line);
 	}
 	return NO_LABEL;
 }
 
-#define l_emit_ia(par,i,a,l) l_emit(par, bc_make_ia(i, a), l)
-#define l_emit_iab(par,i,a,b,l) l_emit(par, bc_make_iab(i, a, b), l)
-#define l_emit_iac(par,i,a,c,l) l_emit(par, bc_make_iac(i, a, c), l)
-#define l_emit_iabx(par,i,a,b,l) l_emit(par, bc_make_iabx(i, a, b), l)
-#define l_emit_iasbx(par,i,a,b,l) l_emit(par, bc_make_iasbx(i, a, b), l)
-#define l_emit_iabc(par,i,a,b,c,l) l_emit(par, bc_make_iabc(i, a, b, c), l)
-#define l_emit_iabsc(par,i,a,b,c,l) l_emit(par, bc_make_iabsc(i, a, b, c), l)
+#define emit_ia(par,i,a,l) emit(par, bc_make_ia(i, a), l)
+#define emit_iab(par,i,a,b,l) emit(par, bc_make_iab(i, a, b), l)
+#define emit_iac(par,i,a,c,l) emit(par, bc_make_iac(i, a, c), l)
+#define emit_iabx(par,i,a,b,l) emit(par, bc_make_iabx(i, a, b), l)
+#define emit_iasbx(par,i,a,b,l) emit(par, bc_make_iasbx(i, a, b), l)
+#define emit_iabc(par,i,a,b,c,l) emit(par, bc_make_iabc(i, a, b, c), l)
+#define emit_iabsc(par,i,a,b,c,l) emit(par, bc_make_iabsc(i, a, b, c), l)
 
-static void l_emit_idb(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 line) {
-	expr_dyn(e, l_emit_iab(par, i, R_DYN, b, line), line);
+static void emit_idb(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 line) {
+	expr_dyn(e, emit_iab(par, i, R_DYN, b, line), line);
 }
 
-static void l_emit_idbx(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 line) {
-	expr_dyn(e, l_emit_iabx(par, i, R_DYN, b, line), line);
+static void emit_idbx(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 line) {
+	expr_dyn(e, emit_iabx(par, i, R_DYN, b, line), line);
 }
 
-static void l_emit_idbc(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 c, a_u32 line) {
-	expr_dyn(e, l_emit_iabc(par, i, R_DYN, b, c, line), line);
+static void emit_idbc(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 c, a_u32 line) {
+	expr_dyn(e, emit_iabc(par, i, R_DYN, b, c, line), line);
 }
 
-static void l_emit_idbd(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 line) {
-	expr_dyn(e, l_emit_iabc(par, i, R_DYN, b, N_DYN, line), line);
+static void emit_idbd(Parser* par, a_u32 i, Expr e, a_u32 b, a_u32 line) {
+	expr_dyn(e, emit_iabc(par, i, R_DYN, b, N_DYN, line), line);
 	e->fupk = true; /* Mark unpackable. */
 }
 
-static void l_emit_idbsc(Parser* par, a_u32 i, Expr e, a_u32 b, a_i32 c, a_u32 line) {
-	expr_dyn(e, l_emit_iabsc(par, i, R_DYN, b, c, line), line);
+static void emit_idbsc(Parser* par, a_u32 i, Expr e, a_u32 b, a_i32 c, a_u32 line) {
+	expr_dyn(e, emit_iabsc(par, i, R_DYN, b, c, line), line);
 }
 
-static a_u32 l_emit_k(Parser* par, a_u32 dst, Value val, a_line line) {
+static a_u32 emit_k(Parser* par, a_u32 dst, Value val, a_line line) {
 	a_u32 index = const_index(par, val);
-	return l_emit(par, bc_make_iabx(BC_K, dst, index), line);
+	return emit(par, bc_make_iabx(BC_K, dst, index), line);
 }
 
-static a_u32 l_emit_kn(Parser* par, a_u32 dst, a_u32 len, a_line line) {
+static a_u32 emit_kn(Parser* par, a_u32 dst, a_u32 len, a_line line) {
 	assume(len > 0);
 	if (par->fscope->fpass && !par->fscope->fland) {
 		a_insn* ip = par->code[par->head_label - 1];
@@ -336,28 +336,28 @@ static a_u32 l_emit_kn(Parser* par, a_u32 dst, a_u32 len, a_line line) {
 			}
 		}
 	}
-	return l_emit(par, bc_make_iac(BC_KN, dst, len), line);
+	return emit(par, bc_make_iac(BC_KN, dst, len), line);
 }
 
-static a_u32 l_emit_branch(Parser* par, a_insn i, a_u32 label, a_u32 line) {
-	if (l_emit(par, i, line) != NO_LABEL) {
-		return l_emit_jump_direct(par, label, line);
+static a_u32 emit_branch(Parser* par, a_insn i, a_u32 label, a_u32 line) {
+	if (emit(par, i, line) != NO_LABEL) {
+		return emit_jump_direct(par, label, line);
 	}
 	return NO_LABEL;
 }
 
-static a_u32 l_emit_aby(Parser* par, a_enum op, a_u32 a, a_u32 b, a_u32 c, a_u32 line) {
+static a_u32 emit_aby(Parser* par, a_enum op, a_u32 a, a_u32 b, a_u32 c, a_u32 line) {
 	if (c <= BC_MAX_C) {
-		return l_emit(par, bc_make_iabc(op, a, b, c), line);
+		return emit(par, bc_make_iabc(op, a, b, c), line);
 	}
 	else {
-		a_u32 label = l_emit(par, bc_make_iab(op, a, b), line);
-		l_emit_fast(par, bc_make_iax(BC_EX, c), line);
+		a_u32 label = emit(par, bc_make_iab(op, a, b), line);
+        emit_fast(par, bc_make_iax(BC_EX, c), line);
 		return label;
 	}
 }
 
-static void l_merge_branch(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) {
+static void merge_label(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) {
 	if (label2 == NO_LABEL)
 		return;
 
@@ -372,16 +372,16 @@ static void l_merge_branch(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line)
 		}
 
 		loop {
-			a_u32 label3 = l_next_jump(par, label1);
+			a_u32 label3 = next_jump(par, label1);
 			if (label3 == NO_LABEL) {
-				l_redirect(par, label1, label2, line);
+                redirect_jump(par, label1, label2, line);
 				return;
 			}
 			else if (label3 > label2) {
 				label1 = label3;
 			}
 			else if (label3 < label2) {
-				l_redirect(par, label1, label2, line);
+                redirect_jump(par, label1, label2, line);
 				label1 = label2;
 				label2 = label3;
 			}
@@ -427,7 +427,7 @@ static void expr_str(OutExpr e, GStr* val, a_line line) {
 static void expr_func(Parser* par, OutExpr e, GProto* fun) {
 	FnScope* scope = par->fscope;
 	a_u16 index = scope->nsub ++;
-	l_emit_idbx(par, BC_LDF, e, index, fun->dbg_lndef);
+	emit_idbx(par, BC_LDF, e, index, fun->dbg_lndef);
 }
 
 static a_u32 stack_alloc_succ(Parser* par, a_u32 num, a_u32 line) {
@@ -447,7 +447,7 @@ static a_u32 stack_alloc(Parser* par, a_u32 line) {
 	return stack_alloc_succ(par, 1, line);
 }
 
-static a_bool l_is_in_tmp(Parser* par, a_u32 reg) {
+static a_bool test_reg_in_tmp(Parser* par, a_u32 reg) {
 	return reg >= par->scope->top_ntr;
 }
 
@@ -466,7 +466,7 @@ static void stack_check_free_used(Scope* scope) {
  */
 static void stack_realloc(Parser* par, a_u32 reg) {
 	Scope* scope = par->scope;
-	assume(l_is_in_tmp(par, reg), "cannot reallocate a using register twice.");
+	assume(test_reg_in_tmp(par, reg), "cannot reallocate a using register twice.");
 	if (scope->top_reg == reg) {
 		scope->top_reg += 1;
 		assume(scope->top_reg <= par->fscope->max_reg);
@@ -489,7 +489,7 @@ static void stack_realloc(Parser* par, a_u32 reg) {
  */
 static void stack_free(Parser* par, a_u32 reg) {
 	Scope* scope = par->scope;
-	assume(reg < scope->top_reg && l_is_in_tmp(par, reg));
+	assume(reg < scope->top_reg && test_reg_in_tmp(par, reg));
 	/* The registers are likely freed with the reversed order of allocation. */
 	if (reg + 1 == scope->top_reg) {
 		scope->top_reg = reg;
@@ -512,7 +512,7 @@ static void stack_free(Parser* par, a_u32 reg) {
  */
 static void stack_free_succ(Parser* par, a_u32 reg) {
 	Scope* scope = par->scope;
-	assume(l_is_in_tmp(par, reg));
+	assume(test_reg_in_tmp(par, reg));
 
 	scope->top_reg = reg;
 	stack_check_free_used(scope);
@@ -567,9 +567,9 @@ static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line
 static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line);
 
 static void expr_resolve(Parser* par, OutExpr e, a_u32 id);
-static a_u32 l_lookup_symbol(Parser* par, GStr* name);
+static a_u32 lookup_symbol(Parser* par, GStr* name);
 
-static void l_capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo* info) {
+static void capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo* info) {
 	quiet(scope);
 
 	switch (sym->tag) {
@@ -585,7 +585,7 @@ static void l_capture_locally(Parser* par, FnScope* scope, Sym* sym, RichCapInfo
 	}
 }
 
-static a_u32 l_lookup_capture_internal(Parser* par, FnScope* fscope, Sym* sym, a_u32 depth) {
+static a_u32 lookup_capture_internal(Parser* par, FnScope* fscope, Sym* sym, a_u32 depth) {
 	/* Find in captured values. */
 	for (a_u32 i = 0; i < fscope->caps->len; ++i) {
 		RichCapInfo* info = &fscope->caps->ptr[i];
@@ -601,22 +601,22 @@ static a_u32 l_lookup_capture_internal(Parser* par, FnScope* fscope, Sym* sym, a
 		.name = sym->name
 	};
 	if (sym->scope >= depth - 1) {
-		l_capture_locally(par, fscope, sym, &info);
+        capture_locally(par, fscope, sym, &info);
 	}
 	else { /* Capture recursively. */
-		info.src_index = l_lookup_capture_internal(par, fscope->fupscope, sym, depth - 1);
+		info.src_index = lookup_capture_internal(par, fscope->fupscope, sym, depth - 1);
 	}
 	return at_buf_push(par->env, fscope->caps, info, "capture");
 }
 
-static a_u32 l_lookup_capture(Parser* par, Sym* sym) {
-	return l_lookup_capture_internal(par, par->fscope, sym, par->scope_depth);
+static a_u32 lookup_capture(Parser* par, Sym* sym) {
+	return lookup_capture_internal(par, par->fscope, sym, par->scope_depth);
 }
 
 #define nosym UINT32_MAX
 
 static void expr_env(Parser* par, OutExpr e) {
-	a_u32 id = l_lookup_symbol(par, par->gvar_name);
+	a_u32 id = lookup_symbol(par, par->gvar_name);
     assume(id != nosym, "variable '_ENV' not defined.");
     expr_resolve(par, e, id);
 }
@@ -652,7 +652,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
             else {
                 init(e) {
                     .tag = EXPR_CAP,
-                    .udat1 = l_lookup_capture(par, sym),
+                    .udat1 = lookup_capture(par, sym),
                     .udat2 = id,
                     .fsym = true
                 };
@@ -662,7 +662,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
         case SYM_CAPTURE: {
             init(e) {
                 .tag = EXPR_CAP,
-                .udat1 = l_lookup_capture(par, sym),
+                .udat1 = lookup_capture(par, sym),
                 .udat2 = id,
                 .fsym = true
             };
@@ -680,7 +680,7 @@ static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 	}
 }
 
-static a_u32 l_lookup_symbol(Parser* par, GStr* name) {
+static a_u32 lookup_symbol(Parser* par, GStr* name) {
 	SymBuf* syms = par->syms;
 	for (a_u32 i = syms->len; i > 0; --i) {
         a_u32 id = i - 1;
@@ -701,7 +701,7 @@ static a_u32 l_lookup_symbol(Parser* par, GStr* name) {
  *@param line the line number of dbg_name reference.
  */
 static void expr_symbol(Parser* par, OutExpr e, GStr* name, a_line line) {
-	a_u32 id = l_lookup_symbol(par, name);
+	a_u32 id = lookup_symbol(par, name);
 	if (id != nosym) {
 		expr_resolve(par, e, id);
         e->line = line;
@@ -736,7 +736,7 @@ static void expr_lookup(Parser* par, InoutExpr e, GStr* name, a_line line) {
 
 	a_u32 reg = stack_alloc_succ(par, 2, line);
 
-    l_emit_aby(par, BC_LOOK, reg, e->udat1, const_index(par, v_of_str(name)), line);
+    emit_aby(par, BC_LOOK, reg, e->udat1, const_index(par, v_of_str(name)), line);
 
     init(e) {
         .tag = EXPR_NTMP,
@@ -798,20 +798,20 @@ static void branch_negate(Parser* par, a_u32* plabel, a_u32 label, a_line line) 
 			a_u32 op = bc_load_op(ip);
             bc_store_op(ip, op ^ 1);
 
-			a_u32 label1 = l_next_jump(par, label);
+			a_u32 label1 = next_jump(par, label);
 			a_u32 label2 = par->fscope->fland ? par->fscope->head_land : NO_LABEL;
 
-			l_mark_label(par, label1, line);
+            mark_label(par, label1, line);
 
-			l_merge_branch(par, plabel, label2, line);
-			l_redirect(par, label, *plabel, line);
+            merge_label(par, plabel, label2, line);
+            redirect_jump(par, label, *plabel, line);
 			*plabel = label;
 			return;
 		}
 	}
 
-	*plabel = l_lazy_jump(par, *plabel, line);
-	l_mark_label(par, label, line);
+	*plabel = jump_lazily(par, *plabel, line);
+    mark_label(par, label, line);
 }
 
 static void branch_instantiate(Parser* par, InoutExpr e, a_u32 reg) {
@@ -819,18 +819,18 @@ static void branch_instantiate(Parser* par, InoutExpr e, a_u32 reg) {
 	assume(par->head_label == e->udat2 + 1);
 	assume(insn_is_branch(par->code[e->udat2 - 1]));
 
-	a_u32 label = l_next_jump(par, e->udat2);
+	a_u32 label = next_jump(par, e->udat2);
 	if (label != NO_LABEL) {
-		l_redirect_chain(par, label, e->udat2, e->line);
+        redirect_jump_chain(par, label, e->udat2, e->line);
 	}
 
 	/* Swap last instruction. */
     bc_store(par->code[par->head_label - 1], bc_make_ia(e->tag == EXPR_TRUE_OR_FALSE ? BC_BKF : BC_BKT, reg));
-	l_emit_ia(par, e->tag == EXPR_TRUE_OR_FALSE ? BC_KT : BC_KF, reg, e->line);
+	emit_ia(par, e->tag == EXPR_TRUE_OR_FALSE ? BC_KT : BC_KF, reg, e->line);
 }
 
 static void expr_new_table(Parser* par, InoutExpr e, a_line line) {
-	l_emit_idbx(par, BC_HNEW, e, 0, line);
+	emit_idbx(par, BC_HNEW, e, 0, line);
 }
 
 static void expr_neg(Parser* par, InoutExpr e, a_line line) {
@@ -848,7 +848,7 @@ static void expr_neg(Parser* par, InoutExpr e, a_line line) {
 		default: {
             expr_to_reg(par, e);
             expr_drop(par, e);
-            l_emit_idb(par, BC_NEG, e, e->udat1, line);
+            emit_idb(par, BC_NEG, e, e->udat1, line);
 			break;
 		}
 	}
@@ -864,7 +864,7 @@ static void expr_bit_inv(Parser* par, InoutExpr e, a_line line) {
 		default: {
             expr_to_reg(par, e);
             expr_drop(par, e);
-            l_emit_idb(par, BC_NEG, e, e->udat1, line);
+            emit_idb(par, BC_NEG, e, e->udat1, line);
 			break;
 		}
 	}
@@ -910,7 +910,7 @@ static void expr_not(Parser* par, InoutExpr e, a_line line) {
             expr_to_reg(par, e);
             expr_drop(par, e);
 
-            a_u32 label = l_emit_branch(par, bc_make_ia(BC_BNZ, e->udat1), NO_LABEL, line);
+            a_u32 label = emit_branch(par, bc_make_ia(BC_BNZ, e->udat1), NO_LABEL, line);
 
             init(e) {
                 .tag = EXPR_TRUE_OR_FALSE,
@@ -926,14 +926,14 @@ static void expr_unbox(Parser* par, InoutExpr e, a_line line) {
     expr_to_reg(par, e);
     expr_drop(par, e);
 
-    l_emit_idbd(par, BC_UNBOX, e, e->udat1, line);
+    emit_idbd(par, BC_UNBOX, e, e->udat1, line);
 }
 
 static void expr_len(Parser* par, InoutExpr e, a_line line) {
     expr_to_reg(par, e);
     expr_drop(par, e);
 
-    l_emit_idb(par, BC_LEN, e, e->udat1, line);
+    emit_idb(par, BC_LEN, e, e->udat1, line);
 }
 
 static void expr_iter(Parser* par, InoutExpr e, a_line line) {
@@ -954,7 +954,7 @@ static void expr_iter(Parser* par, InoutExpr e, a_line line) {
         .fval = true
     };
 
-	l_emit_iab(par, BC_ITER, reg2, reg1, line);
+	emit_iab(par, BC_ITER, reg2, reg1, line);
 
 	scope->top_ntr = scope->top_reg;
 }
@@ -1027,7 +1027,7 @@ static a_bool expr_are_floats(InExpr e1, a_float* i1, InExpr e2, a_float* i2) {
 	return true;
 }
 
-static void l_compute_int(Parser* par , a_int a, a_int b, OutExpr e, a_u32 op, a_line line) {
+static void compute_int(Parser* par , a_int a, a_int b, OutExpr e, a_u32 op, a_line line) {
 	switch (op) {
 		case OP_ADD:
 		case OP_SUB:
@@ -1063,7 +1063,7 @@ static void l_compute_int(Parser* par , a_int a, a_int b, OutExpr e, a_u32 op, a
 	}
 }
 
-static void l_compute_float(a_henv env, a_float a, a_float b, OutExpr e, a_u32 op) {
+static void compute_float(a_henv env, a_float a, a_float b, OutExpr e, a_u32 op) {
 	quiet(env);
 	switch (op) {
 		case OP_ADD:
@@ -1088,57 +1088,57 @@ static void l_compute_float(a_henv env, a_float a, a_float b, OutExpr e, a_u32 o
 	}
 }
 
-static a_bool l_fold_const_int(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line) {
+static a_bool try_fold_int(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line) {
 	a_int i1, i2;
 	if (expr_are_ints(e1, &i1, e2, &i2)) {
-		l_compute_int(par, i1, i2, e1, op, line);
+        compute_int(par, i1, i2, e1, op, line);
 		e1->line = line;
 		return true;
 	}
 	return false;
 }
 
-static a_bool l_fold_const_float(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line) {
+static a_bool try_fold_float(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line) {
 	a_float f1, f2;
 	if (expr_are_floats(e1, &f1, e2, &f2)) {
-		l_compute_float(par->env, f1, f2, e1, op);
+        compute_float(par->env, f1, f2, e1, op);
 		e1->line = line;
 		return true;
 	}
 	return false;
 }
 
-static a_bool l_compare_const(Parser* par, InExpr e1, InExpr e2, a_u32 bc1, a_u32 bc2, a_line line) {
+static a_bool try_fold_compare(Parser* par, InExpr e1, InExpr e2, a_u32 bc1, a_u32 bc2, a_line line) {
 	if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SBX && e2->idat <= BC_MAX_SBX) {
         expr_to_reg(par, e1);
         expr_drop(par, e1);
-        l_emit_iasbx(par, bc1, e1->udat1, e2->idat, line);
+        emit_iasbx(par, bc1, e1->udat1, e2->idat, line);
 		return false;
 	}
 	else if (e1->tag == EXPR_INT && e1->idat >= BC_MIN_SBX && e1->idat <= BC_MAX_SBX) {
         expr_to_reg(par, e2);
         expr_drop(par, e2);
-        l_emit_iasbx(par, bc2, e2->udat1, e1->idat, line);
+        emit_iasbx(par, bc2, e2->udat1, e1->idat, line);
 		return false;
 	}
 
 	return true;
 }
 
-static void l_emit_bin(Parser* par, InoutExpr e1, InExpr e2, a_u32 bc, a_line line) {
+static void emit_binary(Parser* par, InoutExpr e1, InExpr e2, a_u32 bc, a_line line) {
     expr_to_reg(par, e2);
     expr_to_reg(par, e1);
     expr_drop(par, e1);
     expr_drop(par, e2);
-    l_emit_idbc(par, bc, e1, e1->udat1, e2->udat1, line);
+    emit_idbc(par, bc, e1, e1->udat1, e2->udat1, line);
 }
 
-static void l_compare(Parser* par, InoutExpr e1, InExpr e2, a_u32 bc, a_line line) {
+static void emit_compare(Parser* par, InoutExpr e1, InExpr e2, a_u32 bc, a_line line) {
     expr_to_reg(par, e2);
     expr_to_reg(par, e1);
     expr_drop(par, e1);
     expr_drop(par, e2);
-    l_emit_iab(par, bc, e1->udat1, e2->udat1, line);
+    emit_iab(par, bc, e1->udat1, e2->udat1, line);
 }
 
 /**
@@ -1157,15 +1157,15 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 		case OP_MUL:
 		case OP_DIV:
 		case OP_MOD: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
 				return;
 			if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
                 expr_to_reg(par, e1);
                 expr_drop(par, e1);
-                l_emit_idbsc(par, BC_ADDI + op - OP_ADD, e1, e1->udat1, e2->idat, line);
+                emit_idbsc(par, BC_ADDI + op - OP_ADD, e1, e1->udat1, e2->idat, line);
 			}
 			else {
-				l_emit_bin(par, e1, e2, BC_ADD + (op - OP_ADD), line);
+                emit_binary(par, e1, e2, BC_ADD + (op - OP_ADD), line);
 			}
 			break;
 		}
@@ -1174,72 +1174,72 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 		case OP_BIT_AND:
 		case OP_BIT_OR:
 		case OP_BIT_XOR: {
-			if (l_fold_const_int(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line))
 				return;
 			if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
                 expr_to_reg(par, e1);
                 expr_drop(par, e1);
-                l_emit_idbsc(par, BC_SHLI + op - OP_SHL, e1, e1->udat1, e2->idat, line);
+                emit_idbsc(par, BC_SHLI + op - OP_SHL, e1, e1->udat1, e2->idat, line);
 			}
 			else {
-				l_emit_bin(par, e1, e2, BC_ADD + (op - OP_ADD), line);
+                emit_binary(par, e1, e2, BC_ADD + (op - OP_ADD), line);
 			}
 			break;
 		}
 		case OP_EQ: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
 				return;
-			if (l_compare_const(par, e1, e2, BC_BEQI, BC_BEQI, line)) {
-				l_compare(par, e1, e2, BC_BEQ, line);
+			if (try_fold_compare(par, e1, e2, BC_BEQI, BC_BEQI, line)) {
+                emit_compare(par, e1, e2, BC_BEQ, line);
 			}
 
 			goto try_true;
 		}
 		case OP_NE: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
 				return;
-			if (l_compare_const(par, e1, e2, BC_BNEI, BC_BNEI, line)) {
-				l_compare(par, e1, e2, BC_BNE, line);
+			if (try_fold_compare(par, e1, e2, BC_BNEI, BC_BNEI, line)) {
+                emit_compare(par, e1, e2, BC_BNE, line);
 			}
 
 			goto try_true;
 		}
 		case OP_LT: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
 				return;
-			if (l_compare_const(par, e1, e2, BC_BLTI, BC_BGTI, line)) {
-				l_compare(par, e1, e2, BC_BLT, line);
+			if (try_fold_compare(par, e1, e2, BC_BLTI, BC_BGTI, line)) {
+                emit_compare(par, e1, e2, BC_BLT, line);
 			}
 			goto try_true;
 		}
 		case OP_LE: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
 				return;
-			if (l_compare_const(par, e1, e2, BC_BLEI, BC_BGEI, line)) {
-				l_compare(par, e1, e2, BC_BLE, line);
+			if (try_fold_compare(par, e1, e2, BC_BLEI, BC_BGEI, line)) {
+                emit_compare(par, e1, e2, BC_BLE, line);
 			}
 			goto try_true;
 		}
 		case OP_GT: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
 				return;
-			if (l_compare_const(par, e1, e2, BC_BGTI, BC_BLTI, line)) {
-				l_compare(par, e2, e1, BC_BLT, line);
+			if (try_fold_compare(par, e1, e2, BC_BGTI, BC_BLTI, line)) {
+                emit_compare(par, e2, e1, BC_BLT, line);
 			}
 			goto try_true;
 		}
 		case OP_GE: {
-			if (l_fold_const_int(par, e1, e2, op, line) || l_fold_const_float(par, e1, e2, op, line))
+			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
 				return;
-			if (l_compare_const(par, e1, e2, BC_BGEI, BC_BLEI, line)) {
-				l_compare(par, e2, e1, BC_BLE, line);
+			if (try_fold_compare(par, e1, e2, BC_BGEI, BC_BLEI, line)) {
+                emit_compare(par, e2, e1, BC_BLE, line);
 			}
 			goto try_true;
 		}
 		try_true: {
             init(e1) {
                 .tag = EXPR_TRUE_OR_FALSE,
-                .udat2 = l_emit_jump_direct(par, NO_LABEL, line),
+                .udat2 = emit_jump_direct(par, NO_LABEL, line),
                 .line = line
             };
 			break;
@@ -1284,16 +1284,16 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 	}
 }
 
-static void l_merge_optR(Parser* par, a_u32 label, a_u32 reg, a_line line) {
-	a_u32 label2 = l_lazy_jump(par, NO_LABEL, line);
-	l_mark_label(par, label, line);
-	l_emit_kn(par, reg, 1, line);
-	l_mark_label(par, label2, line);
+static void merge_optR(Parser* par, a_u32 label, a_u32 reg, a_line line) {
+	a_u32 label2 = jump_lazily(par, NO_LABEL, line);
+    mark_label(par, label, line);
+	emit_kn(par, reg, 1, line);
+    mark_label(par, label2, line);
 }
 
 static void expr_phi(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line line) {
 	if (e2->fucf) {
-		l_mark_label(par, label, line);
+        mark_label(par, label, line);
 		return;
 	}
 	else if (e1->fucf) {
@@ -1304,27 +1304,27 @@ static void expr_phi(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line l
 	switch (e1->tag) {
 		case EXPR_DYN_OR_NIL: {
 			a_u32 label2 = expr_catch_nil_branch(par, e2, line);
-			l_merge_branch(par, &e1->udat2, label2, line);
+            merge_label(par, &e1->udat2, label2, line);
 
             expr_to_tmp(par, e2);
 
 			a_u32 reg = e2->udat1;
-			l_merge_optR(par, e1->udat2, reg, line);
+            merge_optR(par, e1->udat2, reg, line);
 
-			l_mark_label(par, label, line);
+            mark_label(par, label, line);
 			stack_realloc(par, reg);
 			expr_tmp(e1, reg, line);
 			break;
 		}
 		case EXPR_REG_OR_NIL: {
 			a_u32 label2 = expr_catch_nil_branch(par, e2, line);
-			l_merge_branch(par, &e1->udat2, label2, line);
+            merge_label(par, &e1->udat2, label2, line);
 
 			a_u32 reg = e1->udat1;
             expr_pin_reg(par, e2, reg);
-			l_merge_optR(par, e1->udat2, reg, line);
+            merge_optR(par, e1->udat2, reg, line);
 
-			l_mark_label(par, label, line);
+            mark_label(par, label, line);
 			stack_realloc(par, reg);
 			expr_tmp(e1, reg, line);
 			break;
@@ -1333,14 +1333,14 @@ static void expr_phi(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line l
 			a_u32 reg = e1->udat1;
 			stack_realloc(par, reg);
             expr_pin_reg(par, e2, reg);
-			l_mark_label(par, label, line);
+            mark_label(par, label, line);
 			break;
 		}
 		case EXPR_DYN: {
 			a_u32 reg = stack_alloc(par, line);
             expr_pin_reg(par, e1, reg);
             expr_pin_reg(par, e2, reg);
-			l_mark_label(par, label, line);
+            mark_label(par, label, line);
 			expr_tmp(e1, reg, line);
 			break;
 		}
@@ -1386,16 +1386,16 @@ static void expr_or_else(Parser* par, InoutExpr e, a_u32* plabel, a_line line) {
 			}
 		}
 	}
-	*plabel = l_lazy_jump(par, label, line);
-	l_mark_label(par, label, line);
+	*plabel = jump_lazily(par, label, line);
+    mark_label(par, label, line);
 }
 
 static void expr_phi_nil(Parser* par, InoutExpr e, a_u32 label, a_line line) {
 	if (label == NO_LABEL)
 		return;
 	if (e->fucf) {
-		l_lazy_jump(par, label, line);
-		l_mark_label(par, label, line);
+        jump_lazily(par, label, line);
+        mark_label(par, label, line);
 		expr_const(e, EXPR_NIL, e->line);
 		return;
 	}
@@ -1416,7 +1416,7 @@ static void expr_phi_nil(Parser* par, InoutExpr e, a_u32 label, a_line line) {
 		}
 		case EXPR_REG_OR_NIL:
 		case EXPR_DYN_OR_NIL: {
-			l_merge_branch(par, &e->udat2, label, line);
+            merge_label(par, &e->udat2, label, line);
 			break;
 		}
 	}
@@ -1426,7 +1426,7 @@ static void expr_phi_nil(Parser* par, InoutExpr e, a_u32 label, a_line line) {
 static void expr_or_ret(Parser* par, InoutExpr e, a_line line) {
 	switch (e->tag) {
 		case EXPR_NIL: {
-			l_emit_leave(par, bc_make_i(BC_RET0), line);
+            emit_leave(par, bc_make_i(BC_RET0), line);
 			e->fucf = true;
 			break;
 		}
@@ -1438,15 +1438,15 @@ static void expr_or_ret(Parser* par, InoutExpr e, a_line line) {
 			break;
 		}
 		case EXPR_REG_OR_NIL: {
-			l_redirect_leave(par, e->udat2, bc_make_i(BC_RET0));
-			l_emit(par, bc_make_ia(BC_BNN, e->udat1), line);
-			l_emit_fast(par, bc_make_i(BC_RET0), line);
+            redirect_leave(par, e->udat2, bc_make_i(BC_RET0));
+			emit(par, bc_make_ia(BC_BNN, e->udat1), line);
+            emit_fast(par, bc_make_i(BC_RET0), line);
 
 			e->tag = EXPR_REG;
 			break;
 		}
 		case EXPR_DYN_OR_NIL: {
-			l_redirect_leave(par, e->udat2, bc_make_i(BC_RET0));
+            redirect_leave(par, e->udat2, bc_make_i(BC_RET0));
 
 			e->tag = EXPR_DYN;
 			fallthrough;
@@ -1460,8 +1460,8 @@ static void expr_or_ret(Parser* par, InoutExpr e, a_line line) {
 				bc_store_a(ip, reg);
 				bc_store_c(ip, DMB);
 
-				l_emit(par, bc_make_ia(BC_BNN, reg), line);
-				l_emit_fast(par, bc_make_ia(BC_RETM, reg), line);
+				emit(par, bc_make_ia(BC_BNN, reg), line);
+                emit_fast(par, bc_make_ia(BC_RETM, reg), line);
 
                 init(e) {
                     .tag = EXPR_REG,
@@ -1472,8 +1472,8 @@ static void expr_or_ret(Parser* par, InoutExpr e, a_line line) {
 			else {
 				expr_to_reg(par, e);
 
-				l_emit(par, bc_make_ia(BC_BNN, e->udat1), line);
-				l_emit_fast(par, bc_make_i(BC_RET0), line);
+				emit(par, bc_make_ia(BC_BNN, e->udat1), line);
+                emit_fast(par, bc_make_i(BC_RET0), line);
 			}
 			break;
 		}
@@ -1484,8 +1484,8 @@ static void expr_or_ret(Parser* par, InoutExpr e, a_line line) {
 			bc_store_op(ip, bc_load_op(ip) + 1);
 			bc_store_c(ip, DMB);
 
-			l_emit(par, bc_make_ia(BC_BNN, reg), line);
-			l_emit_fast(par, bc_make_ia(BC_RETM, reg), line);
+			emit(par, bc_make_ia(BC_BNN, reg), line);
+            emit_fast(par, bc_make_ia(BC_RETM, reg), line);
 
             init(e) {
                 .tag = EXPR_REGS,
@@ -1498,15 +1498,15 @@ static void expr_or_ret(Parser* par, InoutExpr e, a_line line) {
 		case EXPR_REGS: {
 			a_u32 reg = e->udat1;
 
-			l_emit(par, bc_make_ia(BC_BNN, reg), line);
-			l_emit_fast(par, bc_make_ia(BC_RETM, reg), line);
+			emit(par, bc_make_ia(BC_BNN, reg), line);
+            emit_fast(par, bc_make_ia(BC_RETM, reg), line);
 			break;
 		}
 		default: {
 			expr_to_reg(par, e);
 
-			l_emit(par, bc_make_ia(BC_BNN, e->udat1), line);
-			l_emit_fast(par, bc_make_i(BC_RET0), line);
+			emit(par, bc_make_ia(BC_BNN, e->udat1), line);
+            emit_fast(par, bc_make_i(BC_RET0), line);
 			break;
 		}
 	}
@@ -1576,10 +1576,10 @@ static void expr_box_tuple(Parser* par, InoutExpr e, a_line line) {
     a_u32 reg = e->udat1;
 
 	if (expr_has_vararg_top(e)) {
-		l_emit_idb(par, BC_TNEWM, e, reg, line);
+		emit_idb(par, BC_TNEWM, e, reg, line);
 	}
 	else {
-		l_emit_idbc(par, BC_TNEW, e, reg, par->scope->top_reg - reg, line);
+		emit_idbc(par, BC_TNEW, e, reg, par->scope->top_reg - reg, line);
 	}
 
     stack_free_succ(par, reg);
@@ -1589,7 +1589,7 @@ static void expr_box_list(Parser* par, InoutExpr e, a_line line) {
     exprs_fix(par, e);
 	switch (e->tag) {
 		case EXPR_UNIT: {
-			l_emit_idbx(par, BC_LNEW, e, 0, line);
+			emit_idbx(par, BC_LNEW, e, 0, line);
 			break;
 		}
 		case EXPR_NTMP: {
@@ -1597,13 +1597,13 @@ static void expr_box_list(Parser* par, InoutExpr e, a_line line) {
 
             expr_drop(par, e);
 
-            l_emit_idbc(par, BC_LBOX, e, e->udat1, n, line);
+            emit_idbc(par, BC_LBOX, e, e->udat1, n, line);
 			break;
 		}
 		case EXPR_NTMPC: {
 			a_u32 n = par->scope->top_reg - e->udat1 - 1;
 			if (n > 0) {
-				l_emit_iabc(par, BC_LPUSH, e->udat1, e->udat1 + 1, n, line);
+				emit_iabc(par, BC_LPUSH, e->udat1, e->udat1 + 1, n, line);
 				stack_free_succ(par, e->udat1 + 1);
 			}
 			expr_tmp(e, e->udat1, line);
@@ -1618,10 +1618,10 @@ static void expr_call(Parser* par, InoutExpr es, a_line line) {
 
 	a_u32 label;
 	if (expr_has_vararg_top(es)) {
-		label = l_emit_iabc(par, BC_CALLM, es->udat1, DMB, N_DYN, line);
+		label = emit_iabc(par, BC_CALLM, es->udat1, DMB, N_DYN, line);
 	}
 	else {
-		label = l_emit_iabc(par, BC_CALL, es->udat1, par->scope->top_reg - es->udat1, N_DYN, line);
+		label = emit_iabc(par, BC_CALL, es->udat1, par->scope->top_reg - es->udat1, N_DYN, line);
 	}
 
     expr_drop(par, es);
@@ -1635,9 +1635,9 @@ static void expr_call(Parser* par, InoutExpr es, a_line line) {
 }
 
 static void expr_return(Parser* par, InoutExpr e, a_line line) {
-	l_clear_close(par);
+    clear_close(par);
 	if (e->tag == EXPR_REG) {
-		l_emit_leave(par, bc_make_iab(BC_RET, e->udat1, 1), line);
+        emit_leave(par, bc_make_iab(BC_RET, e->udat1, 1), line);
 	}
 	else if (e->tag == EXPR_VCALL) {
 		a_insn* ip = code_at(par, e->udat1);
@@ -1659,13 +1659,13 @@ static void expr_return(Parser* par, InoutExpr e, a_line line) {
         expr_drop(par, e);
 
 		if (expr_has_vararg_top(e)) {
-			l_emit_leave(par, bc_make_i(BC_RETM), line);
+            emit_leave(par, bc_make_i(BC_RETM), line);
 		}
 		else if (len == 0) {
-			l_emit_leave(par, bc_make_i(BC_RET0), line);
+            emit_leave(par, bc_make_i(BC_RET0), line);
 		}
 		else {
-			l_emit_leave(par, bc_make_iab(BC_RET, e->udat1, len), line);
+            emit_leave(par, bc_make_iab(BC_RET, e->udat1, len), line);
 		}
 	}
 }
@@ -1759,7 +1759,7 @@ static a_u32 exprs_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_lin
 	}
 }
 
-static a_bool l_try_fold_append(Parser* par, InExpr e) {
+static a_bool expr_try_fold_append(Parser* par, InExpr e) {
 	switch (e->tag) {
 		case EXPR_INT: {
 			at_fmt_puti(par->env, par->sbuf, e->idat);
@@ -1788,7 +1788,7 @@ static GStr* buf_to_str(Parser* par, ConExpr* ce) {
 }
 
 static void expr_concat(Parser* par, ConExpr* ce, InExpr e, a_line line) {
-    if (!l_try_fold_append(par, e)) {
+    if (!expr_try_fold_append(par, e)) {
         if (par->sbuf->len > ce->off) {
             expr_to_dyn(par, e); /* Drop used register. */
 
@@ -1798,7 +1798,7 @@ static void expr_concat(Parser* par, ConExpr* ce, InExpr e, a_line line) {
             expr_pin_reg(par, e, reg + 1);
 
             GStr* str = buf_to_str(par, ce);
-            l_emit_k(par, reg, v_of_str(str), line);
+            emit_k(par, reg, v_of_str(str), line);
         }
         else {
             exprs_push(par, ce->expr, e);
@@ -1815,10 +1815,10 @@ static void expr_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
 		if (par->sbuf->len > ce->off) {
 			GStr* str = buf_to_str(par, ce);
 			a_u32 reg = stack_alloc(par, line);
-			l_emit_k(par, reg, v_of_str(str), line);
+			emit_k(par, reg, v_of_str(str), line);
 		}
         a_u32 base = ce->expr->udat1;
-		l_emit_idbc(par, BC_CAT, e, base, par->scope->top_reg - base, line);
+		emit_idbc(par, BC_CAT, e, base, par->scope->top_reg - base, line);
         expr_drop(par, ce->expr);
     }
 }
@@ -1831,11 +1831,11 @@ static void expr_unpack(Parser* par, InoutExpr e, a_line line) {
 	e->fupk = false;
 }
 
-static a_insn l_leave_or_nop(Parser* par, a_u32 label) {
+static a_insn fetch_leave_or_nop(Parser* par, a_u32 label) {
 	if (unlikely(label == par->head_label))
-		return 0;
-	a_insn* ip = par->code[label];
-	return insn_is_leave(ip) ? *ip : 0;
+		return INSN_NOP;
+	a_insn* ip = code_at(par, label);
+	return insn_is_leave(ip) ? *ip : INSN_NOP;
 }
 
 /**
@@ -1844,30 +1844,30 @@ static a_insn l_leave_or_nop(Parser* par, a_u32 label) {
  *@param label the label jump to.
  *@param line the line number.
  */
-static void l_direct_jump(Parser* par, a_u32 label, a_line line) {
-	if (l_should_emit(par)) {
-        l_flush_jump(par);
+static void jump_direct(Parser* par, a_u32 label, a_line line) {
+	if (should_emit(par)) {
+        flush_jump(par);
 
-		a_insn i = l_leave_or_nop(par, label);
-		if (i == 0) {
+		a_insn i = fetch_leave_or_nop(par, label);
+		if (i == INSN_NOP) {
 			if (par->fscope->fland) {
-				l_redirect_chain(par, par->fscope->head_land, label, line);
-				l_clear_land(par);
+                redirect_jump_chain(par, par->fscope->head_land, label, line);
+                clear_land(par);
 			}
 			if (par->fscope->fpass) {
-				l_emit_jump_direct(par, label, line);
+                emit_jump_direct(par, label, line);
 				par->fscope->fpass = false;
 			}
 		}
 		else {
-			l_emit_leave(par, i, line);
+            emit_leave(par, i, line);
 		}
 	}
 }
 
-static a_u32 l_lazy_jump(Parser* par, a_u32 label, a_line line) {
-	if (l_should_emit(par)) {
-		l_flush_close(par); /* Force flush close. */
+static a_u32 jump_lazily(Parser* par, a_u32 label, a_line line) {
+	if (should_emit(par)) {
+        flush_close(par); /* Force flush close. */
 		if (likely(par->fscope->fpass)) {
 			if (par->fscope->head_jump == NO_LABEL || label > par->fscope->head_jump) {
 				par->fscope->head_jump_line = line;
@@ -1875,33 +1875,33 @@ static a_u32 l_lazy_jump(Parser* par, a_u32 label, a_line line) {
 			par->fscope->fpass = false;
 			par->fscope->fjump = true;
 			par->fscope->head_jump = label;
-			l_merge_branch(par, &par->fscope->head_jump, par->fscope->head_land, line);
-			l_clear_land(par);
+            merge_label(par, &par->fscope->head_jump, par->fscope->head_land, line);
+            clear_land(par);
 			return par->head_label; /* Return next instruction as pseudo label. */
 		}
 		else {
 			assume(par->fscope->fland);
-			l_merge_branch(par, &label, par->fscope->head_land, line);
-			l_clear_land(par);
+            merge_label(par, &label, par->fscope->head_land, line);
+            clear_land(par);
 			return label;
 		}
 	}
 	return label;
 }
 
-static a_u32 l_mark_label(Parser* par, a_u32 label, a_line line) {
+static a_u32 mark_label(Parser* par, a_u32 label, a_line line) {
 	if (label != NO_LABEL) {
 		if (label != par->head_label) { /* If from label is not pseudo head label, merge with head jump label. */
 			par->fscope->fland = true;
-			l_merge_branch(par, &par->fscope->head_land, label, line);
+            merge_label(par, &par->fscope->head_land, label, line);
 		}
 		else {
 			/* Pseudo head jump. */
 			assume(par->fscope->fjump && !par->fscope->fpass);
 			par->fscope->fpass = true;
 			par->fscope->fland = par->fscope->head_jump != NO_LABEL;
-			l_merge_branch(par, &par->fscope->head_land, par->fscope->head_jump, line);
-			l_clear_jump(par);
+            merge_label(par, &par->fscope->head_land, par->fscope->head_jump, line);
+            clear_jump(par);
 		}
 	}
 	return par->head_label;
@@ -1976,14 +1976,14 @@ assign:
 		case EXPR_CAP: {
 			sym_check_writable(par, e1, line);
             expr_to_reg(par, e2);
-			l_emit_iab(par, BC_STC, e1->udat1, e2->udat2, line);
+			emit_iab(par, BC_STC, e1->udat1, e2->udat2, line);
 
             expr_drop(par, e2);
             break;
 		}
 		case EXPR_REF: {
             expr_to_reg(par, e2);
-			l_emit_iabc(par, BC_SET, e2->udat1, e1->udat1, e1->udat2, line);
+			emit_iabc(par, BC_SET, e2->udat1, e1->udat1, e1->udat2, line);
 
             expr_drop(par, e2);
             expr_drop(par, e1);
@@ -1991,7 +1991,7 @@ assign:
 		}
 		case EXPR_REFI: {
             expr_to_reg(par, e2);
-			l_emit_iabsc(par, BC_SETI, e2->udat1, e1->udat1, cast(a_i32, e1->udat2), line);
+			emit_iabsc(par, BC_SETI, e2->udat1, e1->udat1, cast(a_i32, e1->udat2), line);
 
             expr_drop(par, e2);
             expr_drop(par, e1);
@@ -1999,7 +1999,7 @@ assign:
 		}
 		case EXPR_REFK: {
             expr_to_reg(par, e2);
-            l_emit_aby(par, BC_SETS, e2->udat1, e1->udat1, e1->udat2, line);
+            emit_aby(par, BC_SETS, e2->udat1, e1->udat1, e1->udat2, line);
 
             expr_drop(par, e2);
             expr_drop(par, e1);
@@ -2009,14 +2009,14 @@ assign:
             expr_to_reg(par, e2);
 
 			if (const_is_str(par, e1->udat2)) {
-                l_emit_aby(par, BC_CSETS, e2->udat1, e1->udat1, e1->udat2, line);
+                emit_aby(par, BC_CSETS, e2->udat1, e1->udat1, e1->udat2, line);
 			}
 			else {
 				a_u32 reg = stack_alloc_succ(par, 2, line);
-				a_u32 label = l_emit_iab(par, BC_LDC, reg, e1->udat1, line);
+				a_u32 label = emit_iab(par, BC_LDC, reg, e1->udat1, line);
 				if (label != NO_LABEL) {
-					l_emit_fast(par, bc_make_iabx(BC_K, reg + 1, e1->udat2), line);
-                    l_emit_aby(par, BC_SETS, e2->udat1, reg, reg + 1, line);
+                    emit_fast(par, bc_make_iabx(BC_K, reg + 1, e1->udat2), line);
+                    emit_aby(par, BC_SETS, e2->udat1, reg, reg + 1, line);
 				}
 				stack_free_succ(par, reg);
 			}
@@ -2043,7 +2043,7 @@ assign:
 
 static void expr_tbc(Parser* par, InExpr e, a_line line) {
     assume(e->tag == EXPR_REG, "cannot mark a non-register storage variable to-be-closed.");
-    l_emit_ia(par, BC_TBC, e->udat1, line);
+    emit_ia(par, BC_TBC, e->udat1, line);
 }
 
 static a_u32 syms_push(Parser* par, Sym sym) {
@@ -2069,10 +2069,10 @@ static void sec_start(Parser* par, SecRec rec) {
 }
 
 static a_u32 sec_record(Parser* par, SecRec rec) {
-    l_flush_jump(par);
+    flush_jump(par);
     if (par->fscope->fland) {
-        l_lazy_jump(par, NO_LABEL, par->fscope->head_line);
-        l_flush_jump(par);
+        jump_lazily(par, NO_LABEL, par->fscope->head_line);
+        flush_jump(par);
     }
 
     SecHead head = {
@@ -2132,7 +2132,7 @@ static void sec_emit(Parser* par, InoutExpr e, SecHead const* restrict sec, a_u3
     a_u32 id_next_line = sec->nline > 0 ? lines[0].lend - sec->rel_label : UINT32_MAX;
     a_u32 line = line_call;
 
-    l_flush_close(par);
+    flush_close(par);
 
     for (a_u32 l = 0; l < sec->ninsn; ++l) {
         if (l == id_next_line) {
@@ -2172,18 +2172,18 @@ static void sec_emit(Parser* par, InoutExpr e, SecHead const* restrict sec, a_u3
                 assume(op == BC_J, "not jump instruction.");
                 a_u32 label = l + bc_load_sax(ip);
                 if (l == 0) {
-                    l_direct_jump(par, label + label_disp, line);
+                    jump_direct(par, label + label_disp, line);
                 }
                 else if (label >= sec->ninsn) {
 //                    /* Redirect jump. */
-//                    l_emit_jump_direct(par, label + label_disp, line);
+//                    emit_jump_direct(par, label + label_disp, line);
                     panic("cross boundary jump not supported.");
                 }
                 break;
             }
             default: unreachable();
         }
-        l_emit_direct(par, i, line);
+        emit_direct(par, i, line);
 #undef reloc
     }
 
@@ -2262,7 +2262,7 @@ static void pat_bind_nils(Parser* par, Pat* pat, a_line line) {
 	assume(scope->top_ntr == scope->top_reg);
 	a_u32 num = pat->nchild - pat->child->index;
 	a_u32 reg = stack_alloc_succ(par, num, line);
-	a_u32 label = l_emit_kn(par, reg, num, line);
+	a_u32 label = emit_kn(par, reg, num, line);
 	for (Pat* pat_child = pat->child; pat_child != null; pat_child = pat_child->sibling) {
         sym_local(par, pat_child->name, reg++, label, (SymMods) {
             .mmut = pat_child->fmut
@@ -2286,7 +2286,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
         }
 
         expr_pin_reg(par, pat->expr, reg);
-        l_mark_label(par, label, pat->line);
+        mark_label(par, label, pat->line);
     }
 	switch (pat->kind) {
 		case PAT_VARG: {
@@ -2296,7 +2296,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 			assume(e->tag == EXPR_VCALL || e->tag == EXPR_VDYN || e->tag == EXPR_VNTMP, "not vararg expressions.");
 
 			if (e->tag == EXPR_VNTMP) {
-				l_emit_iabc(par, BC_TRIM, reg, DMB, num, line);
+				emit_iabc(par, BC_TRIM, reg, DMB, num, line);
 			}
 			else {
 				a_insn* ip = code_at(par, e->udat1);
@@ -2333,7 +2333,7 @@ static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
 		case PAT_TUPLE: {
 			a_u32 line = pat->expr->line;
 			a_u32 num = pat->nchild;
-			l_emit_iabc(par, BC_UNBOX, reg, e->udat1, num /* TODO: variable length arguments? */, line);
+			emit_iabc(par, BC_UNBOX, reg, e->udat1, num /* TODO: variable length arguments? */, line);
 			for (Pat* child = pat->child; child != null; child = child->sibling) {
 				Expr e2;
 				expr_val(e2, reg++, line);
@@ -2429,7 +2429,7 @@ static a_u32 for_bind_real(Parser* par, Pat* pat, a_line line) {
 	a_u32 reg_itr = par->scope->top_reg - 3; /* The index of iterator register. */
 
 	Expr e;
-	a_u32 label = l_emit_branch(par, bc_make_iabc(BC_NEXTG, R_DYN, reg_itr, N_DYN), NO_LABEL, line);
+	a_u32 label = emit_branch(par, bc_make_iabc(BC_NEXTG, R_DYN, reg_itr, N_DYN), NO_LABEL, line);
 
     init(e) {
         .tag = EXPR_VDYN,
@@ -2549,7 +2549,7 @@ static void scope_pop(Parser* par, a_line line, a_bool leave) {
 		}
 		par->syms->len = bot;
 	}
-	scope->end_label = l_mark_label(par, scope->end_label, line);
+	scope->end_label = mark_label(par, scope->end_label, line);
 	if (leave && scope->top_ntr != upscope->top_ntr) {
 		par->fscope->fclose = true;
 		par->fscope->close_line = line;
@@ -2586,7 +2586,7 @@ static void scope_break(Parser* par, GStr* label, a_line line) {
     if (label == null) {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
             if (scope->jmp_prop & JMP_PROP_BREAK) {
-                scope->end_label = l_lazy_jump(par, scope->end_label, line);
+                scope->end_label = jump_lazily(par, scope->end_label, line);
                 return;
             }
         }
@@ -2596,7 +2596,7 @@ static void scope_break(Parser* par, GStr* label, a_line line) {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
             if (scope->label_name == label) {
                 if (scope->jmp_prop & JMP_PROP_BREAK) {
-                    scope->end_label = l_lazy_jump(par, scope->end_label, line);
+                    scope->end_label = jump_lazily(par, scope->end_label, line);
                     return;
                 }
                 parse_error(par, "cannot break at label '%s'", line, str2ntstr(label));
@@ -2610,7 +2610,7 @@ static void scope_continue(Parser* par, GStr* label, a_line line) {
     if (label == null) {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
             if (scope->jmp_prop & JMP_PROP_CONTINUE) {
-                scope->begin_label = l_lazy_jump(par, scope->end_label, line);
+                scope->begin_label = jump_lazily(par, scope->end_label, line);
                 return;
             }
         }
@@ -2620,7 +2620,7 @@ static void scope_continue(Parser* par, GStr* label, a_line line) {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
             if (scope->label_name == label) {
                 if (scope->jmp_prop & JMP_PROP_CONTINUE) {
-                    scope->begin_label = l_lazy_jump(par, scope->end_label, line);
+                    scope->begin_label = jump_lazily(par, scope->end_label, line);
                     return;
                 }
                 parse_error(par, "cannot continue at label '%s'", line, str2ntstr(label));
@@ -2630,7 +2630,7 @@ static void scope_continue(Parser* par, GStr* label, a_line line) {
     }
 }
 
-static void fscope_prologue(Parser* par, FnScope* fscope, a_line line) {
+static void fscope_enter(Parser* par, FnScope* fscope, a_line line) {
 	if (par->scope_depth == UINT8_MAX) {
 		parse_error(par, "function nested level overflow.", line);
 	}
@@ -2656,11 +2656,11 @@ static void fscope_prologue(Parser* par, FnScope* fscope, a_line line) {
 	par->scope_depth += 1;
 }
 
-static GProto* fscope_epilogue(Parser* par, GStr* name, a_line line) {
+static GProto* fscope_leave(Parser* par, GStr* name, a_line line) {
 	FnScope* fscope = par->fscope;
 
-	l_clear_close(par);
-	l_emit_leave(par, bc_make_i(BC_RET0), line);
+    clear_close(par);
+    emit_leave(par, bc_make_i(BC_RET0), line);
 
 	scope_pop(par, line, false);
 
@@ -2848,54 +2848,54 @@ static a_u32 expr_move_to(Parser* par, InExpr e, a_u32 reg) {
 bind:
 	switch (e->tag) {
 		case EXPR_NIL: {
-			return l_emit_iabc(par, BC_KN, reg, DMB, 1, e->line);
+			return emit_iabc(par, BC_KN, reg, DMB, 1, e->line);
 		}
 		case EXPR_FALSE: {
-			return l_emit_ia(par, BC_KF, reg, e->line);
+			return emit_ia(par, BC_KF, reg, e->line);
 		}
 		case EXPR_TRUE: {
-			return l_emit_ia(par, BC_KT, reg, e->line);
+			return emit_ia(par, BC_KT, reg, e->line);
 		}
 		case EXPR_INT: {
 			if (e->idat >= BC_MIN_SBX && e->idat <= BC_MAX_SBX) {
-				return l_emit_iasbx(par, BC_KI, reg, e->idat, e->line);
+				return emit_iasbx(par, BC_KI, reg, e->idat, e->line);
 			}
 			else {
-				return l_emit_iabx(par, BC_K, reg, const_index(par, v_of_int(e->idat)), e->line);
+				return emit_iabx(par, BC_K, reg, const_index(par, v_of_int(e->idat)), e->line);
 			}
 		}
 		case EXPR_FLOAT: {
-			return l_emit_iabx(par, BC_K, reg, const_index(par, v_of_float(e->ndat)), e->line);
+			return emit_iabx(par, BC_K, reg, const_index(par, v_of_float(e->ndat)), e->line);
 		}
 		case EXPR_STR: {
-			return l_emit_iabx(par, BC_K, reg, const_index(par, v_of_str(e->sdat)), e->line);
+			return emit_iabx(par, BC_K, reg, const_index(par, v_of_str(e->sdat)), e->line);
 		}
 		case EXPR_CAP: {
-			return l_emit_iab(par, BC_LDC, reg, e->udat1, e->line);
+			return emit_iab(par, BC_LDC, reg, e->udat1, e->line);
 		}
 		case EXPR_REG: {
-            return l_emit_iab(par, BC_MOV, reg, e->udat1, e->line);
+            return emit_iab(par, BC_MOV, reg, e->udat1, e->line);
 		}
 		case EXPR_REGS: {
-			l_emit_iac(par, BC_TRIM, e->udat1, 1, e->line);
-			return l_emit_iab(par, BC_MOV, reg, e->udat1, e->line);
+			emit_iac(par, BC_TRIM, e->udat1, 1, e->line);
+			return emit_iab(par, BC_MOV, reg, e->udat1, e->line);
 		}
 		case EXPR_REF: {
-            return l_emit_iabc(par, BC_GET, reg, e->udat1, e->udat2, e->line);
+            return emit_iabc(par, BC_GET, reg, e->udat1, e->udat2, e->line);
 		}
 		case EXPR_REFI: {
-            return l_emit_iabsc(par, BC_GETI, reg, e->udat1, cast(a_i32, e->udat2), e->line);
+            return emit_iabsc(par, BC_GETI, reg, e->udat1, cast(a_i32, e->udat2), e->line);
 		}
 		case EXPR_REFK: {
             a_u32 k = e->udat2;
 			if (const_is_str(par, k)) {
-				return l_emit_aby(par, BC_GETS, reg, e->udat1, k, e->line);
+				return emit_aby(par, BC_GETS, reg, e->udat1, k, e->line);
 			}
 			else {
 				a_u32 reg2 = stack_alloc(par, e->line);
-				a_u32 label = l_emit(par, bc_make_iabx(BC_K, reg2, k), e->line);
+				a_u32 label = emit(par, bc_make_iabx(BC_K, reg2, k), e->line);
 				if (label != NO_LABEL) {
-					l_emit_fast(par, bc_make_iabc(BC_GET, reg, e->udat1, reg2), e->line);
+                    emit_fast(par, bc_make_iabc(BC_GET, reg, e->udat1, reg2), e->line);
 					label += 1;
 				}
 				stack_free(par, reg2);
@@ -2906,14 +2906,14 @@ bind:
 		case EXPR_REFCK: {
 			a_u32 k = e->udat2;
 			if (const_is_str(par, k)) {
-				return l_emit_aby(par, BC_CGETS, reg, e->udat1, k, e->line);
+				return emit_aby(par, BC_CGETS, reg, e->udat1, k, e->line);
 			}
 			else {
 				a_u32 reg2 = stack_alloc_succ(par, 2, e->line);
-				a_u32 label = l_emit(par, bc_make_iabx(BC_K, reg2, k), e->line);
+				a_u32 label = emit(par, bc_make_iabx(BC_K, reg2, k), e->line);
 				if (label != NO_LABEL) {
-					l_emit_fast(par, bc_make_iab(BC_LDC, reg2 + 1, e->udat1), e->line);
-					l_emit_fast(par, bc_make_iabc(BC_GET, reg, reg2 + 1, reg2), e->line);
+                    emit_fast(par, bc_make_iab(BC_LDC, reg2 + 1, e->udat1), e->line);
+                    emit_fast(par, bc_make_iabc(BC_GET, reg, reg2 + 1, reg2), e->line);
 					label += 2;
 				}
 				stack_free_succ(par, reg2);
@@ -2926,35 +2926,35 @@ bind:
 		}
 		case EXPR_CALL: {
 			a_insn* ip = par->code[e->udat1];
-			return l_emit_iab(par, BC_MOV, reg, bc_load_a(ip), e->line);
+			return emit_iab(par, BC_MOV, reg, bc_load_a(ip), e->line);
 		}
 		case EXPR_FALSE_OR_TRUE:
 		case EXPR_TRUE_OR_FALSE: {
 			a_u32 reg2 = stack_alloc(par, e->line);
             branch_instantiate(par, e, reg2);
-			return l_emit_iab(par, BC_MOV, reg, reg2, e->line);
+			return emit_iab(par, BC_MOV, reg, reg2, e->line);
 		}
 		case EXPR_REG_OR_NIL: {
 			a_u32 reg2;
 			if (e->fsym) {
 				assume(!e->fval, "a shared value has ownership.");
 				reg2 = stack_alloc(par, e->line);
-				l_emit_iab(par, BC_MOV, reg2, e->udat1, e->line);
+				emit_iab(par, BC_MOV, reg2, e->udat1, e->line);
 				stack_free(par, reg2);
-				l_merge_optR(par, e->udat2, reg2, e->line);
+                merge_optR(par, e->udat2, reg2, e->line);
 			}
 			else {
 				reg2 = e->udat1;
-				l_merge_optR(par, e->udat2, reg2, e->line);
+                merge_optR(par, e->udat2, reg2, e->line);
 			}
-			return l_emit_iab(par, BC_MOV, reg, reg2, e->line);
+			return emit_iab(par, BC_MOV, reg, reg2, e->line);
 		}
 		case EXPR_DYN_OR_NIL: {
 			a_u32 reg2 = stack_alloc(par, e->line);
             bc_store_a(par->code[e->udat1], reg2);
 			stack_free(par, reg2);
-			l_merge_optR(par, e->udat2, reg2, e->line);
-			return l_emit_iab(par, BC_MOV, reg, reg2, e->line);
+            merge_optR(par, e->udat2, reg2, e->line);
+			return emit_iab(par, BC_MOV, reg, reg2, e->line);
 		}
 		case EXPR_GBL: {
 			expr_gvar(par, e, e->line);
@@ -2969,32 +2969,32 @@ bind:
 static void expr_move_to_if_need(Parser* par, InExpr e, a_u32 reg) {
 	switch (e->tag) {
 		case EXPR_NIL: {
-			l_emit_kn(par, reg, 1, e->line);
+			emit_kn(par, reg, 1, e->line);
 			break;
 		}
 		case EXPR_REG: {
 			if (e->udat1 != reg) {
-                l_emit_iab(par, BC_MOV, reg, e->udat1, e->line);
+                emit_iab(par, BC_MOV, reg, e->udat1, e->line);
 			}
 			break;
 		}
 		case EXPR_REGS: {
-			l_emit_iac(par, BC_TRIM, e->udat1, 1, e->line);
+			emit_iac(par, BC_TRIM, e->udat1, 1, e->line);
 			if (e->udat1 != reg) {
-                l_emit_iab(par, BC_MOV, reg, e->udat1, e->line);
+                emit_iab(par, BC_MOV, reg, e->udat1, e->line);
 			}
 			break;
 		}
 		case EXPR_REG_OR_NIL: {
 			if (e->udat1 != reg) {
-				l_emit_iab(par, BC_MOV, reg, e->udat1, e->line);
+				emit_iab(par, BC_MOV, reg, e->udat1, e->line);
 			}
-			l_merge_optR(par, e->udat2, reg, e->line);
+            merge_optR(par, e->udat2, reg, e->line);
 			break;
 		}
 		case EXPR_DYN_OR_NIL: {
             bc_store_a(par->code[e->udat1], reg);
-			l_merge_optR(par, e->udat2, reg, e->line);
+            merge_optR(par, e->udat2, reg, e->line);
 			break;
 		}
 		case EXPR_FALSE_OR_TRUE:
@@ -3005,7 +3005,7 @@ static void expr_move_to_if_need(Parser* par, InExpr e, a_u32 reg) {
 		case EXPR_CALL: {
 			a_u32 reg2 = bc_load_a(par->code[e->udat1]);
 			if (reg != reg2) {
-				l_emit_iab(par, BC_MOV, reg, reg2, e->line);
+				emit_iab(par, BC_MOV, reg, reg2, e->line);
 			}
 			break;
 		}
@@ -3050,7 +3050,7 @@ static void expr_to_reg(Parser* par, InoutExpr e) {
 			break;
 		}
 		case EXPR_REGS: {
-			l_emit_iac(par, BC_TRIM, e->udat1, 1, e->line);
+			emit_iac(par, BC_TRIM, e->udat1, 1, e->line);
 
 			e->tag = EXPR_REG;
 			break;
@@ -3059,13 +3059,13 @@ static void expr_to_reg(Parser* par, InoutExpr e) {
 			a_u32 reg = e->udat1;
             expr_drop(par, e);
 			if (!e->fsym) {
-				l_merge_optR(par, e->udat2, reg, e->line);
+                merge_optR(par, e->udat2, reg, e->line);
 				e->tag = EXPR_REG;
 			}
 			else {
 				a_u32 reg2 = stack_alloc(par, e->line);
-				l_emit_iab(par, BC_MOV, reg2, reg, e->line);
-				l_merge_optR(par, e->udat2, reg2, e->line);
+				emit_iab(par, BC_MOV, reg2, reg, e->line);
+                merge_optR(par, e->udat2, reg2, e->line);
 				expr_tmp(e, reg2, e->line);
 			}
 			break;
@@ -3118,7 +3118,7 @@ static void exprs_fix(Parser* par, InoutExpr e) {
             bc_store_a(ip, reg);
             bc_store_c(ip, DMB);
 
-			l_emit_iab(par, BC_LBOXM, reg, reg, e->line);
+			emit_iab(par, BC_LBOXM, reg, reg, e->line);
 
 			init(e) {
                 .tag = EXPR_NTMPC,
@@ -3137,7 +3137,7 @@ static void exprs_fix(Parser* par, InoutExpr e) {
             bc_store_op(ip, bc_load_op(ip) + 1);
             bc_store_c(ip, DMB);
 
-			l_emit_iab(par, BC_LBOXM, reg, reg, e->line);
+			emit_iab(par, BC_LBOXM, reg, reg, e->line);
 
 			init(e) {
                 .tag = EXPR_NTMPC,
@@ -3150,7 +3150,7 @@ static void exprs_fix(Parser* par, InoutExpr e) {
 		case EXPR_VNTMP: {
 			a_u32 bot = e->udat1;
 
-			l_emit_iab(par, BC_LBOXM, bot, bot, e->line);
+			emit_iab(par, BC_LBOXM, bot, bot, e->line);
 			stack_free_succ(par, bot + 1);
 
 			e->tag = EXPR_NTMPC;
@@ -3160,7 +3160,7 @@ static void exprs_fix(Parser* par, InoutExpr e) {
 			a_u32 col = e->udat1;
 			a_u32 bot = col + 1;
 
-			l_emit_iab(par, BC_LPUSHM, col, bot, e->line);
+			emit_iab(par, BC_LPUSHM, col, bot, e->line);
 			stack_free_succ(par, bot);
 			break;
 		}
@@ -3188,11 +3188,11 @@ static void exprs_to_top_tmps(Parser* par, InoutExpr e) {
 			a_u32 top = par->scope->top_reg;
 
 			if (bot < top) {
-				l_emit_iabc(par, BC_LPUSH, col, bot, top - bot, e->line);
+				emit_iabc(par, BC_LPUSH, col, bot, top - bot, e->line);
 				stack_free_succ(par, bot);
 			}
 
-			l_emit_iab(par, BC_UNBOXV, col, col, e->line);
+			emit_iab(par, BC_UNBOXV, col, col, e->line);
 
 			e->tag = EXPR_VNTMP;
 			break;
@@ -3203,11 +3203,11 @@ static void exprs_to_top_tmps(Parser* par, InoutExpr e) {
 			a_u32 top = par->scope->top_reg;
 
 			if (bot < top) {
-				l_emit_iab(par, BC_LPUSHM, col, bot, e->line);
+				emit_iab(par, BC_LPUSHM, col, bot, e->line);
 				stack_free_succ(par, bot);
 			}
 
-			l_emit_iab(par, BC_UNBOXV, col, col, e->line);
+            emit_iab(par, BC_UNBOXV, col, col, e->line);
 
 			e->tag = EXPR_NTMP;
 			break;
@@ -3258,18 +3258,18 @@ static a_enum expr_test_true(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 		}
 		case EXPR_NIL:
 		case EXPR_FALSE: {
-			*plabel = l_lazy_jump(par, *plabel, line);
+			*plabel = jump_lazily(par, *plabel, line);
 			e->fucf = true;
 			return EXPR_RESIDUAL_FALSE;
 		}
 		case EXPR_RESIDUAL_TRUE: {
-			l_mark_label(par, e->udat2, line);
+            mark_label(par, e->udat2, line);
 			e->tag = EXPR_TRUE;
 			e->fucf = false;
 			return EXPR_TRUE;
 		}
 		case EXPR_TRUE_OR_FALSE: {
-			l_merge_branch(par, plabel, e->udat2, line);
+            merge_label(par, plabel, e->udat2, line);
 			return EXPR_TRUE_OR_FALSE;
 		}
 		case EXPR_FALSE_OR_TRUE: {
@@ -3277,20 +3277,20 @@ static a_enum expr_test_true(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 			return EXPR_TRUE_OR_FALSE;
 		}
 		case EXPR_REG_OR_NIL: {
-			l_merge_branch(par, plabel, e->udat2, line);
+            merge_label(par, plabel, e->udat2, line);
 			e->tag = EXPR_REG;
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BZ, e->udat1), *plabel, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BZ, e->udat1), *plabel, line);
 			return EXPR_TRUE_OR_FALSE;
 		}
 		case EXPR_DYN_OR_NIL: {
-			l_merge_branch(par, plabel, e->udat2, line);
+            merge_label(par, plabel, e->udat2, line);
 			e->tag = EXPR_DYN;
 			fallthrough;
 		}
 		default: {
             expr_to_reg(par, e);
 			assume(e->tag == EXPR_REG);
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BZ, e->udat1), *plabel, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BZ, e->udat1), *plabel, line);
 			return EXPR_TRUE_OR_FALSE;
 		}
 	}
@@ -3306,18 +3306,18 @@ static a_enum expr_test_false(Parser* par, InExpr e, a_u32* plabel, a_u32 line) 
 		case EXPR_FLOAT:
 		case EXPR_STR:
 		case EXPR_TRUE: {
-			*plabel = l_lazy_jump(par, *plabel, line);
+			*plabel = jump_lazily(par, *plabel, line);
 			e->fucf = true;
 			return EXPR_RESIDUAL_TRUE;
 		}
 		case EXPR_RESIDUAL_FALSE: {
-			l_mark_label(par, e->udat2, line);
+            mark_label(par, e->udat2, line);
 			e->tag = EXPR_FALSE;
 			e->fucf = false;
 			return EXPR_FALSE;
 		}
 		case EXPR_FALSE_OR_TRUE: {
-			l_merge_branch(par, plabel, e->udat2, line);
+            merge_label(par, plabel, e->udat2, line);
 			return EXPR_FALSE_OR_TRUE;
 		}
 		case EXPR_TRUE_OR_FALSE: {
@@ -3325,19 +3325,19 @@ static a_enum expr_test_false(Parser* par, InExpr e, a_u32* plabel, a_u32 line) 
 			return EXPR_FALSE_OR_TRUE;
 		}
 		case EXPR_REG_OR_NIL: {
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BNZ, e->udat1), *plabel, line);
-			l_merge_branch(par, plabel, e->udat2, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BNZ, e->udat1), *plabel, line);
+            merge_label(par, plabel, e->udat2, line);
 			e->tag = EXPR_REG;
 			return EXPR_TRUE_OR_FALSE;
 		}
 		case EXPR_DYN_OR_NIL: {
-			l_merge_branch(par, plabel, e->udat2, line);
+            merge_label(par, plabel, e->udat2, line);
 			e->tag = EXPR_DYN;
 			fallthrough;
 		}
 		default: {
             expr_to_reg(par, e);
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BNZ, e->udat1), *plabel, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BNZ, e->udat1), *plabel, line);
 			return EXPR_FALSE_OR_TRUE;
 		}
 	}
@@ -3350,15 +3350,15 @@ static a_enum expr_test_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 		case EXPR_FLOAT:
 		case EXPR_STR:
 		case EXPR_FALSE: {
-			*plabel = l_lazy_jump(par, *plabel, line);
+			*plabel = jump_lazily(par, *plabel, line);
 			return EXPR_RESIDUAL_FALSE;
 		}
 		case EXPR_NIL: {
 			return EXPR_TRUE;
 		}
 		case EXPR_REG_OR_NIL: {
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
-			l_mark_label(par, e->udat2, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
+            mark_label(par, e->udat2, line);
 
 			e->tag = EXPR_REG;
 			return EXPR_TRUE_OR_FALSE;
@@ -3370,8 +3370,8 @@ static a_enum expr_test_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 			expr_to_reg(par, e);
 
 			assume(e->tag == EXPR_REG);
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
-			l_mark_label(par, label, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
+            mark_label(par, label, line);
 
 			return EXPR_TRUE_OR_FALSE;
 		}
@@ -3379,7 +3379,7 @@ static a_enum expr_test_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
             expr_to_reg(par, e);
 
 			assume(e->tag == EXPR_REG);
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
 
 			return EXPR_TRUE_OR_FALSE;
 		}
@@ -3396,19 +3396,19 @@ static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line
 			return EXPR_TRUE;
 		}
 		case EXPR_NIL: {
-			*plabel = l_lazy_jump(par, *plabel, line);
+			*plabel = jump_lazily(par, *plabel, line);
 			e->fucf = true;
 			return EXPR_RESIDUAL_FALSE;
 		}
 		case EXPR_REG_OR_NIL: {
-			l_merge_branch(par, plabel, e->udat2, line);
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BNN, e->udat1), *plabel, line);
+            merge_label(par, plabel, e->udat2, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BNN, e->udat1), *plabel, line);
 
 			e->tag = EXPR_REG;
 			return EXPR_TRUE_OR_FALSE;
 		}
 		case EXPR_DYN_OR_NIL: {
-			l_merge_branch(par, plabel, e->udat2, line);
+            merge_label(par, plabel, e->udat2, line);
 
 			e->tag = EXPR_DYN;
 			fallthrough;
@@ -3416,7 +3416,7 @@ static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line
 		default: {
             expr_to_reg(par, e);
 			assume(e->tag == EXPR_REG);
-			*plabel = l_emit_branch(par, bc_make_ia(BC_BNN, e->udat1), *plabel, line);
+			*plabel = emit_branch(par, bc_make_ia(BC_BNN, e->udat1), *plabel, line);
 
 			return EXPR_TRUE_OR_FALSE;
 		}
@@ -3426,7 +3426,7 @@ static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line
 static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line) {
 	switch (e->tag) {
 		case EXPR_NIL: {
-			a_u32 label = l_lazy_jump(par, NO_LABEL, line);
+			a_u32 label = jump_lazily(par, NO_LABEL, line);
 			e->tag = EXPR_NIL;
 			return label;
 		}
@@ -3547,25 +3547,25 @@ static a_bool lex_test_sep(Parser* par) {
 	}
 }
 
-static void l_scan_atom(Parser* par, OutExpr e);
-static void l_scan_expr(Parser* par, OutExpr e);
-static void l_scan_expr_from_term(Parser* par, OutExpr e);
-static void l_scan_exprs(Parser* par, InoutExpr es, a_bool exists);
-static void l_scan_pattern(Parser* par, void (*con)(Parser*, Pat*, a_usize), a_usize ctx);
-static void l_scan_stat(Parser* par);
-static void l_scan_stats(Parser* par);
+static void scan_atom(Parser* par, OutExpr e);
+static void scan_expr(Parser* par, OutExpr e);
+static void scan_expr_from_term(Parser* par, OutExpr e);
+static void scan_exprs(Parser* par, InoutExpr es, a_bool exists);
+static void scan_pat(Parser* par, void (*con)(Parser*, Pat*, a_usize), a_usize ctx);
+static void scan_stat(Parser* par);
+static void scan_stats(Parser* par);
 
-static GStr* l_scan_label(Parser* par) {
+static GStr* scan_label(Parser* par) {
     return lex_test_skip(par, TK_COLON) ? lex_check_ident(par) : null;
 }
 
-static GStr* l_scan_label_for_scope(Parser* par) {
-    GStr* name = l_scan_label(par);
+static GStr* scan_label_for_scope(Parser* par) {
+    GStr* name = scan_label(par);
     par->scope->label_name = name;
     return name;
 }
 
-static void l_scan_tstring(Parser* par, OutExpr e) {
+static void scan_tstring(Parser* par, OutExpr e) {
 	ConExpr ce = { .off = par->sbuf->len };
 	a_u32 line = lex_line(par);
 	lex_skip(par);
@@ -3580,7 +3580,7 @@ static void l_scan_tstring(Parser* par, OutExpr e) {
 			}
 			case TK_TSESCAPE: {
                 lex_skip(par);
-                l_scan_atom(par, e);
+                scan_atom(par, e);
 				break;
 			}
 			case TK_TSEND: {
@@ -3594,15 +3594,15 @@ static void l_scan_tstring(Parser* par, OutExpr e) {
 	}
 }
 
-static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
+static void scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 	FnScope scope;
 
-    fscope_prologue(par, &scope, line);
+    fscope_enter(par, &scope, line);
 
 	a_line line1 = lex_line(par);
 	lex_check_skip(par, TK_LBK);
     if (!lex_test_skip(par, TK_RBK)) {
-        l_scan_pattern(par, param_bind, line1);
+        scan_pat(par, param_bind, line1);
         lex_check_pair_right(par, TK_LBK, TK_RBK, line1);
     }
 
@@ -3612,71 +3612,71 @@ static void l_scan_function(Parser* par, OutExpr e, GStr* name, a_line line) {
 	switch (lex_peek(par)) {
 		case TK_LBR: {
 			lex_skip(par);
-			l_scan_stats(par);
+            scan_stats(par);
     		lex_check_pair_right(par, TK_LBR, TK_RBR, line);
 			break;
 		}
 		case TK_ASSIGN: {
 			lex_skip(par);
-			l_scan_expr(par, e);
+            scan_expr(par, e);
 			expr_return(par, e, line);
 			break;
 		}
         default: lex_error_got(par, "function expected");
 	}
 
-	GProto* proto = fscope_epilogue(par, name, lex_line(par));
+	GProto* proto = fscope_leave(par, name, lex_line(par));
 	expr_func(par, e, proto);
 }
 
-static void l_scan_lambda(Parser* par, OutExpr e) {
+static void scan_lambda(Parser* par, OutExpr e) {
 	FnScope scope;
 
-    fscope_prologue(par, &scope, lex_line(par));
+    fscope_enter(par, &scope, lex_line(par));
 
 	if (!lex_test_skip(par, TK_BBAR)) {
 		a_line line = lex_line(par);
 		lex_check_skip(par, TK_BAR);
-		l_scan_pattern(par, param_bind, scope.begin_line);
+        scan_pat(par, param_bind, scope.begin_line);
 		lex_check_pair_right(par, TK_BAR, TK_BAR, line);
 	}
 
 	if (lex_test_skip(par, TK_LBR)) {
 		a_line line = lex_line(par);
 
-		l_scan_stats(par);
+        scan_stats(par);
         lex_check_pair_right(par, TK_LBR, TK_RBR, line);
 	}
 	else {
 		Expr e2;
 
-		l_scan_expr(par, e2);
+        scan_expr(par, e2);
 		expr_return(par, e2, scope.begin_line);
 	}
 
-	GProto* proto = fscope_epilogue(par, null, lex_line(par));
+	GProto* proto = fscope_leave(par, null, lex_line(par));
 	expr_func(par, e, proto);
 }
 
-static void l_scan_table_index_or_value(Parser* par, OutExpr e, a_int* pindex) {
+static void scan_table_index_or_value(Parser* par, OutExpr e, a_int* pindex) {
     Expr e2;
     Expr e3;
 
     a_u32 line = lex_line(par);
     if (!lex_test_skip(par, TK_RSQ)) {
-        l_scan_expr(par, e2);
+        scan_expr(par, e2);
         if (lex_test_skip(par, TK_RSQ)) {
             if (lex_test_skip(par, TK_ASSIGN) || lex_test_skip(par, TK_COLON)) {
 				expr_index(par, e, e2, line);
 
-                l_scan_expr(par, e3);
+                scan_expr(par, e3);
 
                 expr_write(par, e, e3, line);
                 return;
             }
         }
         else {
-            l_scan_exprs(par, e2, true);
+            scan_exprs(par, e2, true);
             lex_check_pair_right(par, TK_LSQ, TK_RSQ, line);
         }
     }
@@ -3684,7 +3684,7 @@ static void l_scan_table_index_or_value(Parser* par, OutExpr e, a_int* pindex) {
 		expr_unit(e2);
     }
 	expr_box_list(par, e2, line);
-    l_scan_expr_from_term(par, e2);
+    scan_expr_from_term(par, e2);
 
     a_int index = (*pindex)++;
 	expr_int(e3, index, line);
@@ -3692,7 +3692,7 @@ static void l_scan_table_index_or_value(Parser* par, OutExpr e, a_int* pindex) {
     expr_write(par, e, e2, line);
 }
 
-static void l_scan_table_constructor(Parser* par, OutExpr e) {
+static void scan_table_constructor(Parser* par, OutExpr e) {
     a_u32 line = lex_line(par);
     Scope scope;
     Expr er;
@@ -3736,18 +3736,18 @@ static void l_scan_table_constructor(Parser* par, OutExpr e) {
             lex_sync(par);
             lex_skip(par);
 
-            l_scan_expr(par, ev);
+            scan_expr(par, ev);
 
             expr_write(par, er, ev, line2);
         }
         else if (lex_test_skip(par, TK_LSQ)) { /* List or setting by index */
-            l_scan_table_index_or_value(par, er, &index);
+            scan_table_index_or_value(par, er, &index);
         }
         else {
             Expr ek;
             Expr ev;
 
-            l_scan_expr(par, ev);
+            scan_expr(par, ev);
 
 			expr_int(ek, index++, line);
 			expr_index(par, er, ek, line);
@@ -3761,7 +3761,7 @@ static void l_scan_table_constructor(Parser* par, OutExpr e) {
 	scope_leave_with(par, lex_line(par), e);
 }
 
-static void l_scan_atom(Parser* par, OutExpr e) {
+static void scan_atom(Parser* par, OutExpr e) {
 	switch (lex_peek(par)) {
 		case TK_nil: {
 			expr_const(e, EXPR_NIL, lex_line(par));
@@ -3794,7 +3794,7 @@ static void l_scan_atom(Parser* par, OutExpr e) {
 			break;
 		}
 		case TK_TSBEGIN: {
-			l_scan_tstring(par, e);
+            scan_tstring(par, e);
 			break;
 		}
 		case TK_IDENT: {
@@ -3811,10 +3811,10 @@ static void l_scan_atom(Parser* par, OutExpr e) {
 				expr_box_tuple(par, e, line);
 			}
 			else {
-				l_scan_expr(par, e);
+                scan_expr(par, e);
 				if (!lex_test_skip(par, TK_RBK)) {
 					if (lex_test_skip(par, TK_COMMA) && !lex_test(par, TK_RBK)) {
-						l_scan_exprs(par, e, true);
+                        scan_exprs(par, e, true);
 					}
                     lex_check_pair_right(par, TK_LBK, TK_RBK, line);
 					expr_box_tuple(par, e, line);
@@ -3826,7 +3826,7 @@ static void l_scan_atom(Parser* par, OutExpr e) {
 			a_u32 line = lex_line(par);
             lex_skip(par);
 			if (!lex_test_skip(par, TK_RSQ)) {
-				l_scan_exprs(par, e, false);
+                scan_exprs(par, e, false);
                 lex_check_pair_right(par, TK_LSQ, TK_RSQ, line);
 			}
 			else {
@@ -3836,7 +3836,7 @@ static void l_scan_atom(Parser* par, OutExpr e) {
 			break;
 		}
 		case TK_LBR: {
-            l_scan_table_constructor(par, e);
+            scan_table_constructor(par, e);
 			break;
 		}
 		default: {
@@ -3845,7 +3845,7 @@ static void l_scan_atom(Parser* par, OutExpr e) {
 	}
 }
 
-static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
+static void scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 	a_u32 label = NO_LABEL;
 	loop {
 		switch (lex_peek(par)) {
@@ -3858,7 +3858,7 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
                     expr_lookup(par, e, name, line2);
 
                     if (!lex_test_skip(par, TK_RBK)) {
-                        l_scan_exprs(par, e, true);
+                        scan_exprs(par, e, true);
                         lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
                     }
 
@@ -3884,7 +3884,7 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
                     expr_lookup(par, e, name, line2);
 
                     if (!lex_test_skip(par, TK_RBK)) {
-                        l_scan_exprs(par, e, true);
+                        scan_exprs(par, e, true);
                         lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
                     }
 
@@ -3899,10 +3899,10 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 				Expr e2 = {};
 				a_line line2 = lex_line(par);
                 lex_skip(par);
-				l_scan_expr(par, e2);
+                scan_expr(par, e2);
 				expr_index(par, e, e2, line2);
 				while (lex_test_skip(par, TK_COMMA)) {
-					l_scan_expr(par, e2);
+                    scan_expr(par, e2);
 					expr_index(par, e, e2, line2);
 				}
                 lex_check_pair_right(par, TK_LSQ, TK_RSQ, line2);
@@ -3913,7 +3913,7 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
                 lex_skip(par);
 
 				if (!lex_test_skip(par, TK_RBK)) {
-					l_scan_exprs(par, e, true);
+                    scan_exprs(par, e, true);
                     lex_check_pair_right(par, TK_LBK, TK_RBK, line2);
 				}
 				expr_call(par, e, line2);
@@ -3927,77 +3927,77 @@ static void l_scan_term_suffix(Parser* par, InoutExpr e, a_line line) {
 	}
 }
 
-static void l_scan_term(Parser* par, InoutExpr e) {
+static void scan_term(Parser* par, InoutExpr e) {
 	if (lex_test(par, TK_BAR) || lex_test(par, TK_BBAR)) {
-		l_scan_lambda(par, e);
+        scan_lambda(par, e);
 	}
 	else {
 		a_line line = lex_line(par);
-		l_scan_atom(par, e);
-		l_scan_term_suffix(par, e, line);
+        scan_atom(par, e);
+        scan_term_suffix(par, e, line);
 	}
 }
 
-static void l_scan_term_with_prefix(Parser* par, InoutExpr e) {
+static void scan_term_with_prefix(Parser* par, InoutExpr e) {
     a_i32 tag = lex_peek(par);
     a_line line = lex_line(par);
 	switch (tag) {
 		case TK_PLUS: {
 			//TODO should VM check type for this operation?
             lex_skip(par);
-            l_scan_term_with_prefix(par, e);
+            scan_term_with_prefix(par, e);
 			break;
 		}
 		case TK_MINUS: {
             lex_skip(par);
-            l_scan_term_with_prefix(par, e);
+            scan_term_with_prefix(par, e);
 			expr_neg(par, e, line);
 			break;
 		}
 		case TK_TILDE: {
             lex_skip(par);
-            l_scan_term_with_prefix(par, e);
+            scan_term_with_prefix(par, e);
 			expr_bit_inv(par, e, line);
 			break;
 		}
 		case TK_BANG: {
             lex_skip(par);
-            l_scan_term_with_prefix(par, e);
+            scan_term_with_prefix(par, e);
 			expr_not(par, e, line);
 			break;
 		}
 		case TK_SHARP: {
             lex_skip(par);
-            l_scan_term_with_prefix(par, e);
+            scan_term_with_prefix(par, e);
 			expr_len(par, e, line);
 			break;
 		}
 		case TK_STAR: {
             lex_skip(par);
-            l_scan_term_with_prefix(par, e);
+            scan_term_with_prefix(par, e);
 			expr_unbox(par, e, line);
 			break;
 		}
 		case TK_fn: {
             lex_skip(par);
-			l_scan_function(par, e, null, line);
+            scan_function(par, e, null, line);
 			break;
 		}
 		default: {
-            l_scan_term(par, e);
+            scan_term(par, e);
 			break;
 		}
 	}
 }
 
-static void l_scan_terms(Parser *par, InoutExpr e) {
-	l_scan_term_with_prefix(par, e);
+static void scan_terms(Parser *par, InoutExpr e) {
+    scan_term_with_prefix(par, e);
 	if (lex_test_skip(par, TK_TDOT)) {
 		expr_unpack(par, e, lex_line(par));
 	}
 }
 
-static a_u32 l_scan_arith_op(Parser* par) {
+static a_u32 scan_arith_op(Parser* par) {
 	switch (lex_peek(par)) {
 		case TK_PLUS:
 			return OP_ADD;
@@ -4023,9 +4023,9 @@ static a_u32 l_scan_arith_op(Parser* par) {
 	return OP__NOT_BIN;
 }
 
-static void l_scan_arith_expr_leveled(Parser* par, InoutExpr e, a_u32 lv_min);
+static void scan_arith_expr_leveled(Parser* par, InoutExpr e, a_u32 lv_min);
 
-static void l_scan_arith_tail(Parser* par, InoutExpr e, a_u32 lv_min) {
+static void scan_arith_tail(Parser* par, InoutExpr e, a_u32 lv_min) {
 	static a_u8 const prios[] = {
 		[OP_ADD] = 5,
 		[OP_SUB] = 5,
@@ -4042,7 +4042,7 @@ static void l_scan_arith_tail(Parser* par, InoutExpr e, a_u32 lv_min) {
 	a_u32 op;
 	a_u32 lv_max = UINT32_MAX;
 	a_u32 lv;
-	while ((op = l_scan_arith_op(par)) != OP__NOT_BIN) {
+	while ((op = scan_arith_op(par)) != OP__NOT_BIN) {
 		lv = prios[op];
 		if (!(lv_min <= lv && lv <= lv_max))
 			break;
@@ -4051,21 +4051,21 @@ static void l_scan_arith_tail(Parser* par, InoutExpr e, a_u32 lv_min) {
 		a_line line = lex_line(par);
 		expr_binary_left(par, e, op, line);
         lex_skip(par);
-		l_scan_arith_expr_leveled(par, e2, lv + 1);
+		scan_arith_expr_leveled(par, e2, lv + 1);
 		expr_binary(par, e, e2, op, line);
 
 		lv_max = lv;
 	}
 }
 
-static void l_scan_arith_expr_leveled(Parser* par, InoutExpr e, a_u32 lv) {
-	l_scan_terms(par, e);
-	l_scan_arith_tail(par, e, lv);
+static void scan_arith_expr_leveled(Parser* par, InoutExpr e, a_u32 lv) {
+    scan_terms(par, e);
+    scan_arith_tail(par, e, lv);
 }
 
-#define l_scan_arith_expr(par,e) l_scan_arith_expr_leveled(par, e, 0)
+#define scan_arith_expr(par,e) scan_arith_expr_leveled(par, e, 0)
 
-static a_u32 l_scan_compare_op(Parser* par) {
+static a_u32 scan_compare_op(Parser* par) {
 	switch (lex_peek(par)) {
 		case TK_GT:
 			return OP_GT;
@@ -4080,13 +4080,13 @@ static a_u32 l_scan_compare_op(Parser* par) {
 	}
 }
 
-static void l_scan_compare_expr(Parser* par, InoutExpr e);
+static void scan_compare_expr(Parser* par, InoutExpr e);
 
-static void l_scan_compare_tail(Parser* par, InoutExpr e) {
+static void scan_compare_tail(Parser* par, InoutExpr e) {
 	a_u32 op1, op2;
 	a_line line1;
 
-	op1 = l_scan_compare_op(par);
+	op1 = scan_compare_op(par);
 	if (op1 == 0) return;
 
     lex_skip(par);
@@ -4094,10 +4094,10 @@ static void l_scan_compare_tail(Parser* par, InoutExpr e) {
 	expr_binary_left(par, e, op1, line1);
 
 	Expr e2;
-	l_scan_arith_expr(par, e2);
+	scan_arith_expr(par, e2);
 	expr_binary(par, e, e2, op1, line1);
 
-	op2 = l_scan_compare_op(par);
+	op2 = scan_compare_op(par);
 	while (op2 != OP__NOT_BIN) {
 		a_u32 line2;
 
@@ -4107,22 +4107,22 @@ static void l_scan_compare_tail(Parser* par, InoutExpr e) {
 		expr_binary_left(par, e2, op2, line2);
 
 		Expr e3;
-		l_scan_arith_expr(par, e3);
+		scan_arith_expr(par, e3);
 		expr_binary(par, e2, e3, op2, line2);
 
 		expr_discard(par, e3);
 		expr_binary(par, e, e2, OP_AND, line2);
 
-		op2 = l_scan_compare_op(par);
+		op2 = scan_compare_op(par);
 	}
 }
 
-static void l_scan_compare_expr(Parser* par, InoutExpr e) {
-	l_scan_arith_expr(par, e);
-	l_scan_compare_tail(par, e);
+static void scan_compare_expr(Parser* par, InoutExpr e) {
+    scan_arith_expr(par, e);
+    scan_compare_tail(par, e);
 }
 
-static a_u32 l_scan_relation_op(Parser* par) {
+static a_u32 scan_relation_op(Parser* par) {
 	switch (lex_peek(par)) {
 		case TK_EQ:
 			return OP_EQ;
@@ -4146,34 +4146,32 @@ static a_u32 l_scan_relation_op(Parser* par) {
 	return OP__NOT_BIN;
 }
 
-static void l_scan_relation_tail(Parser* par, InoutExpr e) {
-	a_u32 op = l_scan_relation_op(par);
+static void scan_relation_tail(Parser* par, InoutExpr e) {
+	a_u32 op = scan_relation_op(par);
 	if (op != 0) {
 		a_u32 line = lex_line(par);
         lex_skip(par);
 		expr_binary_left(par, e, op, line);
 
 		Expr e2;
-		l_scan_compare_expr(par, e2);
+        scan_compare_expr(par, e2);
 		expr_binary(par, e, e2, op, line);
 	}
 }
 
-static void l_scan_relation_expr(Parser* par, InoutExpr e) {
-	l_scan_compare_expr(par, e);
-	l_scan_relation_tail(par, e);
+static void scan_relation_expr(Parser* par, InoutExpr e) {
+    scan_compare_expr(par, e);
+    scan_relation_tail(par, e);
 }
 
-static void l_scan_concatenate_expr(Parser* par, InoutExpr e);
-
-static void l_scan_concatenate_tail(Parser* par, InoutExpr e) {
+static void scan_concatenate_tail(Parser* par, InoutExpr e) {
 	a_line line1 = lex_line(par);
 	if (lex_test_skip(par, TK_BDOT)) {
 		ConExpr ce = { };
 		expr_concat(par, &ce, e, line1);
 		do {
 			a_u32 line2 = lex_line(par);
-			l_scan_relation_expr(par, e);
+            scan_relation_expr(par, e);
 			expr_concat(par, &ce, e, line2);
 		}
 		while (lex_test_skip(par, TK_BDOT));
@@ -4181,46 +4179,46 @@ static void l_scan_concatenate_tail(Parser* par, InoutExpr e) {
 	}
 }
 
-static void l_scan_concatenate_expr(Parser* par, InoutExpr e) {
-	l_scan_relation_expr(par, e);
-	l_scan_concatenate_tail(par, e);
+static void scan_concatenate_expr(Parser* par, InoutExpr e) {
+    scan_relation_expr(par, e);
+    scan_concatenate_tail(par, e);
 }
 
-static void l_scan_conjunctive_tail(Parser* par, InoutExpr e) {
+static void scan_conjunctive_tail(Parser* par, InoutExpr e) {
 	while (lex_test(par, TK_BAMP)) {
 		Expr e2;
 		expr_binary_left(par, e, OP_AND, lex_line(par));
         lex_skip(par);
-		l_scan_concatenate_expr(par, e2);
+        scan_concatenate_expr(par, e2);
 		expr_binary(par, e, e2, OP_AND, lex_line(par));
 	}
 }
 
-static void l_scan_conjunctive_expr(Parser* par, InoutExpr e) {
-	l_scan_concatenate_expr(par, e);
-	l_scan_conjunctive_tail(par, e);
+static void scan_conjunctive_expr(Parser* par, InoutExpr e) {
+    scan_concatenate_expr(par, e);
+    scan_conjunctive_tail(par, e);
 }
 
-static void l_scan_disjunctive_expr(Parser* par, InoutExpr e);
+static void scan_disjunctive_expr(Parser* par, InoutExpr e);
 
-static void l_scan_disjunctive_tail(Parser* par, InoutExpr e) {
+static void scan_disjunctive_tail(Parser* par, InoutExpr e) {
 	while (lex_test(par, TK_BBAR)) {
 		Expr e2;
 		expr_binary_left(par, e, OP_OR, lex_line(par));
         lex_skip(par);
-		l_scan_conjunctive_expr(par, e2);
+        scan_conjunctive_expr(par, e2);
 		expr_binary(par, e, e2, OP_OR, lex_line(par));
 	}
 }
 
-static void l_scan_disjunctive_expr(Parser* par, InoutExpr e) {
-	l_scan_conjunctive_expr(par, e);
-	l_scan_disjunctive_tail(par, e);
+static void scan_disjunctive_expr(Parser* par, InoutExpr e) {
+    scan_conjunctive_expr(par, e);
+    scan_disjunctive_tail(par, e);
 }
 
-static void l_scan_ternary_expr(Parser* par, InoutExpr e);
+static void scan_ternary_expr(Parser* par, InoutExpr e);
 
-static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
+static void scan_ternary_tail(Parser* par, InoutExpr e) {
 	switch (lex_peek(par)) {
 		case TK_QUESTION: {
 			a_line line = lex_line(par);
@@ -4229,7 +4227,7 @@ static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
 			lex_skip(par);
 
 			expr_discard(par, e);
-			l_scan_ternary_expr(par, e);
+            scan_ternary_expr(par, e);
 
 			lex_check_pair_right(par, TK_QUESTION, TK_COLON, line);
 
@@ -4237,8 +4235,8 @@ static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
 			expr_or_else(par, e, &label2, line);
 
 			Expr e2;
-			l_mark_label(par, label1, line);
-			l_scan_ternary_expr(par, e2);
+            mark_label(par, label1, line);
+            scan_ternary_expr(par, e2);
 			expr_phi(par, e, e2, label2, line);
 			break;
 		}
@@ -4252,8 +4250,8 @@ static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
 			expr_or_else(par, e, &label2, line);
 
 			Expr e2;
-			l_mark_label(par, label1, line);
-			l_scan_ternary_expr(par, e2);
+            mark_label(par, label1, line);
+            scan_ternary_expr(par, e2);
 			expr_phi(par, e, e2, label2, line);
 			break;
 		}
@@ -4268,36 +4266,36 @@ static void l_scan_ternary_tail(Parser* par, InoutExpr e) {
 			expr_or_else(par, e, &label2, line);
 
 			Expr e2;
-			l_mark_label(par, label1, line);
-			l_scan_ternary_expr(par, e2);
+            mark_label(par, label1, line);
+            scan_ternary_expr(par, e2);
 			expr_phi(par, e, e2, label2, line);
 			break;
 		}
 	}
 }
 
-static void l_scan_ternary_expr(Parser* par, InoutExpr e) {
-	l_scan_disjunctive_expr(par, e);
-	l_scan_ternary_tail(par, e);
+static void scan_ternary_expr(Parser* par, InoutExpr e) {
+    scan_disjunctive_expr(par, e);
+    scan_ternary_tail(par, e);
 }
 
-static void l_scan_expr(Parser* par, InoutExpr e) {
-	l_scan_ternary_expr(par, e);
+static void scan_expr(Parser* par, OutExpr e) {
+    scan_ternary_expr(par, e);
 }
 
-static void l_scan_expr_from_term(Parser* par, OutExpr e) {
-	l_scan_arith_tail(par, e, 0);
-	l_scan_compare_tail(par, e);
-	l_scan_relation_tail(par, e);
-	l_scan_concatenate_tail(par, e);
-	l_scan_conjunctive_tail(par, e);
-	l_scan_disjunctive_tail(par, e);
-	l_scan_ternary_tail(par, e);
+static void scan_expr_from_term(Parser* par, OutExpr e) {
+    scan_arith_tail(par, e, 0);
+    scan_compare_tail(par, e);
+    scan_relation_tail(par, e);
+    scan_concatenate_tail(par, e);
+    scan_conjunctive_tail(par, e);
+    scan_disjunctive_tail(par, e);
+    scan_ternary_tail(par, e);
 }
 
-static void l_scan_exprs(Parser* par, InoutExpr es, a_bool exists) {
+static void scan_exprs(Parser* par, InoutExpr es, a_bool exists) {
 	if (!exists) {
-		l_scan_expr(par, es);
+        scan_expr(par, es);
 		if (!lex_test_skip(par, TK_COMMA))
 			return;
 	}
@@ -4307,7 +4305,7 @@ static void l_scan_exprs(Parser* par, InoutExpr es, a_bool exists) {
 
 		exprs_push_left(par, es);
 
-		l_scan_expr(par, e);
+        scan_expr(par, e);
 		exprs_push(par, es, e);
 	}
 	while (lex_test_skip(par, TK_COMMA));
@@ -4327,19 +4325,19 @@ struct Lhs {
 	a_u32 count;
 };
 
-static void l_scan_assign_rhs(Parser* par, LhsNode* tail, a_u32 count) {
+static void scan_assign_rhs(Parser* par, LhsNode* tail, a_u32 count) {
     lex_check_skip(par, TK_ASSIGN);
 	a_u32 line = lex_line(par);
 
 	Expr rhs = {};
 	Expr rhs_last;
 
-	l_scan_expr(par, rhs_last);
+    scan_expr(par, rhs_last);
 	if (lex_test_skip(par, TK_COMMA)) {
 		expr_copy(rhs, rhs_last);
 		exprs_push_left(par, rhs);
 		loop {
-			l_scan_expr(par, rhs_last);
+            scan_expr(par, rhs_last);
 
 			if (!lex_test_skip(par, TK_COMMA))
 				break;
@@ -4372,7 +4370,7 @@ static void l_scan_assign_rhs(Parser* par, LhsNode* tail, a_u32 count) {
 	}
 }
 
-static void l_scan_assign_lhs_tail(Parser* par, Lhs* lhs) {
+static void scan_assign_lhs_tail(Parser* par, Lhs* lhs) {
 	LhsNode n = {};
 
 	if (lex_test_skip(par, TK_COMMA)) {
@@ -4381,21 +4379,21 @@ static void l_scan_assign_lhs_tail(Parser* par, Lhs* lhs) {
 		lhs->count += 1;
 		lhs->tail = &n;
 
-        l_scan_term_with_prefix(par, n.expr);
-		return l_scan_assign_lhs_tail(par, lhs);
+        scan_term_with_prefix(par, n.expr);
+		return scan_assign_lhs_tail(par, lhs);
 	}
 
-	l_scan_assign_rhs(par, lhs->tail, lhs->count + 1);
+    scan_assign_rhs(par, lhs->tail, lhs->count + 1);
 }
 
-static void l_scan_assign_or_call(Parser* par) {
+static void scan_assign_or_call(Parser* par) {
 	Lhs lhs = {};
 
 	a_line line = lex_line(par);
-	l_scan_term(par, lhs.head.expr);
+    scan_term(par, lhs.head.expr);
 	if (lex_test(par, TK_COMMA) || lex_test_skip(par, TK_TDOT) || lex_test(par, TK_ASSIGN)) {
 		lhs.tail = &lhs.head;
-		l_scan_assign_lhs_tail(par, &lhs);
+        scan_assign_lhs_tail(par, &lhs);
 	}
 	else if (lhs.head.expr->tag != EXPR_CALL) {
 		parse_error(par, "assignment or function call expected.", line);
@@ -4405,7 +4403,7 @@ static void l_scan_assign_or_call(Parser* par) {
 	expr_discard(par, lhs.head.expr);
 }
 
-static void l_scan_do_stat(Parser* par) {
+static void scan_do_stat(Parser* par) {
     Scope scope;
     lex_skip(par);
 
@@ -4413,115 +4411,115 @@ static void l_scan_do_stat(Parser* par) {
     a_line line = lex_line(par);
 
     scope_enter(par, &scope, line, 0);
-    l_scan_stats(par);
+    scan_stats(par);
 
     lex_check_pair_right(par, TK_LBR, TK_RBR, line);
     scope_leave(par, lex_line(par));
 }
 
-static void l_scan_if_stat(Parser* par) {
+static void scan_if_stat(Parser* par) {
 	lex_skip(par);
 
 	lex_check_skip(par, TK_LBK);
 	a_line line = lex_line(par);
 
 	Expr ep;
-	l_scan_expr(par, ep);
+    scan_expr(par, ep);
 	a_u32 label1 = expr_test(par, ep, line);
 	expr_discard(par, ep);
 
 	lex_check_pair_right(par, TK_LBK, TK_RBK, line);
 	lex_skip(par);
 
-	l_scan_stat(par);
+    scan_stat(par);
 
 	if (lex_test_skip(par, TK_else)) {
-		a_u32 label2 = l_lazy_jump(par, NO_LABEL, lex_line(par));
+		a_u32 label2 = jump_lazily(par, NO_LABEL, lex_line(par));
 
 		lex_sync(par);
-		l_mark_label(par, label1, lex_line(par));
-		l_scan_stat(par);
+        mark_label(par, label1, lex_line(par));
+        scan_stat(par);
 
-		l_mark_label(par, label2, lex_line(par));
+        mark_label(par, label2, lex_line(par));
 	}
 	else {
-		l_mark_label(par, label1, lex_line(par));
+        mark_label(par, label1, lex_line(par));
 	}
 }
 
-static void l_scan_while_stat(Parser* par) {
+static void scan_while_stat(Parser* par) {
     Scope scope;
     scope_enter(par, &scope, lex_line(par), JMP_PROP_BREAK | JMP_PROP_CONTINUE);
 
     lex_skip(par);
 
-    l_scan_label_for_scope(par);
+    scan_label_for_scope(par);
 
     lex_check_skip(par, TK_LBK);
 	a_line line = lex_line(par);
 
-	a_u32 label1 = l_mark_label(par, NO_LABEL, line);
+	a_u32 label1 = mark_label(par, NO_LABEL, line);
 
 	Expr ep;
-	l_scan_expr(par, ep);
+    scan_expr(par, ep);
 	a_u32 label2 = expr_test(par, ep, line);
 	expr_discard(par, ep);
 
     lex_check_pair_right(par, TK_LBK, TK_RBK, line);
     lex_skip(par);
 
-	l_scan_stat(par);
-	l_direct_jump(par, label1, lex_line(par));
+    scan_stat(par);
+    jump_direct(par, label1, lex_line(par));
 
-	l_mark_label(par, label2, lex_line(par));
+    mark_label(par, label2, lex_line(par));
 
 	if (lex_test_skip(par, TK_else)) {
         lex_sync(par);
-		l_scan_stat(par);
+        scan_stat(par);
 	}
 
     scope_leave(par, lex_line(par));
 }
 
-static void l_scan_loop_stat(Parser* par) {
+static void scan_loop_stat(Parser* par) {
     Scope scope;
     scope_enter(par, &scope, lex_line(par), JMP_PROP_BREAK | JMP_PROP_CONTINUE);
 
     lex_skip(par);
 
-    l_scan_label_for_scope(par);
+    scan_label_for_scope(par);
 
-	a_u32 label = l_mark_label(par, NO_LABEL, lex_line(par));
+	a_u32 label = mark_label(par, NO_LABEL, lex_line(par));
 
-	l_scan_stat(par);
-	l_direct_jump(par, label, lex_line(par));
+    scan_stat(par);
+    jump_direct(par, label, lex_line(par));
 
     scope_leave(par, lex_line(par));
 }
 
-static void l_scan_break_stat(Parser* par) {
+static void scan_break_stat(Parser* par) {
     a_line line = lex_line(par);
 
     lex_skip(par);
 
-    GStr* label = l_scan_label(par);
+    GStr* label = scan_label(par);
     scope_break(par, label, line);
 
     lex_test_skip(par, TK_SEMI);
 }
 
-static void l_scan_continue_stat(Parser* par) {
+static void scan_continue_stat(Parser* par) {
     a_line line = lex_line(par);
 
     lex_skip(par);
 
-    GStr* label = l_scan_label(par);
+    GStr* label = scan_label(par);
     scope_continue(par, label, line);
 
     lex_test_skip(par, TK_SEMI);
 }
 
-static void l_scan_return_stat(Parser* par) {
+static void scan_return_stat(Parser* par) {
 	a_line line = lex_line(par);
 
     lex_skip(par);
@@ -4529,7 +4527,7 @@ static void l_scan_return_stat(Parser* par) {
 	Expr e = {};
 
 	if (!lex_test_sep(par)) {
-		l_scan_exprs(par, e, false);
+        scan_exprs(par, e, false);
 	}
 
     lex_test_skip(par, TK_SEMI);
@@ -4540,7 +4538,7 @@ static a_noret par_error_dup_mod(Parser* par, a_i32 tk) {
     parse_error(par, "duplicate '%s' modifier", lex_line(par), ai_lex_tagname(tk));
 }
 
-static void l_scan_var_pattern(Parser* par, Pat* pat) {
+static void scan_var_pattern(Parser* par, Pat* pat) {
     loop {
         switch (lex_peek(par)) {
             case TK_mut: {
@@ -4568,7 +4566,7 @@ static void l_scan_var_pattern(Parser* par, Pat* pat) {
     }
 }
 
-static void l_scan_pattern_recursive(Parser* par, PatInfo* info, Pat* parent, Pat** slot, a_u32 tag) {
+static void scan_pattern_recursive(Parser* par, PatInfo* info, Pat* parent, Pat** slot, a_u32 tag) {
     Pat pat_desc = { .sec_ref = NIL_SEC_REF };
 
     Pat* pat = &pat_desc;
@@ -4591,7 +4589,7 @@ branch_standard:
         /* Variable modifiers */
         case TK_mut:
         case TK_use: {
-            l_scan_var_pattern(par, pat);
+            scan_var_pattern(par, pat);
 			break;
 		}
 		case TK__: {
@@ -4608,7 +4606,7 @@ branch_standard:
             pat->line = lex_line(par);
             pat->nchild = 0;
 			if (!lex_test_skip(par, TK_RBK)) {
-				return l_scan_pattern_recursive(par, info, pat, &pat->child, PAT_TUPLE);
+				return scan_pattern_recursive(par, info, pat, &pat->child, PAT_TUPLE);
 			}
 			break;
 		}
@@ -4619,7 +4617,7 @@ branch_standard:
             pat->line = lex_line(par);
             pat->nchild = 0;
 			if (!lex_test_skip(par, TK_RSQ)) {
-				return l_scan_pattern_recursive(par, info, pat, &pat->child, PAT_LIST);
+				return scan_pattern_recursive(par, info, pat, &pat->child, PAT_LIST);
 			}
 			break;
 		}
@@ -4630,7 +4628,7 @@ branch_standard:
             pat->line = lex_line(par);
             pat->nchild = 0;
 			if (!lex_test_skip(par, TK_RBR)) {
-				return l_scan_pattern_recursive(par, info, pat, &pat->child, PAT_TABLE);
+				return scan_pattern_recursive(par, info, pat, &pat->child, PAT_TABLE);
 			}
 			break;
 		}
@@ -4643,7 +4641,7 @@ branch_standard:
 			case TK_COMMA: {
                 lex_skip(par);
 				tag = parent->kind; /* Recover goto label. */
-				return l_scan_pattern_recursive(par, info, parent, slot, tag);
+				return scan_pattern_recursive(par, info, parent, slot, tag);
 			}
 			case TK_RBK: {
 				if (parent->kind != PAT_TUPLE) {
@@ -4684,7 +4682,7 @@ branch_standard:
                 lex_skip(par);
 
                 sec_start(par, rec);
-                l_scan_expr(par, pat->expr);
+                scan_expr(par, pat->expr);
 
                 pat->sec_ref = sec_record(par, rec);
                 pat->fdfl = true;
@@ -4720,16 +4718,16 @@ error_unexpected:
 	}
 }
 
-static void l_scan_pattern(Parser* par, void (*con)(Parser*, Pat*, a_usize), a_usize ctx) {
+static void scan_pat(Parser* par, void (*con)(Parser*, Pat*, a_usize), a_usize ctx) {
 	PatInfo info = {
 		.root = { .kind = PAT_VARG, .sec_ref = NIL_SEC_REF },
 		.con = con,
 		.ctx = ctx
 	};
-	l_scan_pattern_recursive(par, &info, &info.root, &info.root.child, PAT_VARG);
+    scan_pattern_recursive(par, &info, &info.root, &info.root.child, PAT_VARG);
 }
 
-static void l_scan_for_stat(Parser* par) {
+static void scan_for_stat(Parser* par) {
 	Scope scope = {};
 	ForStat stat;
 
@@ -4741,25 +4739,25 @@ static void l_scan_for_stat(Parser* par) {
 	stat.line = line;
 	
 	lex_check_skip(par, TK_LBK);
-	l_scan_expr(par, e);
+    scan_expr(par, e);
 	lex_check_pair_right(par, TK_LBK, TK_RBK, line);
 	expr_iter(par, e, line);
 
-	a_u32 label = l_mark_label(par, NO_LABEL, line);
+	a_u32 label = mark_label(par, NO_LABEL, line);
 
 	a_u32 line2 = lex_line(par);
 	lex_check_skip(par, TK_BAR);
-	l_scan_pattern(par, for_bind, ptr2int(&stat));
+    scan_pat(par, for_bind, ptr2int(&stat));
 	lex_check_pair_right(par, TK_BAR, TK_BAR, line2);
 
-	l_scan_stat(par);
-	l_direct_jump(par, label, line);
+    scan_stat(par);
+    jump_direct(par, label, line);
 
-	l_mark_label(par, stat.label, line);
+    mark_label(par, stat.label, line);
 
     if (lex_test_skip(par, TK_else)) {
         lex_sync(par);
-        l_scan_stat(par);
+        scan_stat(par);
     }
 
     scope_leave(par, lex_line(par));
@@ -4775,7 +4773,7 @@ static void let_bind(Parser* par, Pat* p, a_usize c) {
         Pat* pat = p->child;
 
         loop {
-            l_scan_expr(par, e);
+            scan_expr(par, e);
             pat_bind(par, pat, e);
 
             pat = pat->sibling;
@@ -4787,7 +4785,7 @@ static void let_bind(Parser* par, Pat* p, a_usize c) {
 
             if (pat == null) {
                 do {
-                    l_scan_expr(par, e);
+                    scan_expr(par, e);
                     expr_discard(par, e);
                 }
                 while (lex_test_skip(par, TK_COMMA));
@@ -4803,7 +4801,7 @@ static void let_bind(Parser* par, Pat* p, a_usize c) {
     stack_compact(par);
 }
 
-static void l_scan_let_stat(Parser* par) {
+static void scan_let_stat(Parser* par) {
 	a_line line = lex_line(par);
     lex_skip(par);
 
@@ -4820,7 +4818,7 @@ static void l_scan_let_stat(Parser* par) {
 
             lex_check_skip(par, TK_ASSIGN);
 
-            l_scan_expr(par, e2);
+            scan_expr(par, e2);
             expr_pin(par, e1, e2);
             expr_tbc(par, e1, line);
             break;
@@ -4833,7 +4831,7 @@ static void l_scan_let_stat(Parser* par) {
                 name = lex_check_ident(par);
                 local_alloc(par, e1, name, line);
 
-				l_scan_function(par, e2, name, line);
+                scan_function(par, e2, name, line);
 
                 expr_pin(par, e1, e2);
 				break;
@@ -4841,13 +4839,13 @@ static void l_scan_let_stat(Parser* par) {
 			fallthrough;
 		}
 		default: {
-            l_scan_pattern(par, let_bind, line);
+            scan_pat(par, let_bind, line);
 			break;
 		}
 	}
 }
 
-static void l_scan_fun_def_stat(Parser* par) {
+static void scan_fn_stat(Parser* par) {
 	a_line line = lex_line(par);
     lex_skip(par);
 
@@ -4863,12 +4861,12 @@ static void l_scan_fun_def_stat(Parser* par) {
 		expr_index_str(par, en, name, lex_line(par));
 	}
 
-	l_scan_function(par, ef, name, line);
+    scan_function(par, ef, name, line);
 
     expr_pin(par, en, ef);
 }
 
-static void l_scan_pub_stat(Parser* par) {
+static void scan_pub_stat(Parser* par) {
 	a_line line = lex_line(par);
     lex_skip(par);
 
@@ -4876,7 +4874,7 @@ static void l_scan_pub_stat(Parser* par) {
 		Expr e1, e2;
 		GStr* name = lex_check_ident(par);
         sym_export(par, e1, name, line);
-		l_scan_function(par, e2, name, line);
+        scan_function(par, e2, name, line);
         expr_write(par, e1, e2, line);
 	}
 	else {
@@ -4885,77 +4883,77 @@ static void l_scan_pub_stat(Parser* par) {
         sym_export(par, e, name, line);
 		if (lex_test_skip(par, TK_ASSIGN)) {
 			Expr e2 = {};
-			l_scan_expr(par, e2);
+            scan_expr(par, e2);
             expr_write(par, e, e2, line);
 		}
 	}
 }
 
-static void l_scan_stat_pack(Parser* par) {
+static void scan_stat_pack(Parser* par) {
 	Scope scope;
 
 	a_line line = lex_line(par);
     lex_skip(par);
 	scope_enter(par, &scope, line, 0);
 
-	l_scan_stats(par);
+    scan_stats(par);
 
     lex_check_pair_right(par, TK_LBR, TK_RBR, line);
 
 	scope_leave(par, lex_line(par));
 }
 
-static void l_scan_stat(Parser* par) {
+static void scan_stat(Parser* par) {
 	assume(par->scope->top_ntr == par->scope->top_reg, "compute stack leaked.");
 	switch (lex_peek(par)) {
 		case TK_if: {
-			l_scan_if_stat(par);
+            scan_if_stat(par);
 			break;
 		}
         case TK_break: {
-            l_scan_break_stat(par);
+            scan_break_stat(par);
             break;
         }
         case TK_continue: {
-            l_scan_continue_stat(par);
+            scan_continue_stat(par);
             break;
         }
 		case TK_return: {
-			l_scan_return_stat(par);
+            scan_return_stat(par);
 			break;
 		}
 		case TK_while: {
-			l_scan_while_stat(par);
+            scan_while_stat(par);
 			break;
 		}
 		case TK_for: {
-			l_scan_for_stat(par);
+            scan_for_stat(par);
 			break;
 		}
 		case TK_loop: {
-			l_scan_loop_stat(par);
+            scan_loop_stat(par);
 			break;
 		}
 		case TK_fn: {
-			l_scan_fun_def_stat(par);
+            scan_fn_stat(par);
 			break;
 		}
 		case TK_LBR: {
-			l_scan_stat_pack(par);
+            scan_stat_pack(par);
 			break;
 		}
 		case TK_pub: {
-			l_scan_pub_stat(par);
+            scan_pub_stat(par);
 			break;
 		}
 		default: {
-			l_scan_assign_or_call(par);
+            scan_assign_or_call(par);
 			break;
 		}
 	}
 }
 
-static void l_scan_stats(Parser* par) {
+static void scan_stats(Parser* par) {
 	loop {
 		switch (lex_peek(par)) {
 			case TK_RBR:
@@ -4966,62 +4964,62 @@ static void l_scan_stats(Parser* par) {
 				break;
 			}
 			case TK_let: {
-				l_scan_let_stat(par);
+                scan_let_stat(par);
 				break;
 			}
 			case TK_return: {
-				l_scan_return_stat(par);
+                scan_return_stat(par);
 				break;
 			}
             case TK_break: {
-                l_scan_break_stat(par);
+                scan_break_stat(par);
                 break;
             }
             case TK_continue: {
-                l_scan_continue_stat(par);
+                scan_continue_stat(par);
                 break;
             }
             case TK_do: {
-                l_scan_do_stat(par);
+                scan_do_stat(par);
                 break;
             }
 			case TK_if: {
-				l_scan_if_stat(par);
+                scan_if_stat(par);
 				break;
 			}
 			case TK_while: {
-				l_scan_while_stat(par);
+                scan_while_stat(par);
 				break;
 			}
 			case TK_for: {
-				l_scan_for_stat(par);
+                scan_for_stat(par);
 				break;
 			}
 			case TK_loop: {
-				l_scan_loop_stat(par);
+                scan_loop_stat(par);
 				break;
 			}
 			case TK_fn: {
-				l_scan_fun_def_stat(par);
+                scan_fn_stat(par);
 				break;
 			}
 			case TK_pub: {
-				l_scan_pub_stat(par);
+                scan_pub_stat(par);
 				break;
 			}
 			default: {
-				l_scan_assign_or_call(par);
+                scan_assign_or_call(par);
 				break;
 			}
 		}
 	}
 }
 
-static void l_scan_root_return_stat(Parser* par) {
+static void scan_root_return_stat(Parser* par) {
 	Expr e = {};
 
 	if (!lex_test_sep(par)) {
-		l_scan_exprs(par, e, false);
+        scan_exprs(par, e, false);
 		/* Unpack the return value if only return one value, and it can be unpacked. */
 		if (e->fupk) {
 			expr_unpack(par, e, lex_line(par));
@@ -5032,36 +5030,36 @@ static void l_scan_root_return_stat(Parser* par) {
 	expr_return(par, e, 1);
 }
 
-static void l_scan_root(unused a_henv env, void* ctx) {
+static void scan_root(unused a_henv env, void* ctx) {
 	FnScope scope;
 
 	Parser* par = ctx;
     parser_start(par);
 
-    fscope_prologue(par, &scope, 1);
+    fscope_enter(par, &scope, 1);
 	if (unlikely(par->options & ALO_COMP_OPT_EVAL)) {
-		l_scan_root_return_stat(par);
+        scan_root_return_stat(par);
 	}
 	else {
-		l_scan_stats(par);
+        scan_stats(par);
 	}
 
 	if (!lex_test(par, TK_EOF)) {
 		lex_error_got(par, "statement expected");
 	}
 
-    fscope_epilogue(par, par->name, lex_line(par));
+    fscope_leave(par, par->name, lex_line(par));
 }
 
-static Impl const parser_impl = {
+static Impl const parse_impl = {
     .tag = ALO_TPTR,
     .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
     .mark = parser_mark
 };
 
-static void parser_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
+static void parse_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
     init(par) {
-        .impl = &parser_impl,
+        .impl = &parse_impl,
         .tnext = WHITE_COLOR,
         .options = options,
         .name = name
@@ -5072,12 +5070,12 @@ static void parser_init(a_henv env, a_ifun fun, void* ctx, char const* file, GSt
 
 a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, GFun** pfun) {
 	Parser par;
-    parser_init(env, fun, ctx, file, name, options, &par);
+    parse_init(env, fun, ctx, file, name, options, &par);
 
     Value* p = env->stack.top++;
     v_set_other(env, p, &par);
 
-	a_msg msg = ai_env_protect(env, l_scan_root, parser_except, &par);
+	a_msg msg = ai_env_protect(env, scan_root, parser_except, &par);
 
     v_set_nil(--env->stack.top);
 
