@@ -164,6 +164,21 @@ static a_bool close_work(Global* gbl) {
 	return true;
 }
 
+static void split_closable(Global* gbl) {
+    a_gptr obj;
+    for (a_gclist* list = &gbl->gc_closable; (obj = *list) != null; list = &obj->gnext) {
+        if (g_has_other_color(gbl, obj)) {
+            join_gc(&gbl->gc_toclose, strip_gc(list));
+        }
+    }
+}
+
+static void close_all(Global* gbl) {
+    while (gbl->gc_toclose != null) {
+        close_once(gbl);
+    }
+}
+
 static void propagate_all(Global* gbl, a_trmark* list) {
 	while (*list != trmark_null) {
 		propagate_once(gbl, list);
@@ -251,6 +266,7 @@ static void propagate_atomic(Global* gbl) {
 static void sweep_atomic(Global* gbl) {
 	gbl->gcstep = GCSTEP_SWEEP_ATOMIC;
 	ai_cap_clean(gbl);
+    split_closable(gbl);
 }
 
 static a_bool run_incr_gc(Global* gbl) {
@@ -303,6 +319,9 @@ static void run_full_gc(Global* gbl) {
 			begin_sweep(gbl);
 			sweep_all(gbl);
 			sweep_atomic(gbl);
+            if (!gbl->gcflags.emergency) {
+                close_all(gbl);
+            }
 			break;
 		}
 	}
@@ -385,7 +404,11 @@ void ai_gc_full_gc(a_henv env, a_bool emergency) {
 }
 
 void ai_gc_clean(Global* gbl) {
-	drop_all(gbl, &gbl->gc_closable);
-	drop_all(gbl, &gbl->gc_toclose);
+    /* Close all objects to be closed */
+    close_all(gbl);
+    /* And close all closeable objects */
+    gbl->gc_toclose = gbl->gc_closable;
+    close_all(gbl);
+    /* Then drop all objects */
 	drop_all(gbl, &gbl->gc_normal);
 }

@@ -553,9 +553,10 @@ aloL_Buf* aloL_newbuf(a_henv env) {
     return cast(aloL_Buf*, self->_buf_head_mark);
 }
 
-void aloL_bufhint(a_henv env, aloL_Buf* b, a_usize a) {
+void* aloL_bufhint(a_henv env, aloL_Buf* b, a_usize a) {
     GBuf* self = from_buff(env, b);
     at_buf_check(env, self, a);
+    return buf_end(self);
 }
 
 void aloL_bufpush(a_henv env, aloL_Buf* b) {
@@ -583,6 +584,7 @@ void aloL_openlibs(a_henv env) {
         { ALO_LIB_LIST_NAME, aloopen_list },
         { ALO_LIB_TYPE_NAME, aloopen_type },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
+        { ALO_LIB_IO_NAME, aloopen_io },
 		{ ALO_LIB_SYS_NAME, aloopen_sys },
         { ALO_LIB_LOAD_NAME, aloopen_load }
 	};

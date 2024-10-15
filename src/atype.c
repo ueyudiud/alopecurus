@@ -17,13 +17,14 @@
 #include "atype.h"
 
 static Impl const ptype_impl;
+static Impl const itype_impl;
 static Impl const utype_impl;
 
 #define TYPE_MAX_CAP (u32c(1) << 31)
 
 #define dead_key ((GStr*) sizeof(a_usize))
 
-GType* ai_type_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot) {
+GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot) {
     a_usize size = type_size(extra_size);
 
     GType* self = ai_mem_alloc(env, size);
@@ -42,6 +43,22 @@ GType* ai_type_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a
         },
         .num_slot = num_slot,
         .block_size = block_size
+    };
+
+    ai_gc_register_normal(env, self);
+    return self;
+}
+
+GType* ai_itype_new(a_henv env, Impl impl) {
+    a_usize size = sizeof(GIType);
+
+    GType* self = ai_mem_alloc(env, size);
+    memclr(self, size);
+
+    init(self->as_itype) {
+        .impl = &itype_impl,
+        .size = size,
+        .body = impl
     };
 
     ai_gc_register_normal(env, self);
@@ -301,9 +318,9 @@ static void ptype_mark(Global* gbl, GType* self) {
     type_mark_dict(gbl, self);
 }
 
-static void utype_drop(Global* gbl, GType* self) {
-    type_clean(gbl, self);
-    ai_mem_dealloc(gbl, self, self->size);
+static void itype_mark(Global* gbl, GType* self) {
+    type_mark_dict(gbl, self);
+    ai_gc_trace_work(gbl, self->size);
 }
 
 static void utype_mark(Global* gbl, GType* self) {
@@ -314,16 +331,29 @@ static void utype_mark(Global* gbl, GType* self) {
     ai_gc_trace_work(gbl, self->size);
 }
 
+static void nptype_drop(Global* gbl, GType* self) {
+    type_clean(gbl, self);
+    ai_mem_dealloc(gbl, self, self->size);
+}
+
 static Impl const ptype_impl = {
     .tag = ALO_TTYPE,
     .name = "type",
     .mark = ptype_mark
 };
 
+static Impl const itype_impl = {
+    .tag = ALO_TTYPE,
+    .name = "type",
+    .flags = 0,
+    .drop = nptype_drop,
+    .mark = itype_mark
+};
+
 static Impl const utype_impl = {
     .tag = ALO_TTYPE,
     .name = "type",
     .flags = IMPL_FLAG_DYNAMIC,
-    .drop = utype_drop,
+    .drop = nptype_drop,
     .mark = utype_mark
 };

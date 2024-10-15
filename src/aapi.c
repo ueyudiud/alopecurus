@@ -520,7 +520,7 @@ void alo_newtype(a_henv env, alo_NewType const* info) {
         name = g_str(env, STR_NIL);
     }
 
-    GType* self = ai_type_new(env, name, info->extra_size, info->block_size, info->num_slot);
+    GType* self = ai_utype_new(env, name, info->extra_size, info->block_size, info->num_slot);
     v_set_type(env, pv, self);
 
     ai_gc_trigger(env);

@@ -9,7 +9,8 @@
 
 typedef struct MNode MNode;
 
-intern GType* ai_type_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot);
+intern GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot);
+intern GType* ai_itype_new(a_henv env, Impl impl);
 intern void ai_type_boost(a_henv env);
 intern a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
 intern a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
@@ -54,6 +55,12 @@ typedef struct {
 typedef struct {
     GTYPE_STRUCT_HEADER;
     Impl body;
+} GIType;
+
+/* User defined type */
+typedef struct {
+    GTYPE_STRUCT_HEADER;
+    Impl body;
     a_u32 block_size;
     a_u32 num_slot;
     a_usize user[0];
@@ -68,6 +75,7 @@ union GType {
         char const* name;
     };
     GBType as_btype[1];
+    GIType as_itype[1];
     GUType as_utype[1];
 };
 

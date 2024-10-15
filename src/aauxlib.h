@@ -59,7 +59,7 @@ ALO_EXPORT void (aloL_putalls_)(a_henv env, a_ilen id, aloL_Entry const* es, a_u
 
 ALO_EXPORT void* (aloL_newblk)(a_henv env, a_usize s);
 ALO_EXPORT aloL_Buf* (aloL_newbuf)(a_henv env);
-ALO_EXPORT void (aloL_bufhint)(a_henv env, aloL_Buf* b, a_usize a);
+ALO_EXPORT void* (aloL_bufhint)(a_henv env, aloL_Buf* b, a_usize a);
 ALO_EXPORT void (aloL_bufpush)(a_henv env, aloL_Buf* b);
 ALO_EXPORT void (aloL_bufstr)(a_henv env, aloL_Buf* b);
 
