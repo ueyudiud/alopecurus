@@ -43,7 +43,7 @@ static void expr_copy(OutExpr dst, InExpr src) {
 
 static void expr_unit(OutExpr e) {
     init(e) {
-        .tag = EXPR_UNIT
+        .tag = CONST_UNIT
     };
 }
 
@@ -393,7 +393,7 @@ static void merge_label(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) {
 }
 
 static void expr_const(OutExpr e, a_u32 val, a_line line) {
-	assume(val == EXPR_NIL || val == EXPR_FALSE || val == EXPR_TRUE || val == EXPR_UNIT);
+	assume(val == CONST_NIL || val == CONST_FALSE || val == CONST_TRUE || val == CONST_UNIT);
     init(e) {
         .tag = val,
         .line = line
@@ -402,7 +402,7 @@ static void expr_const(OutExpr e, a_u32 val, a_line line) {
 
 static void expr_int(OutExpr e, a_int val, a_line line) {
 	init(e) {
-        .tag = EXPR_INT,
+        .tag = CONST_INT,
         .idat = val,
         .line = line
     };
@@ -410,7 +410,7 @@ static void expr_int(OutExpr e, a_int val, a_line line) {
 
 static void expr_float(OutExpr e, a_float val, a_line line) {
     init(e) {
-        .tag = EXPR_FLOAT,
+        .tag = CONST_FLOAT,
         .ndat = val,
         .line = line
     };
@@ -418,7 +418,7 @@ static void expr_float(OutExpr e, a_float val, a_line line) {
 
 static void expr_str(OutExpr e, GStr* val, a_line line) {
     init(e) {
-        .tag = EXPR_STR,
+        .tag = CONST_STR,
         .sdat = val,
         .line = line
     };
@@ -640,6 +640,13 @@ static void expr_gvar(Parser* par, InoutExpr e, a_line line) {
 static void expr_resolve(Parser* par, OutExpr e, a_u32 id) {
 	Sym* sym = &par->syms->ptr[id];
 	switch (sym->tag) {
+        case 0 ... CONST__COUNT - 1: {
+            init(e) {
+                .tag = sym->tag,
+                .udat = sym->udat
+            };
+            break;
+        }
         case SYM_LOCAL: {
             if (par->scope_depth == sym->scope) {
                 init(e) {
@@ -755,7 +762,7 @@ static void expr_lookup(Parser* par, InoutExpr e, GStr* name, a_line line) {
  */
 static void expr_index(Parser* par, InoutExpr ev, InExpr ek, a_line line) {
 	switch (ek->tag) {
-		case EXPR_INT: {
+		case CONST_INT: {
             expr_to_reg(par, ev);
 			a_int val = ek->idat;
 			if (val >= 0 && val <= BC_MAX_C) {
@@ -769,7 +776,7 @@ static void expr_index(Parser* par, InoutExpr ev, InExpr ek, a_line line) {
 			ev->line = line;
 			break;
 		}
-		case EXPR_STR: {
+		case CONST_STR: {
 			expr_index_str(par, ev, ek->sdat, line);
 			break;
 		}
@@ -835,12 +842,12 @@ static void expr_new_table(Parser* par, InoutExpr e, a_line line) {
 
 static void expr_neg(Parser* par, InoutExpr e, a_line line) {
 	switch (e->tag) {
-		case EXPR_INT: {
+		case CONST_INT: {
 			e->idat = ai_op_neg_int(e->idat);
 			e->line = line;
 			break;
 		}
-		case EXPR_FLOAT: {
+		case CONST_FLOAT: {
 			e->ndat = ai_op_neg_float(e->ndat);
 			e->line = line;
 			break;
@@ -856,7 +863,7 @@ static void expr_neg(Parser* par, InoutExpr e, a_line line) {
 
 static void expr_bit_inv(Parser* par, InoutExpr e, a_line line) {
 	switch (e->tag) {
-		case EXPR_INT: {
+		case CONST_INT: {
 			e->idat = ai_op_bnot_int(e->idat);
 			e->line = line;
 			break;
@@ -872,17 +879,17 @@ static void expr_bit_inv(Parser* par, InoutExpr e, a_line line) {
 
 static void expr_not(Parser* par, InoutExpr e, a_line line) {
 	switch (e->tag) {
-		case EXPR_NIL:
-		case EXPR_FALSE: {
-			e->tag = EXPR_TRUE;
+		case CONST_NIL:
+		case CONST_FALSE: {
+			e->tag = CONST_TRUE;
 			e->line = line;
 			break;
 		}
-		case EXPR_TRUE:
-		case EXPR_INT:
-		case EXPR_FLOAT:
-		case EXPR_STR: {
-			e->tag = EXPR_FALSE;
+		case CONST_TRUE:
+		case CONST_INT:
+		case CONST_FLOAT:
+		case CONST_STR: {
+			e->tag = CONST_FALSE;
 			e->line = line;
 			break;
 		}
@@ -1000,122 +1007,112 @@ static void expr_binary_left(Parser* par, InoutExpr e, a_enum op, a_line line) {
 	}
 }
 
-static a_bool expr_are_ints(InExpr e1, a_int* i1, InExpr e2, a_int* i2) {
-	if (e1->tag == EXPR_INT && e2->tag == EXPR_INT) {
-		*i1 = e1->idat;
-		*i2 = e2->idat;
+static a_bool data_are_ints(TData* d1, a_int* i1, TData* d2, a_int* i2) {
+	if (d1->tag == CONST_INT && d2->tag == CONST_INT) {
+		*i1 = d1->dat.as_int;
+		*i2 = d2->dat.as_int;
 		return true;
 	}
 	return false;
 }
 
-static a_bool expr_are_floats(InExpr e1, a_float* i1, InExpr e2, a_float* i2) {
-	if (e1->tag == EXPR_INT) {
-		*i1 = cast(a_float, e1->idat);
+static a_bool data_are_floats(TData* d1, a_float* i1, TData* d2, a_float* i2) {
+	if (d1->tag == CONST_INT) {
+		*i1 = cast(a_float, d1->dat.as_int);
 	}
-	else if (e1->tag == EXPR_FLOAT) {
-		*i1 = e1->ndat;
+	else if (d1->tag == CONST_FLOAT) {
+		*i1 = d1->dat.as_float;
 	}
 	else return false;
-	if (e2->tag == EXPR_INT) {
-		*i2 = cast(a_float, e2->idat);
+	if (d2->tag == CONST_INT) {
+		*i2 = cast(a_float, d2->dat.as_int);
 	}
-	else if (e2->tag == EXPR_FLOAT) {
-		*i2 = e2->ndat;
+	else if (d2->tag == CONST_FLOAT) {
+		*i2 = d2->dat.as_float;
 	}
 	else return false;
 	return true;
 }
 
-static void compute_int(Parser* par , a_int a, a_int b, OutExpr e, a_u32 op, a_line line) {
-	switch (op) {
-		case OP_ADD:
-		case OP_SUB:
-		case OP_MUL:
-		case OP_SHL:
-		case OP_SHR:
-		case OP_BIT_AND:
-		case OP_BIT_OR:
-		case OP_BIT_XOR: {
-			e->tag = EXPR_INT;
-			e->idat = ai_op_bin_int(a, b, op);
-			break;
-		}
-		case OP_DIV:
-		case OP_MOD: {
-			if (unlikely(b == 0)) {
-				parse_error(par, "attempt to divide by 0.", line);
-			}
-			e->tag = EXPR_INT;
-			e->idat = ai_op_bin_int(a, b, op);
-			break;
-		}
-		case OP_EQ:
-		case OP_NE:
-		case OP_LT:
-		case OP_LE:
-		case OP_GT:
-		case OP_GE: {
-			e->tag = ai_op_cmp_int(a, b, op) ? EXPR_TRUE : EXPR_FALSE;
-			break;
-		}
-		default: unreachable();
-	}
-}
-
-static void compute_float(a_henv env, a_float a, a_float b, OutExpr e, a_u32 op) {
-	quiet(env);
-	switch (op) {
-		case OP_ADD:
-		case OP_SUB:
-		case OP_MUL:
-		case OP_DIV:
-		case OP_MOD: {
-			e->tag = EXPR_FLOAT;
-			e->ndat = ai_op_bin_float(a, b, op);
-			break;
-		}
-		case OP_EQ:
-		case OP_NE:
-		case OP_LT:
-		case OP_LE:
-		case OP_GT:
-		case OP_GE: {
-			e->tag = ai_op_cmp_float(a, b, op) ? EXPR_TRUE : EXPR_FALSE;
-			break;
-		}
-		default: unreachable();
-	}
-}
-
-static a_bool try_fold_int(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line) {
+static a_bool try_fold_int(Parser* par, TData* d1, TData* d2, a_u32 op, a_line line) {
 	a_int i1, i2;
-	if (expr_are_ints(e1, &i1, e2, &i2)) {
-        compute_int(par, i1, i2, e1, op, line);
-		e1->line = line;
+	if (data_are_ints(d1, &i1, d2, &i2)) {
+        switch (op) {
+            case OP_ADD:
+            case OP_SUB:
+            case OP_MUL:
+            case OP_SHL:
+            case OP_SHR:
+            case OP_BIT_AND:
+            case OP_BIT_OR:
+            case OP_BIT_XOR: {
+                d1->tag = CONST_INT;
+                d1->dat.as_int = ai_op_bin_int(i1, i2, op);
+                break;
+            }
+            case OP_DIV:
+            case OP_MOD: {
+                if (unlikely(i2 == 0)) {
+                    parse_error(par, "attempt to divide by 0.", line);
+                }
+                d1->tag = CONST_INT;
+                d1->dat.as_int = ai_op_bin_int(i1, i2, op);
+                break;
+            }
+            case OP_EQ:
+            case OP_NE:
+            case OP_LT:
+            case OP_LE:
+            case OP_GT:
+            case OP_GE: {
+                d1->tag = ai_op_cmp_int(i1, i2, op) ? CONST_TRUE : CONST_FALSE;
+                break;
+            }
+            default: unreachable();
+        }
 		return true;
 	}
 	return false;
 }
 
-static a_bool try_fold_float(Parser* par, InoutExpr e1, InExpr e2, a_u32 op, a_line line) {
+static a_bool try_fold_float(unused Parser* par, TData* d1, TData* d2, a_u32 op, a_line line) {
 	a_float f1, f2;
-	if (expr_are_floats(e1, &f1, e2, &f2)) {
-        compute_float(par->env, f1, f2, e1, op);
-		e1->line = line;
+	if (data_are_floats(d1, &f1, d2, &f2)) {
+        switch (op) {
+            case OP_ADD:
+            case OP_SUB:
+            case OP_MUL:
+            case OP_DIV:
+            case OP_MOD:
+            case OP_POW: {
+                d1->tag = CONST_FLOAT;
+                d1->dat.as_float = ai_op_bin_float(f1, f2, op);
+                break;
+            }
+            case OP_EQ:
+            case OP_NE:
+            case OP_LT:
+            case OP_LE:
+            case OP_GT:
+            case OP_GE: {
+                d1->tag = ai_op_cmp_float(f1, f2, op) ? CONST_TRUE : CONST_FALSE;
+                break;
+            }
+            default: unreachable();
+        }
 		return true;
 	}
 	return false;
 }
 
-static a_bool try_fold_compare(Parser* par, InExpr e1, InExpr e2, a_u32 bc1, a_u32 bc2, a_line line) {
-	if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SBX && e2->idat <= BC_MAX_SBX) {
+static a_bool try_compare_int(Parser* par, InExpr e1, InExpr e2, a_u32 bc1, a_u32 bc2, a_line line) {
+	if (e2->tag == CONST_INT && e2->idat >= BC_MIN_SBX && e2->idat <= BC_MAX_SBX) {
         expr_to_reg(par, e1);
         expr_drop(par, e1);
         emit_iasbx(par, bc1, e1->udat1, e2->idat, line);
 		return false;
 	}
-	else if (e1->tag == EXPR_INT && e1->idat >= BC_MIN_SBX && e1->idat <= BC_MAX_SBX) {
+	else if (e1->tag == CONST_INT && e1->idat >= BC_MIN_SBX && e1->idat <= BC_MAX_SBX) {
         expr_to_reg(par, e2);
         expr_drop(par, e2);
         emit_iasbx(par, bc2, e2->udat1, e1->idat, line);
@@ -1157,9 +1154,9 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 		case OP_MUL:
 		case OP_DIV:
 		case OP_MOD: {
-			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
+			if (e2->tag == CONST_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
                 expr_to_reg(par, e1);
                 expr_drop(par, e1);
                 emit_idbsc(par, BC_ADDI + op - OP_ADD, e1, e1->udat1, e2->idat, line);
@@ -1174,9 +1171,9 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 		case OP_BIT_AND:
 		case OP_BIT_OR:
 		case OP_BIT_XOR: {
-			if (try_fold_int(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
+			if (e2->tag == CONST_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
                 expr_to_reg(par, e1);
                 expr_drop(par, e1);
                 emit_idbsc(par, BC_SHLI + op - OP_SHL, e1, e1->udat1, e2->idat, line);
@@ -1187,51 +1184,51 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 			break;
 		}
 		case OP_EQ: {
-			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (try_fold_compare(par, e1, e2, BC_BEQI, BC_BEQI, line)) {
+			if (try_compare_int(par, e1, e2, BC_BEQI, BC_BEQI, line)) {
                 emit_compare(par, e1, e2, BC_BEQ, line);
 			}
 
 			goto try_true;
 		}
 		case OP_NE: {
-			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (try_fold_compare(par, e1, e2, BC_BNEI, BC_BNEI, line)) {
+			if (try_compare_int(par, e1, e2, BC_BNEI, BC_BNEI, line)) {
                 emit_compare(par, e1, e2, BC_BNE, line);
 			}
 
 			goto try_true;
 		}
 		case OP_LT: {
-			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (try_fold_compare(par, e1, e2, BC_BLTI, BC_BGTI, line)) {
+			if (try_compare_int(par, e1, e2, BC_BLTI, BC_BGTI, line)) {
                 emit_compare(par, e1, e2, BC_BLT, line);
 			}
 			goto try_true;
 		}
 		case OP_LE: {
-			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (try_fold_compare(par, e1, e2, BC_BLEI, BC_BGEI, line)) {
+			if (try_compare_int(par, e1, e2, BC_BLEI, BC_BGEI, line)) {
                 emit_compare(par, e1, e2, BC_BLE, line);
 			}
 			goto try_true;
 		}
 		case OP_GT: {
-			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (try_fold_compare(par, e1, e2, BC_BGTI, BC_BLTI, line)) {
+			if (try_compare_int(par, e1, e2, BC_BGTI, BC_BLTI, line)) {
                 emit_compare(par, e2, e1, BC_BLT, line);
 			}
 			goto try_true;
 		}
 		case OP_GE: {
-			if (try_fold_int(par, e1, e2, op, line) || try_fold_float(par, e1, e2, op, line))
+			if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
 				return;
-			if (try_fold_compare(par, e1, e2, BC_BGEI, BC_BLEI, line)) {
+			if (try_compare_int(par, e1, e2, BC_BGEI, BC_BLEI, line)) {
                 emit_compare(par, e2, e1, BC_BLE, line);
 			}
 			goto try_true;
@@ -1249,7 +1246,7 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 				case EXPR_RESIDUAL_FALSE: {
 					break;
 				}
-				case EXPR_TRUE: {
+				case CONST_TRUE: {
 					e1->udat2 = NO_LABEL;
 					fallthrough;
 				}
@@ -1267,7 +1264,7 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 				case EXPR_RESIDUAL_TRUE: {
 					break;
 				}
-				case EXPR_FALSE: {
+				case CONST_FALSE: {
 					e1->udat2 = NO_LABEL;
 					fallthrough;
 				}
@@ -1284,7 +1281,7 @@ static void expr_binary(Parser* par, InoutExpr e1, InExpr e2, a_enum op, a_line 
 	}
 }
 
-static void merge_optR(Parser* par, a_u32 label, a_u32 reg, a_line line) {
+static void merge_opt_reg(Parser* par, a_u32 label, a_u32 reg, a_line line) {
 	a_u32 label2 = jump_lazily(par, NO_LABEL, line);
     mark_label(par, label, line);
 	emit_kn(par, reg, 1, line);
@@ -1309,7 +1306,7 @@ static void expr_phi(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line l
             expr_to_tmp(par, e2);
 
 			a_u32 reg = e2->udat1;
-            merge_optR(par, e1->udat2, reg, line);
+            merge_opt_reg(par, e1->udat2, reg, line);
 
             mark_label(par, label, line);
 			stack_realloc(par, reg);
@@ -1322,7 +1319,7 @@ static void expr_phi(Parser* par, InoutExpr e1, InExpr e2, a_u32 label, a_line l
 
 			a_u32 reg = e1->udat1;
             expr_pin_reg(par, e2, reg);
-            merge_optR(par, e1->udat2, reg, line);
+            merge_opt_reg(par, e1->udat2, reg, line);
 
             mark_label(par, label, line);
 			stack_realloc(par, reg);
@@ -1396,7 +1393,7 @@ static void expr_phi_nil(Parser* par, InoutExpr e, a_u32 label, a_line line) {
 	if (e->fucf) {
         jump_lazily(par, label, line);
         mark_label(par, label, line);
-		expr_const(e, EXPR_NIL, e->line);
+		expr_const(e, CONST_NIL, e->line);
 		return;
 	}
 	switch (e->tag) {
@@ -1425,16 +1422,16 @@ static void expr_phi_nil(Parser* par, InoutExpr e, a_u32 label, a_line line) {
 
 static void expr_or_ret(Parser* par, InoutExpr e, a_line line) {
 	switch (e->tag) {
-		case EXPR_NIL: {
+		case CONST_NIL: {
             emit_leave(par, bc_make_i(BC_RET0), line);
 			e->fucf = true;
 			break;
 		}
-		case EXPR_FALSE:
-		case EXPR_TRUE:
-		case EXPR_INT:
-		case EXPR_FLOAT:
-		case EXPR_STR: {
+		case CONST_FALSE:
+		case CONST_TRUE:
+		case CONST_INT:
+		case CONST_FLOAT:
+		case CONST_STR: {
 			break;
 		}
 		case EXPR_REG_OR_NIL: {
@@ -1517,7 +1514,7 @@ static void exprs_push_left(Parser *par, InoutExpr es) {
 }
 
 static void exprs_push(Parser *par, InoutExpr es, InExpr e) {
-	if (es->tag == EXPR_UNIT) {
+	if (es->tag == CONST_UNIT) {
 		expr_copy(es, e);
 		return;
 	}
@@ -1529,7 +1526,7 @@ static void exprs_push(Parser *par, InoutExpr es, InExpr e) {
 	es->fucf |= e->fucf;
 
 	switch (e->tag) {
-		case EXPR_UNIT: {
+		case CONST_UNIT: {
 			break;
 		}
 		case EXPR_VCALL: {
@@ -1588,7 +1585,7 @@ static void expr_box_tuple(Parser* par, InoutExpr e, a_line line) {
 static void expr_box_list(Parser* par, InoutExpr e, a_line line) {
     exprs_fix(par, e);
 	switch (e->tag) {
-		case EXPR_UNIT: {
+		case CONST_UNIT: {
 			emit_idbx(par, BC_LNEW, e, 0, line);
 			break;
 		}
@@ -1696,7 +1693,7 @@ static void exprs_take(Parser* par, InoutExpr e, a_u32 n, a_line line) {
 static a_u32 exprs_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_line line) {
 	assume(n > 0, "truncate nothing.");
 	switch (ei->tag) {
-		case EXPR_UNIT: {
+		case CONST_UNIT: {
 			if (expr_has_vararg_top(el)) {
 				exprs_take(par, el, n, line);
 				expr_tmp(el, par->scope->top_reg - 1, line);
@@ -1761,15 +1758,15 @@ static a_u32 exprs_trunc(Parser* par, InoutExpr ei, InoutExpr el, a_u32 n, a_lin
 
 static a_bool expr_try_fold_append(Parser* par, InExpr e) {
 	switch (e->tag) {
-		case EXPR_INT: {
+		case CONST_INT: {
 			at_fmt_puti(par->env, par->sbuf, e->idat);
 			return true;
 		}
-		case EXPR_FLOAT: {
+		case CONST_FLOAT: {
 			at_fmt_putf(par->env, par->sbuf, e->ndat);
 			return true;
 		}
-		case EXPR_STR: {
+		case CONST_STR: {
 			GStr* str = e->sdat;
 			at_buf_putls(par->env, par->sbuf, str->ptr, str->len);
 			return true;
@@ -1807,7 +1804,7 @@ static void expr_concat(Parser* par, ConExpr* ce, InExpr e, a_line line) {
 }
 
 static void expr_concat_end(Parser* par, ConExpr* ce, OutExpr e, a_line line) {
-	if (ce->expr->tag == EXPR_UNIT) {
+	if (ce->expr->tag == CONST_UNIT) {
 		expr_str(e, buf_to_str(par, ce), line);
 	}
 	else {
@@ -2274,7 +2271,7 @@ static void pat_bind_nils(Parser* par, Pat* pat, a_line line) {
 
 static void pat_bind_with(Parser* par, Pat* pat, InExpr e, a_u32 base) {
     a_u32 reg = base + pat->abs_bot + pat->tmp_pos;
-    if (pat->expr->tag != EXPR_UNIT && pat->expr->tag != EXPR_NIL) {
+    if (pat->expr->tag != CONST_UNIT && pat->expr->tag != CONST_NIL) {
 		assume(pat->kind != PAT_VARG);
 
 		a_u32 label = NO_LABEL;
@@ -2410,8 +2407,13 @@ static void pat_bind(Parser* par, Pat* pat, InExpr e) {
 
     a_u32 abs_top = pat_compute(pat);
 
-    if (pat->kind == PAT_VAR) { /* Try fold constant. */
-
+    if (pat->kind == PAT_VAR && !pat->fmut && e->tag <= CONST__COUNT) { /* Try fold constant. */
+        syms_push(par, (Sym) {
+            .tag = e->tag,
+            .udat = e->udat,
+            .name = pat->name,
+            .scope = par->scope_depth,
+        });
     }
     else {
         expr_drop(par, e); /* Drop ownership but keep expression. */
@@ -2847,16 +2849,16 @@ static GFun* func_build(Parser* par) {
 static a_u32 expr_move_to(Parser* par, InExpr e, a_u32 reg) {
 bind:
 	switch (e->tag) {
-		case EXPR_NIL: {
+		case CONST_NIL: {
 			return emit_iabc(par, BC_KN, reg, DMB, 1, e->line);
 		}
-		case EXPR_FALSE: {
+		case CONST_FALSE: {
 			return emit_ia(par, BC_KF, reg, e->line);
 		}
-		case EXPR_TRUE: {
+		case CONST_TRUE: {
 			return emit_ia(par, BC_KT, reg, e->line);
 		}
-		case EXPR_INT: {
+		case CONST_INT: {
 			if (e->idat >= BC_MIN_SBX && e->idat <= BC_MAX_SBX) {
 				return emit_iasbx(par, BC_KI, reg, e->idat, e->line);
 			}
@@ -2864,10 +2866,10 @@ bind:
 				return emit_iabx(par, BC_K, reg, const_index(par, v_of_int(e->idat)), e->line);
 			}
 		}
-		case EXPR_FLOAT: {
+		case CONST_FLOAT: {
 			return emit_iabx(par, BC_K, reg, const_index(par, v_of_float(e->ndat)), e->line);
 		}
-		case EXPR_STR: {
+		case CONST_STR: {
 			return emit_iabx(par, BC_K, reg, const_index(par, v_of_str(e->sdat)), e->line);
 		}
 		case EXPR_CAP: {
@@ -2941,11 +2943,11 @@ bind:
 				reg2 = stack_alloc(par, e->line);
 				emit_iab(par, BC_MOV, reg2, e->udat1, e->line);
 				stack_free(par, reg2);
-                merge_optR(par, e->udat2, reg2, e->line);
+                merge_opt_reg(par, e->udat2, reg2, e->line);
 			}
 			else {
 				reg2 = e->udat1;
-                merge_optR(par, e->udat2, reg2, e->line);
+                merge_opt_reg(par, e->udat2, reg2, e->line);
 			}
 			return emit_iab(par, BC_MOV, reg, reg2, e->line);
 		}
@@ -2953,7 +2955,7 @@ bind:
 			a_u32 reg2 = stack_alloc(par, e->line);
             bc_store_a(par->code[e->udat1], reg2);
 			stack_free(par, reg2);
-            merge_optR(par, e->udat2, reg2, e->line);
+            merge_opt_reg(par, e->udat2, reg2, e->line);
 			return emit_iab(par, BC_MOV, reg, reg2, e->line);
 		}
 		case EXPR_GBL: {
@@ -2968,7 +2970,7 @@ bind:
 
 static void expr_move_to_if_need(Parser* par, InExpr e, a_u32 reg) {
 	switch (e->tag) {
-		case EXPR_NIL: {
+		case CONST_NIL: {
 			emit_kn(par, reg, 1, e->line);
 			break;
 		}
@@ -2989,12 +2991,12 @@ static void expr_move_to_if_need(Parser* par, InExpr e, a_u32 reg) {
 			if (e->udat1 != reg) {
 				emit_iab(par, BC_MOV, reg, e->udat1, e->line);
 			}
-            merge_optR(par, e->udat2, reg, e->line);
+            merge_opt_reg(par, e->udat2, reg, e->line);
 			break;
 		}
 		case EXPR_DYN_OR_NIL: {
             bc_store_a(par->code[e->udat1], reg);
-            merge_optR(par, e->udat2, reg, e->line);
+            merge_opt_reg(par, e->udat2, reg, e->line);
 			break;
 		}
 		case EXPR_FALSE_OR_TRUE:
@@ -3059,13 +3061,13 @@ static void expr_to_reg(Parser* par, InoutExpr e) {
 			a_u32 reg = e->udat1;
             expr_drop(par, e);
 			if (!e->fsym) {
-                merge_optR(par, e->udat2, reg, e->line);
+                merge_opt_reg(par, e->udat2, reg, e->line);
 				e->tag = EXPR_REG;
 			}
 			else {
 				a_u32 reg2 = stack_alloc(par, e->line);
 				emit_iab(par, BC_MOV, reg2, reg, e->line);
-                merge_optR(par, e->udat2, reg2, e->line);
+                merge_opt_reg(par, e->udat2, reg2, e->line);
 				expr_tmp(e, reg2, e->line);
 			}
 			break;
@@ -3091,13 +3093,13 @@ static void expr_to_tmp(Parser* par, InoutExpr e) {
 
 static void expr_to_reg_or_const(Parser* par, InoutExpr e) {
 	switch (e->tag) {
-		case EXPR_UNIT:
-		case EXPR_NIL:
-		case EXPR_FALSE:
-		case EXPR_TRUE:
-		case EXPR_INT:
-		case EXPR_FLOAT:
-		case EXPR_STR: {
+		case CONST_UNIT:
+		case CONST_NIL:
+		case CONST_FALSE:
+		case CONST_TRUE:
+		case CONST_INT:
+		case CONST_FLOAT:
+		case CONST_STR: {
 			break;
 		}
 		default: {
@@ -3173,7 +3175,7 @@ static void exprs_fix(Parser* par, InoutExpr e) {
 
 static void exprs_to_top_tmps(Parser* par, InoutExpr e) {
 	switch (e->tag) {
-		case EXPR_UNIT: {
+		case CONST_UNIT: {
 			e->tag = EXPR_NTMP;
 			e->udat1 = par->scope->top_reg;
 			break;
@@ -3250,23 +3252,23 @@ static void exprs_to_top_tmps(Parser* par, InoutExpr e) {
 
 static a_enum expr_test_true(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 	switch (e->tag) {
-		case EXPR_TRUE:
-		case EXPR_INT:
-		case EXPR_FLOAT:
-		case EXPR_STR: {
-			return EXPR_TRUE;
+		case CONST_TRUE:
+		case CONST_INT:
+		case CONST_FLOAT:
+		case CONST_STR: {
+			return CONST_TRUE;
 		}
-		case EXPR_NIL:
-		case EXPR_FALSE: {
+		case CONST_NIL:
+		case CONST_FALSE: {
 			*plabel = jump_lazily(par, *plabel, line);
 			e->fucf = true;
 			return EXPR_RESIDUAL_FALSE;
 		}
 		case EXPR_RESIDUAL_TRUE: {
             mark_label(par, e->udat2, line);
-			e->tag = EXPR_TRUE;
+			e->tag = CONST_TRUE;
 			e->fucf = false;
-			return EXPR_TRUE;
+			return CONST_TRUE;
 		}
 		case EXPR_TRUE_OR_FALSE: {
             merge_label(par, plabel, e->udat2, line);
@@ -3298,23 +3300,23 @@ static a_enum expr_test_true(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 
 static a_enum expr_test_false(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 	switch (e->tag) {
-		case EXPR_NIL:
-		case EXPR_FALSE: {
-			return EXPR_FALSE;
+		case CONST_NIL:
+		case CONST_FALSE: {
+			return CONST_FALSE;
 		}
-		case EXPR_INT:
-		case EXPR_FLOAT:
-		case EXPR_STR:
-		case EXPR_TRUE: {
+		case CONST_INT:
+		case CONST_FLOAT:
+		case CONST_STR:
+		case CONST_TRUE: {
 			*plabel = jump_lazily(par, *plabel, line);
 			e->fucf = true;
 			return EXPR_RESIDUAL_TRUE;
 		}
 		case EXPR_RESIDUAL_FALSE: {
             mark_label(par, e->udat2, line);
-			e->tag = EXPR_FALSE;
+			e->tag = CONST_FALSE;
 			e->fucf = false;
-			return EXPR_FALSE;
+			return CONST_FALSE;
 		}
 		case EXPR_FALSE_OR_TRUE: {
             merge_label(par, plabel, e->udat2, line);
@@ -3345,16 +3347,16 @@ static a_enum expr_test_false(Parser* par, InExpr e, a_u32* plabel, a_u32 line) 
 
 static a_enum expr_test_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 	switch (e->tag) {
-		case EXPR_TRUE:
-		case EXPR_INT:
-		case EXPR_FLOAT:
-		case EXPR_STR:
-		case EXPR_FALSE: {
+		case CONST_TRUE:
+		case CONST_INT:
+		case CONST_FLOAT:
+		case CONST_STR:
+		case CONST_FALSE: {
 			*plabel = jump_lazily(par, *plabel, line);
 			return EXPR_RESIDUAL_FALSE;
 		}
-		case EXPR_NIL: {
-			return EXPR_TRUE;
+		case CONST_NIL: {
+			return CONST_TRUE;
 		}
 		case EXPR_REG_OR_NIL: {
 			*plabel = emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
@@ -3388,14 +3390,14 @@ static a_enum expr_test_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 
 static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line) {
 	switch (e->tag) {
-		case EXPR_TRUE:
-		case EXPR_INT:
-		case EXPR_FLOAT:
-		case EXPR_STR:
-		case EXPR_FALSE: {
-			return EXPR_TRUE;
+		case CONST_TRUE:
+		case CONST_INT:
+		case CONST_FLOAT:
+		case CONST_STR:
+		case CONST_FALSE: {
+			return CONST_TRUE;
 		}
-		case EXPR_NIL: {
+		case CONST_NIL: {
 			*plabel = jump_lazily(par, *plabel, line);
 			e->fucf = true;
 			return EXPR_RESIDUAL_FALSE;
@@ -3425,9 +3427,9 @@ static a_enum expr_test_not_nil(Parser* par, InExpr e, a_u32* plabel, a_u32 line
 
 static a_u32 expr_catch_nil_branch(Parser* par, InoutExpr e, a_u32 line) {
 	switch (e->tag) {
-		case EXPR_NIL: {
+		case CONST_NIL: {
 			a_u32 label = jump_lazily(par, NO_LABEL, line);
-			e->tag = EXPR_NIL;
+			e->tag = CONST_NIL;
 			return label;
 		}
 		case EXPR_DYN_OR_NIL: {
@@ -3764,17 +3766,17 @@ static void scan_table_constructor(Parser* par, OutExpr e) {
 static void scan_atom(Parser* par, OutExpr e) {
 	switch (lex_peek(par)) {
 		case TK_nil: {
-			expr_const(e, EXPR_NIL, lex_line(par));
+			expr_const(e, CONST_NIL, lex_line(par));
             lex_skip(par);
 			break;
 		}
 		case TK_false: {
-			expr_const(e, EXPR_FALSE, lex_line(par));
+			expr_const(e, CONST_FALSE, lex_line(par));
             lex_skip(par);
 			break;
 		}
 		case TK_true: {
-			expr_const(e, EXPR_TRUE, lex_line(par));
+			expr_const(e, CONST_TRUE, lex_line(par));
             lex_skip(par);
 			break;
 		}
@@ -3807,7 +3809,7 @@ static void scan_atom(Parser* par, OutExpr e) {
             lex_skip(par);
 
 			if (lex_test_skip(par, TK_RBK)) {
-				expr_const(e, EXPR_UNIT, line);
+				expr_const(e, CONST_UNIT, line);
 				expr_box_tuple(par, e, line);
 			}
 			else {
@@ -3830,7 +3832,7 @@ static void scan_atom(Parser* par, OutExpr e) {
                 lex_check_pair_right(par, TK_LSQ, TK_RSQ, line);
 			}
 			else {
-				expr_const(e, EXPR_UNIT, line);
+				expr_const(e, CONST_UNIT, line);
 			}
 			expr_box_list(par, e, line);
 			break;
@@ -4353,7 +4355,7 @@ static void scan_assign_rhs(Parser* par, LhsNode* tail, a_u32 count) {
 
 	while (num_nil > 0) {
 		Expr en;
-		expr_const(en, EXPR_NIL, line);
+		expr_const(en, CONST_NIL, line);
         expr_write(par, node->expr, en, line);
 
 		node = node->last;
@@ -5051,15 +5053,15 @@ static void scan_root(unused a_henv env, void* ctx) {
     fscope_leave(par, par->name, lex_line(par));
 }
 
-static Impl const parse_impl = {
+static Impl const parser_impl = {
     .tag = ALO_TPTR,
     .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
     .mark = parser_mark
 };
 
-static void parse_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
+static void parser_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
     init(par) {
-        .impl = &parse_impl,
+        .impl = &parser_impl,
         .tnext = WHITE_COLOR,
         .options = options,
         .name = name
@@ -5070,7 +5072,7 @@ static void parse_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr
 
 a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, GFun** pfun) {
 	Parser par;
-    parse_init(env, fun, ctx, file, name, options, &par);
+    parser_init(env, fun, ctx, file, name, options, &par);
 
     Value* p = env->stack.top++;
     v_set_other(env, p, &par);
@@ -5086,7 +5088,7 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, 
 	return msg;
 }
 
-static GStr* l_get_str(a_henv env, a_ilen id) {
+static GStr* api_get_str(a_henv env, a_ilen id) {
     Value const* v = api_roslot(env, id);
     return v != null ? v_as_str(*v) : null;
 }
@@ -5098,7 +5100,7 @@ a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,
     api_check_slot(env, 1);
     id_env = alo_absindex(env, id_env);
 
-    GStr* name = l_get_str(env, id_name);
+    GStr* name = api_get_str(env, id_name);
 
     a_msg msg = ai_parse(env, fun, ctx, file, name, options, &out);
     if (likely(msg == ALO_SOK)) {

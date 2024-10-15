@@ -65,42 +65,52 @@ typedef ExprDesc* restrict InExpr;
 typedef ExprDesc* restrict OutExpr;
 typedef ExprDesc* restrict InoutExpr;
 
+enum ConstTag {
+    CONST_UNIT,
+    /**
+     ** Nil constant expression.
+     */
+    CONST_NIL,
+    /**
+     ** Boolean constant expression.
+     */
+    CONST_FALSE, CONST_TRUE,
+    /**
+     ** Integer constant expression.
+     *@param as_int the integer constant.
+     */
+    CONST_INT,
+    /**
+     ** Float constant expression.
+     *@param as_float the float constant.
+     */
+    CONST_FLOAT,
+    /**
+     ** String constant expression.
+     *@param as_str the string constant.
+     */
+    CONST_STR,
+    /* Count of constant variant */
+    CONST__COUNT
+};
+
+typedef struct {
+    a_int as_int;
+    a_float as_float;
+    GStr* as_str;
+} UData;
+
+typedef struct {
+    UData dat;
+    a_u8 tag;
+} TData;
+
 /**
  ** Volatile expressions are expressions presumed to be destroyed across
  ** any unrelated operations. Nonvolatile expressions are required to
  ** retain the values across any operations.
  */
 enum ExprTag {
-    EXPR_UNIT,
-/*==============================Constants===============================*/
-    /**
-     ** Nil constant expression.
-     ** REPR: nil
-     */
-    EXPR_NIL,
-    /**
-     ** Boolean constant expression.
-     ** REPR: false/true
-     */
-    EXPR_FALSE, EXPR_TRUE,
-    /**
-     ** Integer constant expression.
-     ** REPR: idat
-     *@param _i the integer constant.
-     */
-    EXPR_INT,
-    /**
-     ** Float constant expression.
-     ** REPR: ndat
-     *@param _n the float constant.
-     */
-    EXPR_FLOAT,
-    /**
-     ** String constant expression.
-     ** REPR: sdat
-     *@param _s the string constant.
-     */
-    EXPR_STR,
 /*==========================Bind Expressions============================*/
     /**
      ** The expression from a local variable.
@@ -110,7 +120,7 @@ enum ExprTag {
      *@param _fval true if value needs drop.
      *@param _fsym true if it is a named register.
      */
-    EXPR_REG,
+    EXPR_REG = CONST__COUNT,
     /**
      ** The expression bind to a capture value.
      ** REPR: C[udat1]
@@ -271,26 +281,32 @@ static_assert(EXPR_NTMPC + 1 == EXPR_VNTMPC);
 
 struct ExprDesc {
     union {
-        a_int idat;
-        a_float ndat;
-        GStr* sdat;
-        struct { /* Universal data */
-            a_u32 udat1;
-            a_u32 udat2;
-        };
-    };
-    a_u8 tag;
-    union {
-        a_u8 flags;
         struct {
-            a_u8 fval: 1; /* Used for value drop mark. */
-            a_u8 fkey: 1; /* Used for key drop mark. */
-            a_u8 fsym: 1; /* Used for symbol mark or shared mark. */
-            a_u8 fupk: 1; /* Used for unpack-able mark. */
-            a_u8 fucf: 1; /* Used for unreachable control flow mark. */
+            union {
+                a_int idat;
+                a_float ndat;
+                GStr* sdat;
+                UData udat;
+                struct { /* Universal data */
+                    a_u32 udat1;
+                    a_u32 udat2;
+                };
+            };
+            a_u8 tag;
+            union {
+                a_u8 flags;
+                struct {
+                    a_u8 fval: 1; /* Used for value drop mark. */
+                    a_u8 fkey: 1; /* Used for key drop mark. */
+                    a_u8 fsym: 1; /* Used for symbol mark or shared mark. */
+                    a_u8 fupk: 1; /* Used for unpack-able mark. */
+                    a_u8 fucf: 1; /* Used for unreachable control flow mark. */
+                };
+            };
+            a_line line;
         };
+        TData tdat;
     };
-    a_line line;
 };
 
 typedef ExprDesc Expr[1];
@@ -343,7 +359,7 @@ enum SymKind {
      ** Local variable.
      *@param index the register index.
      */
-    SYM_LOCAL,
+    SYM_LOCAL = CONST__COUNT,
     /**
      ** The top capture value.
      *@param index the capture index in top as_scope.
@@ -379,11 +395,19 @@ typedef union {
  ** Storage compile-time metadata of named symbol in chunk.
  */
 struct Sym {
-    a_u8 tag; /* The tag of symbol kind. */
-    a_u8 scope; /* The as_scope of symbol belongs to. */
-    a_u8 status; /* The status of symbol. */
-    SymMods mods; /* The modifiers of symbol. */
-    a_u32 index; /* Variant uses for different symbol tag. */
+    union {
+        struct {
+            union {
+                a_u32 index; /* Variant uses for different symbol tag. */
+                UData udat;
+            };
+            a_u8 tag; /* The tag of symbol kind. */
+            a_u8 scope; /* The as_scope of symbol belongs to. */
+            a_u8 status; /* The status of symbol. */
+            SymMods mods; /* The modifiers of symbol. */
+        };
+        TData tdat;
+    };
     GStr* name; /* The symbol name. */
 };
 
