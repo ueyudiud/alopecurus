@@ -15,7 +15,6 @@ intern void ai_type_boost(a_henv env);
 intern a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
 intern a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
 intern a_bool ai_type_getls(a_henv env, GType* self, a_lstr k, Value* pv);
-intern a_bool ai_type_refs_or_empty(a_henv env, GType* self, GStr* k, MNode** pe);
 intern a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv);
 intern void ai_type_sets(a_henv env, GType* self, GStr* key, Value val);
 intern Value* ai_type_refls(a_henv env, GType* self, a_lstr k);
@@ -40,8 +39,6 @@ struct MNode {
     a_u32 nchg;             \
     /* Fast TM flags */     \
     a_u32 ftmz;             \
-
-#define TYPE_CAT_BASIC u16c(0x0001)
 
 /* Basic type */
 typedef struct {

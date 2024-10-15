@@ -50,6 +50,8 @@ GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, 
 }
 
 GType* ai_itype_new(a_henv env, Impl impl) {
+    assume(!(impl.flags & IMPL_FLAG_DYNAMIC), "dynamic flag is not supported by itype.");
+
     a_usize size = sizeof(GIType);
 
     GType* self = ai_mem_alloc(env, size);
@@ -113,7 +115,7 @@ static a_bool type_needs_grow(GType* self) {
     return self->len >= (self->hmask + 1) / 4 * 3;
 }
 
-a_bool ai_type_refs_or_empty(unused a_henv env, GType* self, GStr* key, MNode** pnode) {
+static a_bool type_ref(unused a_henv env, GType* self, GStr* key, MNode** pnode) {
     if (self->len == 0) {
         *pnode = null;
         return true;
@@ -151,7 +153,7 @@ a_bool ai_type_refs_or_empty(unused a_henv env, GType* self, GStr* key, MNode** 
     }
 }
 
-static MNode* type_ref_empty(GType* self, GStr* key) {
+static MNode* type_reserve(GType* self, GStr* key) {
     a_u32 index = key->hash & self->hmask;
     a_u32 perturb = key->hash;
 
@@ -171,7 +173,7 @@ static MNode* type_ref_empty(GType* self, GStr* key) {
 }
 
 static void type_put(a_henv env, GType* self, GStr* key, Value val) {
-    MNode* field = type_ref_empty(self, key);
+    MNode* field = type_reserve(self, key);
     field->key = key;
     v_set(env, &field->value, val);
 }
@@ -214,7 +216,7 @@ a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv) {
 
 void ai_type_sets(a_henv env, GType* self, GStr* key, Value val) {
     MNode* node;
-    if (ai_type_refs_or_empty(env, self, key, &node)) {
+    if (type_ref(env, self, key, &node)) {
         if (node != null) {
             node->key = key;
             v_set(env, &node->value, val);
@@ -248,7 +250,7 @@ Value* ai_type_refls(a_henv env, GType* self, a_lstr k) {
 
     GStr* str = ai_str_get_or_null_with_hash(env, k, hash);
     if (str != null) {
-        if (!ai_type_refs_or_empty(env, self, str, &node)) {
+        if (!type_ref(env, self, str, &node)) {
             return &node->value;
         }
 
@@ -263,7 +265,7 @@ Value* ai_type_refls(a_henv env, GType* self, a_lstr k) {
     }
 
     str = ai_str_get_or_new(env, k);
-    node = type_ref_empty(self, str);
+    node = type_reserve(self, str);
 
 place:
     node->key = str;
