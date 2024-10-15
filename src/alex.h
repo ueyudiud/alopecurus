@@ -34,14 +34,13 @@ intern a_i32 ai_lex_peek2(Lexer* lex, a_u32 line);
 static_assert(cast(a_u32, TK_if) == cast(a_u32, STR_if));
 
 struct Token {
-    a_i32 tag;
-    a_line line;
     union {
         a_int as_int;
-        a_uint as_uint;
         a_float as_float;
         GStr* as_str;
     };
+    a_i32 tag;
+    a_line line;
 };
 
 typedef struct {
@@ -58,7 +57,7 @@ struct Lexer {
     Buf buf[1];
     char const* file;
     a_line line;
-    a_i32 _char; /* Next character. */
+    a_i32 next; /* Next character. */
     Token ahead[2];
     StrSet strs;
 };

@@ -19,8 +19,8 @@ static a_noret l_foreign_error(Lexer* lex) {
 }
 
 always_inline a_i32 l_poll_unchecked(Lexer* lex) {
-    a_i32 ch = lex->_char;
-    lex->_char = ai_io_igetc(&lex->in);
+    a_i32 ch = lex->next;
+    lex->next = ai_io_igetc(&lex->in);
     return ch;
 }
 
@@ -28,10 +28,10 @@ static void l_back(Lexer* lex, a_i32 ch) {
     assume(ch >= 0, "cannot unwind error.");
     lex->in.ptr -= 1;
     lex->in.len += 1;
-    lex->_char = ch;
+    lex->next = ch;
 }
 
-#define l_peek(lex) ((lex)->_char)
+#define l_peek(lex) ((lex)->next)
 
 static a_i32 l_poll(Lexer* lex) {
 	a_i32 ch = l_poll_unchecked(lex);
