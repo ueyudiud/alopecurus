@@ -66,7 +66,7 @@ struct GFun {
     GOBJ_STRUCT_HEADER;
     a_u32 ncap;
     a_u16 flags;
-    /* Function dbg_name. */
+    /* Function name. */
     a_u16 fname;
     union {
         a_cfun fptr;

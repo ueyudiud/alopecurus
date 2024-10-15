@@ -14,7 +14,7 @@ always_inline char const* ai_dbg_get_func_name(a_henv env, Frame* frame) {
 	GFun* fun = ai_dbg_get_func(env, frame);
 	if (fun == null) return null;
 	if (fun->flags & FUN_FLAG_NATIVE) {
-		//TODO get native function dbg_name.
+		//TODO get native function name.
 		return null;
 	}
 	GStr* name = fun->proto->dbg_name;

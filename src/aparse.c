@@ -704,8 +704,8 @@ static a_u32 lookup_symbol(Parser* par, GStr* name) {
  ** Lookup symbol in global as_scope.
  *@param par the parser.
  *@param e the expression for output.
- *@param name the lookup dbg_name.
- *@param line the line number of dbg_name reference.
+ *@param name the lookup name.
+ *@param line the line number of name reference.
  */
 static void expr_symbol(Parser* par, OutExpr e, GStr* name, a_line line) {
 	a_u32 id = lookup_symbol(par, name);
@@ -2801,7 +2801,7 @@ static void parser_start(Parser* par) {
 
 	par->gvar_name = ai_lex_to_str(lex(par), nt2lstr(ENV_NAME));
 
-	/* Add predefined '_ENV' dbg_name. */
+	/* Add predefined environment name. */
 	syms_push(par, (Sym) {
 		.tag = SYM_CAPTURE,
 		.scope = 0,

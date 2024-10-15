@@ -82,7 +82,7 @@ typedef enum ext(PROCESS_INFORMATION_CLASS) {
 WINSYSAPI HMODULE WINAPI GetModuleHandleA(LPCSTR);
 WINSYSAPI FARPROC WINAPI GetProcAddress(HANDLE, LPCSTR);
 
-#define CTX_DCL(dbg_name,owner,rtype,ptypes) static rtype (*WINAPI ext(dbg_name)) ptypes;
+#define CTX_DCL(name,owner,rtype,ptypes) static rtype (*WINAPI ext(name)) ptypes;
 IMPORT_LIST(CTX_DCL)
 #undef CTX_DCL
 
@@ -110,8 +110,8 @@ a_msg ai_ctx_init(void) {
 	HMODULE hntdll = GetModuleHandleA("ntdll.dll");
 	if (hntdll == null) return ALO_EOUTER;
 
-#define CTX_GET(dbg_name,mod,...) run { \
-	void* _addr = cast(void*, GetProcAddress(mod, #dbg_name)); \
+#define CTX_GET(name,mod,...) run { \
+	void* _addr = cast(void*, GetProcAddress(mod, #name)); \
 	if (_addr == null) return ALO_EOUTER; \
 	ext(dbg_name) = _addr; \
 }

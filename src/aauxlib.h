@@ -64,7 +64,7 @@ ALO_EXPORT void (aloL_bufpush)(a_henv env, aloL_Buf* b);
 ALO_EXPORT void (aloL_bufstr)(a_henv env, aloL_Buf* b);
 
 struct aloL_Entry {
-	char const* name; /* Entry dbg_name. */
+	char const* name; /* Entry name. */
 	a_cfun fptr; /* Function pointer, null for create entry only. */
 };
 

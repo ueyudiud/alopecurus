@@ -211,7 +211,7 @@ static a_msg l_try_comp_reps(a_henv env, char const* prompt, a_bool* peval) {
 again:
 	ctx = l_lines.head;
 
-	/* stack: dbg_name */
+	/* stack: name */
 	msg = alo_compile(
         env,
         l_read_lines,

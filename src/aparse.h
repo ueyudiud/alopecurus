@@ -132,7 +132,7 @@ enum ExprTag {
     /**
      ** The reference of export symbol.
      ** repr: _ENV[sdat]
-     *@param _d1 the const index of variable dbg_name.
+     *@param _d1 the const index of variable name.
      *@param _d2 the symbol of variable.
      *@param _fsym if symbol exists.
      */
