@@ -62,4 +62,6 @@ always_inline Value api_decr_stack(a_henv env) {
     return v;
 }
 
+intern char const ai_api_version[];
+
 #endif /* aapi_h_ */

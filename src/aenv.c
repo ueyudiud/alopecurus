@@ -15,6 +15,7 @@
 #include "actx.h"
 #include "amem.h"
 #include "agc.h"
+#include "aapi.h"
 
 #include "aenv.h"
 
@@ -204,6 +205,7 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	GRoute* env = &mr->route;
 
     init(gbl) {
+        .version = ai_api_version,
         .alloc_ = *af,
         .alloc_ctx = ac,
         .active = env,

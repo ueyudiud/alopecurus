@@ -66,21 +66,35 @@ a_msg alo_init(void) {
  */
 a_bool alo_attri(unused a_henv env, a_enum n, a_int* pi) {
 	switch (n) {
-		case ALO_ATTR_VERSION:
-			*pi = ALO_VERSION_NUMBER;
-			return false;
-		case ALO_ATTR_VARIANT:
-			*pi = ALO_VARIANT;
-			return false;
+        case ALO_ATTR_VERSION:
+            *pi = ALO_VERSION_NUMBER;
+            return false;
+        case ALO_ATTR_VARIANT:
+            *pi = ALO_VARIANT;
+            return false;
         case ALO_ATTR_YIELD:
             *pi = true;
             return false;
         case ALO_ATTR_ASYNC:
             *pi = true;
             return false;
-		default:
-			return true;
+        default:
+            return true;
 	}
+}
+
+char const ai_api_version[] = ALO_VERSION_FULL_STRING(".");
+
+/**
+ ** Get semantic version of environment or context.
+ * @param env the environment, optional.
+ * @return the version pointer.
+ */
+char const* alo_version(a_henv env) {
+    if (env == null)
+        return ai_api_version;
+    Global* gbl = G(env);
+    return gbl->version;
 }
 
 /**
@@ -376,7 +390,10 @@ char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 
 char const* alo_pushntstr(a_henv env, char const* src) {
     api_check(src != null, "string source violates contract.");
-	return alo_pushstr(env, src, strlen(src));
+    GStr* str = ai_str_get_or_new(env, nt2lstr(src));
+    v_set_str(env, api_incr_stack(env), str);
+    ai_gc_trigger(env);
+    return str2ntstr(str);
 }
 
 char const* alo_pushfstr(a_henv env, char const* fmt, ...) {

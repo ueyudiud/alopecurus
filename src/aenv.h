@@ -97,6 +97,7 @@ typedef struct {
 
 struct Global {
     a_byte global[0];
+    char const* version;
     Alloc alloc_;
     void* alloc_ctx;
     a_hfun hook_;
@@ -127,6 +128,8 @@ struct Global {
     GStr* fast_strs[STR__COUNT];
     GBType fast_types[PTYPE_COUNT];
 };
+
+static_assert(offsetof(Global, version) == 0); /* 'version' must be head of global. */
 
 #define RFLAG_COUNT_VARARG UINT8_MAX
 
