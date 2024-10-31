@@ -105,6 +105,6 @@ always_inline void v_set_type(a_henv env, Value* d, GType* o) {
     v_set(env, d, v);
 }
 
-#define type_size(e) align_to(sizeof(GUType) + (e), sizeof(a_usize))
+#define type_size(e) align_forward(sizeof(GUType) + (e), sizeof(a_usize))
 
 #endif /* atype_h_ */

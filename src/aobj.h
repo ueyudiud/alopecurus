@@ -42,8 +42,6 @@ static_assert(sizeof(Value) == 8);
 
 #define ALO_TBUF 14
 
-#define VALUE_TAG_SHIFT 47
-
 enum {
     T_NIL = 0,
     T_FALSE = 1,
@@ -79,13 +77,14 @@ enum {
 /* Defined in aenv.h */
 always_inline void v_check_alive(a_henv env, Value v);
 
-#define V_TAG_MASK (~u64c(0) << VALUE_TAG_SHIFT)
-#define V_PAYLOAD_MASK (~V_TAG_MASK)
+#define V_TAG_SHIFT 47
+#define V_TAG_MASK (~u64c(0) << V_TAG_SHIFT)
+#define V_DATA_MASK (~V_TAG_MASK)
 #define V_INT_MASK (~(~u64c(0) << 32))
 
-#define V_STENCIL(t) (~cast(a_u64, t) << VALUE_TAG_SHIFT)
+#define V_STENCIL(t) (~cast(a_u64, t) << V_TAG_SHIFT)
 #define V_GET_TAG(r) (~(r) >> 47)
-#define V_GET_PAYLOAD(r) ((r) & V_PAYLOAD_MASK)
+#define V_GET_DATA(r) ((r) & V_DATA_MASK)
 #define V_IS(r,t) (((r) & V_TAG_MASK) == V_STENCIL(t))
 
 always_inline a_u64 v_stencil(a_enum tag) {
@@ -94,7 +93,7 @@ always_inline a_u64 v_stencil(a_enum tag) {
 }
 
 always_inline a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
-    assume((payload & ~V_PAYLOAD_MASK) == 0, "bad value payload.");
+    assume((payload & ~V_DATA_MASK) == 0, "bad value payload.");
     return v_stencil(tag) | payload;
 }
 
@@ -103,7 +102,7 @@ always_inline a_u64 v_box_nan_raw_min(a_enum tag) {
 }
 
 always_inline a_u64 v_box_nan_raw_max(a_enum tag) {
-    return v_stencil(tag) | V_PAYLOAD_MASK;
+    return v_stencil(tag) | V_DATA_MASK;
 }
 
 #define v_new(v) ((Value) {v})
@@ -114,7 +113,7 @@ always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
 
 #define v_get_tag(v) V_GET_TAG((v)._)
 
-#define v_get_payload(v) V_GET_PAYLOAD((v)._)
+#define v_get_payload(v) V_GET_DATA((v)._)
 
 #define v_is(v,t) V_IS((v)._, t)
 
@@ -207,7 +206,7 @@ always_inline void v_set_nil_ranged(Value* l, Value* h) {
  *=========================================================*/
 
 #define V_FALSE V_STENCIL(T_FALSE)
-#define V_TRUE (V_STENCIL(T_TRUE) | V_PAYLOAD_MASK)
+#define V_TRUE (V_STENCIL(T_TRUE) | V_DATA_MASK)
 #define V_FLOAT_MAX u64c(0xfff8000000000000)
 
 static_assert(V_IS(V_FALSE, T_FALSE));

@@ -208,7 +208,6 @@ always_inline char const* v_name(Global* gbl, Value v) {
         case T_PTR: return "ptr";
         case T_OBJ: return g_name(gbl, v_as_obj(v));
         case T_FLOAT: return "float";
-        default: unreachable();
     }
 }
 

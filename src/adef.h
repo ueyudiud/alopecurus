@@ -185,18 +185,18 @@ always_inline a_noret trap() {
 intern a_noret ai_dbg_panic(char const* fmt, ...);
 
 #if defined(ALOI_CHECK_ASSUME)
-# define assume_only(s...) s
+# define assume_only(...) __VA_ARGS__
 #else
 # define assume_only(...)
 #endif
 
 #if defined(ALOI_CHECK_ASSUME) && defined(ALO_LIB)
-# define panic(m...) ai_dbg_panic(""m)
+# define panic(...) ai_dbg_panic(""__VA_ARGS__)
 #else
 # define panic(...) unreachable()
 #endif
 
-#define assume(e,m...) quiet((e) || (panic(m), false))
+#define assume(e,...) quiet((e) || (panic(__VA_ARGS__), false))
 
 always_inline a_lstr nt2lstr(char const* str) {
     return (a_lstr) { str, strlen(str) };
@@ -227,6 +227,6 @@ always_inline void memclr(void* dst, a_usize len) {
 #define try_sub(a,b) ({ typeof((a) - (b)) _c; try (ckd_sub(&_c, a, b)); _c; })
 #define try_mul(a,b) ({ typeof((a) * (b)) _c; try (ckd_mul(&_c, a, b)); _c; })
 
-#define align_to(s,g) (((s) + (g) - 1) & ~((g) - 1))
+#define align_forward(s,g) (((s) + (g) - 1) & ~((g) - 1))
 
 #endif /* adef_h_ */
