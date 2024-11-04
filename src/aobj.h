@@ -113,7 +113,7 @@ always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
 
 #define v_get_tag(v) V_GET_TAG((v)._)
 
-#define v_get_payload(v) V_GET_DATA((v)._)
+#define v_get_data(v) V_GET_DATA((v)._)
 
 #define v_is(v,t) V_IS((v)._, t)
 
@@ -262,7 +262,7 @@ always_inline a_float v_as_num(Value v) {
 
 always_inline void* v_as_ptr(Value v) {
     assume(v_is_ptr(v), "not pointer.");
-    return int2ptr(void, v_get_payload(v));
+    return int2ptr(void, v_get_data(v));
 }
 
 #define v_of_ptr(v) v_box_nan(T_PTR, ptr2int(v))
@@ -279,12 +279,13 @@ always_inline void v_set_ptr(Value* d, void const* v) {
 
 /* Identity hashcode. */
 always_inline a_hash v_trivial_hash_unchecked(Value v) {
-    a_u32 h = v._ * u32c(0xcc9e2d51);
-    h = (h << 15) | (h >> 17);
-    h *= u32c(0x1b873593);
+    a_u32 h = v._ ^ (v._ >> 32);
+    h *= u32c(0x1000193);
+    h += h << 13;
+    h ^= h >> 7;
+    h += h << 3;
     h ^= h >> 17;
-    h *= u32c(0x85ebca6b);
-    h ^= h >> 13;
+    h += h << 5;
     return h;
 }
 
@@ -391,7 +392,7 @@ struct Impl_ {
 
 always_inline a_gptr v_as_obj(Value v) {
     assume(v_is_obj(v), "not object.");
-    return int2ptr(GObj, v_get_payload(v));
+    return int2ptr(GObj, v_get_data(v));
 }
 
 always_inline Value v_of_obj_(a_gptr o, a_enum t) {
