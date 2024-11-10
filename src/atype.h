@@ -10,7 +10,7 @@
 typedef struct MNode MNode;
 
 intern GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot);
-intern GType* ai_itype_new(a_henv env, Impl impl);
+intern GType* ai_itype_new(a_henv env, void const* ksrc, a_usize klen);
 intern void ai_type_boost(a_henv env);
 intern a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
 intern a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
@@ -51,13 +51,13 @@ typedef struct {
 /* User defined type */
 typedef struct {
     GTYPE_STRUCT_HEADER;
-    Impl body;
+    Klass body;
 } GIType;
 
 /* User defined type */
 typedef struct {
     GTYPE_STRUCT_HEADER;
-    Impl body;
+    KClose body;
     a_u32 block_size;
     a_u32 num_slot;
     a_usize user[0];
@@ -92,12 +92,12 @@ always_inline a_bool v_is_type(Value v) {
 
 always_inline GType* v_as_type(Value v) {
     assume(v_is_type(v), "not type.");
-    return g_as(GType, v_as_obj(v));
+    return g_as(GType, v_as_ref(v));
 }
 
 always_inline Value v_of_type(GType* o) {
     assume(g_is_type(o), "invalid instance.");
-    return v_of_obj_(o, T_TYPE);
+    return v_of_ref(o, T_TYPE);
 }
 
 always_inline void v_set_type(a_henv env, Value* d, GType* o) {

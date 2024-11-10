@@ -12,7 +12,7 @@
 
 #include "atuple.h"
 
-static Impl const tuple_impl;
+static KHeap const tuple_klass;
 
 #if ALO_M64
 # define TUPLE_MAX_LEN cast(a_u32, INT32_MAX)
@@ -27,7 +27,7 @@ GTuple* ai_tuple_new(a_henv env, Value const* src, a_ulen len) {
 
     GTuple* self = ai_mem_alloc(env, tuple_size(len));
 
-	self->impl = &tuple_impl;
+	self->klass = &tuple_klass;
     self->len = len;
 	self->hash = 0;
 	v_cpy_all(env, self->ptr, src, len);
@@ -97,15 +97,15 @@ static void tuple_drop(Global* gbl, GTuple* self) {
 static void tuple_mark(Global* gbl, GTuple* self) {
     a_u32 len = self->len;
     for (a_u32 i = 0; i < len; ++i) {
-        ai_gc_trace_mark_val(gbl, self->ptr[i]);
+        v_trace(gbl, self->ptr[i]);
     }
     ai_gc_trace_work(gbl, tuple_size(self->len));
 }
 
-static Impl const tuple_impl = {
+static KHeap const tuple_klass = {
     .tag = ALO_TTUPLE,
     .name = "tuple",
-    .flags = IMPL_FLAG_NONE,
+    .flags = KLASS_FLAG_NONE,
     .drop = tuple_drop,
     .mark = tuple_mark
 };

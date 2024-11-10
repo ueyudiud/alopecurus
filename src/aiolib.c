@@ -126,7 +126,7 @@ static a_msg file_open0(a_henv env, GFile** pfile) {
 }
 
 static void file_mark0(Global* gbl, GFile* self) {
-    ai_gc_trace_mark(gbl, g_type(gbl, self));
+    g_trace(gbl, g_type(gbl, self));
     ai_gc_trace_work(gbl, sizeof(GFile));
 }
 
@@ -145,7 +145,7 @@ static void file_drop0(Global* gbl, GFile* self) {
 
 static GFile* check_file(a_henv env, a_ilen id) {
     Value v = api_elem(env, id);
-    return g_as(GFile, v_as_obj(v));
+    return g_as(GFile, v_as_ref(v));
 }
 
 static GFile* check_open_file(a_henv env, a_ilen id) {

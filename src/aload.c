@@ -170,15 +170,13 @@ static void load_chunk(unused a_henv env, void* ctx) {
     ai_gc_register_normals(ic->in.env, &ic->rq);
 }
 
-static void load_mark(Global* gbl, void* ctx) {
-    InCtx* ic = ctx;
-	rq_for (obj, &ic->rq) {
+static void load_mark(Global* gbl, InCtx* ctx) {
+	rq_for (obj, &ctx->rq) {
 		GProto* meta = g_as(GProto, obj);
 		for (a_u32 i = 0; i < meta->nconst; ++i) {
-			ai_gc_trace_mark_val(gbl, meta->consts[i]);
+            v_trace(gbl, meta->consts[i]);
 		}
 	}
-    g_set_stack_white(ic);
 }
 
 static void load_except(a_henv env, void* ctx, unused a_msg msg) {
@@ -190,28 +188,24 @@ static void load_except(a_henv env, void* ctx, unused a_msg msg) {
 	}
 }
 
-static Impl const load_impl = {
-    .tag = ALO_TPTR,
-    .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
-    .mark = load_mark
+static KStack const load_klass = {
+    .tag = ALO_TUSER,
+    .flags = KLASS_FLAG_PLAIN,
+    .name = null,
+    .mark = load_mark,
+    .catch = load_except
 };
 
 a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags) {
     InCtx ic = {
-        .impl = &load_impl,
+        .klass = &load_klass,
         .flags = flags
     };
-    g_set_stack_white(&ic);
 	rq_init(&ic.rq);
     ai_io_iinit(env, fun, ctx, &ic.in);
 
-    Value* p = env->stack.top++;
-    v_set_other(env, p, &ic);
+    a_msg msg = ai_env_catch(env, load_chunk, ic);
 
-    a_msg msg = ai_env_protect(env, load_chunk, load_except, &ic);
-
-    v_set_nil(--env->stack.top);
-    
     if (likely(msg == ALO_SOK)) {
         *pval = g_as(GProto, ic.rq.head)->cache;
     }

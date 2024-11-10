@@ -12,20 +12,17 @@
 #include "atype.h"
 #include "astk.h"
 
-#define GLOBAL_FLAG_INCRGC u16c(0x0001)
-#define GLOBAL_FLAG_FULLGC u16c(0x0002)
-#define GLOBAL_FLAG_EMERGENCYGC u16c(0x0004)
-#define GLOBAL_FLAG_DISABLE_GC u16c(0x0008)
-
 intern GRoute* ai_env_new(a_henv env, a_usize stack_size);
 intern a_henv ai_env_mroute(Global* gbl);
 intern a_msg ai_env_resume(a_henv env, GRoute* self);
 intern void ai_env_yield(a_henv env);
 intern a_msg ai_env_protect(a_henv env, a_pfun pfun, a_efun efun, void* ctx);
+intern a_msg ai_env_catch_(a_henv env, a_pfun pfun, a_gptr ctx);
 intern a_noret ai_env_raise(a_henv env, a_msg msg);
 
-#define FRAME_FLAG_NONE 0x00
+#define ai_env_catch(env,fun,ctx) ai_env_catch_(env, fun, g_as_ref(&(ctx)))
 
+#define FRAME_FLAG_NONE 0x00
 #define FRAME_FLAG_TRIM_RET 0x01
 #define FRAME_FLAG_TAIL_CALL 0x02
 #define FRAME_FLAG_META_CALL 0x04
@@ -52,11 +49,12 @@ struct alo_Env {
     GRoute* caller;
     Frame* frame;
     Stack stack;
+    a_gclist gc_stack;
     a_efun errf;
     void* errc;
     Value error;
     a_u16 flags;
-    a_u8 status;
+    a_i8 status;
     PCtx pctx;
     RcCap* open_caps;
     Frame base_frame;
@@ -115,6 +113,9 @@ struct Global {
     RcCap* cap_cache;
     a_trmark tr_gray;
     a_trmark tr_regray;
+    a_trmark tr_weak;
+    a_trmark tr_blur;
+    a_trmark tr_phantom;
     GStr* nomem_error;
     StrCache str_cache;
     Value global_value;
@@ -148,17 +149,17 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
 #define g_is_route(o) g_is(o, ALO_TROUTE)
 
 always_inline a_bool v_is_route(Value v) {
-    return v_is(v, T_OTHER) && g_is_route(v_as_obj(v));
+    return v_is(v, T_OTHER) && g_is_route(v_as_ref(v));
 }
 
 always_inline GRoute* v_as_route(Value v) {
     assume(v_is_route(v), "not route");
-    return g_as(GRoute, v_as_obj(v));
+    return g_as(GRoute, v_as_ref(v));
 }
 
 always_inline Value v_of_route(GRoute* o) {
     assume(g_is_route(o), "invalid instance.");
-    return v_of_obj_(o, T_OTHER);
+    return v_of_ref(o, T_OTHER);
 }
 
 always_inline void v_set_route(a_henv env, Value* d, GRoute* o) {
@@ -169,20 +170,21 @@ always_inline void v_set_route(a_henv env, Value* d, GRoute* o) {
 #define route_size() sizeof(GRoute)
 
 always_inline GType* g_type(Global* gbl, a_gptr o) {
-    a_u32 tag = o->impl->tag;
+    Klass const* k = g_klass(o);
+    a_u32 tag = k->tag;
     if (likely(tag < PTYPE_COUNT)) {
         return g_ptype(gbl, tag);
     }
-    return g_as(GType, from_member(GUType, body, o->impl));
+    return g_as(GType, from_member(GUType, body, k));
 }
 
-#define g_type(env,p) g_type(G(env), g_as_obj(p))
+#define g_type(env,p) g_type(G(env), g_as_ref(p))
 
 always_inline char const* g_name(unused Global* gbl, a_gptr p) {
-    return g_impl(p)->name ?: "user";
+    return g_klass(p)->name ?: "user";
 }
 
-#define g_name(env,p) g_name(G(env), g_as_obj(p))
+#define g_name(env,p) g_name(G(env), g_as_ref(p))
 
 always_inline GType* v_type(Global* gbl, Value v) {
     switch (v_get_tag(v)) {
@@ -191,7 +193,7 @@ always_inline GType* v_type(Global* gbl, Value v) {
         case T_TRUE: return g_ptype(gbl, ALO_TBOOL);
         case T_INT: return g_ptype(gbl, ALO_TINT);
         case T_PTR: return g_ptype(gbl, ALO_TPTR);
-        case T_OBJ: return g_type(gbl, v_as_obj(v));
+        case T_OBJ: return g_type(gbl, v_as_ref(v));
         case T_FLOAT: return g_ptype(gbl, ALO_TFLOAT);
         default: unreachable();
     }
@@ -206,8 +208,9 @@ always_inline char const* v_name(Global* gbl, Value v) {
         case T_TRUE: return "bool";
         case T_INT: return "int";
         case T_PTR: return "ptr";
-        case T_OBJ: return g_name(gbl, v_as_obj(v));
+        case T_OBJ: return g_name(gbl, v_as_ref(v));
         case T_FLOAT: return "float";
+        default: unreachable();
     }
 }
 
@@ -242,7 +245,7 @@ always_inline StkPtr val2stk(a_henv env, Value* v) {
 always_inline Value* stk2val(a_henv env, StkPtr p) {
 	Value* v;
 #if ALO_STACK_RELOC
-	v = ptr_disp(Value, env->stack.impl, p);
+	v = addr_add(Value, env->stack.impl, p);
 #else
 	quiet(env);
 	v = p;
@@ -272,8 +275,9 @@ always_inline void ai_env_pop_error(a_henv env, Value* d) {
 }
 
 enum {
-    GCSTEP_PROPAGATE,
-    GCSTEP_PROPAGATE_ATOMIC,
+    GCSTEP_TRACE,
+    GCSTEP_TRACE_ATOMIC,
+    GCSTEP_TRACE_WEAK,
     GCSTEP_SWEEP_NORMAL,
     GCSTEP_SWEEP_ATOMIC,
     GCSTEP_CLOSE,
@@ -299,28 +303,28 @@ always_inline a_bool g_has_black_color(a_gptr o) {
     return (o->tnext & BLACK_COLOR) != 0;
 }
 
-#define g_has_black_color(o) g_has_black_color(g_as_obj(o))
+#define g_has_black_color(o) g_has_black_color(g_as_ref(o))
 
 always_inline a_bool g_has_gray_color(a_gptr o) {
     return (o->tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
 
-#define g_has_gray_color(o) g_has_gray_color(g_as_obj(o))
+#define g_has_gray_color(o) g_has_gray_color(g_as_ref(o))
 
 always_inline a_bool g_has_white_color(Global* gbl, a_gptr o) {
     return (o->tnext & white_color(gbl)) != 0;
 }
 
-#define g_has_white_color(gbl,o) g_has_white_color(gbl, g_as_obj(o))
+#define g_has_white_color(gbl,o) g_has_white_color(gbl, g_as_ref(o))
 
 always_inline a_bool g_has_other_color(Global* gbl, a_gptr o) {
     return (o->tnext & other_color(gbl)) != 0;
 }
 
-#define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_obj(v))
+#define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_ref(v))
 
 always_inline a_bool g_has_valid_color(Global* gbl, a_gptr o) {
-    return !g_has_other_color(gbl, o) || impl_has_flag(o->impl, IMPL_FLAG_STACK_ALLOC);
+    return !g_has_other_color(gbl, o);
 }
 
 always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o) {
@@ -328,11 +332,20 @@ always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o
     return (o->tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
 
-#define g_has_white_color_within_assume_alive(gbl,o) g_has_white_color_within_assume_alive(gbl, g_as_obj(o))
+always_inline a_bool v_is_alive(Global* gbl, Value v) {
+    if (!v_is_ref(v) || v_is_str(v)) {
+        return true;
+    }
+    a_gptr o = v_as_ref(v);
+    if (v_is(v, T_OTHER) && k_has_flag(g_klass(o), KLASS_FLAG_VALUE)) {
+        return true;
+    }
+    return !g_has_white_color_within_assume_alive(gbl, o);
+}
 
 always_inline void v_check_alive(a_henv env, Value v) {
-    if (v_is_obj(v)) {
-        a_gptr p = v_as_obj(v);
+    if (v_is_ref(v)) {
+        a_gptr p = v_as_ref(v);
         assume(g_has_valid_color(G(env), p));
     }
 }

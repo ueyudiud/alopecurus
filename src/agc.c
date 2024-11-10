@@ -29,7 +29,7 @@ always_inline void join_gc(a_gclist* list, a_gptr elem) {
 	*list = elem;
 }
 
-#define join_gc(list,elem) join_gc(list, g_as_obj(elem))
+#define join_gc(list,elem) join_gc(list, g_as_ref(elem))
 
 always_inline a_gptr strip_gc(a_gclist* list) {
 	a_gptr elem = *list;
@@ -39,6 +39,12 @@ always_inline a_gptr strip_gc(a_gclist* list) {
 
 always_inline void flip_color(Global* gbl) {
 	gbl->white_bit = cast(a_u8, other_color(gbl));
+}
+
+void ai_gc_push_stack_(a_henv env, a_gptr obj) {
+    g_fetch(obj, mark);
+
+    join_gc(&env->gc_stack, obj);
 }
 
 void ai_gc_register_normal_(a_henv env, a_gptr obj) {
@@ -82,8 +88,8 @@ void ai_gc_trace_mark_(Global* gbl, a_gptr obj) {
 	/* Tested in inline function. */
 	assume(g_has_white_color(gbl, obj));
 	/* Mark object lazily or greedily. */
-	Impl const* impl = obj->impl;
-	if (impl_has_flag(impl, IMPL_FLAG_GREEDY_MARK)) {
+	Klass const* klass = g_klass(obj);
+	if (k_has_flag(klass, KLASS_FLAG_PLAIN)) {
 		g_set_gray(obj); /* Mark object to gray before propagation. */
 		really_mark_object(gbl, obj);
 		/* Else keep object as gray since it has no mark function to remark. */
@@ -99,7 +105,7 @@ static void drop_object(Global* gbl, a_gptr obj) {
     (*g_fetch(obj, drop))(gbl, obj);
 }
 
-static void propagate_once(Global* gbl, a_trmark* list) {
+static void trace_once(Global* gbl, a_trmark* list) {
 	a_gptr obj = strip_trace(list);
 	really_mark_object(gbl, obj);
 }
@@ -137,7 +143,7 @@ static a_bool sweep_till_alive(Global* gbl) {
 
 static a_bool propagate_work(Global* gbl, a_trmark* list) {
 	while (*list != trmark_null) {
-		propagate_once(gbl, list);
+        trace_once(gbl, list);
 		if (gbl->mem_work < 0) return false;
 	}
 	return true;
@@ -173,15 +179,28 @@ static void split_closable(Global* gbl) {
     }
 }
 
+static void trace_toclose(Global* gbl) {
+    for (a_gptr obj = gbl->gc_toclose; obj != null; obj = obj->gnext) {
+        g_trace(gbl, obj);
+    }
+}
+
 static void close_all(Global* gbl) {
     while (gbl->gc_toclose != null) {
         close_once(gbl);
     }
 }
 
-static void propagate_all(Global* gbl, a_trmark* list) {
+static void trace_all(Global* gbl, a_trmark* list) {
 	while (*list != trmark_null) {
-		propagate_once(gbl, list);
+        trace_once(gbl, list);
+	}
+}
+
+static void clear_all(Global* gbl, a_trmark* list) {
+	while (*list != trmark_null) {
+        a_gptr obj = strip_trace(list);
+        (*g_fetch(obj, clear))(gbl, obj);
 	}
 }
 
@@ -198,7 +217,7 @@ static void drop_all(Global* gbl, a_gptr* list) {
 	}
 }
 
-static void halt_propagate(Global* gbl, a_gptr* list) {
+static void halt_trace(Global* gbl, a_gptr* list) {
 	a_trmark white = white_color(gbl);
 	while (*list != null) {
 		a_gptr obj = *list;
@@ -209,18 +228,18 @@ static void halt_propagate(Global* gbl, a_gptr* list) {
 	}
 }
 
-static void begin_propagate(Global* gbl) {
+static void begin_trace(Global* gbl) {
 	gbl->tr_gray = trmark_null;
 	gbl->tr_regray = trmark_null;
 	/* Mark nonvolatile root. */
 	join_trace(&gbl->tr_gray, ai_env_mroute(gbl));
-	if (v_is_obj(gbl->global_value)) {
-		join_trace(&gbl->tr_gray, v_as_obj(gbl->global_value));
+	if (v_is_ref(gbl->global_value)) {
+		join_trace(&gbl->tr_gray, v_as_ref(gbl->global_value));
 	}
     for (a_u32 i = 0; i < PTYPE_COUNT; ++i) {
         join_trace(&gbl->tr_gray, g_ptype(gbl, i));
     }
-	gbl->gcstep = GCSTEP_PROPAGATE;
+	gbl->gcstep = GCSTEP_TRACE;
 }
 
 static void begin_sweep(Global* gbl) {
@@ -240,48 +259,83 @@ static a_bool begin_close(Global* gbl) {
 	}
 }
 
-static void propagate_atomic(Global* gbl) {
-	gbl->gcstep = GCSTEP_PROPAGATE_ATOMIC;
+static void trace_blur(Global* gbl) {
+    a_bool changed = false;
+    do {
+        a_trmark list = gbl->tr_blur;
+        gbl->tr_blur = trmark_null;
+        while (list != trmark_null) {
+            trace_once(gbl, &list);
+            if (gbl->tr_gray != trmark_null) {
+                trace_all(gbl, &gbl->tr_gray);
+                changed = true;
+            }
+        }
+    }
+    while (changed);
+}
+
+static void trace_atomic(Global* gbl) {
+	gbl->gcstep = GCSTEP_TRACE_ATOMIC;
 	/* Mark volatile root. */
-	ai_gc_trace_mark(gbl, gbl->active);
-	if (v_is_obj(gbl->global_value)) {
-		ai_gc_trace_mark(gbl, v_as_obj(gbl->global_value));
+	g_trace(gbl, gbl->active);
+	if (v_is_ref(gbl->global_value)) {
+		g_trace(gbl, v_as_ref(gbl->global_value));
 	}
-	propagate_all(gbl, &gbl->tr_gray);
+    trace_all(gbl, &gbl->tr_gray);
 
 	a_isize old_work = gbl->mem_work;
+
 	a_trmark list = gbl->tr_regray;
 	gbl->tr_regray = trmark_null;
-	propagate_all(gbl, &list);
+    trace_all(gbl, &list);
+    trace_all(gbl, &gbl->tr_gray);
+    trace_blur(gbl);
 
-	propagate_all(gbl, &gbl->tr_gray);
+    /* Here, all strongly accessible objects are traced. */
+    clear_all(gbl, &gbl->tr_weak);
+    clear_all(gbl, &gbl->tr_phantom);
+
+    /* Start weak tracing step */
+    gbl->gcstep = GCSTEP_TRACE_WEAK;
+
+    split_closable(gbl);
+    trace_toclose(gbl);
+
+    trace_all(gbl, &gbl->tr_gray);
+
+    trace_blur(gbl);
+
+    /* Here, all resurrected objects are traced. */
+    clear_all(gbl, &gbl->tr_weak);
+    clear_all(gbl, &gbl->tr_blur);
+    clear_all(gbl, &gbl->tr_phantom);
 
     ai_str_cache_shrink_if_need(gbl);
 
-	gbl->mem_estimate = gbl_mem_total(gbl);
-	flip_color(gbl);
+    gbl->mem_estimate = gbl_mem_total(gbl);
+    flip_color(gbl);
 	gbl->mem_work = old_work;
 }
 
 static void sweep_atomic(Global* gbl) {
 	gbl->gcstep = GCSTEP_SWEEP_ATOMIC;
 	ai_cap_clean(gbl);
-    split_closable(gbl);
 }
 
 static a_bool run_incr_gc(Global* gbl) {
 	switch (gbl->gcstep) {
 		case GCSTEP_PAUSE: {
-			begin_propagate(gbl);
+            begin_trace(gbl);
 			fallthrough;
 		}
-		case GCSTEP_PROPAGATE: {
+		case GCSTEP_TRACE: {
 			if (!propagate_work(gbl, &gbl->tr_gray))
 				return false;
 			fallthrough;
 		}
-		case GCSTEP_PROPAGATE_ATOMIC: {
-			propagate_atomic(gbl);
+		case GCSTEP_TRACE_ATOMIC: {
+            trace_atomic(gbl);
 			begin_sweep(gbl);
 			fallthrough;
 		}
@@ -305,17 +359,18 @@ static a_bool run_incr_gc(Global* gbl) {
 
 static void run_full_gc(Global* gbl) {
 	switch (gbl->gcstep) {
-		case GCSTEP_PROPAGATE: {
+		case GCSTEP_TRACE: {
+            trace_toclose(gbl);
 			flip_color(gbl);
 			fallthrough;
 		}
 		case GCSTEP_SWEEP_NORMAL: {
-			halt_propagate(gbl, &gbl->gc_normal);
+            halt_trace(gbl, &gbl->gc_normal);
 			fallthrough;
 		}
 		default: {
-			begin_propagate(gbl);
-			propagate_atomic(gbl);
+            begin_trace(gbl);
+            trace_atomic(gbl);
 			begin_sweep(gbl);
 			sweep_all(gbl);
 			sweep_atomic(gbl);

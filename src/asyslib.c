@@ -10,7 +10,6 @@
 #include <errno.h>
 
 #include "agc.h"
-#include "avm.h"
 #include "aapi.h"
 
 #include "alolib.h"

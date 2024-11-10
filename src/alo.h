@@ -191,10 +191,12 @@ ALO_EXPORT a_ulen (alo_rotate)(a_henv env, a_ilen id, a_ilen n);
 ALO_EXPORT a_ulen (alo_erase)(a_henv env, a_ilen id, a_ulen n);
 ALO_EXPORT void (alo_newtuple)(a_henv env, a_ulen n);
 ALO_EXPORT void (alo_newlist)(a_henv env, a_ulen n);
-ALO_EXPORT void (alo_newtable)(a_henv env, a_ulen n);
+ALO_EXPORT void (alo_newtablex)(a_henv env, a_ulen n, a_enum m);
 ALO_EXPORT void (alo_newcfun)(a_henv env, a_cfun f, a_ulen n);
 ALO_EXPORT a_henv (alo_newroute)(a_henv env, a_usize ss);
 ALO_EXPORT void* (alo_newuser)(a_henv env, a_ilen id);
+
+#define alo_newtable(env,n) alo_newtablex(env, n, 0)
 
 #define ALO_NEWTYPE_STATIC 0x0001
 

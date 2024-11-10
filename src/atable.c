@@ -14,7 +14,7 @@
 
 #include "atable.h"
 
-static Impl const table_impl;
+static KWeak const table_klass[];
 
 #if ALO_M64
 # define TABLE_MAX_CAP (cast(a_usize, INT32_MAX) + 1)
@@ -26,20 +26,29 @@ enum {
     CTRL_INDEX = i32c(-1)
 };
 
+static a_usize bucket_size(a_u32 cap) {
+    return sizeof(TNode) * (cap + 1);
+}
+
+#define bucket_offset() sizeof(TNode)
+
 static TNode* bucket_alloc(a_henv env, a_u32 cap) {
-    TNode* p = ai_mem_vnew(env, TNode, cap + 1);
-    memset(p, -1, sizeof(TNode) * (cap + 1));
-    return p + 1;
+    a_usize size = bucket_size(cap);
+    void* bucket = ai_mem_alloc(env, size);
+    memset(bucket, -1, size);
+    return addr_add(TNode, bucket, bucket_offset());
 }
 
 static void bucket_dealloc(Global* gbl, TNode* bucket, a_u32 cap) {
-    ai_mem_vdel(gbl, bucket - 1, cap + 1);
+    ai_mem_dealloc(gbl, addr_sub(void, bucket, bucket_offset()), bucket_size(cap));
 }
 
-GTable* ai_table_new(a_henv env) {
+GTable* ai_table_new(a_henv env, a_enum kv) {
+    assume(kv == REFERENCE_STRONG || kv == REFERENCE_WEAKKEY || kv == REFERENCE_WEAK || kv == REFERENCE_PHANTOM, "bad reference strategy.");
+
     GTable* self = ai_mem_alloc(env, table_size());
 
-	self->impl = &table_impl;
+	self->klass = &table_klass[kv];
     self->ptr = null;
     self->hmask = 0;
     self->len = 0;
@@ -49,7 +58,7 @@ GTable* ai_table_new(a_henv env) {
 }
 
 static TNode* table_node(GTable* self, a_i32 index) {
-    assume(index == CTRL_INDEX || (index >= 0 && index <= cast(a_i32, self->hmask)), "bad table node index");
+    assume(index == CTRL_INDEX || (self->ptr != null && index >= 0 && index <= cast(a_i32, self->hmask)), "index out of bound.");
     return &self->ptr[index];
 }
 
@@ -65,13 +74,13 @@ static a_bool table_is_head_of_hash_chain(GTable* self, a_i32 index, TNode* node
     return index == table_hash_to_first_index(self, node->hash);
 }
 
-static void table_move_node(a_henv env, GTable* self, a_i32 index_src, a_i32 index_dst) {
+static void table_move_node(GTable* self, a_i32 index_src, a_i32 index_dst) {
     TNode* node_src = table_node(self, index_src);
     TNode* node_dst = table_node(self, index_dst);
 
     /* Copy key-value. */
-    v_cpy(env, &node_dst->key, &node_src->key);
-    v_cpy(env, &node_dst->value, &node_src->value);
+    v_set_raw(&node_dst->key, node_src->key);
+    v_set_raw(&node_dst->value, node_src->value);
     node_dst->hash = node_src->hash;
     node_dst->hnext = node_src->hnext;
 
@@ -157,7 +166,7 @@ static a_i32 table_emplace_backward(a_henv env, GTable* self, Value key, a_hash 
         }
         else {
             table_redirect_from_hash_chain(self, index_head, node_head->hash, index_free);
-            table_move_node(env, self, index_head, index_free);
+            table_move_node(self, index_head, index_free);
 
             index = index_head;
             node = node_head;
@@ -225,7 +234,7 @@ void ai_table_hint(a_henv env, GTable* self, a_ulen add) {
     }
 }
 
-static void table_erase(unused a_henv env, GTable* self, a_i32 index) {
+static a_bool table_erase(GTable* self, a_i32 index) {
     TNode* node = table_node(self, index);
     TNode* node_ctrl = table_ctrl_node(self);
 
@@ -237,19 +246,26 @@ static void table_erase(unused a_henv env, GTable* self, a_i32 index) {
 
     v_set_nil(&node->key);
 
+    a_bool move_backward = false;
     if (table_is_head_of_hash_chain(self, index, node)) {
         if (index_next >= 0) {
-            table_move_node(env, self, index_next, index);
+            table_move_node(self, index_next, index);
+            move_backward = index < index_next;
         }
     }
     else {
         table_redirect_from_hash_chain(self, index, node->hash, node->hnext);
     }
+
     node->hnext = node_ctrl->hnext;
     node_ctrl->hnext = index;
 
     node_prev->lnext = index_next;
     node_next->lprev = index_prev;
+
+    self->len -= 1;
+
+    return move_backward;
 }
 
 static a_bool table_find_with_trivial_equality(GTable* self, Value vk, a_hash hash, a_i32* pindex) {
@@ -318,19 +334,19 @@ static a_bool table_find(a_henv env, GTable* self, Value vk, a_hash* phash, a_i3
     }
 }
 
-union LstrFindResult {
+union LstrFind {
     a_i32 index;
     GStr* key;
 };
 
-static a_bool table_find_lstr(a_henv env, GTable* self, a_lstr k, a_hash hash, union LstrFindResult* presult) {
+static a_bool table_find_lstr(a_henv env, GTable* self, a_lstr k, a_hash hash, union LstrFind* out) {
     GStr* key = ai_str_get_or_null_with_hash(env, k, hash);
     if (key == null) {
-        presult->key = null;
+        out->key = null;
         return true;
     }
-    if (table_find_with_trivial_equality(self, v_of_str(key), hash, &presult->index)) {
-        presult->key = key;
+    if (table_find_with_trivial_equality(self, v_of_str(key), hash, &out->index)) {
+        out->key = key;
         return true;
     }
     return false;
@@ -359,12 +375,12 @@ a_bool ai_table_geti(a_henv env, GTable* self, a_int k, Value* pv) {
 }
 
 a_bool ai_table_getls(a_henv env, GTable* self, a_lstr k, Value* pv) {
-    union LstrFindResult result;
+    union LstrFind out;
     a_hash hash = ai_str_hashof(env, k);
 
-    try (table_find_lstr(env, self, k, hash, &result));
+    try (table_find_lstr(env, self, k, hash, &out));
 
-    TNode* node = table_node(self, result.index);
+    TNode* node = table_node(self, out.index);
     v_set(env, pv, node->value);
     return false;
 }
@@ -401,14 +417,14 @@ a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
 }
 
 Value* ai_table_refls(a_henv env, GTable* self, a_lstr k) {
-    union LstrFindResult result;
+    union LstrFind out;
     a_hash hash = ai_str_hashof(env, k);
 
-    catch (table_find_lstr(env, self, k, hash, &result)) {
+    catch (table_find_lstr(env, self, k, hash, &out)) {
         ai_table_hint(env, self, 1);
 
-        GStr* key = result.key ?: ai_str_new_with_hash(env, k, hash);
-        result.index = table_emplace_backward(env, self, v_of_str(key), hash, v_of_nil());
+        GStr* key = out.key ?: ai_str_new_with_hash(env, k, hash);
+        out.index = table_emplace_backward(env, self, v_of_str(key), hash, v_of_nil());
 
         self->len += 1;
 
@@ -417,7 +433,7 @@ Value* ai_table_refls(a_henv env, GTable* self, a_lstr k) {
         break;
     }
 
-    TNode* node = table_node(self, result.index);
+    TNode* node = table_node(self, out.index);
     return &node->value;
 }
 
@@ -427,19 +443,16 @@ a_bool ai_table_del(a_henv env, GTable* self, Value vk) {
 
     try (table_find(env, self, vk, &hash, &index));
 
-    table_erase(env, self, index);
-    self->len -= 1;
+    table_erase(self, index);
     return true;
 }
 
 void ai_table_delr(a_henv env, GTable* self, Value* ref) {
-    assume(self->ptr != null && &self->ptr->value <= ref && ref <= &(self->ptr + self->hmask)->value,
-           "not table reference");
     TNode* node = from_member(TNode, value, ref);
+    assume(table_node(self, 0) <= node && node <= table_node(self, self->hmask), "not table reference");
 
     a_i32 index = cast(a_i32, node - self->ptr);
-    table_erase(env, self, index);
-    self->len -= 1;
+    table_erase(self, index);
 }
 
 a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex) {
@@ -492,19 +505,179 @@ static void table_mark(Global* gbl, GTable* self) {
 		for (a_u32 i = 0; i < cap; ++i) {
 			TNode* node = &self->ptr[i];
 			if (!v_is_nil(node->key)) {
-				ai_gc_trace_mark_val(gbl, node->key);
-				ai_gc_trace_mark_val(gbl, node->value);
+                v_trace(gbl, node->key);
+                v_trace(gbl, node->value);
 			}
 		}
-		ai_gc_trace_work(gbl, sizeof(TNode) * (cap + 1));
+		ai_gc_trace_work(gbl, bucket_size(cap));
 	}
 	ai_gc_trace_work(gbl, table_size());
 }
 
-static Impl const table_impl = {
-    .tag = ALO_TTABLE,
-    .name = "table",
-    .flags = IMPL_FLAG_NONE,
-    .drop = table_drop,
-    .mark = table_mark
+static void wtable_mark(Global* gbl, GTable* self) {
+    if (self->ptr != null) {
+        a_bool has_weak = false;
+        a_u32 cap = self->hmask + 1;
+        for (a_u32 i = 0; i < cap; ++i) {
+            TNode* node = &self->ptr[i];
+            if (!v_is_nil(node->key)) {
+                if (v_is_alive(gbl, node->value)) {
+                    v_trace(gbl, node->key);
+                }
+                else {
+                    has_weak = true;
+                }
+            }
+        }
+        if (has_weak) {
+            if (gbl->gcstep == GCSTEP_TRACE) {
+                join_trace(&gbl->tr_regray, self);
+            }
+            else {
+                join_trace(&gbl->tr_weak, self);
+            }
+        }
+        ai_gc_trace_work(gbl, bucket_size(cap));
+    }
+    ai_gc_trace_work(gbl, table_size());
+}
+
+static void wktable_mark(Global* gbl, GTable* self) {
+    if (self->ptr != null) {
+        a_bool has_weak = false;
+        a_bool has_blur = false;
+        a_u32 cap = self->hmask + 1;
+        for (a_u32 i = 0; i < cap; ++i) {
+            TNode* node = &self->ptr[i];
+            if (!v_is_nil(node->key)) {
+                if (v_is_alive(gbl, node->key)) {
+                    v_trace(gbl, node->value);
+                }
+                else {
+                    has_weak = true;
+                    if (!v_is_alive(gbl, node->value)) {
+                        has_blur = true;
+                    }
+                }
+            }
+        }
+        if (has_weak) {
+            if (gbl->gcstep == GCSTEP_TRACE) {
+                join_trace(&gbl->tr_regray, self);
+            }
+            else if (has_blur) {
+                join_trace(&gbl->tr_blur, self);
+            }
+            else {
+                join_trace(&gbl->tr_weak, self);
+            }
+        }
+        ai_gc_trace_work(gbl, bucket_size(cap));
+    }
+    ai_gc_trace_work(gbl, table_size());
+}
+
+static void ptable_mark(Global* gbl, GTable* self) {
+    if (self->ptr != null) {
+        a_bool has_weak_key = false;
+        a_bool has_weak = false;
+        a_bool has_blur = false;
+        a_u32 cap = self->hmask + 1;
+        for (a_u32 i = 0; i < cap; ++i) {
+            TNode* node = &self->ptr[i];
+            if (!v_is_nil(node->key)) {
+                a_bool weak_key = !v_is_alive(gbl, node->key);
+                a_bool weak_value = !v_is_alive(gbl, node->value);
+                has_weak |= weak_key || weak_value;
+                has_weak_key |= weak_key;
+                has_blur |= weak_key && weak_value;
+            }
+        }
+        if (has_weak) {
+            if (gbl->gcstep == GCSTEP_TRACE) {
+                join_trace(&gbl->tr_regray, self);
+            }
+            else if (has_blur) {
+                join_trace(&gbl->tr_blur, self);
+            }
+            else if (has_weak_key) {
+                join_trace(&gbl->tr_phantom, self);
+            }
+            else {
+                join_trace(&gbl->tr_weak, self);
+            }
+        }
+        ai_gc_trace_work(gbl, bucket_size(cap));
+    }
+    ai_gc_trace_work(gbl, table_size());
+}
+
+static void wtable_clear(Global* gbl, GTable* self) {
+    if (self->ptr != null) {
+        a_u32 cap = self->hmask + 1;
+        for (a_u32 i = 0; i < cap; ++i) {
+            TNode* node = &self->ptr[i];
+            if (!v_is_nil(node->key)) erase: {
+                a_bool dead_value = !v_is_alive(gbl, node->value);
+                if (dead_value) {
+                    if (table_erase(self, cast(a_i32, i))) {
+                        goto erase;
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void ptable_clear(Global* gbl, GTable* self) {
+    if (self->ptr != null) {
+        a_u32 cap = self->hmask + 1;
+        a_bool trace_weak = gbl->gcstep == GCSTEP_TRACE_WEAK;
+        for (a_u32 i = 0; i < cap; ++i) {
+            TNode* node = &self->ptr[i];
+            if (!v_is_nil(node->key)) erase: {
+                a_bool dead_key = !v_is_alive(gbl, node->key);
+                a_bool dead_value = !v_is_alive(gbl, node->value);
+                if (trace_weak ? dead_key || dead_value : !dead_key && dead_value) {
+                    if (table_erase(self, cast(a_i32, i))) {
+                        goto erase;
+                    }
+                }
+            }
+        }
+    }
+}
+
+static KWeak const table_klass[] = {
+    [REFERENCE_STRONG] = {
+        .tag = ALO_TTABLE,
+        .name = "table",
+        .flags = KLASS_FLAG_NONE,
+        .drop = table_drop,
+        .mark = table_mark
+    },
+    [REFERENCE_WEAK] = {
+        .tag = ALO_TTABLE,
+        .name = "table",
+        .flags = KLASS_FLAG_NONE,
+        .drop = table_drop,
+        .mark = wtable_mark,
+        .clear = wtable_clear
+    },
+    [REFERENCE_WEAKKEY] = {
+        .tag = ALO_TTABLE,
+        .name = "table",
+        .flags = KLASS_FLAG_NONE,
+        .drop = table_drop,
+        .mark = wktable_mark,
+        .clear = ptable_clear
+    },
+    [REFERENCE_PHANTOM] = {
+        .tag = ALO_TTABLE,
+        .name = "table",
+        .flags = KLASS_FLAG_NONE,
+        .drop = table_drop,
+        .mark = ptable_mark,
+        .clear = ptable_clear
+    }
 };

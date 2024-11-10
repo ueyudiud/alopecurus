@@ -341,8 +341,8 @@ static a_msg debug_dump(a_henv env) {
 static a_msg debug_addr(a_henv env) {
     aloL_checkany(env, 0);
     Value v = api_elem(env, 0);
-    if (v_is_obj(v)) {
-        alo_pushptr(env, v_as_obj(v));
+    if (v_is_ref(v)) {
+        alo_pushptr(env, v_as_ref(v));
     }
     else {
         alo_pushnil(env);

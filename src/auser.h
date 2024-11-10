@@ -27,12 +27,12 @@ always_inline a_bool v_is_user(Value v) {
 
 always_inline GUser* v_as_user(Value v) {
     assume(v_is_user(v), "not userdata.");
-    return g_as(GUser, v_as_obj(v));
+    return g_as(GUser, v_as_ref(v));
 }
 
 always_inline Value v_of_user(GUser* o) {
     assume(g_is_user(o));
-    return v_of_obj_(o, T_USER);
+    return v_of_ref(o, T_USER);
 }
 
 always_inline void v_set_user(a_henv env, Value* d, GUser* o) {

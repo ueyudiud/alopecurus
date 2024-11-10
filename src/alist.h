@@ -35,12 +35,12 @@ struct GList {
 
 always_inline GList* v_as_list(Value v) {
     assume(v_is_list(v), "not list.");
-    return g_as(GList, v_as_obj(v));
+    return g_as(GList, v_as_ref(v));
 }
 
 always_inline Value v_of_list(GList* o) {
     assume(g_is_list(o), "invalid instance.");
-    return v_of_obj_(o, T_LIST);
+    return v_of_ref(o, T_LIST);
 }
 
 always_inline void v_set_list(a_henv env, Value* d, GList* o) {

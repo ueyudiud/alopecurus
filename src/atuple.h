@@ -28,12 +28,12 @@ struct GTuple {
 
 always_inline GTuple* v_as_tuple(Value v) {
     assume(v_is_tuple(v), "not tuple.");
-    return g_as(GTuple, v_as_obj(v));
+    return g_as(GTuple, v_as_ref(v));
 }
 
 always_inline Value v_of_tuple(GTuple* o) {
     assume(g_is_tuple(o), "invalid instance.");
-    return v_of_obj_(o, T_TUPLE);
+    return v_of_ref(o, T_TUPLE);
 }
 
 always_inline void v_set_tuple(a_henv env, Value* d, GTuple* o) {

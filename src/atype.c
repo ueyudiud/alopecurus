@@ -16,9 +16,9 @@
 
 #include "atype.h"
 
-static Impl const ptype_impl;
-static Impl const itype_impl;
-static Impl const utype_impl;
+static KLocal const ptype_klass;
+static KHeap const itype_klass;
+static KHeap const utype_klass;
 
 #define TYPE_MAX_CAP (u32c(1) << 31)
 
@@ -31,12 +31,12 @@ GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, 
     memclr(self, size);
 
     init(self->as_utype) {
-        .impl = &utype_impl,
+        .klass = &utype_klass,
         .size = size,
         .body = {
             .tag = ALO_TUSER,
             .name = name != null ? str2ntstr(name) : null,
-            .flags = (num_slot == 0 ? IMPL_FLAG_GREEDY_MARK : 0) | IMPL_FLAG_DYNAMIC,
+            .flags = (num_slot == 0 ? KLASS_FLAG_PLAIN : 0) | KLASS_FLAG_BUILD,
             .mark = ai_user_mark,
             .close = ai_tm_close,
             .drop = ai_user_drop
@@ -49,19 +49,26 @@ GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, 
     return self;
 }
 
-GType* ai_itype_new(a_henv env, Impl impl) {
-    assume(!(impl.flags & IMPL_FLAG_DYNAMIC), "dynamic flag is not supported by itype.");
+GType* ai_itype_new(a_henv env, void const* ksrc, a_usize klen) {
+    assume(klen >= sizeof(KHeap));
 
-    a_usize size = sizeof(GIType);
+    Klass const* klass = ksrc;
+
+    a_usize res_size = klen - offsetof(Klass, mark);
+    a_usize size = sizeof(GBType) + res_size;
 
     GType* self = ai_mem_alloc(env, size);
     memclr(self, size);
 
-    init(self->as_itype) {
-        .impl = &itype_impl,
+    init(self->as_btype) {
+        .klass = &itype_klass,
         .size = size,
-        .body = impl
+        .tag = klass->tag,
+        .name = klass->name,
+        .flags = klass->flags & ~(KLASS_FLAG_BUILD | KLASS_FLAG_HIDDEN)
     };
+
+    memcpy(&self->as_itype->body.mark, &klass->mark, res_size);
 
     ai_gc_register_normal(env, self);
     return self;
@@ -284,7 +291,7 @@ void ai_type_boost(a_henv env) {
 
     for (a_u32 i = 0; i < PTYPE_COUNT; ++i) {
         init(&gbl->fast_types[i]) {
-            .impl = &ptype_impl,
+            .klass = &ptype_klass,
             .size = 0,
             .name = ai_api_tagname[i]
         };
@@ -308,8 +315,8 @@ static void type_mark_dict(Global* gbl, GType* self) {
         for (a_u32 i = 0; i <= self->hmask; ++i) {
             MNode* node = &self->ptr[i];
             if (node->key > dead_key) {
-                ai_gc_trace_mark(gbl, node->key);
-                ai_gc_trace_mark_val(gbl, node->value);
+                g_trace(gbl, node->key);
+                v_trace(gbl, node->value);
             }
         }
         ai_gc_trace_work(gbl, sizeof(MNode) * (self->hmask + 1));
@@ -328,7 +335,7 @@ static void itype_mark(Global* gbl, GType* self) {
 static void utype_mark(Global* gbl, GType* self) {
     type_mark_dict(gbl, self);
     if (self->name != null) {
-        ai_gc_trace_mark(gbl, from_member(GStr, ptr, self->name));
+        g_trace(gbl, from_member(GStr, ptr, self->name));
     }
     ai_gc_trace_work(gbl, self->size);
 }
@@ -338,24 +345,25 @@ static void nptype_drop(Global* gbl, GType* self) {
     ai_mem_dealloc(gbl, self, self->size);
 }
 
-static Impl const ptype_impl = {
+static KLocal const ptype_klass = {
     .tag = ALO_TTYPE,
     .name = "type",
+    .flags = KLASS_FLAG_NONE,
     .mark = ptype_mark
 };
 
-static Impl const itype_impl = {
+static KHeap const itype_klass = {
     .tag = ALO_TTYPE,
     .name = "type",
-    .flags = 0,
+    .flags = KLASS_FLAG_NONE,
     .drop = nptype_drop,
     .mark = itype_mark
 };
 
-static Impl const utype_impl = {
+static KHeap const utype_klass = {
     .tag = ALO_TTYPE,
     .name = "type",
-    .flags = IMPL_FLAG_DYNAMIC,
+    .flags = KLASS_FLAG_BUILD,
     .drop = nptype_drop,
     .mark = utype_mark
 };

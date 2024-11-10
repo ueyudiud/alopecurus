@@ -133,7 +133,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 			break;
 		}
 		case T_FUNC: {
-			aloi_show("<func:%p>", v_as_obj(v));
+			aloi_show("<func:%p>", v_as_ref(v));
 			break;
 		}
         case T_TYPE: {
@@ -147,7 +147,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
             break;
         }
 		case T_OTHER: {
-			aloi_show("<%s:%p>", v_name(env, v), v_as_obj(v));
+			aloi_show("<%s:%p>", v_name(env, v), v_as_ref(v));
 			break;
 		}
 		default: {

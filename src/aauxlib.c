@@ -516,8 +516,10 @@ static void block_mark(Global* gbl, GBlock* self) {
     ai_gc_trace_work(gbl, block_size(self->size));
 }
 
-static Impl const block_impl = {
+static KHeap const block_klass = {
     .tag = ALO_TUSER,
+    .flags = KLASS_FLAG_PLAIN,
+    .name = "block",
     .drop = block_drop,
     .mark = block_mark
 };
@@ -526,7 +528,7 @@ void* aloL_newblk(a_henv env, a_usize s) {
     api_check_slot(env, 1);
 
     GBlock* self = ai_mem_alloc(env, block_size(s));
-    self->impl = &block_impl;
+    self->klass = &block_klass;
     self->size = s;
     ai_gc_register_normal(env, self);
 
@@ -582,6 +584,7 @@ void aloL_openlibs(a_henv env) {
         { ALO_LIB_INT_NAME, aloopen_int },
         { ALO_LIB_STR_NAME, aloopen_str },
         { ALO_LIB_LIST_NAME, aloopen_list },
+        { ALO_LIB_TABLE_NAME, aloopen_table },
         { ALO_LIB_TYPE_NAME, aloopen_type },
 		{ ALO_LIB_DEBUG_NAME, aloopen_debug },
         { ALO_LIB_IO_NAME, aloopen_io },

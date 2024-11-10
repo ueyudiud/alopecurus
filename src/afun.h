@@ -132,12 +132,12 @@ struct LineInfo {
 
 always_inline GFun* v_as_func(Value v) {
     assume(v_is_func(v), "not function.");
-    return g_as(GFun, v_as_obj(v));
+    return g_as(GFun, v_as_ref(v));
 }
 
 always_inline Value v_of_func(GFun* o) {
     assume(g_is_func(o), "invalid instance.");
-    return v_of_obj_(o, T_FUNC);
+    return v_of_ref(o, T_FUNC);
 }
 
 always_inline void v_set_func(a_henv env, Value* d, GFun* o) {

@@ -26,7 +26,7 @@
 # define MAX_STR_CACHE_CAPACITY ((usizec(1) << 31) / sizeof(GStr*))
 #endif
 
-static Impl const str_impl;
+static KHeap const str_klass;
 
 /**
  ** Compute hash code for string, use FNV-1 like algorithm.
@@ -128,7 +128,7 @@ static GStr* str_alloc(a_henv env, a_usize len) {
 }
 
 static void str_init(GStr* self, a_lstr src, a_hash hash) {
-	self->impl = &str_impl;
+	self->klass = &str_klass;
     self->len = src.len;
     self->hash = hash;
     memcpy(self->ptr, src.ptr, sizeof(char) * src.len);
@@ -178,7 +178,7 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 
 	self = buff;
 	/* Complete all fields. */
-	self->impl = &str_impl;
+	self->klass = &str_klass;
 	self->len = len;
 	self->hash = hash;
 	self->ptr[len] = '\0';
@@ -340,9 +340,9 @@ void ai_str_clean(Global* gbl) {
     ai_mem_vdel(gbl, cache->ptr, cache->hmask + 1);
 }
 
-static Impl const str_impl = {
+static KHeap const str_klass = {
     .tag = ALO_TSTR,
-    .flags = IMPL_FLAG_GREEDY_MARK,
+    .flags = KLASS_FLAG_PLAIN | KLASS_FLAG_VALUE,
     .name = "str",
     .drop = str_drop,
     .mark = str_mark

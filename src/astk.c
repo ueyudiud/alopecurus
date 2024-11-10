@@ -45,7 +45,7 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 
     init(stack) {
 		.base = base,
-		.limit = ptr_disp(Value, base, INIT_STACK_SIZE) - RESERVED_STACK_SIZE,
+		.limit = addr_add(Value, base, INIT_STACK_SIZE) - RESERVED_STACK_SIZE,
 		.top = base,
 		.alloc_size = alloc_size
 	};
@@ -60,15 +60,15 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 #if ALO_STACK_RELOC
 static void stack_reloc(a_henv env, a_isize diff) {
 	Stack* stack = &env->stack;
-	stack->top = ptr_disp(Value, stack->top, diff);
+	stack->top = addr_add(Value, stack->top, diff);
 
 	for (Frame* frame = env->frame; frame != null; frame = frame->prev) {
-		frame->stack_bot = ptr_disp(Value, frame->stack_bot, diff);
-        frame->stack_dst = ptr_disp(Value, frame->stack_dst, diff);
+		frame->stack_bot = addr_add(Value, frame->stack_bot, diff);
+        frame->stack_dst = addr_add(Value, frame->stack_dst, diff);
 	}
 
     for (RcCap* cap = env->open_caps; cap != null; cap = cap->next) {
-        cap->ptr = ptr_disp(Value, cap->ptr, diff);
+        cap->ptr = addr_add(Value, cap->ptr, diff);
     }
 }
 #endif

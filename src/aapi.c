@@ -33,7 +33,7 @@ a_msg api_tagof(unused a_henv env, Value v) {
         case T_PTR:
             return ALO_TPTR;
         case T_OBJ:
-            return cast(a_msg, v_as_obj(v)->impl->tag);
+            return cast(a_msg, g_tag(v_as_ref(v)));
         case T_FLOAT:
             return ALO_TFLOAT;
         default:
@@ -488,8 +488,10 @@ void alo_newlist(a_henv env, a_ulen n) {
     ai_gc_trigger(env);
 }
 
-void alo_newtable(a_henv env, a_ulen n) {
-	GTable* val = ai_table_new(env);
+void alo_newtablex(a_henv env, a_ulen n, a_enum m) {
+    api_check(m == REFERENCE_STRONG || m == REFERENCE_WEAK || m == REFERENCE_WEAKKEY || m == REFERENCE_PHANTOM,
+              "invalid table mode.");
+	GTable* val = ai_table_new(env, m);
 	v_set_table(env, api_incr_stack(env), val);
 	if (n > 0) {
         ai_table_grow(env, val, n);
@@ -516,7 +518,7 @@ void* alo_newuser(a_henv env, a_ilen id) {
     api_check_slot(env, 1);
 
     Value v = api_elem(env, id);
-    api_check(v_is_type(v) && g_impl(v_as_obj(v))->flags & IMPL_FLAG_DYNAMIC, "not user type.");
+    api_check(v_is_type(v) && g_klass(v_as_ref(v))->flags & KLASS_FLAG_BUILD, "not user type.");
     GUser* val = ai_user_new(env, v_as_type(v)->as_utype);
     v_set_user(env, api_incr_stack(env), val);
     ai_gc_trigger(env);
@@ -847,7 +849,7 @@ void* alo_toptr(a_henv env, a_ilen id) {
         }
         case T_TYPE: {
             GType* o = v_as_type(v);
-            if (o->impl->flags & IMPL_FLAG_DYNAMIC) {
+            if (k_has_flag(g_klass(o), KLASS_FLAG_BUILD)) {
                 return o->as_utype->user;
             }
             else {

@@ -38,16 +38,17 @@ static a_bool route_is_active(a_henv env) {
 	return G(env)->active == env;
 }
 
-static Impl const route_impl;
+static KClose const route_klass;
 
 static void route_new(GRoute* self, Global* gbl) {
     init(self) {
-        .impl = &route_impl,
+        .klass = &route_klass,
         .status = ALO_SYIELD,
         .flags = 0,
         .global = gbl,
         .error = v_of_nil(),
         .frame = &self->base_frame,
+        .gc_stack = null,
         .base_frame = { }
     };
 }
@@ -66,6 +67,7 @@ static void route_close(Global* gbl, GRoute* self) {
 		caps = cap->next;
 		ai_cap_close(env, cap);
 	}
+    self->status = ALO_SDEAD;
 }
 
 static void route_destroy(Global* gbl, GRoute* self) {
@@ -78,13 +80,16 @@ static void route_mark_stack(Global* gbl, GRoute* self) {
 	Value* from = stack->base;
 	Value* const to =
 			/* Mark object conservative in increasing GC: assume all object in the last frame will be freed. */
-			gbl->gcstep == GCSTEP_PROPAGATE_ATOMIC ?
+			gbl->gcstep == GCSTEP_TRACE_ATOMIC ?
 			stack->top :
 			stk2val(self, self->frame->stack_bot);
 	for (Value const* v = from; v < to; ++v) {
-		ai_gc_trace_mark_val(gbl, *v);
+        v_trace(gbl, *v);
 	}
-	if (gbl->gcstep == GCSTEP_PROPAGATE_ATOMIC) {
+	if (gbl->gcstep == GCSTEP_TRACE_ATOMIC) {
+        for (a_gptr obj = self->gc_stack; obj != null; obj = obj->gnext) {
+            (*g_fetch(obj, mark))(gbl, obj); /* Force mark immediately. */
+        }
 		v_set_nil_ranged(stack->top, stack->limit); /* Clear no-marked stack slice. */
 	}
 	else if (!gbl->gcflags.emergency) {
@@ -100,7 +105,7 @@ static void route_mark(Global* gbl, GRoute* self) {
 
 	route_mark_stack(gbl, self);
 	if (self->caller != null) {
-		ai_gc_trace_mark(gbl, self->caller);
+		g_trace(gbl, self->caller);
 	}
 
 	join_trace(&gbl->tr_regray, self);
@@ -113,11 +118,13 @@ static void route_drop(Global* gbl, GRoute* self) {
 	ai_mem_dealloc(gbl, self, route_size());
 }
 
-static Impl const route_impl = {
+static KClose const route_klass = {
     .tag = ALO_TROUTE,
-	.flags = IMPL_FLAG_NONE,
+	.flags = KLASS_FLAG_NONE,
+    .name = "route",
     .drop = route_drop,
-    .mark = route_mark
+    .mark = route_mark,
+    .close = route_close
 };
 
 a_msg ai_env_resume(a_henv env, GRoute* self) {
@@ -143,6 +150,13 @@ a_msg ai_env_protect(a_henv env, a_pfun pfun, a_efun efun, void* ctx) {
 	a_msg msg = ai_ctx_catch(env, pfun, ctx);
     env->errf = old_errf;
     env->errc = old_errc;
+    return msg;
+}
+
+a_msg ai_env_catch_(a_henv env, a_pfun pfun, a_gptr ctx) {
+    ai_gc_push_stack(env, ctx);
+    a_msg msg = ai_env_protect(env, pfun, cast(a_efun, g_klass(ctx)->catch), ctx);
+    ai_gc_pop_stack(env, ctx);
     return msg;
 }
 

@@ -37,17 +37,17 @@ static_assert(offsetof(Buf, str.len) == offsetof(Buf, len));
 #define g_is_buf(o) g_is(o, ALO_TBUF)
 
 always_inline a_bool v_is_buf(Value v) {
-    return v_is(v, T_OTHER) && g_is_buf(v_as_obj(v));
+    return v_is(v, T_OTHER) && g_is_buf(v_as_ref(v));
 }
 
 always_inline GBuf* v_as_buf(Value v) {
     assume(v_is_buf(v), "not buffer.");
-    return g_as(GBuf, v_as_obj(v));
+    return g_as(GBuf, v_as_ref(v));
 }
 
 always_inline Value v_of_buf(GBuf* o) {
     assume(g_is_buf(o), "invalid instance.");
-    return v_of_obj_(o, T_OTHER);
+    return v_of_ref(o, T_OTHER);
 }
 
 always_inline void v_set_buf(a_henv env, Value* d, GBuf* o) {

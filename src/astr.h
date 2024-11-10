@@ -55,14 +55,14 @@ always_inline a_enum str_id(GStr* o) {
 
 always_inline GStr* v_as_str(Value v) {
     assume(v_is_str(v), "not string.");
-    a_gptr p = v_as_obj(v);
+    a_gptr p = v_as_ref(v);
     assume(g_is_str(p), "invalid instance.");
     return g_as(GStr, p);
 }
 
 always_inline Value v_of_str(GStr* o) {
     assume(g_is_str(o), "invalid instance.");
-    return v_of_obj_(o, T_STR);
+    return v_of_ref(o, T_STR);
 }
 
 always_inline void v_set_str(a_henv env, Value* d, GStr* o) {

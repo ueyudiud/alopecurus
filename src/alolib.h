@@ -19,6 +19,9 @@ ALO_EXPORT void aloopen_str(a_henv env);
 #define ALO_LIB_LIST_NAME "list"
 ALO_EXPORT void aloopen_list(a_henv env);
 
+#define ALO_LIB_TABLE_NAME "table"
+ALO_EXPORT void aloopen_table(a_henv env);
+
 #define ALO_LIB_TYPE_NAME "type"
 ALO_EXPORT void aloopen_type(a_henv env);
 

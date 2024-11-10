@@ -24,42 +24,38 @@ static GList* check_self(a_henv env) {
 }
 
 static a_msg list___new__(a_henv env) { /* Should this function write in script? */
-    if (alo_stacksize(env) == 0) {
-        alo_newlist(env, 0);
-    }
-    else {
-        Value v = api_elem(env, 0);
-        if (v_is_float(v))
-            goto error;
-        switch (v_get_tag(v)) {
-            case T_INT: {
-                alo_newlist(env, cast(a_uint, v_as_int(v)));
-                break;
-            }
-            case T_TUPLE: {
-                GTuple* init_val = v_as_tuple(v);
+    Value v = api_elem(env, 0);
+    switch (v_get_tag(v)) {
+        case T_NIL: {
+            alo_newlist(env, 0);
+            break;
+        }
+        case T_INT: {
+            alo_newlist(env, cast(a_uint, v_as_int(v)));
+            break;
+        }
+        case T_TUPLE: {
+            GTuple* init_val = v_as_tuple(v);
 
-                GList* out = ai_list_new(env);
-                v_set_list(env, api_incr_stack(env), out);
-                ai_list_push_all(env, out, init_val->ptr, init_val->len);
+            GList* out = ai_list_new(env);
+            v_set_list(env, api_incr_stack(env), out);
+            ai_list_push_all(env, out, init_val->ptr, init_val->len);
 
-                ai_gc_trigger(env);
-                break;
-            }
-            case T_LIST: {
-                GList* init_val = v_as_list(v);
+            ai_gc_trigger(env);
+            break;
+        }
+        case T_LIST: {
+            GList* init_val = v_as_list(v);
 
-                GList* out = ai_list_new(env);
-                v_set_list(env, api_incr_stack(env), out);
-                ai_list_push_all(env, out, init_val->ptr, init_val->len);
+            GList* out = ai_list_new(env);
+            v_set_list(env, api_incr_stack(env), out);
+            ai_list_push_all(env, out, init_val->ptr, init_val->len);
 
-                ai_gc_trigger(env);
-                break;
-            }
-            default: {
-            error:
-                aloL_argerror(env, 1, "initial size or collection expected."); //TODO iterable value support.
-            }
+            ai_gc_trigger(env);
+            break;
+        }
+        default: {
+            aloL_argerror(env, 1, "initial size or collection expected."); //TODO iterable value support.
         }
     }
     return 1;

@@ -12,7 +12,7 @@
 
 #include "alist.h"
 
-static Impl const list_impl;
+static KHeap const list_klass;
 
 #if ALO_M64
 # define LIST_MAX_CAP cast(a_u32, INT32_MAX)
@@ -23,7 +23,7 @@ static Impl const list_impl;
 GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, list_size());
 
-    self->impl = &list_impl;
+    self->klass = &list_klass;
     self->ptr = null;
     self->cap = 0;
     self->len = 0;
@@ -138,7 +138,7 @@ a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v) {
 
 static void list_mark(Global* gbl, GList* self) {
     for (a_u32 i = 0; i < self->len; ++i) {
-        ai_gc_trace_mark_val(gbl, self->ptr[i]);
+        v_trace(gbl, self->ptr[i]);
     }
     ai_gc_trace_work(gbl, list_size() + sizeof(Value) * self->cap);
 }
@@ -150,8 +150,9 @@ static void list_drop(Global* gbl, GList* self) {
     ai_mem_dealloc(gbl, self, list_size());
 }
 
-static Impl const list_impl = {
+static KHeap const list_klass = {
     .tag = ALO_TLIST,
+    .flags = KLASS_FLAG_NONE,
     .name = "list",
     .drop = list_drop,
     .mark = list_mark

@@ -2772,12 +2772,11 @@ static void parser_mark(Global* gbl, void* ctx) {
             for (a_u32 i = 0; i <= set->hmask; ++i) {
                 GStr* str = set->ptr[i];
                 if (str != null) {
-                    ai_gc_trace_mark(gbl, str);
+                    g_trace(gbl, str);
                 }
             }
         }
 	}
-    g_set_stack_white(par);
 }
 
 static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
@@ -5053,16 +5052,17 @@ static void scan_root(unused a_henv env, void* ctx) {
     fscope_leave(par, par->name, lex_line(par));
 }
 
-static Impl const parser_impl = {
-    .tag = ALO_TPTR,
-    .flags = IMPL_FLAG_GREEDY_MARK | IMPL_FLAG_STACK_ALLOC,
-    .mark = parser_mark
+static KStack const parser_klass = {
+    .tag = ALO_TUSER,
+    .flags = KLASS_FLAG_PLAIN | KLASS_FLAG_HIDDEN,
+    .name = null,
+    .mark = parser_mark,
+    .catch = parser_except
 };
 
 static void parser_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, Parser* par) {
     init(par) {
-        .impl = &parser_impl,
-        .tnext = WHITE_COLOR,
+        .klass = &parser_klass,
         .options = options,
         .name = name
     };
@@ -5074,12 +5074,7 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, 
 	Parser par;
     parser_init(env, fun, ctx, file, name, options, &par);
 
-    Value* p = env->stack.top++;
-    v_set_other(env, p, &par);
-
-	a_msg msg = ai_env_protect(env, scan_root, parser_except, &par);
-
-    v_set_nil(--env->stack.top);
+	a_msg msg = ai_env_catch(env, scan_root, par);
 
 	if (msg == ALO_SOK) {
 		*pfun = func_build(&par);

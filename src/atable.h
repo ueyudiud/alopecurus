@@ -7,7 +7,7 @@
 
 #include "aobj.h"
 
-intern GTable* ai_table_new(a_henv env);
+intern GTable* ai_table_new(a_henv env, a_enum kv);
 intern void ai_table_grow(a_henv env, GTable* self, a_ulen add);
 intern void ai_table_hint(a_henv env, GTable* self, a_ulen add);
 intern a_bool ai_table_get(a_henv env, GTable* self, Value vk, Value* pv);
@@ -51,12 +51,12 @@ struct TNode {
 
 always_inline GTable* v_as_table(Value v) {
     assume(v_is_table(v), "not table.");
-    return g_as(GTable, v_as_obj(v));
+    return g_as(GTable, v_as_ref(v));
 }
 
 always_inline Value v_of_table(GTable* o) {
     assume(g_is_table(o), "invalid instance.");
-    return v_of_obj_(o, T_TABLE);
+    return v_of_ref(o, T_TABLE);
 }
 
 always_inline void v_set_table(a_henv env, Value* d, GTable* o) {

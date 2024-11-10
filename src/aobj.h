@@ -19,6 +19,13 @@ typedef union GType GType;
 typedef struct GProto GProto;
 typedef struct GBuf GBuf;
 
+typedef struct Klass Klass;
+typedef struct KLocal KLocal;
+typedef struct KStack KStack;
+typedef struct KHeap KHeap;
+typedef struct KClose KClose;
+typedef struct KWeak KWeak;
+
 /* GC pointer. */
 typedef GObj* a_gptr;
 
@@ -60,8 +67,8 @@ enum {
 
     T__MAX = T_NAN,
 
-    T__MIN_OBJ = T_LIST,
-    T__MAX_OBJ = T_OTHER,
+    T__MIN_REF = T_LIST,
+    T__MAX_REF = T_OTHER,
     T__MIN_FLT = 16,
     T__MAX_FLT = UINT32_MAX,
     T__MIN_NEQ = T_TUPLE,
@@ -70,11 +77,13 @@ enum {
     T__MAX_NHH = T_USER,
 };
 
-#define T_OBJ T__MIN_OBJ ... T__MAX_OBJ
+#define T_OBJ T__MIN_REF ... T__MAX_REF
 
 #define T_FLOAT T__MIN_FLT ... T__MAX_FLT
 
 /* Defined in aenv.h */
+always_inline a_bool v_is_alive(Global* gbl, Value v);
+
 always_inline void v_check_alive(a_henv env, Value v);
 
 #define V_TAG_SHIFT 47
@@ -278,7 +287,7 @@ always_inline void v_set_ptr(Value* d, void const* v) {
 #define v_has_trivial_hash(v) (!v_in(v, T__MIN_NHH, T__MAX_NHH))
 
 /* Identity hashcode. */
-always_inline a_hash v_trivial_hash_unchecked(Value v) {
+always_inline a_hash v_trivial_hash(Value v) {
     a_u32 h = v._ ^ (v._ >> 32);
     h *= u32c(0x1000193);
     h += h << 13;
@@ -289,15 +298,10 @@ always_inline a_hash v_trivial_hash_unchecked(Value v) {
     return h;
 }
 
-always_inline a_hash v_trivial_hash(Value v) {
-    assume(v_has_trivial_hash(v), "no trivial hash.");
-    return v_trivial_hash_unchecked(v);
-}
-
 always_inline a_hash v_float_hash(Value v) {
     a_float f = v_as_float(v);
     if (f == 0.0) return 0; /* Special case for 0.0 and -0.0 */
-    return v_trivial_hash_unchecked(v);
+    return v_trivial_hash(v);
 }
 
 always_inline Value v_float_key(Value v) {
@@ -317,69 +321,142 @@ always_inline a_bool v_trivial_equals(Value v1, Value v2) {
 }
 
 /*=========================================================*
- * Object
+ * Reference
  *=========================================================*/
 
+#define REFERENCE_STRONG  u32c(0x00)
+#define REFERENCE_WEAK    u32c(0x01)
+#define REFERENCE_WEAKKEY u32c(0x02)
+#define REFERENCE_PHANTOM u32c(0x03)
+
 #define GOBJ_STRUCT_HEADER \
-    a_byte _obj_head_mark[0]; \
+    a_byte _obj_head[0];   \
+    void const* klass;     \
     a_gcnext gnext;        \
-    union {                \
-        struct Impl const* impl;      \
-        struct Impl_ const* impl_;    \
-    };                     \
     a_trmark tnext
 
 struct GObj {
     GOBJ_STRUCT_HEADER;
 };
 
-#define GOBJ_METHODS(_f,_m) \
-    _f(name, char const*)   \
-    _f(tag, a_u32)          \
-    _f(flags, a_u32)        \
-    _m(drop, void, Global* gbl, a_gptr self) \
-    _m(mark, void, Global* gbl, a_gptr self) \
-    _m(close, void, a_henv env, a_gptr self)
+#define KOBJ_STRUCT_HEADER \
+    a_byte _kls_head[0];   \
+    char const* name;      \
+    a_u32 tag;             \
+    a_u32 flags
+
+#define KOBj_METHODS(_) \
+    _(drop, void(Global* gbl, a_gptr self))
+
+#define KHEAP_METHODS(_) \
+    _(drop, void(Global* gbl, a_gptr self))
+
+#define KSTACK_METHODS(_) \
+    _(close, void(a_henv env, a_gptr self)) \
+    _(close, void(a_henv env, a_gptr self)) \
+
+
+#define KANY_METHODS(_) \
+    _(drop, void(Global* gbl, a_gptr self)) \
+    _(mark, void(Global* gbl, a_gptr self)) \
+    _(close, void(a_henv env, a_gptr self)) \
+    _(drain, void(Global* gbl, a_gptr self))
 
 /**
  ** The virtual table for type, used for fast dispatch.
  ** Primitive types do not have virtual table.
  */
-struct Impl {
-#define DEFF(n,t) t n;
-#define DEFM(n,r,p...) void const* n;
-    GOBJ_METHODS(DEFF, DEFM)
-#undef DEFF
-#undef DEFM
+struct Klass {
+    KOBJ_STRUCT_HEADER;
+    /* GObj */
+    void (*mark)(Global* gbl, a_gptr self);
+    union {
+        /* GStack */
+        void (*catch)(a_henv gbl, a_gptr self, a_i32 msg);
+        struct {
+            /* GHeap */
+            void (*drop)(Global* gbl, a_gptr self);
+            union {
+                /* GClose */
+                void (*close)(a_henv env, a_gptr self);
+                /* GWeak */
+                void (*clear)(Global* gbl, a_gptr self);
+            };
+        };
+    };
 };
 
-struct Impl_ {
-#define DEFF(n,t) t n;
-#define DEFM(n,r,p...) r (*n)(p);
-    GOBJ_METHODS(DEFF, DEFM)
-#undef DEFF
-#undef DEFM
+struct KLocal {
+    KOBJ_STRUCT_HEADER;
+    void const* mark;
 };
 
-#define IMPL_FLAG_NONE        u8c(0x00)
-#define IMPL_FLAG_GREEDY_MARK u8c(0x01)
-#define IMPL_FLAG_STACK_ALLOC u8c(0x02)
-#define IMPL_FLAG_DYNAMIC     u8c(0x04) /* Marked for dynamic-created impl block. */
+struct KStack {
+    KOBJ_STRUCT_HEADER;
+    void const* mark;
+    void const* catch;
+};
 
-#define impl_has_flag(vt,f) (((vt)->flags & (f)) != 0)
+struct KHeap {
+    KOBJ_STRUCT_HEADER;
+    void const* mark;
+    void const* drop;
+};
 
-#define g_impl(o) ((o)->impl_)
+struct KClose {
+    KOBJ_STRUCT_HEADER;
+    void const* mark;
+    void const* drop;
+    void const* close;
+};
 
-#define g_is(o,t) (g_impl(o)->tag == (t))
+struct KWeak {
+    KOBJ_STRUCT_HEADER;
+    void const* mark;
+    void const* drop;
+    void const* clear;
+};
+
+#define KLASS_FLAG_NONE    u8c(0x00)
+/**
+ ** The reference has plain data, which assumes:
+ ** 1. the value has no managed field stored the value.
+ */
+#define KLASS_FLAG_PLAIN   u8c(0x01)
+/**
+ ** The reference will be regard as a 'value', which assumes:
+ ** 1. the value has no reference identity in equality and hashing method.
+ ** 2. the value will always regard as an alive value in weak reference and so on.
+ ** 3. the value should be immutable.
+ */
+#define KLASS_FLAG_VALUE   u8c(0x02)
+/**
+ ** The reference is build by inner custom type constructor.
+ */
+#define KLASS_FLAG_BUILD   u8c(0x04)
+/**
+ ** THe reference with hidden should not exposed in API.
+ */
+#define KLASS_FLAG_HIDDEN  u8c(0x08)
+
+#define k_has_flag(k,f) (((k)->flags & (f)) != 0)
+
+#define k_eq(k1,k2) ((k1)->_kls_head == (k2)->_kls_head)
+
+#define g_klass(o) cast(Klass const*, (o)->klass)
+
+#define g_tag(o) (g_klass(o)->tag)
+
+#define g_is(o,t) (g_tag(o) == (t))
 
 #define g_fetch(o,f) ({ \
-	auto _f2 = g_impl(o)->f; \
+	auto _f2 = g_klass(o)->f; \
 	assume(_f2 != null, "method '"#f"' is null."); \
 	_f2;                    \
 })
 
-#define g_as(t,o) from_member(t, _obj_head_mark, &(o)->_obj_head_mark)
-#define g_as_obj(o) g_as(GObj, o)
+#define g_as(t,o) from_member(t, _obj_head, &(o)->_obj_head)
+#define g_as_ref(o) g_as(GObj, o)
 
 #define obj_idx(k,l,f) ({ \
     a_int _k = k; a_uint _l = l; \
@@ -388,25 +465,25 @@ struct Impl_ {
     _i;                 \
 })
 
-#define v_is_obj(v) v_in(v, T__MIN_OBJ, T__MAX_OBJ)
+#define v_is_ref(v) v_in(v, T__MIN_REF, T__MAX_REF)
 
-always_inline a_gptr v_as_obj(Value v) {
-    assume(v_is_obj(v), "not object.");
+always_inline a_gptr v_as_ref(Value v) {
+    assume(v_is_ref(v), "not reference.");
     return int2ptr(GObj, v_get_data(v));
 }
 
-always_inline Value v_of_obj_(a_gptr o, a_enum t) {
+always_inline Value v_of_ref(a_gptr o, a_enum t) {
     return v_new(V_STENCIL(t) | ptr2int(o));
 }
 
-#define v_of_obj_(o,t) v_of_obj_(g_as_obj(o), t)
+#define v_of_ref(o,t) v_of_ref(g_as_ref(o), t)
 
-#define v_of_other(o) v_of_obj_(o, T_OTHER)
+#define v_of_other(o) v_of_ref(o, T_OTHER)
 
 always_inline void v_set_other(a_henv env, Value* d, a_gptr o) {
     v_set(env, d, v_of_other(o));
 }
 
-#define v_set_other(env,d,o) v_set_other(env, d, g_as_obj(o))
+#define v_set_other(env,d,o) v_set_other(env, d, g_as_ref(o))
 
 #endif /* aobj_h_ */

@@ -32,7 +32,7 @@
 
 #define setprogdir(env) quiet(env)
 
-static Impl const lib_impl;
+static KHeap const lib_klass;
 
 #if ALO_OS_WINDOWS
 
@@ -169,7 +169,7 @@ static void lib_mark(Global* gbl, unused GLib* self) {
 
 static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
     GLib* self = ai_mem_alloc(env, sizeof(GLib));
-    self->impl = &lib_impl;
+    self->klass = &lib_klass;
 
     catch (lib_open(env, file, &self->lib), msg) {
         ai_mem_dealloc(G(env), self, sizeof(GLib));
@@ -184,17 +184,17 @@ static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
 }
 
 static GLib* lib_cast(Value v) {
-    if (!v_is_obj(v))
+    if (!v_is_ref(v))
         return null;
-    GObj* obj = v_as_obj(v);
-    if (obj->impl != &lib_impl)
+    a_gptr obj = v_as_ref(v);
+    if (!k_eq(g_klass(obj), &lib_klass))
         return null;
     return g_as(GLib, obj);
 }
 
-static Impl const lib_impl = {
+static KHeap const lib_klass = {
     .tag = ALO_TUSER,
-    .flags = IMPL_FLAG_GREEDY_MARK,
+    .flags = KLASS_FLAG_PLAIN | KLASS_FLAG_HIDDEN,
     .drop = lib_drop,
     .mark = lib_mark
 };
@@ -369,7 +369,7 @@ static GTable* check_cache(a_henv env, GType* self) {
 
     GTable* cache;
     if (v_is_nil(*pv)) {
-        cache = ai_table_new(env);
+        cache = ai_table_new(env, REFERENCE_STRONG);
 
         v_set_table(env, pv, cache);
         ai_gc_barrier_forward(env, self, cache);

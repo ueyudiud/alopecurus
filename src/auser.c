@@ -18,7 +18,7 @@ static GUser* user_alloc(a_henv env, GUType* type) {
 
 GUser* ai_user_new(a_henv env, GUType* type) {
     GUser* self = user_alloc(env, type);
-    self->impl = &type->body;
+    self->klass = &type->body;
 
     memclr(self->block, type->block_size);
     v_set_nil_ranged(self->slot - type->num_slot, self->slot);
@@ -29,9 +29,9 @@ GUser* ai_user_new(a_henv env, GUType* type) {
 }
 
 GUser* ai_user_clone(a_henv env, GUser* proto) {
-    GUType* type = from_member(GUType, body, proto->impl);
+    GUType* type = from_member(GUType, body, g_klass(proto));
     GUser* self = user_alloc(env, type);
-    self->impl = proto->impl;
+    self->klass = proto->klass;
 
     memcpy(self->block, proto->block, type->block_size);
     v_cpy_all(env, self->slot - type->num_slot, proto->slot - type->num_slot, type->num_slot);
@@ -45,10 +45,10 @@ void ai_user_mark(Global* gbl, a_gptr obj) {
     GUser* self = g_as(GUser, obj);
     GUType* type = g_type(gbl, self)->as_utype;
     for (a_u32 i = 0; i < type->num_slot; ++i) {
-        ai_gc_trace_mark_val(gbl, *user_slot(self, i));
+        v_trace(gbl, *user_slot(self, i));
     }
     ai_gc_trace_work(gbl, user_size(type));
-    ai_gc_trace_mark(gbl, g_type(gbl, obj));
+    g_trace(gbl, g_type(gbl, obj));
 }
 
 void ai_user_drop(Global* gbl, a_gptr obj) {

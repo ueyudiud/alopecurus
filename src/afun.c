@@ -13,10 +13,10 @@
 
 #include "afun.h"
 
-static Impl const afun_impl;
-static Impl const uniq_afun_impl;
-static Impl const cfun_impl;
-static Impl const proto_impl;
+static KHeap const afun_klass;
+static KHeap const uafun_klass;
+static KHeap const cfun_klass;
+static KHeap const proto_klass;
 
 static a_usize fun_size(a_usize ncap) {
 	return sizeof(GFun) + sizeof(Value) * ncap;
@@ -56,7 +56,7 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
     }
     else {
         self = blk;
-        self->impl = &proto_impl;
+        self->klass = &proto_klass;
     }
 
     self->size = total_size;
@@ -105,7 +105,7 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
 		GFun* fun = int2ptr(GFun, addr);
 		addr += fun_size(desc->ncap);
 
-		fun->impl = &uniq_afun_impl;
+		fun->klass = &uafun_klass;
 		fun->proto = self;
 		fun->ncap = desc->ncap;
 
@@ -128,7 +128,7 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
 GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 	GFun* self = ai_mem_alloc(env, fun_size(ncap));
 
-	self->impl = &cfun_impl;
+	self->klass = &cfun_klass;
 	self->ncap = ncap;
 	self->fptr = hnd;
 	self->flags = FUN_FLAG_NATIVE | FUN_FLAG_VARARG;
@@ -196,7 +196,7 @@ static RcCap* cap_load(a_henv env, CapInfo const* info, RcCap** up, Value* stack
 }
 
 static void v_close(a_henv env, Value v) {
-    a_gptr p = v_as_obj(v);
+    a_gptr p = v_as_ref(v);
     (*g_fetch(p, close))(env, p);
 }
 
@@ -233,7 +233,7 @@ GFun* ai_fun_new(a_henv env, GProto* proto) {
 
 	GFun* self = ai_mem_alloc(env, fun_size(len));
 
-	self->impl = &afun_impl;
+	self->klass = &afun_klass;
 	self->proto = proto;
 	self->ncap = len;
 	self->flags = proto->flags;
@@ -255,8 +255,8 @@ static a_bool cap_is_closed(RcCap* self) {
 }
 
 static void cap_mark(Global* gbl, RcCap* self) {
-	if (cap_is_closed(self) || gbl->gcstep == GCSTEP_PROPAGATE_ATOMIC) {
-		ai_gc_trace_mark_val(gbl, *self->ptr);
+	if (cap_is_closed(self) || gbl->gcstep == GCSTEP_TRACE_ATOMIC) {
+        v_trace(gbl, *self->ptr);
 	}
 	else {
 		self->ftouch = true;
@@ -292,7 +292,7 @@ static void cap_close_internal(a_henv env, RcCap* restrict self) {
 	self->ptr = &self->slot;
 
 	if (self->ftouch) {
-		ai_gc_trace_mark_val(G(env), self->slot);
+        v_trace(G(env), self->slot);
 	}
 }
 
@@ -334,28 +334,28 @@ static void proto_drop(Global* gbl, GProto* self) {
 
 static void proto_mark_body(Global* gbl, GProto* self) {
     for (a_u32 i = 0; i < self->nconst; ++i) {
-        ai_gc_trace_mark_val(gbl, self->consts[i]);
+        v_trace(gbl, self->consts[i]);
     }
     for (a_u32 i = 0; i < self->nsub; ++i) {
-        ai_gc_trace_mark(gbl, self->subs[i]);
+        g_trace(gbl, self->subs[i]);
     }
     if (self->dbg_name != null) {
-        ai_gc_trace_mark(gbl, self->dbg_name);
+        g_trace(gbl, self->dbg_name);
     }
     if (self->dbg_file != null) {
-        ai_gc_trace_mark(gbl, self->dbg_file);
+        g_trace(gbl, self->dbg_file);
     }
     if (self->dbg_locals != null) {
         for (a_u32 i = 0; i < self->nlocal; ++i) {
             LocalInfo* info = &self->dbg_locals[i];
             if (info->name != null) {
-                ai_gc_trace_mark(gbl, info->name);
+                g_trace(gbl, info->name);
             }
         }
         assume(self->dbg_cap_names != null);
         for (a_u32 i = 0; i < self->ncap; ++i) {
             if (self->dbg_cap_names[i] != null) {
-                ai_gc_trace_mark(gbl, self->dbg_cap_names[i]);
+                g_trace(gbl, self->dbg_cap_names[i]);
             }
         }
     }
@@ -382,7 +382,7 @@ static void afun_mark_body(Global* gbl, GFun* self) {
 }
 
 static void afun_mark(Global* gbl, GFun* self) {
-    ai_gc_trace_mark(gbl, self->proto);
+    g_trace(gbl, self->proto);
     afun_mark_body(gbl, self);
     ai_gc_trace_work(gbl, fun_size(self->ncap));
 }
@@ -409,7 +409,7 @@ static void cfun_drop(Global* gbl, GFun* self) {
 static void cfun_mark(Global* gbl, GFun* self) {
     a_u32 len = self->ncap;
     for (a_u32 i = 0; i < len; ++i) {
-        ai_gc_trace_mark_val(gbl, self->val_caps[i]);
+        v_trace(gbl, self->val_caps[i]);
     }
     ai_gc_trace_work(gbl, fun_size(len));
 }
@@ -423,26 +423,34 @@ void ai_proto_drop(Global* gbl, GProto* self) {
     }
 }
 
-static Impl const afun_impl = {
+static KHeap const afun_klass = {
     .tag = ALO_TFUNC,
+    .flags = KLASS_FLAG_NONE,
+    .name = "fun",
     .drop = afun_drop,
     .mark = afun_mark
 };
 
-static Impl const uniq_afun_impl = {
+static KHeap const uafun_klass = {
     .tag = ALO_TFUNC,
+    .flags = KLASS_FLAG_NONE,
+    .name = "fun",
     .drop = uniq_afun_drop,
     .mark = uniq_afun_mark
 };
 
-static Impl const cfun_impl = {
+static KHeap const cfun_klass = {
     .tag = ALO_TFUNC,
+    .flags = KLASS_FLAG_NONE,
+    .name = "fun",
     .drop = cfun_drop,
     .mark = cfun_mark
 };
 
-static Impl const proto_impl = {
+static KHeap const proto_klass = {
     .tag = ALO_TPTR,
+    .flags = KLASS_FLAG_HIDDEN,
+    .name = null,
     .drop = proto_drop,
     .mark = proto_mark
 };

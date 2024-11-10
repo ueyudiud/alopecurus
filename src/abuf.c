@@ -12,7 +12,7 @@
 
 #include "abuf.h"
 
-static Impl const buf_impl;
+static KHeap const buf_klass;
 
 a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...) {
     va_list varg;
@@ -49,7 +49,7 @@ a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg) {
 GBuf* ai_buf_new(a_henv env) {
 	GBuf* self = ai_mem_alloc(env, sizeof(GBuf));
 
-	self->impl = &buf_impl;
+	self->klass = &buf_klass;
 	at_buf_init(self);
 
 	ai_gc_register_normal(env, self);
@@ -78,9 +78,10 @@ static void buf_drop(Global* gbl, a_gptr raw_self) {
 	ai_mem_dealloc(gbl, self, sizeof(GBuf));
 }
 
-static Impl const buf_impl = {
+static KHeap const buf_klass = {
     .tag = ALO_TBUF,
-    .flags = IMPL_FLAG_GREEDY_MARK,
+    .flags = KLASS_FLAG_PLAIN,
+    .name = "buf",
     .drop = buf_drop,
     .mark = buf_mark
 };

@@ -95,7 +95,7 @@ a_hash ai_vm_hash(a_henv env, Value v) {
     a_hash hash;
     if (!ai_tm_hash(env, v, &hash)) return hash;
 
-    return v_trivial_hash_unchecked(v);
+    return v_trivial_hash(v);
 }
 
 a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
@@ -512,7 +512,7 @@ static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_ulen num_ret, a_u32 f
 #if ALO_STACK_RELOC
     Value* R;
 # define R R
-# define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); base = ptr_disp(Value, R, _d); reload_stack(); })
+# define check_stack(top) ({ a_isize _d = ai_stk_check(env, top); base = addr_add(Value, R, _d); reload_stack(); })
 # define reload_stack() quiet(R = env->stack.bot)
 #else
 # define R (frame->stack_bot)
@@ -778,7 +778,7 @@ tail_call:
             case BC_HNEW: {
                 loadBx();
 
-                GTable* val = ai_table_new(env);
+                GTable* val = ai_table_new(env, REFERENCE_STRONG);
                 v_set_table(env, &R[a], val);
                 if (b > 0) {
                     ai_table_grow(env, val, b);

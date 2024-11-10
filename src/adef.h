@@ -136,7 +136,8 @@ typedef void (*a_efun)(a_henv, void*, a_msg);
 #define addr_diff(p,q) ({ void const *_p = (p), *_q = (q); _p - _q; })
 #define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
 #define ref_of(t,a) (*int2ptr(t, a))
-#define ptr_disp(t,p,d) int2ptr(t, ptr2int(p) + (d))
+#define addr_add(t,p,d) int2ptr(t, ptr2int(p) + (d))
+#define addr_sub(t,p,d) int2ptr(t, ptr2int(p) - (d))
 #define from_member(t,f,v) int2ptr(t, ptr2int(v) - offsetof(t, f))
 #define fallthrough __attribute__((__fallthrough__))
 
