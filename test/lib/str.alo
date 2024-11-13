@@ -1,0 +1,6 @@
+if (str == nil) {
+    print("no library 'str', skipped")
+    return
+}
+
+assert(' '.trim() == '')

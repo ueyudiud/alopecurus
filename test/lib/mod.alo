@@ -1,0 +1,2 @@
+lib.load('lib.str')
+lib.load('lib.table')
