@@ -41,6 +41,15 @@ static void expr_dyn(Expr* e, a_u32 label, a_line line) {
     e->line = line;
 }
 
+static void expr_refi(Expr* e, a_reg reg, a_int key, a_line line) {
+    assume(reg != R_DMB, "invalid register.");
+    assume(key >= BC_MIN_SC && key <= BC_MAX_SC, "integer key out of bound.");
+    e->tag = EXPR_REFI;
+    e->udat1 = reg;
+    e->udat2 = cast(a_u32, key);
+    e->line = line;
+}
+
 /*=========================================================*/
 
 enum {
@@ -630,9 +639,7 @@ void ai_cg_symbol(Parser* par, Expr* e, GStr* name, a_line line) {
 void ai_cg_index_int(Parser* par, Expr* e, a_int k, a_line line) {
     a_u32 reg = eval_to_reg(par, e);
     if (k >= 0 && k <= BC_MAX_C) {
-        e->tag = EXPR_REFI;
-        e->udat1 = reg;
-        e->udat2 = cast(a_u32, k);
+        expr_refi(e, reg, k, line);
     }
     else {
         e->tag = EXPR_REFK;
@@ -1597,11 +1604,7 @@ a_u32 ai_cg_vec_trim(Parser* par, Expr* ei, Expr* el, a_u32 n, a_line line) {
         case EXPR_NTMPC: {
             ai_cg_vec_push_right(par, ei, el);
             ai_cg_list_box(par, ei, line);
-            init(el) {
-                .tag = EXPR_REFI,
-                .udat1 = ei->udat1,
-                .udat2 = n - 1
-            };
+            expr_refi(el, ei->udat1, n - 1, line);
             return 0;
         }
         default: {
@@ -2025,13 +2028,14 @@ static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
             a_u32 top = bot + pat->num_bwd;
             a_u32 src_reg = eval_to_reg_or(par, src, top);
             if (pat->fcpx && num > 2) {
+                top += pat->num_sub - 1;
                 emit_iab(par, BC_UNBOXT, top, src_reg, line);
 
                 Pat* sub = pat->sub;
                 a_u32 sub_idx = 0;
 
                 while (sub != null) {
-                    emit_idbc(par, BC_GETI, src, top, sub_idx, sub->line);
+                    expr_refi(src, top, cast(a_int, sub_idx), sub->line);
                     bot = pat_bind_with(par, sub, bot, src);
 
                     sub = sub->sib;
@@ -2059,7 +2063,6 @@ static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
  */
 static a_u32 pat_valloc(Parser* par, Pat* pat) {
     pat->num_bwd = 0;
-    pat->num_fwd = 0;
     switch (pat->tag) {
         case PAT_VAR: {
             return 1;
@@ -2070,24 +2073,20 @@ static a_u32 pat_valloc(Parser* par, Pat* pat) {
         case PAT_VARG:
         case PAT_TUPLE: {
             Pat* sub = pat->sub;
-            a_u32 sub_idx = 0;
             a_u32 num_pin = 0;
 
             pat->num_bwd = pat->num_sub;
-            pat->num_fwd = pat->num_sub;
 
             loop {
                 a_u32 sub_pin = pat_valloc(par, sub);
-                a_u32 sub_use = num_pin + sub->num_bwd + sub->num_fwd;
+                a_u32 sub_use = num_pin + sub->num_bwd + sub->num_sub;
+                pat->num_bwd = max(pat->num_bwd, sub_use + num_pin);
                 num_pin += sub_pin;
 
-                a_u32 num_tail = pat->num_sub - sub_idx - 1;
-                pat->num_bwd = max(pat->num_bwd, sub_use + sub->num_bwd);
                 if (sub->sib == null)
                     break;
 
                 sub = sub->sib;
-                sub_idx += 1;
             }
 
             pat->num_bwd -= pat->num_sub;

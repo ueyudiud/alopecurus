@@ -200,19 +200,12 @@ always_inline void memclr(void* dst, a_usize len) {
     memset(dst, 0, len);
 }
 
-#if !ALO_C23
-/* Compact with C23 standard function. */
-# define ckd_add(d,a,b) __builtin_add_overflow(a, b, d)
-# define ckd_sub(d,a,b) __builtin_sub_overflow(a, b, d)
-# define ckd_mul(d,a,b) __builtin_mul_overflow(a, b, d)
+#define ckd_add(d,a,b) __builtin_add_overflow(a, b, d)
+#define ckd_sub(d,a,b) __builtin_sub_overflow(a, b, d)
+#define ckd_mul(d,a,b) __builtin_mul_overflow(a, b, d)
 
-# define count_leading_zero(a) __builtin_clz(a)
-# define ceil_power_of_two(a) ((~((typeof(a)) 0) >> count_leading_zero(a)) + 1)
-#else
-/* Redirect to C23 defined function name. */
-# define count_leading_zero(a) stdc_leading_zeros(a)
-# define ceil_power_of_two(a) stdc_bit_ceil(a)
-#endif
+#define count_leading_zero(a) __builtin_clz(a)
+#define ceil_power_of_two(a) ((~((typeof(a)) 0) >> count_leading_zero(a)) + 1)
 
 #define try_add(a,b) ({ typeof((a) + (b)) _c; try (ckd_add(&_c, a, b)); _c; })
 #define try_sub(a,b) ({ typeof((a) - (b)) _c; try (ckd_sub(&_c, a, b)); _c; })

@@ -241,7 +241,6 @@ struct Pat {
     a_u8 tag;
     a_u8 num_sub;
     a_u8 num_bwd;
-    a_u8 num_fwd;
     union {
         a_u8 flags;
         struct {

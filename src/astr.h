@@ -38,7 +38,7 @@ enum {
     STR_POS__DUMMY = ISIZE_MAX /* Pad enumeration to a_isize type. */
 };
 
-intern char const ai_str_interns[STR__TOTAL_LEN];
+intern char const ai_str_interns[];
 
 always_inline a_enum str_id(GStr* o) {
     return bit_cast(a_usize, o->gnext) >> 48;

@@ -43,6 +43,9 @@ static a_msg table___new__(a_henv env) {
         if (mode_str != null) {
             mode = mode_from_str(env, 1, mode_str);
         }
+        else {
+            mode = REFERENCE_STRONG;
+        }
     }
     switch (v_get_tag(v)) {
         case T_NIL: {

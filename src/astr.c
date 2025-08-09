@@ -354,4 +354,4 @@ char const ai_str_interns[] = {
 #undef SYMDEF
 };
 
-static_assert(sizeof(ai_str_interns) == STR__TOTAL_LEN);
+static_assert(sizeof(ai_str_interns) == STR__TOTAL_LEN + 1);
