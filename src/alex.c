@@ -323,7 +323,7 @@ enum {
  *@param tk the output token.
  *@param sign the sign of number, 0 for unsigned number and 1 or -1 for positive or negative number.
  *@param ch the leading character.
- *@return the token kind.
+ *@return the token tag.
  */
 static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
     a_i32 e; /* Exponent count. */
@@ -849,10 +849,10 @@ static a_i32 l_scan_dqchr(Lexer* lex, Token* tk, a_u32 line) {
 		}
 		case '\"': {
 			if (lex->buf->len == 0)
-				return TK_TSEND;
+				return TK_TSFINISH;
 
 			tk->as_str = l_to_str(lex);
-			lex->ahead[1].tag = TK_TSEND;
+			lex->ahead[1].tag = TK_TSFINISH;
 			return TK_STRING;
 		}
 		default: {
@@ -1038,7 +1038,11 @@ static a_i32 l_scan_plain(Lexer* lex, Token* tk) {
                 return l_scan_sqstr(lex, tk);
             }
 			case '\"': {
-				return TK_TSBEGIN;
+				a_i32 tag = l_scan_dqstr(lex, tk, lex->line);
+                if (tag == TK_STRING && lex->ahead[1].tag == TK_TSFINISH) {
+                    lex->ahead[1].tag = TK__NONE;
+                }
+                return tag;
 			}
             default: {
 				ai_lex_error(lex, "invalid character, got '%c'", lex->line, ch);
@@ -1057,36 +1061,31 @@ static void l_scan2(Lexer* lex, Token* tk, a_u32 line) {
 	tk->tag = l_scan_dqstr(lex, tk, line);
 }
 
-a_i32 ai_lex_forward(Lexer* lex) {
-	assume(lex->ahead[0].tag != TK__NONE, "cannot call forward() before poll current token.");
-	if (lex->ahead[1].tag == TK__NONE) {
-		l_scan(lex, &lex->ahead[1]);
-	}
-	return lex->ahead[1].tag;
+void ai_lex_next2(Lexer* lex) {
+	assume(lex->ahead[0].tag != TK__NONE && lex->ahead[1].tag == TK__NONE);
+    l_scan(lex, &lex->ahead[1]);
 }
 
-a_i32 ai_lex_peek(Lexer* lex) {
-    if (lex->ahead[0].tag == TK__NONE) {
-		if (lex->ahead[1].tag != TK__NONE) {
-			lex->ahead[0] = lex->ahead[1];
-			lex->ahead[1].tag = TK__NONE;
-		}
-		else {
-			l_scan(lex, &lex->ahead[0]);
-		}
+void ai_lex_next(Lexer* lex) {
+    assume(lex->ahead[0].tag == TK__NONE);
+
+    if (lex->ahead[1].tag != TK__NONE) {
+        lex->ahead[0] = lex->ahead[1];
+        lex->ahead[1].tag = TK__NONE;
     }
-    return lex->ahead[0].tag;
+    else {
+        l_scan(lex, &lex->ahead[0]);
+    }
 }
 
-a_i32 ai_lex_peek2(Lexer* lex, a_u32 line) {
-    if (lex->ahead[0].tag == TK__NONE) {
-		if (lex->ahead[1].tag != TK__NONE) {
-			lex->ahead[0] = lex->ahead[1];
-			lex->ahead[1].tag = TK__NONE;
-		}
-		else {
-			l_scan2(lex, &lex->ahead[0], line);
-		}
+void ai_lex_next_dqstr(Lexer* lex, a_u32 line) {
+    assume(lex->ahead[0].tag == TK__NONE);
+
+    if (lex->ahead[1].tag != TK__NONE) {
+        lex->ahead[0] = lex->ahead[1];
+        lex->ahead[1].tag = TK__NONE;
     }
-    return lex->ahead[0].tag;
+    else {
+        l_scan2(lex, &lex->ahead[0], line);
+    }
 }

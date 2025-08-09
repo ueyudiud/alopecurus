@@ -313,12 +313,8 @@ always_inline Value v_float_key(Value v) {
 #define v_has_trivial_equals(v) (!v_in(v, T__MIN_NEQ, T__MAX_NEQ))
 
 /* Identity equality. */
-#define v_trivial_equals_unchecked(v1,v2) ((v1)._ == (v2)._)
+#define v_trivial_equals(v1,v2) ((v1)._ == (v2)._)
 
-always_inline a_bool v_trivial_equals(Value v1, Value v2) {
-    assume(v_has_trivial_equals(v1), "object does not have trivial equality.");
-    return v_trivial_equals_unchecked(v1, v2);
-}
 
 /*=========================================================*
  * Reference

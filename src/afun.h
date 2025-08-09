@@ -8,7 +8,7 @@
 #include "aobj.h"
 
 typedef struct LocalInfo LocalInfo;
-typedef struct CapInfo CapInfo;
+typedef struct CapSrc CapSrc;
 typedef struct LineInfo LineInfo;
 typedef struct ProtoDesc ProtoDesc;
 
@@ -92,7 +92,7 @@ struct GProto {
     a_u16 nlocal;
     a_u16 nline;
     a_u8 ncap;
-    CapInfo* caps;
+    CapSrc* caps;
     GFun* cache;
     GStr* dbg_name;
     GStr* dbg_file;
@@ -111,7 +111,7 @@ struct LocalInfo {
     a_u8 reg;
 };
 
-struct CapInfo {
+struct CapSrc {
     union {
         a_u8 flags;
         struct {

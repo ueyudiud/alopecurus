@@ -242,8 +242,8 @@ ifeq (debug,$(LEVEL))
   TARGET_STRIP= @:
 endif
 
-KER_O= aapi.o aparse.o alex.o adbg.o aerr.o aload.o asave.o avm.o \
-atm.o afmt.o agc.o amem.o aenv.o astk.o auser.o atype.o afun.o \
+KER_O= aapi.o acg.o aparse.o alex.o adbg.o aerr.o aload.o asave.o \
+avm.o atm.o afmt.o agc.o amem.o aenv.o astk.o auser.o atype.o afun.o \
 atable.o alist.o atuple.o astr.o abuf.o aio.o abc.o actx.o ajmp.o
 LIB_O= aloadlib.o aiolib.o asyslib.o adbglib.o atypelib.o atablelib.o \
 alistlib.o astrlib.o aintlib.o abaselib.o aauxlib.o

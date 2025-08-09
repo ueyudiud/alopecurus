@@ -124,9 +124,8 @@ _d(IDENT    , "<ident>"      ) \
 _d(INTEGER  , "<integer>"    ) \
 _d(FLOAT    , "<float>"      ) \
 _d(STRING   , "<string>"     ) \
-_d(TSBEGIN  , "<string>"     ) \
 _d(TSESCAPE , "'$'"          ) \
-_d(TSEND    , "<string>"     ) \
+_d(TSFINISH , "<string>"     ) \
 _d(EOF      , "<eof>"        ) \
 _e(OP)
 

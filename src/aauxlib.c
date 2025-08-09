@@ -438,7 +438,7 @@ a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_as_type(v);
 
-    catch (ai_type_getls(env, o, nt2lstr(s), &v)) {
+    if (ai_type_getls(env, o, nt2lstr(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -452,7 +452,7 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_type(env, v);
 
-    catch (ai_type_getls(env, o, nt2lstr(s), &v)) {
+    if (ai_type_getls(env, o, nt2lstr(s), &v)) {
         return ALO_EEMPTY;
     }
 

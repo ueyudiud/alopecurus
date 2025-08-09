@@ -118,8 +118,12 @@ always_inline a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usi
 always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, a_usize lim) {
 	if (add > buf->cap - buf->len) {
 		a_usize cap = buf->cap;
-		catch (ai_buf_nhint(&cap, buf->len, add, lim)) { return ALO_EINVAL; }
-		catch (ai_buf_ngrow(env, buf, cap, size)) { return ALO_ENOMEM; }
+		if (ai_buf_nhint(&cap, buf->len, add, lim)) {
+            return ALO_EINVAL;
+        }
+		if (ai_buf_ngrow(env, buf, cap, size)) {
+            return ALO_ENOMEM;
+        }
 	}
 	return ALO_SOK;
 }

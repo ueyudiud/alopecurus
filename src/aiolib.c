@@ -100,7 +100,7 @@ static a_msg file_open0(a_henv env, GFile** pfile) {
     char const* mode = aloL_optstr(env, 1) ?: "r";
 
     GFile* self = ai_mem_alloc(env, sizeof(GFile));
-    self->impl = &v_as_type(api_elem(env, ALO_STACK_INDEX_CAPTURE(0)))->as_itype->body;
+    self->klass = &v_as_type(api_elem(env, ALO_STACK_INDEX_CAPTURE(0)))->as_itype->body;
     int error;
 #if ALO_OS_WINDOWS
     error = fopen_s(&self->handle, filename, mode);
@@ -269,14 +269,14 @@ static void check_file_type(a_henv env) {
     };
 
     if (alo_isnil(env, ALO_STACK_INDEX_CAPTURE(0))) {
-        GType* self = ai_itype_new(env, (Impl) {
+        GType* self = ai_itype_new(env, &(KClose) {
             .tag = ALO_TUSER,
             .name = "file",
             .flags = 0,
             .mark = file_mark0,
             .close = file_close0,
             .drop = file_drop0
-        });
+        }, sizeof(KClose));
 
         v_set_type(env, api_wrslot(env, ALO_STACK_INDEX_CAPTURE(0)), self);
 

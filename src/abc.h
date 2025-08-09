@@ -142,6 +142,7 @@ always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
     _(   LEN,   "len",reg,reg,___,___) /* R[a] := #R[b]                           */ \
     _( UNBOX, "unbox",reg,___,len,___) /* R[a:a+c] := *R[b]                       */ \
     _(UNBOXV,"unboxv",reg,___,___,___) /* R[a:] := *R[b]                          */ \
+    _(UNBOXT,"unboxt",reg,___,___,___) /* R[a] := tuple(*R[b])                    */ \
     _(  TNEW,  "tnew",reg,reg,len,___) /* R[a] := (R[b:b+c])                      */ \
     _( TNEWM, "tnewm",reg,reg,___,___) /* R[a] := (R[b:])                         */ \
     _(  LNEW,  "lnew",reg,ini,___,___) /* R[a] := [] (with size hint b)           */ \

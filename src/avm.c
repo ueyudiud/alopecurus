@@ -117,7 +117,7 @@ a_bool ai_vm_equals(a_henv env, Value v1, Value v2) {
     a_bool z;
     if (!ai_tm_equals(env, v1, v2, &z)) return z;
 
-    return v_trivial_equals_unchecked(v1, v2);
+    return v_trivial_equals(v1, v2);
 }
 
 Value ai_vm_unary(a_henv env, Value v, a_enum op) {
@@ -1063,6 +1063,19 @@ tail_call:
                 }
                 else {
 					ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_name(env, vb));
+                }
+                break;
+            }
+            case BC_UNBOXT: {
+                loadB();
+
+                Value vb = R[b];
+
+                if (v_is_tuple(vb) || v_is_list(vb)) {
+                    v_set(env, &R[a], vb);
+                }
+                else {
+                    ai_err_raisef(env, ALO_EINVAL, "cannot unbox '%s' value.", v_name(env, vb));
                 }
                 break;
             }

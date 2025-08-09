@@ -52,7 +52,7 @@ static a_bool list_grow(a_henv env, GList* self, a_ulen add) {
 }
 
 void ai_list_grow(a_henv env, GList* self, a_usize add) {
-    catch (list_grow(env, self, add)) {
+    if (list_grow(env, self, add)) {
         ai_err_raisef(env, ALO_EINVAL, "too many elements.");
     }
 }

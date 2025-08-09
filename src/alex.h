@@ -25,9 +25,9 @@ intern char const* ai_lex_tagname(a_i32 tag);
 intern char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf);
 intern a_noret ai_lex_report(Lexer* lex, char const* fmt, ...);
 intern GStr* ai_lex_to_str(Lexer* lex, a_lstr src);
-intern a_i32 ai_lex_forward(Lexer* lex);
-intern a_i32 ai_lex_peek(Lexer* lex);
-intern a_i32 ai_lex_peek2(Lexer* lex, a_u32 line);
+intern void ai_lex_next2(Lexer* lex);
+intern void ai_lex_next(Lexer* lex);
+intern void ai_lex_next_dqstr(Lexer* lex, a_u32 line);
 
 #define ai_lex_error(lex,fmt,ln,args...) ai_lex_report(lex, "%s:%u: "fmt, (lex)->file, ln, ##args)
 

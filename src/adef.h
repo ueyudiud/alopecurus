@@ -120,11 +120,6 @@ typedef void (*a_efun)(a_henv, void*, a_msg);
 #define run if (true)
 #define loop while (true)
 
-#if ALO_C23
-# include <stdchkint.h>
-# include <stdbit.h>
-#endif
-
 #undef max
 #undef min
 
@@ -160,14 +155,7 @@ always_inline void quiet_(unused int dummy, ...) {}
 #define expect(e,v) __builtin_expect(e, v)
 #define likely(e) expect(!!(e), true)
 #define unlikely(e) expect(!!(e), false)
-
-always_inline a_noret unreachable() {
-    __builtin_unreachable();
-}
-
-always_inline a_noret trap() {
-    __builtin_trap();
-}
+#define trap() __builtin_trap()
 
 /* Error handling functions. */
 
@@ -193,7 +181,9 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 
 #if defined(ALOI_CHECK_ASSUME) && defined(ALO_LIB)
 # define panic(...) ai_dbg_panic(""__VA_ARGS__)
+# define unreachable() panic("unreachable code.")
 #else
+# define unreachable() __builtin_unreachable()
 # define panic(...) unreachable()
 #endif
 

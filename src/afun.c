@@ -28,7 +28,7 @@ static a_usize proto_size_with_head(ProtoDesc const* desc) {
 	a_usize size = sizeof(GProto) +
 				   sizeof(Value) * desc->nconst +
 				   sizeof(a_insn) * desc->ninsn +
-				   sizeof(CapInfo) * desc->ncap +
+                   sizeof(CapSrc) * desc->ncap +
 				   sizeof(GProto*) * desc->nsub;
 	if (desc->flags & FUN_FLAG_DEBUG) {
 		size += sizeof(LineInfo) * desc->nline +
@@ -112,8 +112,8 @@ GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc) {
 		self->cache = fun;
 	}
 
-	self->caps = int2ptr(CapInfo, addr);
-	addr += sizeof(CapInfo) * self->ncap;
+	self->caps = int2ptr(CapSrc, addr);
+	addr += sizeof(CapSrc) * self->ncap;
 
 	self->code = int2ptr(a_insn, addr);
 	addr += sizeof(a_insn) * self->ninsn;
@@ -182,7 +182,7 @@ static RcCap* cap_nload_from_stack(a_henv env, Value* pv) {
 	return cap;
 }
 
-static RcCap* cap_load(a_henv env, CapInfo const* info, RcCap** up, Value* stack) {
+static RcCap* cap_load(a_henv env, CapSrc const* info, RcCap** up, Value* stack) {
 	if (info->fup) {
         RcCap* cap = up[info->reg];
         cap->nref += 1;
@@ -227,7 +227,7 @@ void ai_cap_mark_tbc(a_henv env, Value* p) {
 GFun* ai_fun_new(a_henv env, GProto* proto) {
 	Value* base = ai_stk_bot(env);
 	GFun* parent = v_as_func(base[-1]);
-	CapInfo* infos = proto->caps;
+	CapSrc* infos = proto->caps;
 
 	a_u32 len = proto->ncap;
 

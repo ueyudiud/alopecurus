@@ -463,7 +463,7 @@ a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex) {
     Value vk = *rk;
 
     /* Attempt to use cached index. */
-    if (!v_trivial_equals_unchecked(vk, n->key)) {
+    if (!v_trivial_equals(vk, n->key)) {
         /* Failed, try to locate index again. */
         catch (table_find_with_trivial_equality(self, vk, ai_vm_hash(env, vk), pindex)) {
             /* No key found, raise error here. */

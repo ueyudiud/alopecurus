@@ -79,7 +79,7 @@ a_usize ai_fmt_ptr2str(char* p, void* v) {
 }
 
 void ai_fmt_putp(a_henv env, Buf* buf, void* v) {
-	catch (ai_buf_ncheck(env, buf, BUFF_SIZE_FOR_PTR, 1, SIZE_MAX)) {
+	if (ai_buf_ncheck(env, buf, BUFF_SIZE_FOR_PTR, 1, SIZE_MAX)) {
 		ai_mem_nomem(env);
 	}
 	buf->len += ai_fmt_ptr2str(buf_end(buf) + BUFF_SIZE_FOR_PTR, v);

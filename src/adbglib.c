@@ -136,6 +136,7 @@ static void dump_code(GProto* meta, a_bool fline) {
 			case BC_LPUSHM:
 			case BC_LBOXM:
 			case BC_UNBOXV:
+            case BC_UNBOXT:
 			case BC_BEQ:
 			case BC_BNE:
 			case BC_BLT:
@@ -259,7 +260,7 @@ static void dump_chunk(a_henv env, GProto* proto, a_u32 options) {
 			}
 			printf("capture info table <%p>\n", proto->caps);
 			for (a_u32 i = 0; i < proto->ncap; ++i) {
-				CapInfo* info = &proto->caps[i];
+				CapSrc* info = &proto->caps[i];
 				GStr* name = proto->dbg_cap_names[i];
 				aloi_show("\t%5u\t%c[%u]\t%s\n",
                           i,

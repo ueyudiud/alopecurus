@@ -36,3 +36,20 @@ assert(#t == 1)
 k = nil
 sys.gc()
 assert(#t == 0)
+
+t = table('kv')
+k = {}
+v = {}
+
+assert(#t == 0)
+
+t[k] = v
+assert(#t == 1)
+
+v = nil
+sys.gc()
+assert(#t == 0)
+
+k = nil
+sys.gc()
+assert(#t == 0)
