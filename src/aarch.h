@@ -31,6 +31,7 @@
 # define ALO_ARCH ALOI_ARCH
 #endif
 
+#define ALO_ARCH_X86 (ALO_ARCH == ALO_ENUM_ARCH_X86)
 #define ALO_ARCH_X64 (ALO_ARCH == ALO_ENUM_ARCH_X64)
 
 #ifndef ALOI_OS

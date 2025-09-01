@@ -28,8 +28,8 @@ typedef struct TNode TNode;
  */
 struct GTable {
     GOBJ_STRUCT_HEADER;
-    a_u32 len;
-    a_u32 hmask;
+    a_ulen len;
+    a_ulen hmask;
     TNode* ptr;
 };
 

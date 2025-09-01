@@ -51,13 +51,13 @@ static a_bool list_grow(a_henv env, GList* self, a_ulen add) {
     return false;
 }
 
-void ai_list_grow(a_henv env, GList* self, a_usize add) {
+void ai_list_grow(a_henv env, GList* self, a_ulen add) {
     if (list_grow(env, self, add)) {
         ai_err_raisef(env, ALO_EINVAL, "too many elements.");
     }
 }
 
-void ai_list_hint(a_henv env, GList* self, a_usize add) {
+void ai_list_hint(a_henv env, GList* self, a_ulen add) {
     if (add > self->cap - self->len) {
         ai_list_grow(env, self, add);
     }
@@ -72,7 +72,7 @@ void ai_list_push(a_henv env, GList* self, Value v) {
 	ai_gc_barrier_backward_val(env, self, v);
 }
 
-void ai_list_push_all(a_henv env, GList* self, Value const* src, a_usize len) {
+void ai_list_push_all(a_henv env, GList* self, Value const* src, a_ulen len) {
     ai_list_hint(env, self, len);
 
     v_cpy_all(env, &self->ptr[self->len], src, len);

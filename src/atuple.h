@@ -17,7 +17,7 @@ intern a_msg ai_tuple_uget(a_henv env, GTuple* self, Value vk, Value* pv);
 
 struct GTuple {
     GOBJ_STRUCT_HEADER;
-    a_u32 len;
+    a_ulen len;
     a_hash hash;
     Value ptr[0];
 };

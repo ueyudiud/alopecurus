@@ -205,6 +205,7 @@ always_inline void memclr(void* dst, a_usize len) {
 #define ckd_mul(d,a,b) __builtin_mul_overflow(a, b, d)
 
 #define count_leading_zero(a) __builtin_clz(a)
+#define count_trailing_zero(a) __builtin_ctz(a)
 #define ceil_power_of_two(a) ((~((typeof(a)) 0) >> count_leading_zero(a)) + 1)
 
 #define try_add(a,b) ({ typeof((a) + (b)) _c; try (ckd_add(&_c, a, b)); _c; })

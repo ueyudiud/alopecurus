@@ -23,7 +23,7 @@ intern void ai_str_clean(Global* gbl);
 
 struct GStr {
     GOBJ_STRUCT_HEADER;
-    a_u32 len;
+    a_ulen len;
     a_hash hash;
     GStr* snext;
     char ptr[];
