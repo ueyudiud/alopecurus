@@ -754,6 +754,7 @@ static void branch_instantiate(Parser* par, Expr* e, a_u32 reg) {
         emit_ia(par, e->tag == EXPR_TRUE_OR_FALSE ? BC_KT : BC_KF, reg, e->line);
     }
     else {
+        ai_cg_mark_label(par, e->udat2, e->line);
         emit_ia(par, e->tag == EXPR_TRUE_OR_FALSE ? BC_KF : BC_KT, reg, e->line);
     }
 }
@@ -1801,8 +1802,8 @@ a_u32 ai_cg_test_true(Parser* par, Expr* e, a_line line) {
 /**
  ** Discard the result of the expression,
  ** also drop the ownership of it.
- * @param par the parser.
- * @param e the expression to be discarded.
+ *@param par the parser.
+ *@param e the expression to be discarded.
  */
 void ai_cg_wild(Parser* par, Expr* e) {
     switch (e->tag) {
