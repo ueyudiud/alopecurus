@@ -589,13 +589,17 @@ static void resolve_symbol(Parser* par, Expr* e, a_u32 id) {
                 e->tag = EXPR_CAP;
                 e->mod = sym->mod;
                 e->udat1 = lookup_capture(par, sym);
+                e->line = sym->line;
                 return;
             }
             case EXPR_PUB: {
-                expr_pub_to_index(par, e, e->line);
+                e->tag = EXPR_REFCK;
+                e->udat1 = par->gvar_index;
+                e->udat2 = sym->udat1;
+                e->mod = sym->mod;
+                e->line = sym->line;
                 return;
             }
-            default: break;
         }
     }
 
@@ -1895,8 +1899,7 @@ void ai_cg_assign(Parser* par, Expr* e1, Expr* e2, a_line line) {
             break;
         }
         case EXPR_PUB: {
-            sym_check_writable(par, e1, line);
-            if (!(par->options & ALO_COMP_OPT_LOSSEN)) {
+            if (!(par->options & ALO_COMP_OPT_SCRIPT) || &par->root_scope != par->fscope) {
                 GStr* name = v_as_str(const_at(par, e1->udat2));
                 parse_error(par, "cannot assign to anonymous variable '%s'", line, str2ntstr(name));
             }
@@ -1912,7 +1915,7 @@ void ai_cg_assign(Parser* par, Expr* e1, Expr* e2, a_line line) {
             break;
         }
         default: {
-            panic("cannot assign to the expression.");
+            parse_error(par, "cannot assign to expression.", line);
         }
     }
 }

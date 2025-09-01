@@ -29,7 +29,6 @@
 #define M_cat0(a,b) a##b
 #define M_cat(a,b) M_cat0(a,b)
 
-#define ALO_COMP_OPT_LOSSEN 0x1000000
 #define ALO_COMP_OPT_EVAL 0x2000000
 
 /* Special attributes. */

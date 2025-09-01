@@ -261,7 +261,7 @@ ALO_EXPORT a_usize (alo_gchint)(a_henv env, a_enum n, a_usize s);
 #define ALO_COMP_OPT_NOTHING 0x0
 #define ALO_COMP_OPT_STATIC_LINK 0x1
 #define ALO_COMP_OPT_STRICT_NAME 0x2
-#define ALO_COMP_OPT_MODULE 0x4
+#define ALO_COMP_OPT_SCRIPT 0x4
 #define ALO_COMP_OPT_CALL_EXACTLY_ONCE 0x8
 #define ALO_COMP_OPT_STRIP_DEBUG 0x10
 

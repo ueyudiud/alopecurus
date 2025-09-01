@@ -219,7 +219,7 @@ again:
         ALO_STACK_INDEX_GLOBAL,
         0,
         "stdin",
-        ALO_COMP_OPT_LOSSEN | (*peval ? ALO_COMP_OPT_EVAL : 0));
+        ALO_COMP_OPT_SCRIPT | (*peval ? ALO_COMP_OPT_EVAL : 0));
 
 	switch (msg) {
 		case ALO_SOK: {
@@ -316,22 +316,22 @@ static a_noret l_run_repl(a_henv env) {
 "\t-  stop handling options and execute stdin"
 
 static a_enum l_opts;
-static char const* l_script;
+static char const* l_file;
 
 static a_bool l_scan_opts(a_henv env, int argc, char const* const* argv) {
 	l_opts = 0;
-    l_script = null;
+	l_file = null;
 
     int i;
 
 	for (i = 1; i < argc; ++i) {
 		char const* arg = argv[i];
         if (arg[0] != '-') {
-            l_script = arg;
+			l_file = arg;
             break;
         }
         else if (strcmp(arg, "-") == 0) {
-            l_script = "-";
+			l_file = "-";
             goto push_args;
         }
         else if (strcmp(arg, "--") == 0) {
@@ -381,12 +381,12 @@ static a_msg l_main(a_henv env) {
         aloi_show(ALO_HELP);
     }
     aloL_openlibs(env);
-    if (l_script != null) {
-        catch (l_run_file(env, l_script)) {
+    if (l_file != null) {
+        catch (l_run_file(env, l_file)) {
             return 0;
         }
     }
-    if (!((l_opts & OPT_V) || l_script != null) || (l_opts & OPT_I)) {
+    if (!((l_opts & OPT_V) || l_file != null) || (l_opts & OPT_I)) {
         l_run_repl(env);
     }
     return 0;

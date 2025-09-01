@@ -351,7 +351,7 @@ static a_msg loader_alib(a_henv env) {
         char const* base = check_path(env, paths, i);
         char const* path = aloS_replace(env, base, PATH_PLACEHOLDER, file);
 
-        a_msg msg = aloL_compilef(env, path, ALO_COMP_OPT_MODULE);
+        a_msg msg = aloL_compilef(env, path, ALO_COMP_OPT_NOTHING);
         if (msg != ALO_EEMPTY) return check_stat(env, msg);
 
         alo_pushfstr(env, "\n\tno file '%s'", alo_tostr(env, -1));
