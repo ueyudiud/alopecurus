@@ -2,15 +2,14 @@
  *@file actx/x64.sysv.posix.c
  */
 
-#include "../actx.h"
-
-#ifdef actx_x64_sysv_posix_h_
-
+#define actx_c_
 #define actx_x64_sysv_posix_c_
 #define ALO_LIB
 
+#include <sys/mman.h>
 #include <fcntl.h>
 
+#include "../actx.h"
 #include "../aenv.h"
 
 a_msg ai_ctx_init(void) {
@@ -67,6 +66,4 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
 void ai_ctx_close(a_henv env) {
     munmap(env->rctx_alloc, 0);
 }
-
-#endif /* actx_x64_sysv_posix_h_ */
 

@@ -13,7 +13,7 @@
 #include "astk.h"
 
 #if ALO_STACK_OUTER
-# define STACK_GRANULARITY PAGE_SIZE
+# define STACK_GRANULARITY ALO_PAGE_SIZE
 #else
 # define STACK_GRANULARITY usizec(1024)
 #endif

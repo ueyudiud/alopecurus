@@ -6,16 +6,15 @@
 #define actx_x64_w64_win_c_
 #define ALO_LIB
 
-#include "../actx.h"
-
-#ifdef actx_x64_w64_win_h_
-
 #include <windows.h>
 
+#include "../actx.h"
 #include "../aobj.h"
 #include "../aenv.h"
 #include "../avm.h"
 #include "../aerr.h"
+
+#define EXCEPTION_CODE_PREFIX 0xEA4BD800
 
 #define ext(n) M_cat(ext_,n) /* Avoid for type redefinition. */
 
@@ -366,7 +365,7 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
 	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
 	if (header == null) return ALO_EINVAL;
 
-	a_usize commit = align_forward(stack_size, PAGE_SIZE);
+	a_usize commit = align_forward(stack_size, ALO_PAGE_SIZE);
 	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
 
 	PVOID addr;
@@ -386,11 +385,11 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
     if (addr == null) return ALO_EINVAL;
 #endif
 
-	if (VirtualAlloc(addr, PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == null)
+	if (VirtualAlloc(addr, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == null)
 		goto nomem;
-	if (VirtualAlloc(addr + PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == null)
+	if (VirtualAlloc(addr + ALO_PAGE_SIZE, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == null)
 		goto nomem;
-	if (VirtualAlloc(addr + PAGE_SIZE * 2, reserve - 2 * PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
+	if (VirtualAlloc(addr + ALO_PAGE_SIZE * 2, reserve - 2 * ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
 		goto nomem;
 
 	a_usize stack_base = ptr2int(alloc_info.StackBase) + reserve;
@@ -455,5 +454,3 @@ void ai_ctx_close(a_henv env) {
 	route_unwind(env);
 	VirtualFree(env->rctx_alloc, 0, MEM_RELEASE);
 }
-
-#endif /* actx_x64_w64_win_h_ */
