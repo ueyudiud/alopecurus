@@ -181,12 +181,13 @@ GRoute* ai_env_new(a_henv env, a_usize stack_size) {
 
 nomem2:
 	ai_ctx_close(self);
+
 nomem1:
 	ai_mem_dealloc(G(env), self, route_size());
 	ai_mem_nomem(env);
 }
 
-static void global_init(a_henv env, unused void* ctx) {
+static void global_init(a_henv env, void* ctx) {
 	MRoute* m = from_member(MRoute, route, env);
 
     ai_str_boost1(env, m->reserved);

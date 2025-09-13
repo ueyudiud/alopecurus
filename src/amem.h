@@ -145,23 +145,23 @@ always_inline a_bool ai_mem_nrelease(void* base, a_usize size) {
 #define NCOMMIT_PROT_READWRITE 0
 #define NCOMMIT_PROT_READEXEC 0
 
-always_inline void* ai_mem_nreserve(unused void* hint, a_usize size) {
+always_inline void* ai_mem_nreserve(void* hint, a_usize size) {
 	return malloc(size);
 }
 
-always_inline a_bool ai_mem_ncommit(unused void* base, unused void* addr, unused a_usize size, unused a_flags prot) {
+always_inline a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
 	return true;
 }
 
-always_inline a_bool ai_mem_nprotect(unused void* base, unused void* addr, unused a_usize size, unused a_flags prot) {
+always_inline a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
 	return true;
 }
 
-always_inline a_bool ai_mem_ndecommit(unused void* base, unused void* addr, unused a_usize size) {
+always_inline a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
 	return true;
 }
 
-always_inline a_bool ai_mem_nrelease(void* base, unused a_usize size) {
+always_inline a_bool ai_mem_nrelease(void* base, a_usize size) {
 	free(base);
 	return true;
 }

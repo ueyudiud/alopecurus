@@ -53,7 +53,7 @@ static void expr_refi(Expr* e, a_reg reg, a_int key, a_line line) {
 /*=========================================================*/
 
 enum {
-    /* Mark unused operand. */
+    /* Mark operand. */
     DMB = 0
 };
 
@@ -525,7 +525,7 @@ static a_u32 expr_catch_nil_branch(Parser* par, Expr* e, a_u32 line);
 
 static void resolve_symbol(Parser* par, Expr* e, a_u32 id);
 
-static void capture_locally(unused Parser* par, unused FnScope* scope, Sym* sym, CapInfo* info) {
+static void capture_locally(Parser* par, FnScope* scope, Sym* sym, CapInfo* info) {
     switch (sym->tag) {
         case EXPR_REG: {
             info->src_index = sym->udat1;
@@ -990,7 +990,7 @@ static a_bool try_fold_int(Parser* par, TConst* d1, TConst* d2, a_u32 op, a_line
     return false;
 }
 
-static a_bool try_fold_float(unused Parser* par, TConst* d1, TConst* d2, a_u32 op, unused a_line line) {
+static a_bool try_fold_float(Parser* par, TConst* d1, TConst* d2, a_u32 op, a_line line) {
     a_float f1, f2;
     if (data_are_floats(d1, &f1, d2, &f2)) {
         switch (op) {
@@ -1398,7 +1398,7 @@ void ai_cg_check_not_nil(Parser* par, Expr* e, a_line line) {
     }
 }
 
-void ai_cg_vec_init(unused Parser* par, Expr* es) {
+void ai_cg_vec_init(Parser* par, Expr* es) {
     expr_unit(es);
 }
 
@@ -1659,12 +1659,12 @@ static a_bool try_fold_append(Parser* par, Expr* e) {
 
 static GStr* buf_to_str(Parser* par, ConExpr* ce) {
     Buf* buf = par->sbuf;
-    GStr* str = ai_lex_to_str(lex(par), (a_lstr) { buf->ptr + ce->off, buf->len - ce->off });
+    GStr* str = ai_lex_to_str(lex(par), buf->ptr + ce->off, buf->len - ce->off);
     at_buf_clear(buf);
     return str;
 }
 
-void ai_cg_str_init(unused Parser* par, ConExpr* ce, Expr* e, unused a_line line) {
+void ai_cg_str_init(Parser* par, ConExpr* ce, Expr* e, a_line line) {
     a_regs regs = exprs_to_top_tmps(par, e);
     ce->expr->tag = regs.len != N_VLR ? EXPR_NTMP : EXPR_NTMPC;
     ce->expr->udat1 = regs.bot;
@@ -2446,7 +2446,7 @@ static void parser_mark(Global* gbl, void* ctx) {
     }
 }
 
-static void parser_except(a_henv env, void* ctx, unused a_msg msg) {
+static void parser_except(a_henv env, void* ctx, a_msg msg) {
     Parser* par = ctx;
     assume(env == par->env);
     /* Destroy queued prototypes. */
@@ -2484,7 +2484,7 @@ void ai_cg_parse_init(a_henv env, a_ifun fun, void* ctx, char const* file, GStr*
 void ai_cg_chunk_start(Parser* par) {
     ai_lex_open(lex(par), par->options);
 
-    GStr* gvar_name = ai_lex_to_str(lex(par), nt2lstr(ENV_NAME));
+    GStr* gvar_name = ai_lex_to_str(lex(par), ENV_NAME, strlen(ENV_NAME));
 
     /* Add predefined environment name. */
     par->gvar_index = syms_push(par, (Sym) {

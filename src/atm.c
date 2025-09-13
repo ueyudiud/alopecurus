@@ -14,8 +14,8 @@
 
 #include "atm.h"
 
-#define vm_call0(env,vf,va...) ai_vm_call(env, vm_push_args(env, vf, ##va), 0)
-#define vm_call1(env,vf,va...) ai_vm_call_meta(env, vm_push_args(env, vf, ##va))
+#define vm_call0(env,...) ai_vm_call(env, vm_push_args(env, __VA_ARGS__), 0)
+#define vm_call1(env,...) ai_vm_call_meta(env, vm_push_args(env, __VA_ARGS__))
 
 static a_bool type_look(a_henv env, GType* type, GStr* k, Value* pv) {
     return ai_type_gets(env, type, k, pv);

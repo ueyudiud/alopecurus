@@ -327,6 +327,6 @@ always_inline a_u64 expr_tag_mask(a_enum const src[], a_usize len) {
     return mask;
 }
 
-#define expr_match(e,ts...) ((EXPR_TAG_MASK(expr_tag(e)) & expr_tag_mask((a_enum[]) { ts }, sizeof((a_enum[]) { ts }) / sizeof(a_enum))) != 0)
+#define expr_match(e,...) ((EXPR_TAG_MASK(expr_tag(e)) & expr_tag_mask((a_enum[]) { __VA_ARGS__ }, sizeof((a_enum[]) { __VA_ARGS__ }) / sizeof(a_enum))) != 0)
 
 #endif /* acg_h_ */

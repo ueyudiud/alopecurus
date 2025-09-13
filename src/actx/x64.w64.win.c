@@ -2,18 +2,19 @@
  *@file actx/x64.w64.win.c
  */
 
+#define actx_c_
+#define actx_x64_w64_win_c_
+#define ALO_LIB
+
 #include "../actx.h"
 
 #ifdef actx_x64_w64_win_h_
 
-#define actx_x64_w64_win_c_
-#define ALO_LIB
-
-#include <memoryapi.h>
-#include <intrin.h>
+#include <windows.h>
 
 #include "../aobj.h"
 #include "../aenv.h"
+#include "../avm.h"
 #include "../aerr.h"
 
 #define ext(n) M_cat(ext_,n) /* Avoid for type redefinition. */
@@ -67,14 +68,10 @@ typedef enum ext(PROCESS_INFORMATION_CLASS) {
 #define IMPORT_LIST(_) \
 	_(NtSetInformationProcess, hntdll, NTSTATUS, (HANDLE, ext(PROCESS_INFORMATION_CLASS), PVOID, ULONG)) \
 	_(NtRaiseException, hntdll, VOID, (PEXCEPTION_RECORD, PCONTEXT, BOOLEAN)) \
-	_(RtlLookupFunctionEntry, hntdll, PRUNTIME_FUNCTION, (DWORD64, PDWORD64, PUNWIND_HISTORY_TABLE)) \
-	_(RtlVirtualUnwind, hntdll, PEXCEPTION_ROUTINE, (DWORD, DWORD64, DWORD64, PRUNTIME_FUNCTION, PCONTEXT, PVOID*, PDWORD64, PKNONVOLATILE_CONTEXT_POINTERS)) \
 	_(RtlImageNtHeader, hntdll, PIMAGE_NT_HEADERS, (PVOID))
 
 #undef NtSetInformationProcess
 #undef NtRaiseException
-#undef RtlLookupFunctionEntry
-#undef RtlVirtualUnwind
 #undef RtlImageNtHeader
 
 #if defined(ALOI_WIN_DYNAMIC_INIT)
@@ -88,8 +85,6 @@ IMPORT_LIST(CTX_DCL)
 
 #define NtSetInformationProcess (*ext(NtSetInformationProcess))
 #define NtRaiseException (*ext(NtRaiseException))
-#define RtlLookupFunctionEntry (*ext(RtlLookupFunctionEntry))
-#define RtlVirtualUnwind (*ext(RtlVirtualUnwind))
 #define RtlImageNtHeader (*ext(RtlImageNtHeader))
 
 #else
@@ -101,9 +96,17 @@ IMPORT_LIST(CTX_DCL)
 #endif
 
 #define NtCurrentProcess() cast(HANDLE, isizec(-1))
-#define NtCurrentTeb() cast(ext(PTEB), __readgsqword(offsetof(ext(TEB), Self)))
 
-WINSYSAPI void WINAPI RaiseException(DWORD, DWORD, DWORD, ULONG_PTR const*);
+#undef NtCurrentTeb
+always_inline ext(TEB)* ext(NtCurrentTeb)() {
+	ext(TEB)* teb;
+	asm("movq %%gs:(%c1), %0":"=r"(teb):"i"(offsetof(ext(TEB), Self)));
+	return teb;
+}
+#define NtCurrentTeb ext(NtCurrentTeb)
+
+static naked void ai_ctx_catch_unwind();
+static naked a_msg ai_ctx_return();
 
 a_msg ai_ctx_init(void) {
 #if defined(ALOI_WIN_DYNAMIC_INIT)
@@ -120,7 +123,6 @@ a_msg ai_ctx_init(void) {
 #undef CTX_GET
 
 #endif
-
 	return ALO_SOK;
 }
 
@@ -166,16 +168,19 @@ static void route_recover(void* rctx, PCONTEXT context, a_bool recover_stack) {
 
 EXCEPTION_DISPOSITION ai_ctx_start_catch(
 		_In_ PEXCEPTION_RECORD ExceptionRecord,
-		_In_ unused PVOID EstablisherFrame,
+		_In_ PVOID EstablisherFrame,
 		_Inout_ PCONTEXT ContextRecord,
-		_Inout_ unused PDISPATCHER_CONTEXT DispatcherContext) {
+		_Inout_ PDISPATCHER_CONTEXT DispatcherContext) {
+	quiet(EstablisherFrame);
+	quiet(DispatcherContext);
+
 	a_henv callee = cast(a_henv, ContextRecord->Rbx);
 	a_henv caller = callee->caller;
 
 	if (!(ExceptionRecord->ExceptionFlags & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND))) {
         a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
         if (msg != ALO_SOK) {
-            callee->status = msg;
+            callee->status = cast(a_i8, msg);
             ai_ctx_jump(caller, callee, msg);
         }
     }
@@ -185,46 +190,176 @@ EXCEPTION_DISPOSITION ai_ctx_start_catch(
 	trap();
 }
 
-a_noret ai_ctx_raise(unused a_henv env, a_msg msg) {
-	RaiseException(EXCEPTION_CODE_PREFIX | cast(DWORD, msg & 0xff), EXCEPTION_NONCONTINUABLE, 0, null);
-	unreachable();
+naked a_msg ai_ctx_jump0() {
+	/* load TEB */
+	asm("movq %%gs:(%c0), %%r10"::"i"(offsetof(ext(TEB), Self)));
+
+	/* save FLS */
+	asm("movq %c0(%%r10), %%r8"::"i"(offsetof(ext(TEB), ArbitraryUserPointer)));
+	asm("movq %%r8, -0x008(%%rsp)"::);
+    /* save deallocation stack */
+	asm("movq %c0(%%r10), %%r8"::"i"(offsetof(ext(TEB), DeallocationStack)));
+	asm("movq %%r8, -0x010(%%rsp)"::);
+	/* save stack limit */
+	asm("movq %c0(%%r10), %%r8"::"i"(offsetof(ext(TEB), StackLimit)));
+	asm("movq %%r8, -0x018(%%rsp)"::);
+	/* save stack base */
+	asm("movq %c0(%%r10), %%r8"::"i"(offsetof(ext(TEB), StackBase)));
+	asm("movq %%r8, -0x020(%%rsp)"::);
+
+	/* save GPR */
+	asm("movq %%rbp, -0x028(%%rsp)"::);
+	asm("movq %%rbx, -0x030(%%rsp)"::);
+	asm("movq %%rsi, -0x038(%%rsp)"::);
+	asm("movq %%rdi, -0x040(%%rsp)"::);
+	asm("movq %%r12, -0x048(%%rsp)"::);
+	asm("movq %%r13, -0x050(%%rsp)"::);
+	asm("movq %%r14, -0x058(%%rsp)"::);
+	asm("movq %%r15, -0x060(%%rsp)"::);
+
+	/* save control word */
+	asm("stmxcsr -0x068(%%rsp)"::);
+	asm("fnstcw -0x06C(%%rsp)"::);
+
+	/* save FPR */
+	asm("movaps %%xmm6, -0x078(%%rsp)"::);
+	asm("movaps %%xmm7, -0x088(%%rsp)"::);
+	asm("movaps %%xmm8, -0x098(%%rsp)"::);
+	asm("movaps %%xmm9, -0x0A8(%%rsp)"::);
+	asm("movaps %%xmm10, -0x0B8(%%rsp)"::);
+	asm("movaps %%xmm11, -0x0C8(%%rsp)"::);
+	asm("movaps %%xmm12, -0x0D8(%%rsp)"::);
+	asm("movaps %%xmm13, -0x0E8(%%rsp)"::);
+	asm("movaps %%xmm14, -0x0F8(%%rsp)"::);
+	asm("movaps %%xmm15, -0x108(%%rsp)"::);
+
+	/* save context */
+	asm("movq %%rsp, 0x20(%%rdx)"::);
+
+	asm("%c0:"::"p"(ai_ctx_return));
+
+	/* load context */
+	asm("movq 0x20(%%rcx), %%rsp"::);
+
+	/* load FPR */
+	asm("movaps -0x078(%%rsp), %%xmm6"::);
+	asm("movaps -0x088(%%rsp), %%xmm7"::);
+	asm("movaps -0x098(%%rsp), %%xmm8"::);
+	asm("movaps -0x0A8(%%rsp), %%xmm9"::);
+	asm("movaps -0x0B8(%%rsp), %%xmm10"::);
+	asm("movaps -0x0C8(%%rsp), %%xmm11"::);
+	asm("movaps -0x0D8(%%rsp), %%xmm12"::);
+	asm("movaps -0x0E8(%%rsp), %%xmm13"::);
+	asm("movaps -0x0F8(%%rsp), %%xmm14"::);
+	asm("movaps -0x108(%%rsp), %%xmm15"::);
+
+	/* load Control Word */
+	asm("ldmxcsr -0x068(%%rsp)"::);
+	asm("fldcw -0x06C(%%rsp)"::);
+
+	/* load GPR */
+	asm("movq -0x028(%%rsp), %%rbp"::);
+	asm("movq -0x030(%%rsp), %%rbx"::);
+	asm("movq -0x038(%%rsp), %%rsi"::);
+	asm("movq -0x040(%%rsp), %%rdi"::);
+	asm("movq -0x048(%%rsp), %%r12"::);
+	asm("movq -0x050(%%rsp), %%r13"::);
+	asm("movq -0x058(%%rsp), %%r14"::);
+	asm("movq -0x060(%%rsp), %%r15"::);
+
+	/* load FLS */
+	asm("movq -0x008(%%rsp), %%r8"::);
+	asm("movq %%r8, %c0(%%r10)"::"i"(offsetof(ext(TEB), ArbitraryUserPointer)));
+	/* load deallocation stack */
+	asm("movq -0x010(%%rsp), %%r8"::);
+	asm("movq %%r8, %c0(%%r10)"::"i"(offsetof(ext(TEB), DeallocationStack)));
+	/* load stack limit */
+	asm("movq -0x018(%%rsp), %%r8"::);
+	asm("movq %%r8, %c0(%%r10)"::"i"(offsetof(ext(TEB), StackLimit)));
+	/* load stack base */
+	asm("movq -0x020(%%rsp), %%r8"::);
+	asm("movq %%r8, %c0(%%r10)"::"i"(offsetof(ext(TEB), StackBase)));
+
+	/* load return address */
+	asm("popq %%r10"::);
+
+	/* jump to caller route */
+	asm("jmpq *%%r10"::);
+	asm_unreachable();
 }
 
-static EXCEPTION_DISPOSITION catch_except_hook(
+a_noret ai_ctx_raise(a_henv env, a_msg msg) {
+	DWORD code = EXCEPTION_CODE_PREFIX | cast(DWORD, msg & 0xff);
+	RaiseException(code, 0, 0, null);
+	/* no protector found, call panic handler */
+	Global* g = G(env);
+	if (g->panic_ != null) {
+		(*g->panic_)(env);
+	}
+	/* no panic handler, abort process immediately */
+	trap();
+}
+
+EXCEPTION_DISPOSITION alo_specific_handler(
 		PEXCEPTION_RECORD ExceptionRecord,
-		unused PVOID EstablisherFrame,
-		unused PCONTEXT ContextRecord,
+		PVOID EstablisherFrame,
+		PCONTEXT ContextRecord,
 		PDISPATCHER_CONTEXT DispatcherContext) {
-	a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
-	if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
+	a_henv env = ref_of(GRoute*, DispatcherContext->EstablisherFrame + 0x30);
 
-	a_henv env = int2ptr(GRoute, DispatcherContext->ContextRecord->Rsi);
-    ai_err_except(env, msg);
+	if (ExceptionRecord->ExceptionFlags & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND)) {
+		return EXCEPTION_EXECUTE_HANDLER;
+	}
+	else {
+		a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
+		if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
 
-	a_usize target_ip = DispatcherContext->ImageBase + *((a_u32*) DispatcherContext->HandlerData);
+		ai_err_except(env, msg);
 
-	RtlUnwind(
-			EstablisherFrame,
-			cast(PVOID, target_ip),
-			ExceptionRecord,
-			cast(PVOID, cast(a_isize, msg)));
-	unreachable();
+		RtlUnwindEx(
+				EstablisherFrame,
+				ai_ctx_catch_unwind,
+				ExceptionRecord,
+				cast(PVOID, cast(a_isize, msg)),
+				ContextRecord,
+				DispatcherContext->HistoryTable);
+		unreachable();
+	}
 }
 
-never_inline a_msg ai_ctx_catch_(a_henv env, a_pfun pfun, void* pctx) {
-	asm(".seh_handler %c0, @except"::"p"(catch_except_hook));
-	asm goto(".seh_handlerdata\n"
-		".rva .final\n"
-		".text"::::final);
-	a_msg msg = ALO_SOK;
+naked a_msg ai_ctx_catch0() {
+	asm(".seh_handler %c0, @except, @unwind"::"p"(alo_specific_handler));
 
-	(*pfun)(env, pctx);
+	asm("subq $0x28, %%rsp"::);
+	asm(".cfi_def_cfa_offset 0x30"::);
 
-	asm(""::"a"(msg));
-final:
-	asm volatile(".final:":"=a"(msg));
+	asm("movq %%rcx, 0x30(%%rsp)"::);
+	asm("callq *%r8");
+	asm("xorq %%rax, %%rax"::);
 
-	return msg;
+	asm("%c0:"::"p"(ai_ctx_catch_unwind));
+	asm("addq $0x28, %%rsp"::);
+	asm(".cfi_def_cfa_offset 0x08"::);
+	asm("ret"::);
+	asm_unreachable();
+}
+
+static naked a_noret ai_ctx_start() {
+	asm(".seh_handler %c0, @except"::"p"(ai_ctx_start_catch));
+
+	/* save env */
+	asm("movq %%rcx, %%rbx"::);
+
+	/* do vm call */
+	asm("movq 0x40(%%rcx), %%rdx"::"i"(offsetof(GRoute, rctx_alloc)));
+	asm("movq $-1, %%r8"::);
+	asm("call %c0"::"p"(ai_vm_call));
+
+	asm("movq %%rbx, %%rdx"::);
+	asm("movq 0x30(%%rbx), %%rcx"::);
+	asm("xorq %%rax, %%rax"::);
+	asm("jmp %c0"::"p"(ai_ctx_return));
+	asm_unreachable();
 }
 
 a_msg ai_ctx_open(a_henv env, a_usize stack_size) {

@@ -21,7 +21,7 @@
 
 #include "aapi.h"
 
-a_msg api_tagof(unused a_henv env, Value v) {
+a_msg api_tagof(a_henv env, Value v) {
     switch (v_get_tag(v)) {
         case T_NIL:
             return ALO_TNIL;
@@ -64,7 +64,7 @@ a_msg alo_init(void) {
  *@param pi the pointer to store result.
  *@return false if attribute name is valid and true for otherwise.
  */
-a_bool alo_attri(unused a_henv env, a_enum n, a_int* pi) {
+a_bool alo_attri(a_henv env, a_enum n, a_int* pi) {
 	switch (n) {
         case ALO_ATTR_VERSION:
             *pi = ALO_VERSION_NUMBER;
@@ -382,7 +382,7 @@ void alo_pushptr(a_henv env, void const* val) {
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
     api_check(src != null || len == 0, "string source violates contract.");
-	GStr* str = ai_str_get_or_new(env, (a_lstr) { src, len });
+	GStr* str = ai_str_get_or_new(env, src, len);
 	v_set_str(env, api_incr_stack(env), str);
 	ai_gc_trigger(env);
 	return str2ntstr(str);
@@ -390,7 +390,7 @@ char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 
 char const* alo_pushntstr(a_henv env, char const* src) {
     api_check(src != null, "string source violates contract.");
-    GStr* str = ai_str_get_or_new(env, nt2lstr(src));
+    GStr* str = ai_str_from_ntstr(env, src);
     v_set_str(env, api_incr_stack(env), str);
     ai_gc_trigger(env);
     return str2ntstr(str);
@@ -702,7 +702,7 @@ static void do_pcall(a_henv env, void* ctx) {
     do_call(env, pc->narg, pc->nres);
 }
 
-static void do_ecall(a_henv env, void* ctx, unused a_msg msg) {
+static void do_ecall(a_henv env, void* ctx, a_msg msg) {
     PCall* pc = ctx;
     if (pc->errf != STACK_NULL) {
         Value* bot = vm_push_args(env, *val2stk(env, pc->errf), env->error);

@@ -259,8 +259,10 @@ typedef struct {
     a_u32 rep;
 } Rep;
 
-static a_msg l_repeat(void* rctx, void* dst, unused a_usize len) {
+static a_msg l_repeat(void* rctx, void* dst, a_usize len) {
     Rep* ctx = rctx;
+
+    quiet(len);
 
     memcpy(dst, ctx->str.ptr, ctx->str.len);
     dst += ctx->str.len;

@@ -8,12 +8,12 @@
 #include "aenv.h"
 
 #ifdef ALOI_CHECK_API
-# define api_panic(m...) ai_dbg_panic("API: "m)
+# define api_panic(...) ai_dbg_panic("API: " __VA_ARGS__)
 #else
 # define api_panic(...) unreachable()
 #endif
 
-#define api_check(e,m...) ((e) || (api_panic(m), false))
+#define api_check(e,...) ((e) || (api_panic(__VA_ARGS__), false))
 
 intern Value const* api_roslot(a_henv env, a_ilen id);
 intern Value const* api_rdslot(a_henv env, a_ilen id);

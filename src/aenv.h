@@ -180,11 +180,10 @@ always_inline GType* g_type(Global* gbl, a_gptr o) {
 
 #define g_type(env,p) g_type(G(env), g_as_ref(p))
 
-always_inline char const* g_name(unused Global* gbl, a_gptr p) {
+always_inline char const* g_name(a_henv env, a_gptr p) {
+    quiet(env);
     return g_klass(p)->name ?: "user";
 }
-
-#define g_name(env,p) g_name(G(env), g_as_ref(p))
 
 always_inline GType* v_type(Global* gbl, Value v) {
     switch (v_get_tag(v)) {
@@ -201,20 +200,18 @@ always_inline GType* v_type(Global* gbl, Value v) {
 
 #define v_type(env,v) v_type(G(env), v)
 
-always_inline char const* v_name(Global* gbl, Value v) {
+always_inline char const* v_name(a_henv env, Value v) {
     switch (v_get_tag(v)) {
         case T_NIL: return "nil";
         case T_FALSE:
         case T_TRUE: return "bool";
         case T_INT: return "int";
         case T_PTR: return "ptr";
-        case T_OBJ: return g_name(gbl, v_as_ref(v));
+        case T_OBJ: return g_name(env, v_as_ref(v));
         case T_FLOAT: return "float";
         default: unreachable();
     }
 }
-
-#define v_name(env,v) v_name(G(env), v)
 
 #ifndef ALOI_DFL_GCSTEPMUL
 # define ALOI_DFL_GCSTEPMUL usizec(384)
@@ -259,7 +256,7 @@ always_inline Value* ai_stk_bot(a_henv env) {
 }
 
 always_inline a_isize ai_stk_check(a_henv env, Value* top) {
-	if (top > env->stack.limit) {
+	if (unlikely(top > env->stack.limit)) {
 		a_isize diff = ai_stk_grow(env, top);
 		if (diff & STACK_GROW_FAILED) {
 			ai_stk_overflow(env, diff);

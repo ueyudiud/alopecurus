@@ -71,7 +71,7 @@ static a_bool lex_test_skip(Parser* par, a_i32 tk) {
 }
 
 #define lex_error_got(par,fmt,args...) ({ \
-	a_tkbuf _buf; \
+	a_tkbuf _buf;                         \
     parse_error(par, fmt", got %s", lex_line(par), ##args, ai_lex_tkrepr(lex_token(par), _buf)); \
 })
 
@@ -1527,7 +1527,7 @@ static void scan_eval_expr(Parser* par) {
 	ai_cg_return(par, e, 1);
 }
 
-static void scan_chunk(unused a_henv env, void* ctx) {
+static void scan_chunk(a_henv env, void* ctx) {
 	Parser* par = ctx;
     ai_cg_chunk_start(par);
 

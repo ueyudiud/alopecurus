@@ -134,8 +134,10 @@ static a_msg l_read_line(a_henv env, char const* prompt) {
 
 static void l_save_line(a_henv env) {
 	char* lines = malloc(l_lines.len + 1);
+	if (lines == null)
+		return;
+
 	char* dst = lines;
-	if (lines == null) return;
 	for (InLine* line = l_lines.head; line != null; line = line->next) {
 		memcpy(dst, line->ptr, line->len);
 		dst += line->len;
@@ -145,9 +147,10 @@ static void l_save_line(a_henv env) {
 	free(lines);
 }
 
-static a_i32 l_read_lines(unused a_henv env, void* rctx, void const** pdst, a_usize* plen) {
+static a_i32 l_read_lines(a_henv env, void* rctx, void const** pdst, a_usize* plen) {
 	InLine** pline = rctx;
 	InLine* line = *pline;
+	quiet(env);
 	if (line != null) {
 		*pdst = line->ptr;
 		*plen = strlen(line->ptr);
@@ -398,6 +401,11 @@ int main(int argc, char const* const argv[]) {
 	}
 
 	a_henv env = aloL_create();
+
+	if (env == null) {
+		return EXIT_FAILURE;
+	}
+
     alo_newcfun(env, l_main, 0);
     alo_pushint(env, argc);
     alo_pushptr(env, argv);

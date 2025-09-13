@@ -21,15 +21,20 @@
 #include "alolib.h"
 #include "aauxlib.h"
 
-static void* aux_alloc(unused void* ctx, a_usize sz) {
+static void* aux_alloc(void* ctx, a_usize sz) {
+	quiet(ctx);
     return malloc(sz);
 }
 
-static void* aux_realloc(unused void* ctx, void* blk, unused a_usize sz_old, a_usize sz_new) {
+static void* aux_realloc(void* ctx, void* blk, a_usize sz_old, a_usize sz_new) {
+	quiet(ctx);
+	quiet(sz_old);
 	return realloc(blk, sz_new);
 }
 
-static void aux_dealloc(unused void* ctx, void* blk, unused a_usize sz) {
+static void aux_dealloc(void* ctx, void* blk, a_usize sz) {
+	quiet(ctx);
+	quiet(sz);
 	free(blk);
 }
 
@@ -63,7 +68,8 @@ void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 
 void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
     a_ilen sid = uid2sid(env, id);
-	char const* what = alo_pushfstr(env, "%s expected, got %s", name, v_name(G(env), api_elem(env, sid)));
+	Value v = api_elem(env, sid);
+	char const* what = alo_pushfstr(env, "%s expected, got %s", name, v_name(env, v));
 	aloL_argerror(env, id, what);
 }
 
@@ -218,7 +224,7 @@ a_msg aloL_resultcx(a_henv env, a_bool stat, int err, char const* what) {
 
 #else
 
-# define l_inspect_result(stat) quiet()
+# define l_inspect_result(stat) quiet(0)
 
 #endif
 
@@ -247,8 +253,9 @@ typedef struct {
     a_usize len;
 } ReadStrCtx;
 
-static a_i32 l_read_str(unused a_henv env, void* rctx, void const** pdst, size_t* plen) {
+static a_i32 l_read_str(a_henv env, void* rctx, void const** pdst, size_t* plen) {
     ReadStrCtx* ctx = rctx;
+    quiet(env);
 	*pdst = ctx->ptr;
 	*plen = ctx->len;
 	ctx->ptr = null;
@@ -257,10 +264,7 @@ static a_i32 l_read_str(unused a_henv env, void* rctx, void const** pdst, size_t
 }
 
 a_msg aloL_compiles(a_henv env, char const* src, a_usize len, char const* fname, a_u32 options) {
-    ReadStrCtx str = {
-        src,
-        len
-    };
+    ReadStrCtx str = { src, len };
 	fname = alo_pushntstr(env, fname);
 	a_msg msg = alo_compile(env, l_read_str, &str, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, fname, options);
 	alo_pop(env, -2);
@@ -274,8 +278,9 @@ typedef struct {
     a_hfile file;
 } FileReadCtx;
 
-static a_i32 l_read_file(unused a_henv env, void* rctx, void const** pdst, size_t* plen) {
+static a_i32 l_read_file(a_henv env, void* rctx, void const** pdst, size_t* plen) {
     FileReadCtx* ctx = rctx;
+	quiet(env);
     int count = read(ctx->file, ctx->buff, sizeof(ctx->buff));
     if (count < 0) return count;
     *pdst = ctx->buff;
@@ -414,7 +419,7 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
         }
     }
 
-	GStr* str = ai_str_get_or_new(dst, buf->str);
+	GStr* str = ai_str_get_or_new(dst, buf->ptr, buf->len);
 	v_set_str(dst, err, str);
 	return ALO_SOK;
 }
@@ -438,7 +443,7 @@ a_msg aloL_gets(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_as_type(v);
 
-    if (ai_type_getls(env, o, nt2lstr(s), &v)) {
+    if (ai_type_getls(env, o, s, strlen(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -452,7 +457,7 @@ a_msg aloL_gettm(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_type(env, v);
 
-    if (ai_type_getls(env, o, nt2lstr(s), &v)) {
+    if (ai_type_getls(env, o, s, strlen(s), &v)) {
         return ALO_EEMPTY;
     }
 
@@ -467,7 +472,7 @@ void aloL_puts(a_henv env, a_ilen id, char const* s) {
 
     GType* o = v_as_type(v);
 
-    Value* p = ai_type_refls(env, o, nt2lstr(s));
+    Value* p = ai_type_refls(env, o, s, strlen(s));
 
     v = api_decr_stack(env);
     v_set(env, p, v);
@@ -487,7 +492,7 @@ void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 		aloL_Entry const* e = &es[i];
 		assume(e->name != null, "name cannot be null.");
 
-        Value* slot = ai_type_refls(env, o, nt2lstr(e->name));
+        Value* slot = ai_type_refls(env, o, e->name, strlen(e->name));
         v_set_nil(slot);
 
 		if (e->fptr != null) {

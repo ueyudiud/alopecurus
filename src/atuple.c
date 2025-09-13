@@ -66,7 +66,7 @@ Value ai_tuple_get(a_henv env, GTuple* self, Value vk) {
 	return ai_tuple_geti(env, self, v_as_int(vk));
 }
 
-static Value const* tuple_refi(unused a_henv env, GTuple* self, a_int key) {
+static Value const* tuple_refi(a_henv env, GTuple* self, a_int key) {
     a_uint i = obj_idx(key, self->len, null);
     return &self->ptr[i];
 }

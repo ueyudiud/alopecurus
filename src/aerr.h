@@ -7,6 +7,12 @@
 
 #include "astr.h"
 
+struct GError {
+	GOBJ_STRUCT_HEADER;
+	a_u32 size; /* size of allocated error size, 0 for interned error */
+
+};
+
 intern a_noret ai_err_raisef(a_henv env, a_msg msg, char const* fmt, ...);
 intern a_noret ai_err_raisevf(a_henv env, a_msg msg, char const* fmt, va_list varg);
 intern a_noret ai_err_raise(a_henv env, a_msg msg, Value err);

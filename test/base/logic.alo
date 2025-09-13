@@ -1,24 +1,33 @@
-let t = true
-let f = false
+-- avoid constant folding
+let mut t = true
+let mut f = false
 
 -- true test
+assert(true)
 assert(t)
 
 -- false test
+assert(!false)
 assert(!f)
 
 -- logical or
+assert(f || true)
+assert(false || t)
 assert(!(f || f))
 assert(f || t)
 assert(t || f)
 assert(t || t)
 
 -- logical and
+assert(t && true)
+assert(true && t)
 assert(!(f && f))
 assert(!(t && f))
 assert(!(f && t))
 assert(t && t)
 
 -- ternary predicate
+assert(true ? t : f)
+assert(false ? f : t)
 assert(t ? t : f)
 assert(f ? f : t)

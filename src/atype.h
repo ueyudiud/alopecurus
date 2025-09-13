@@ -14,10 +14,10 @@ intern GType* ai_itype_new(a_henv env, void const* ksrc, a_usize klen);
 intern void ai_type_boost(a_henv env);
 intern a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
 intern a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
-intern a_bool ai_type_getls(a_henv env, GType* self, a_lstr k, Value* pv);
+intern a_bool ai_type_getls(a_henv env, GType* self, char const* kptr, a_usize klen, Value* pv);
 intern a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv);
 intern void ai_type_sets(a_henv env, GType* self, GStr* key, Value val);
-intern Value* ai_type_refls(a_henv env, GType* self, a_lstr k);
+intern Value* ai_type_refls(a_henv env, GType* self, char const* kptr, a_usize klen);
 intern void ai_type_clean(Global* gbl);
 
 struct MNode {

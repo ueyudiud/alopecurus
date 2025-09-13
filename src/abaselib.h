@@ -9,7 +9,7 @@
 
 #ifndef aloi_show
 # include <stdio.h>
-# define aloi_show(fmt,args...) quiet(printf(fmt, ##args))
+# define aloi_show(...) quiet(printf(__VA_ARGS__))
 # define aloi_show_flush() quiet(fflush(stdout))
 # define aloi_show_newline() quiet(fputc('\n', stdout), fflush(stdout))
 #endif

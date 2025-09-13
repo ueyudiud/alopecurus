@@ -153,7 +153,7 @@ static void strs_close(a_henv env, StrSet* strs) {
 
 static GStr* l_to_str(Lexer* lex) {
     Buf* buf = lex->buf;
-    GStr* str = ai_lex_to_str(lex, buf->str);
+    GStr* str = ai_lex_to_str(lex, buf->ptr, buf->len);
 	at_buf_clear(lex->buf);
     return str;
 }
@@ -171,7 +171,7 @@ void ai_lex_open(Lexer* lex, a_flags options) {
     strs_alloc_array(lex->env, &lex->strs, STRS_INIT_CAP);
 
     if (!(options & ALO_COMP_OPT_STRIP_DEBUG) && lex->file != null) {
-        GStr* str = ai_lex_to_str(lex, nt2lstr(lex->file));
+        GStr* str = ai_lex_to_str(lex, lex->file, strlen(lex->file));
         lex->file = str2ntstr(str);
     }
 
@@ -232,11 +232,11 @@ a_noret ai_lex_report(Lexer* lex, char const* fmt, ...) {
     va_end(varg);
 }
 
-GStr* ai_lex_to_str(Lexer* lex, a_lstr src) {
+GStr* ai_lex_to_str(Lexer* lex, char const* ptr, a_usize len) {
 	a_henv env = lex->env;
 	StrSet* set = &lex->strs;
 
-    GStr* str = ai_str_get_or_new(env, src);
+    GStr* str = ai_str_get_or_new(env, ptr, len);
 
     if (strs_put(set, str)) {
         set->len += 1;
@@ -401,7 +401,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 }
 
                 check_gap();
-                tk->as_int = sign >= 0 ? bit_cast(a_i32, i) : -bit_cast(a_i32, i);
+                tk->as_int = sign >= 0 ? cast(a_i32, i) : -cast(a_i32, i);
                 return TK_INTEGER;
             }
             float_hex_head: {

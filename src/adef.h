@@ -43,8 +43,7 @@
 
 #define always_inline __attribute__((__always_inline__, __gnu_inline__)) extern __inline__
 #define never_inline __attribute__((__noinline__))
-#define naked __attribute__((__naked__))
-#define unused __attribute__((__unused__))
+#define naked __attribute__((__noinline__, __naked__))
 
 /* Types. */
 #define a_noret ALO_NORETURN void
@@ -139,12 +138,7 @@ always_inline a_usize ptr2int(void const* p) {
     return bit_cast(a_usize, p);
 }
 
-#if ALO_C23
-always_inline void quiet(...) {}
-#else
-always_inline void quiet_(unused int dummy, ...) {}
-#define quiet(e...) quiet_(0, ##e)
-#endif
+#define quiet(...) ((void) (__VA_ARGS__))
 
 /* Utility functions. */
 
@@ -164,7 +158,7 @@ always_inline void quiet_(unused int dummy, ...) {}
  ** Do the statement inside catch block if 'e' is not zero.
  ** The error is assumed happening rarely.
  */
-#define catch(e,n...) catch_(e, ##n, _e)
+#define catch(...) catch_(__VA_ARGS__, _e)
 /**
  ** Leave current function and return 'e' if 'e' is not zero.
  */
@@ -184,6 +178,13 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 #else
 # define unreachable() __builtin_unreachable()
 # define panic(...) unreachable()
+#endif
+
+#if ALO_CC == ALO_ENUM_CC_GCC
+/* GCC inline assembly produce redundant `ud2` at end of function, use unreachable to supress its generation. */
+# define asm_unreachable() unreachable()
+#else
+# define asm_unreachable() asm("")
 #endif
 
 #define assume(e,...) quiet((e) || (panic(__VA_ARGS__), false))

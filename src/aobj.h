@@ -13,6 +13,7 @@ typedef struct GTuple GTuple;
 typedef struct GList GList;
 typedef struct GTable GTable;
 typedef struct GFun GFun;
+typedef struct GError GError;
 typedef struct GUser GUser;
 typedef struct alo_Env GRoute;
 typedef union GType GType;
@@ -341,7 +342,7 @@ struct GObj {
     a_u32 tag;             \
     a_u32 flags
 
-#define KOBj_METHODS(_) \
+#define KOBJ_METHODS(_) \
     _(drop, void(Global* gbl, a_gptr self))
 
 #define KHEAP_METHODS(_) \
@@ -350,7 +351,6 @@ struct GObj {
 #define KSTACK_METHODS(_) \
     _(close, void(a_henv env, a_gptr self)) \
     _(close, void(a_henv env, a_gptr self)) \
-
 
 #define KANY_METHODS(_) \
     _(drop, void(Global* gbl, a_gptr self)) \

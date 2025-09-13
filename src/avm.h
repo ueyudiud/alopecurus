@@ -30,6 +30,6 @@ always_inline Value* vm_push_args(a_henv env, Value const* src, a_usize len) {
 	return dst;
 }
 
-#define vm_push_args(env,args...) ({ Value const _vs[] = {args}; vm_push_args(env, _vs, sizeof(_vs) / sizeof(Value)); })
+#define vm_push_args(env,...) ({ Value const _vs[] = {__VA_ARGS__}; vm_push_args(env, _vs, sizeof(_vs) / sizeof(Value)); })
 
 #endif /* avm_h_ */

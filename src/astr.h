@@ -9,11 +9,11 @@
 
 typedef a_msg (*a_sbfun)(void* ctx, void* dst, a_usize len);
 
-intern a_hash ai_str_hashof(a_henv env, a_lstr src);
-intern GStr* ai_str_get_or_null_with_hash(a_henv env, a_lstr src, a_hash hash);
-intern GStr* ai_str_new_with_hash(a_henv env, a_lstr src, a_hash hash);
-intern GStr* ai_str_get_or_new_with_hash(a_henv env, a_lstr src, a_hash hash);
-intern GStr* ai_str_get_or_new(a_henv env, a_lstr src);
+intern a_hash ai_str_hashof(a_henv env, char const* ptr, a_usize len);
+intern GStr* ai_str_get_or_null_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash);
+intern GStr* ai_str_new_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash);
+intern GStr* ai_str_get_or_new_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash);
+intern GStr* ai_str_get_or_new(a_henv env, char const* ptr, a_usize len);
 intern a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr);
 intern GStr* ai_str_format(a_henv env, char const* fmt, va_list varg);
 intern void ai_str_boost1(a_henv env, void* block);
@@ -41,7 +41,7 @@ enum {
 intern char const ai_str_interns[];
 
 always_inline a_enum str_id(GStr* o) {
-    return bit_cast(a_usize, o->gnext) >> 48;
+    return ptr2int(o->gnext) >> 48;
 }
 
 #define str_iskw(str) (str_id(str) >= STR__KW_BEGIN && str_id(str) <= STR__KW_END)
@@ -76,6 +76,8 @@ always_inline char const* str2ntstr(GStr* self) {
     return self->ptr;
 }
 
-#define ai_str_from_ntstr(env,src) ai_str_get_or_new(env, nt2lstr(src))
+always_inline GStr* ai_str_from_ntstr(a_henv env, char const* src) {
+    return ai_str_get_or_new(env, src, strlen(src));
+}
 
 #endif /* astr_h_ */

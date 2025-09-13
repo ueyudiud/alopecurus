@@ -12,9 +12,9 @@ typedef struct { a_usize _; } BufHeadMark[0];
 #define CHAR_BUF_STRUCT_BODY BufHeadMark _buf_head_mark; union { a_lstr str; struct { char* ptr; a_usize len; }; }; a_usize cap
 #define BUF_STRUCT_BODY(t) BufHeadMark _buf_head_mark; t* ptr; a_usize len; a_usize cap
 
-#define BUF_STRUCT_DECLARE(n,t,e...) \
+#define BUF_STRUCT_DECLARE(n,t,...) \
     typedef struct n n; \
-    struct n { BUF_STRUCT_BODY(t); e; }
+    struct n { BUF_STRUCT_BODY(t); __VA_ARGS__; }
 
 typedef struct Buf {
     CHAR_BUF_STRUCT_BODY;
@@ -158,7 +158,7 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 
 #define ai_buf_nputls(env,b,s,l) at_buf_nappend(env, b, s, l)
 #define ai_buf_nputs(env,b,s) ai_buf_nputls(env, b, s, strlen(s))
-#define ai_buf_nputfs(env,b,f,a...) ai_buf_nputfs_(env, buf_cast(b), f, ##a)
+#define ai_buf_nputfs(env,b,...) ai_buf_nputfs_(env, buf_cast(b), __VA_ARGS__)
 #define ai_buf_nputvfs(env,b,f,v) ai_buf_nputvfs_(env, buf_cast(b), f, v)
 
 #define at_buf_check(env,b,a) catch (at_buf_ncheck(env, b, a)) { ai_buf_error(env, _e, "byte"); }

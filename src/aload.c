@@ -160,7 +160,7 @@ static void load_verify(InCtx* ic) {
     }
 }
 
-static void load_chunk(unused a_henv env, void* ctx) {
+static void load_chunk(a_henv env, void* ctx) {
     InCtx* ic = ctx;
     /* Verify chunk head */
     load_verify(ic);
@@ -179,7 +179,7 @@ static void load_mark(Global* gbl, InCtx* ctx) {
 	}
 }
 
-static void load_except(a_henv env, void* ctx, unused a_msg msg) {
+static void load_except(a_henv env, void* ctx, a_msg msg) {
     InCtx* ic = ctx;
     Global* gbl = G(env);
 	rq_for (obj, &ic->rq) {

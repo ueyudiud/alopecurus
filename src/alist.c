@@ -91,7 +91,8 @@ Value ai_list_get(a_henv env, GList* self, Value vk) {
 	return ai_list_geti(env, self, v_as_int(vk));
 }
 
-Value ai_list_geti(unused a_henv env, GList* self, a_int k) {
+Value ai_list_geti(a_henv env, GList* self, a_int k) {
+    quiet(env);
     a_u32 i = obj_idx(k, self->len, v_of_nil());
 	return self->ptr[i];
 }

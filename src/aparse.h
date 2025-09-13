@@ -106,7 +106,7 @@ struct Parser {
 
 #define lex(par) (&(par)->lex)
 
-#define parse_error(par,fmt,args...) ai_lex_error(lex(par), fmt, args)
+#define parse_error(par,...) ai_lex_error(lex(par), __VA_ARGS__)
 
 #define NO_LABEL (~u32c(0))
 #define NIL_SEC_REF (~u32c(0))

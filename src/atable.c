@@ -339,8 +339,8 @@ union LstrFind {
     GStr* key;
 };
 
-static a_bool table_find_lstr(a_henv env, GTable* self, a_lstr k, a_hash hash, union LstrFind* out) {
-    GStr* key = ai_str_get_or_null_with_hash(env, k, hash);
+static a_bool table_find_lstr(a_henv env, GTable* self, char const* kptr, a_usize klen, a_hash hash, union LstrFind* out) {
+    GStr* key = ai_str_get_or_null_with_hash(env, kptr, klen, hash);
     if (key == null) {
         out->key = null;
         return true;
@@ -374,18 +374,18 @@ a_bool ai_table_geti(a_henv env, GTable* self, a_int k, Value* pv) {
     return false;
 }
 
-a_bool ai_table_getls(a_henv env, GTable* self, a_lstr k, Value* pv) {
+a_bool ai_table_getls(a_henv env, GTable* self, char const* kptr, a_usize klen, Value* pv) {
     union LstrFind out;
-    a_hash hash = ai_str_hashof(env, k);
+    a_hash hash = ai_str_hashof(env, kptr, klen);
 
-    try (table_find_lstr(env, self, k, hash, &out));
+    try (table_find_lstr(env, self, kptr, klen, hash, &out));
 
     TNode* node = table_node(self, out.index);
     v_set(env, pv, node->value);
     return false;
 }
 
-a_bool ai_table_gets(unused a_henv env, GTable* self, GStr* k, Value* pv) {
+a_bool ai_table_gets(a_henv env, GTable* self, GStr* k, Value* pv) {
     a_i32 index;
     Value vk = v_of_str(k);
 
@@ -416,14 +416,14 @@ a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
     }
 }
 
-Value* ai_table_refls(a_henv env, GTable* self, a_lstr k) {
+Value* ai_table_refls(a_henv env, GTable* self, char const* kptr, a_usize klen) {
     union LstrFind out;
-    a_hash hash = ai_str_hashof(env, k);
+    a_hash hash = ai_str_hashof(env, kptr, klen);
 
-    catch (table_find_lstr(env, self, k, hash, &out)) {
+    catch (table_find_lstr(env, self, kptr, klen, hash, &out)) {
         ai_table_hint(env, self, 1);
 
-        GStr* key = out.key ?: ai_str_new_with_hash(env, k, hash);
+        GStr* key = out.key ?: ai_str_new_with_hash(env, kptr, klen, hash);
         out.index = table_emplace_backward(env, self, v_of_str(key), hash, v_of_nil());
 
         self->len += 1;
@@ -448,6 +448,7 @@ a_bool ai_table_del(a_henv env, GTable* self, Value vk) {
 }
 
 void ai_table_delr(a_henv env, GTable* self, Value* ref) {
+    quiet(env);
     TNode* node = from_member(TNode, value, ref);
     assume(table_node(self, 0) <= node && node <= table_node(self, self->hmask), "not table reference");
 

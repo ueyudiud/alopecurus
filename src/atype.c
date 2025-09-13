@@ -108,10 +108,10 @@ a_bool ai_type_gets(a_henv env, GType* self, GStr* key, Value* pval) {
     }
 }
 
-a_bool ai_type_getls(a_henv env, GType* self, a_lstr k, Value* pval) {
-    a_hash hash = ai_str_hashof(env, k);
+a_bool ai_type_getls(a_henv env, GType* self, char const* kptr, a_usize klen, Value* pval) {
+    a_hash hash = ai_str_hashof(env, kptr, klen);
 
-    GStr* str = ai_str_get_or_null_with_hash(env, k, hash);
+    GStr* str = ai_str_get_or_null_with_hash(env, kptr, klen, hash);
     if (str == null)
         return true;
 
@@ -122,7 +122,9 @@ static a_bool type_needs_grow(GType* self) {
     return self->len >= (self->hmask + 1) / 4 * 3;
 }
 
-static a_bool type_ref(unused a_henv env, GType* self, GStr* key, MNode** pnode) {
+static a_bool type_ref(a_henv env, GType* self, GStr* key, MNode** pnode) {
+    quiet(env);
+
     if (self->len == 0) {
         *pnode = null;
         return true;
@@ -251,11 +253,11 @@ void ai_type_sets(a_henv env, GType* self, GStr* key, Value val) {
     }
 }
 
-Value* ai_type_refls(a_henv env, GType* self, a_lstr k) {
-    a_hash hash = ai_str_hashof(env, k);
+Value* ai_type_refls(a_henv env, GType* self, char const* kptr, a_usize klen) {
+    a_hash hash = ai_str_hashof(env, kptr, klen);
     MNode* node;
 
-    GStr* str = ai_str_get_or_null_with_hash(env, k, hash);
+    GStr* str = ai_str_get_or_null_with_hash(env, kptr, klen, hash);
     if (str != null) {
         if (!type_ref(env, self, str, &node)) {
             return &node->value;
@@ -271,7 +273,7 @@ Value* ai_type_refls(a_henv env, GType* self, a_lstr k) {
         type_grow(env, self);
     }
 
-    str = ai_str_get_or_new(env, k);
+    str = ai_str_get_or_new(env, kptr, klen);
     node = type_reserve(self, str);
 
 place:

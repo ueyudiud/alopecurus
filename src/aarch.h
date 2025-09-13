@@ -15,6 +15,11 @@
 #define ALO_ENUM_OS_LINUX 2
 #define ALO_ENUM_OS_OSX 3
 
+#define ALO_ENUM_CC_OTHER 0
+#define ALO_ENUM_CC_MSVC 1
+#define ALO_ENUM_CC_GCC 2
+#define ALO_ENUM_CC_CLANG 2
+
 #ifndef ALOI_ARCH
 # if defined(__i386) || defined(__i386__)
 #  define ALO_ARCH ALO_ENUM_ARCH_X86
@@ -50,6 +55,18 @@
 
 #define ALO_OS_WINDOWS (ALO_OS == ALO_ENUM_OS_WINDOWS)
 #define ALO_OS_POSIX (ALO_OS >= ALO_ENUM_OS_LINUX)
+
+#if defined(_MSC_VER)
+# define ALO_CC ALO_ENUM_CC_MSVC
+#elif defined(__GNUC__)
+# if defined(__clang__)
+#  define ALO_CC ALO_ENUM_CC_CLANG
+# else
+#  define ALO_CC ALO_ENUM_CC_GCC
+# endif
+#else
+# define ALO_CC ALO_ENUM_CC_OTHER
+#endif
 
 /**
  ** File system and naming contracts.

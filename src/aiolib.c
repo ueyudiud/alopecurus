@@ -130,12 +130,15 @@ static void file_mark0(Global* gbl, GFile* self) {
     ai_gc_trace_work(gbl, sizeof(GFile));
 }
 
-static int file_close0(unused a_henv env, GFile* self) {
+static int file_close0(a_henv env, GFile* self) {
+    quiet(env);
+
     if (self->closer != null) {
         int result = (*self->closer)(self->handle);
         self->closer = null;
         return result;
     }
+
     return 0;
 }
 
@@ -151,12 +154,7 @@ static GFile* check_file(a_henv env, a_ilen id) {
 static GFile* check_open_file(a_henv env, a_ilen id) {
     GFile* self = check_file(env, id);
     if (self->closer == null) {
-        if (id >= 0) {
-            aloL_argerror(env, id, "file already closed");
-        }
-        else {
-            aloL_raisef(env, "file already closed");
-        }
+        aloL_argerror(env, id, "file already closed");
     }
     return self;
 }
