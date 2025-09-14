@@ -106,6 +106,7 @@ always_inline ext(TEB)* ext(NtCurrentTeb)() {
 
 static naked void ai_ctx_catch_unwind();
 static naked a_msg ai_ctx_return();
+static naked a_noret ai_ctx_start();
 
 a_msg ai_ctx_init(void) {
 #if defined(ALOI_WIN_DYNAMIC_INIT)
@@ -187,6 +188,190 @@ EXCEPTION_DISPOSITION ai_ctx_start_catch(
 	route_recover(caller->frame, ContextRecord, TRUE);
 	NtRaiseException(ExceptionRecord, ContextRecord, TRUE);
 	trap();
+}
+
+a_noret ai_ctx_raise(a_henv env, a_msg msg) {
+	DWORD code = EXCEPTION_CODE_PREFIX | cast(DWORD, msg & 0xff);
+	RaiseException(code, 0, 0, null);
+	/* no protector found, call panic handler */
+	Global* g = G(env);
+	if (g->panic_ != null) {
+		(*g->panic_)(env);
+	}
+	/* no panic handler, abort process immediately */
+	trap();
+}
+
+EXCEPTION_DISPOSITION alo_specific_handler(
+		PEXCEPTION_RECORD ExceptionRecord,
+		PVOID EstablisherFrame,
+		PCONTEXT ContextRecord,
+		PDISPATCHER_CONTEXT DispatcherContext) {
+	a_henv env = ref_of(GRoute*, DispatcherContext->EstablisherFrame + 0x30);
+
+	if (ExceptionRecord->ExceptionFlags & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND)) {
+		return EXCEPTION_EXECUTE_HANDLER;
+	}
+	else {
+		a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
+		if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
+
+		ai_err_except(env, msg);
+
+		RtlUnwindEx(
+				EstablisherFrame,
+				ai_ctx_catch_unwind,
+				ExceptionRecord,
+				cast(PVOID, cast(a_isize, msg)),
+				ContextRecord,
+				DispatcherContext->HistoryTable);
+		unreachable();
+	}
+}
+
+a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
+	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
+	if (header == null) return ALO_EINVAL;
+
+	a_usize commit = align_forward(stack_size, ALO_PAGE_SIZE);
+	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
+
+	PVOID addr;
+#ifndef ALOI_WIN_NO_USE_UNDOCUMENT_API
+	ext(PROCESS_STACK_ALLOCATION_INFORMATION) alloc_info = {
+		.ReserveSize = max(reserve, commit),
+		.ZeroBits = 0,
+		.StackBase = null
+	};
+
+	NTSTATUS status = NtSetInformationProcess(NtCurrentProcess(), ProcessThreadStackAllocation, &alloc_info, sizeof(alloc_info));
+	if (status != 0) return ALO_EINVAL;
+
+	addr = alloc_info.StackBase;
+#else
+	addr = VirtualAlloc(NULL, reserve, MEM_RESERVE, PAGE_NOACCESS);
+    if (addr == null) return ALO_EINVAL;
+#endif
+
+	if (VirtualAlloc(addr, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == null)
+		goto nomem;
+	if (VirtualAlloc(addr + ALO_PAGE_SIZE, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == null)
+		goto nomem;
+	if (VirtualAlloc(addr + ALO_PAGE_SIZE * 2, reserve - 2 * ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
+		goto nomem;
+
+	a_usize stack_base = ptr2int(alloc_info.StackBase) + reserve;
+
+    ref_of(void*, stack_base - 0x00) = null;
+    ref_of(void*, stack_base - 0x08) = null;
+    ref_of(void*, stack_base - 0x10) = ai_ctx_start;
+    env->rctx = int2ptr(void, stack_base - 0x18);
+	env->rctx_alloc = addr;
+
+	return ALO_SOK;
+
+nomem:
+	VirtualFree(addr, 0, MEM_RELEASE);
+	return ALO_ENOMEM;
+}
+
+static void route_unwind(a_henv env) {
+    DWORD64 EstablisherFrame;
+    DWORD64 ImageBase;
+	/* Load context. */
+	CONTEXT Context = { };
+
+	route_recover(env->rctx, &Context, FALSE);
+
+	/* Initialize unwind history table. */
+	UNWIND_HISTORY_TABLE UnwindHistoryTable = {};
+	
+	loop {
+    	PRUNTIME_FUNCTION RuntimeFunction = RtlLookupFunctionEntry(
+			Context.Rip, 
+			&ImageBase, 
+			&UnwindHistoryTable);
+		KNONVOLATILE_CONTEXT_POINTERS NvContext = {};
+
+		if (RuntimeFunction == null) {
+			/* Unwinding leaf node. */
+			Context.Rip = ref_of(DWORD64, Context.Rsp);
+			Context.Rsp += sizeof(DWORD64);
+		}
+		else {
+   			PVOID HandlerData;
+			/* Unwinding branch node. */
+			RtlVirtualUnwind(
+				UNW_FLAG_NHANDLER,
+				ImageBase,
+				Context.Rip,
+				RuntimeFunction,
+				&Context,
+				&HandlerData,
+				&EstablisherFrame,
+				&NvContext);
+		}
+
+		/* Stop if unwind to end. */
+		if (Context.Rip == 0)
+			break;
+	}
+}
+
+void ai_ctx_close(a_henv env) {
+	route_unwind(env);
+	VirtualFree(env->rctx_alloc, 0, MEM_RELEASE);
+}
+
+#if ALO_CC_GCC
+# pragma GCC push_options
+# pragma GCC optimize("no-unwind-tables")
+#endif
+
+naked a_msg ai_ctx_catch0() {
+	asm(".seh_proc %c0"::"p"(ai_ctx_catch0));
+
+	asm("subq $0x28, %%rsp"::);
+	asm(".seh_stackalloc 0x28");
+	asm(".cfi_def_cfa_offset 0x30"::);
+	asm(".seh_endprologue"::);
+
+	asm(".seh_handler %c0, @except, @unwind"::"p"(alo_specific_handler));
+
+	asm("movq %%rcx, 0x30(%%rsp)"::);
+	asm("callq *%r8");
+	asm("xorq %%rax, %%rax"::);
+
+	asm("%c0:"::"p"(ai_ctx_catch_unwind));
+	asm("addq $0x28, %%rsp"::);
+	asm(".cfi_def_cfa_offset 0x08"::);
+	asm("ret"::);
+	asm(".seh_endproc"::);
+	asm_unreachable();
+}
+
+static naked a_noret ai_ctx_start() {
+	asm(".seh_proc %c0"::"p"(ai_ctx_start));
+
+	asm(".seh_stackalloc 0x08"::);
+	asm(".seh_endprologue"::);
+
+	asm(".seh_handler %c0, @except"::"p"(ai_ctx_start_catch));
+
+	/* save env */
+	asm("movq %%rcx, %%rbx"::);
+
+	/* do vm call */
+	asm("movq 0x40(%%rcx), %%rdx"::"i"(offsetof(GRoute, rctx_alloc)));
+	asm("movq $-1, %%r8"::);
+	asm("call %c0"::"p"(ai_vm_call));
+
+	asm("movq %%rbx, %%rdx"::);
+	asm("movq 0x30(%%rbx), %%rcx"::);
+	asm("xorq %%rax, %%rax"::);
+	asm("jmp %c0"::"p"(ai_ctx_return));
+	asm(".seh_endproc"::);
+	asm_unreachable();
 }
 
 naked a_msg ai_ctx_jump0() {
@@ -287,170 +472,6 @@ naked a_msg ai_ctx_jump0() {
 	asm_unreachable();
 }
 
-a_noret ai_ctx_raise(a_henv env, a_msg msg) {
-	DWORD code = EXCEPTION_CODE_PREFIX | cast(DWORD, msg & 0xff);
-	RaiseException(code, 0, 0, null);
-	/* no protector found, call panic handler */
-	Global* g = G(env);
-	if (g->panic_ != null) {
-		(*g->panic_)(env);
-	}
-	/* no panic handler, abort process immediately */
-	trap();
-}
-
-EXCEPTION_DISPOSITION alo_specific_handler(
-		PEXCEPTION_RECORD ExceptionRecord,
-		PVOID EstablisherFrame,
-		PCONTEXT ContextRecord,
-		PDISPATCHER_CONTEXT DispatcherContext) {
-	a_henv env = ref_of(GRoute*, DispatcherContext->EstablisherFrame + 0x30);
-
-	if (ExceptionRecord->ExceptionFlags & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND)) {
-		return EXCEPTION_EXECUTE_HANDLER;
-	}
-	else {
-		a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
-		if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
-
-		ai_err_except(env, msg);
-
-		RtlUnwindEx(
-				EstablisherFrame,
-				ai_ctx_catch_unwind,
-				ExceptionRecord,
-				cast(PVOID, cast(a_isize, msg)),
-				ContextRecord,
-				DispatcherContext->HistoryTable);
-		unreachable();
-	}
-}
-
-naked a_msg ai_ctx_catch0() {
-	asm(".seh_handler %c0, @except, @unwind"::"p"(alo_specific_handler));
-
-	asm("subq $0x28, %%rsp"::);
-	asm(".cfi_def_cfa_offset 0x30"::);
-
-	asm("movq %%rcx, 0x30(%%rsp)"::);
-	asm("callq *%r8");
-	asm("xorq %%rax, %%rax"::);
-
-	asm("%c0:"::"p"(ai_ctx_catch_unwind));
-	asm("addq $0x28, %%rsp"::);
-	asm(".cfi_def_cfa_offset 0x08"::);
-	asm("ret"::);
-	asm_unreachable();
-}
-
-static naked a_noret ai_ctx_start() {
-	asm(".seh_handler %c0, @except"::"p"(ai_ctx_start_catch));
-
-	/* save env */
-	asm("movq %%rcx, %%rbx"::);
-
-	/* do vm call */
-	asm("movq 0x40(%%rcx), %%rdx"::"i"(offsetof(GRoute, rctx_alloc)));
-	asm("movq $-1, %%r8"::);
-	asm("call %c0"::"p"(ai_vm_call));
-
-	asm("movq %%rbx, %%rdx"::);
-	asm("movq 0x30(%%rbx), %%rcx"::);
-	asm("xorq %%rax, %%rax"::);
-	asm("jmp %c0"::"p"(ai_ctx_return));
-	asm_unreachable();
-}
-
-a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
-	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
-	if (header == null) return ALO_EINVAL;
-
-	a_usize commit = align_forward(stack_size, ALO_PAGE_SIZE);
-	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
-
-	PVOID addr;
-#ifndef ALOI_WIN_NO_USE_UNDOCUMENT_API
-	ext(PROCESS_STACK_ALLOCATION_INFORMATION) alloc_info = {
-		.ReserveSize = max(reserve, commit),
-		.ZeroBits = 0,
-		.StackBase = null
-	};
-
-	NTSTATUS status = NtSetInformationProcess(NtCurrentProcess(), ProcessThreadStackAllocation, &alloc_info, sizeof(alloc_info));
-	if (status != 0) return ALO_EINVAL;
-
-	addr = alloc_info.StackBase;
-#else
-	addr = VirtualAlloc(NULL, reserve, MEM_RESERVE, PAGE_NOACCESS);
-    if (addr == null) return ALO_EINVAL;
+#if ALO_CC_GCC
+# pragma GCC pop_options
 #endif
-
-	if (VirtualAlloc(addr, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == null)
-		goto nomem;
-	if (VirtualAlloc(addr + ALO_PAGE_SIZE, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == null)
-		goto nomem;
-	if (VirtualAlloc(addr + ALO_PAGE_SIZE * 2, reserve - 2 * ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
-		goto nomem;
-
-	a_usize stack_base = ptr2int(alloc_info.StackBase) + reserve;
-
-    ref_of(void*, stack_base - 0x00) = null;
-    ref_of(void*, stack_base - 0x08) = null;
-    ref_of(void*, stack_base - 0x10) = ai_ctx_start;
-    env->rctx = int2ptr(void, stack_base - 0x18);
-	env->rctx_alloc = addr;
-
-	return ALO_SOK;
-
-nomem:
-	VirtualFree(addr, 0, MEM_RELEASE);
-	return ALO_ENOMEM;
-}
-
-static void route_unwind(a_henv env) {
-    DWORD64 EstablisherFrame;
-    DWORD64 ImageBase;
-	/* Load context. */
-	CONTEXT Context = { };
-
-	route_recover(env->rctx, &Context, FALSE);
-
-	/* Initialize unwind history table. */
-	UNWIND_HISTORY_TABLE UnwindHistoryTable = {};
-	
-	loop {
-    	PRUNTIME_FUNCTION RuntimeFunction = RtlLookupFunctionEntry(
-			Context.Rip, 
-			&ImageBase, 
-			&UnwindHistoryTable);
-		KNONVOLATILE_CONTEXT_POINTERS NvContext = {};
-
-		if (RuntimeFunction == null) {
-			/* Unwinding leaf node. */
-			Context.Rip = ref_of(DWORD64, Context.Rsp);
-			Context.Rsp += sizeof(DWORD64);
-		}
-		else {
-   			PVOID HandlerData;
-			/* Unwinding branch node. */
-			RtlVirtualUnwind(
-				UNW_FLAG_NHANDLER,
-				ImageBase,
-				Context.Rip,
-				RuntimeFunction,
-				&Context,
-				&HandlerData,
-				&EstablisherFrame,
-				&NvContext);
-		}
-
-		/* Stop if unwind to end. */
-		if (Context.Rip == 0)
-			break;
-	}
-}
-
-void ai_ctx_close(a_henv env) {
-	route_unwind(env);
-	VirtualFree(env->rctx_alloc, 0, MEM_RELEASE);
-}
