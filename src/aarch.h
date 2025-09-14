@@ -68,6 +68,9 @@
 # define ALO_CC ALO_ENUM_CC_OTHER
 #endif
 
+#define ALO_CC_GCC (ALO_CC == ALO_ENUM_CC_GCC)
+#define ALO_CC_CLANG (ALO_CC == ALO_ENUM_CC_CLANG)
+
 /**
  ** File system and naming contracts.
  ** ALO_DIR_SEP is directory separator.
