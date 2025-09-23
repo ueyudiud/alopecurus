@@ -19,9 +19,9 @@
 #endif
 
 enum {
-	INIT_STACK_SIZE = align_forward(sizeof(Value) * (ALOI_INIT_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
-	MAX_STACK_SIZE = align_forward(sizeof(Value) * (ALOI_MAX_STACKSIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
-	MAX_OVERFLOWED_STACK_SIZE = align_forward(sizeof(Value) * (ALOI_MAX_STACKSIZE + OVERFLOW_STACK_SIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY)
+	INIT_STACK_SIZE = align_forward(sizeof(Value) * (ALOI_INIT_STACK_SIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
+	MAX_STACK_SIZE = align_forward(sizeof(Value) * (ALOI_MAX_STACK_SIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY),
+	MAX_OVERFLOWED_STACK_SIZE = align_forward(sizeof(Value) * (ALOI_MAX_STACK_SIZE + OVERFLOW_STACK_SIZE + RESERVED_STACK_SIZE), STACK_GRANULARITY)
 };
 
 a_bool ai_stk_init(a_henv env, Stack* stack) {
@@ -51,7 +51,7 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 	};
 
 #ifdef ALOI_CHECK_API
-    env->base_frame.stack_limit = val2stk(env, base + ALOI_INIT_CFRAME_STACKSIZE);
+    env->base_frame.stack_limit = val2stk(env, base + ALOI_INIT_CFRAME_STACK_SIZE);
 #endif
 
 	return false;

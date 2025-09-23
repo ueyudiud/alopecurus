@@ -2152,6 +2152,7 @@ void ai_cg_bind_args(Parser* par, Pat* pat, a_usize ctx) {
     scope->top_reg = num_sub;
     scope->top_pin = num_sub;
     par->fscope->nparam = num_sub;
+    par->fscope->max_reg = num_sub;
 
     Pat* sub = pat->sub;
     a_u32 sub_idx = 0;

@@ -578,9 +578,9 @@ tail_call:
 	reload_stack();
 
 	if (fun->flags & FUN_FLAG_NATIVE) {
-		check_stack(R + ALOI_INIT_CFRAME_STACKSIZE);
+		check_stack(R + ALOI_INIT_CFRAME_STACK_SIZE);
 #ifdef ALOI_CHECK_API
-        frame->stack_limit = val2stk(env, R + ALOI_INIT_CFRAME_STACKSIZE);
+        frame->stack_limit = val2stk(env, R + ALOI_INIT_CFRAME_STACK_SIZE);
 #endif
 
 		a_msg n = (*fun->fptr)(env);

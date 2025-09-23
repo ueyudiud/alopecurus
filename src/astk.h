@@ -38,16 +38,16 @@ typedef Value* StkPtr;
 /* Stack size for stack overflow error handling. */
 #define OVERFLOW_STACK_SIZE 128
 
-#ifndef ALOI_INIT_STACKSIZE
-# define ALOI_INIT_STACKSIZE 500
+#ifndef ALOI_INIT_STACK_SIZE
+# define ALOI_INIT_STACK_SIZE 500
 #endif
 
-#ifndef ALOI_INIT_CFRAME_STACKSIZE
-# define ALOI_INIT_CFRAME_STACKSIZE 16
+#ifndef ALOI_INIT_CFRAME_STACK_SIZE
+# define ALOI_INIT_CFRAME_STACK_SIZE 16
 #endif
 
-#ifndef ALOI_MAX_STACKSIZE
-# define ALOI_MAX_STACKSIZE 100000
+#ifndef ALOI_MAX_STACK_SIZE
+# define ALOI_MAX_STACK_SIZE 100000
 #endif
 
 #endif /* astk_h_ */
