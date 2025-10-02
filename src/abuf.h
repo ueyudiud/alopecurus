@@ -129,7 +129,10 @@ always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize siz
 }
 
 always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize len, a_usize size, a_usize lim) {
-	try (ai_buf_ncheck(env, buf, len, size, lim));
+	a_msg msg = ai_buf_ncheck(env, buf, len, size, lim);
+	if (unlikely(msg != ALO_SOK)) {
+		return msg;
+	}
 	memcpy(buf->ptr + size * buf->len, src, len * size);
 	buf->len += len;
 	return ALO_SOK;

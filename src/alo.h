@@ -73,8 +73,9 @@ typedef a_u32 a_flags;
 
 #define ALO_STACK_INDEX_CAPTURE(n) (ALO_STACK_INDEX_CAPTURE_BASE + (n))
 
-#define ALO_ERAISE (-8) /* User Raised Error */
-#define ALO_ECHUNK (-7) /* Text/Binary Chunk Error */
+#define ALO_ERAISE (-9) /* User Raised Error */
+#define ALO_EIO    (-8) /* IO Error */
+#define ALO_ECHUNK (-7) /* Text/Binary Chunk Format Error */
 #define ALO_EOUTER (-6) /* External Error */
 #define ALO_ESTKOF (-5) /* Stack Overflow */
 #define ALO_ENOMEM (-4) /* Out of Memory */

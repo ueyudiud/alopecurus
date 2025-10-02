@@ -102,7 +102,10 @@ static void l_close(void) {
 
 static a_msg l_open(void) {
 	l_init_lines();
-	try (alo_init());
+	a_msg msg = alo_init();
+	if (msg != ALO_SOK) {
+		return msg;
+	}
 
 	atexit(l_close); /* add exit handler. */
 	return ALO_SOK;

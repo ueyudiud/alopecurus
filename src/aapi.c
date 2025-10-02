@@ -22,6 +22,8 @@
 #include "aapi.h"
 
 a_msg api_tagof(a_henv env, Value v) {
+	quiet(env);
+
     switch (v_get_tag(v)) {
         case T_NIL:
             return ALO_TNIL;
@@ -65,6 +67,8 @@ a_msg alo_init(void) {
  *@return false if attribute name is valid and true for otherwise.
  */
 a_bool alo_attri(a_henv env, a_enum n, a_int* pi) {
+	quiet(env);
+
 	switch (n) {
         case ALO_ATTR_VERSION:
             *pi = ALO_VERSION_NUMBER;
@@ -295,6 +299,7 @@ a_msg alo_pushex(a_henv env, char const* sp, ...) {
  *@see alo_pushex
  */
 a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
+	a_msg msg;
 	Value v;
 	switch (*(sp++)) {
 		case '\0': { /* Empty constant. */
@@ -325,15 +330,24 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 				a_int k = va_arg(varg, a_int);
 				switch (v_get_tag(v)) {
 					case T_TUPLE: {
-						try (ai_tuple_ugeti(env, v_as_tuple(v), k, &v));
+						msg = ai_tuple_ugeti(env, v_as_tuple(v), k, &v);
+						if (msg != ALO_SOK) {
+							return msg;
+						}
 						break;
 					}
 					case T_LIST: {
-						try (ai_list_ugeti(env, v_as_list(v), k, &v));
+						msg = ai_list_ugeti(env, v_as_list(v), k, &v);
+						if (msg != ALO_SOK) {
+							return msg;
+						}
 						break;
 					}
 					case T_TABLE: {
-						try (ai_table_geti(env, v_as_table(v), k, &v));
+						msg = ai_table_geti(env, v_as_table(v), k, &v);
+						if (msg != ALO_SOK) {
+							return msg;
+						}
 						break;
 					}
 					default: {

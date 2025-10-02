@@ -206,17 +206,22 @@ GStr* ai_str_get_or_new(a_henv env, char const* ptr, a_usize len) {
 #define MAX_STACK_BUFFER_SIZE (256-1)
 
 a_msg ai_str_load(a_henv env, a_sbfun fun, a_usize len, void* ctx, GStr** pstr) {
+    a_msg msg;
 	if (likely(len < MAX_STACK_BUFFER_SIZE)) {
         /* Allocate buffer on stack. */
         char buf[MAX_STACK_BUFFER_SIZE + 1];
-		try ((*fun)(ctx, buf, len));
+		msg = (*fun)(ctx, buf, len);
+	    if (unlikely(msg != 0)) {
+	        return msg;
+	    }
 		*pstr = ai_str_get_or_new(env, buf, len);
 		return ALO_SOK;
 	}
 	else {
         /* Allocate buffer on heap. */
 		GStr* buf = str_alloc(env, len);
-        catch ((*fun)(ctx, buf->ptr, len), msg) {
+	    msg = (*fun)(ctx, buf->ptr, len);
+        if (unlikely(msg != 0)) {
             ai_mem_dealloc(G(env), buf, str_size(len));
             return msg;
         }

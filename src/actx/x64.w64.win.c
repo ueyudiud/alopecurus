@@ -73,26 +73,9 @@ typedef enum ext(PROCESS_INFORMATION_CLASS) {
 #undef NtRaiseException
 #undef RtlImageNtHeader
 
-#if defined(ALOI_WIN_DYNAMIC_INIT)
-
-WINSYSAPI HMODULE WINAPI GetModuleHandleA(LPCSTR);
-WINSYSAPI FARPROC WINAPI GetProcAddress(HANDLE, LPCSTR);
-
-#define CTX_DCL(name,owner,rtype,ptypes) static rtype (*WINAPI ext(name)) ptypes;
-IMPORT_LIST(CTX_DCL)
-#undef CTX_DCL
-
-#define NtSetInformationProcess (*ext(NtSetInformationProcess))
-#define NtRaiseException (*ext(NtRaiseException))
-#define RtlImageNtHeader (*ext(RtlImageNtHeader))
-
-#else
-
 #define CTX_DCL(name,owner,rtype,ptypes) WINSYSAPI rtype WINAPI name ptypes;
 IMPORT_LIST(CTX_DCL)
 #undef CTX_DCL
-
-#endif
 
 #define NtCurrentProcess() cast(HANDLE, isizec(-1))
 
@@ -104,26 +87,15 @@ always_inline ext(TEB)* ext(NtCurrentTeb)() {
 }
 #define NtCurrentTeb ext(NtCurrentTeb)
 
-static naked void ai_ctx_catch_unwind();
-static naked a_msg ai_ctx_return();
+naked void ai_ctx_catch_unwind();
+naked a_msg ai_ctx_return();
 static naked a_noret ai_ctx_start();
 
 a_msg ai_ctx_init(void) {
-#if defined(ALOI_WIN_DYNAMIC_INIT)
-	HMODULE hntdll = GetModuleHandleA("ntdll.dll");
-	if (hntdll == null) return ALO_EOUTER;
-
-#define CTX_GET(name,mod,...) run { \
-	void* _addr = cast(void*, GetProcAddress(mod, #name)); \
-	if (_addr == null) return ALO_EOUTER; \
-	ext(dbg_name) = _addr; \
+	return ALO_SOK;
 }
 
-	IMPORT_LIST(CTX_GET)
-#undef CTX_GET
-
-#endif
-	return ALO_SOK;
+void ai_ctx_deinit(void) {
 }
 
 static a_msg code2msg(DWORD code) {
@@ -229,9 +201,9 @@ EXCEPTION_DISPOSITION alo_specific_handler(
 	}
 }
 
-a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
+a_bool ai_ctx_open(a_henv env, a_usize stack_size) {
 	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
-	if (header == null) return ALO_EINVAL;
+	if (header == null) return true;
 
 	a_usize commit = align_forward(stack_size, ALO_PAGE_SIZE);
 	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
@@ -245,7 +217,7 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
 	};
 
 	NTSTATUS status = NtSetInformationProcess(NtCurrentProcess(), ProcessThreadStackAllocation, &alloc_info, sizeof(alloc_info));
-	if (status != 0) return ALO_EINVAL;
+	if (status != 0) return true;
 
 	addr = alloc_info.StackBase;
 #else
@@ -268,7 +240,7 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
     env->rctx = int2ptr(void, stack_base - 0x18);
 	env->rctx_alloc = addr;
 
-	return ALO_SOK;
+	return false;
 
 nomem:
 	VirtualFree(addr, 0, MEM_RELEASE);

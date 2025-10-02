@@ -14,8 +14,9 @@
 typedef struct PCtx PCtx;
 
 intern a_msg ai_ctx_init(void);
+intern void ai_ctx_deinit(void);
 intern a_noret ai_ctx_raise(a_henv env, a_msg msg);
-intern a_msg ai_ctx_open(a_henv env, a_usize stack_size);
+intern a_bool ai_ctx_open(a_henv env, a_usize stack_size);
 intern void ai_ctx_close(a_henv env);
 
 intern a_msg ai_ctx_catch(a_henv env, a_pfun fun, void* ctx);

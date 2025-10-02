@@ -15,7 +15,7 @@ intern a_i32 ai_io_igetc(ZIn* in);
 intern a_msg ai_io_iget(ZIn* in, void* dst, a_usize len);
 
 intern void ai_io_oinit(a_henv env, a_ofun fun, void* ctx, ZOut* out);
-intern a_msg ai_io_oput(ZOut* out, void const* src, a_usize len);
+intern void ai_io_oput(ZOut* out, void const* src, a_usize len);
 
 struct ZIn {
     a_henv env;
@@ -30,7 +30,6 @@ struct ZOut {
     a_henv env;
     a_ofun fun;
     void* ctx;
-    a_i32 err;
 };
 
 #endif /* aio_h_ */

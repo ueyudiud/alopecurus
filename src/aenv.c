@@ -54,7 +54,9 @@ static void route_new(GRoute* self, Global* gbl) {
 }
 
 static a_bool route_init(a_henv env, GRoute* self) {
-	try (ai_stk_init(env, &self->stack));
+	if (ai_stk_init(env, &self->stack)) {
+		return true;
+	}
 	self->base_frame.stack_bot = val2stk(env, self->stack.base);
 	return false;
 }
@@ -169,10 +171,10 @@ GRoute* ai_env_new(a_henv env, a_usize stack_size) {
 
 	route_new(self, G(env));
 
-    catch (ai_ctx_open(self, stack_size)) {
+    if (ai_ctx_open(self, stack_size)) {
         goto nomem1;
     }
-    catch (route_init(env, self)) {
+    if (route_init(env, self)) {
         goto nomem2;
     }
 

@@ -83,7 +83,9 @@ static a_isize file_size0(GFile* self) {
     }
 #endif
     /* Get file attribute */
-    try (_fstat64(fno, &s));
+    if (_fstat64(fno, &s) != 0) {
+        return -1;
+    }
     /* Test is regular file */
     if (s.st_mode & S_IFREG) {
         return s.st_size;

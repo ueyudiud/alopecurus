@@ -32,19 +32,16 @@ static void load_report(InCtx* ic, a_msg msg) {
     if (msg == ALO_EEMPTY) {
         ai_err_raisef(ic->env, ALO_ECHUNK, "unexpected ending of chunk");
     }
-    else {
-        assume(msg == ALO_EOUTER);
-        ai_err_raisef(ic->env, msg, "foreign error, code: %d", ic->in.err);
+    assume(msg == ALO_EIO);
+    ai_env_raise(ic->env, ALO_EIO);
+}
+
+static void l_in(InCtx* ic, void* dst, a_usize len) {
+    if (ai_io_iget(&ic->in, dst, len) != 0) {
+        load_report(ic, ALO_EIO);
     }
 }
 
-static void load_input(InCtx* ic, void* dst, a_usize len) {
-    catch (ai_io_iget(&ic->in, dst, len), msg) {
-        load_report(ic, msg);
-    }
-}
-
-#define l_in(ic,p,l) load_input(ic, p, l)
 #define l_get(ic,t) ({ t _v0; l_in(ic, &_v0, sizeof(t));  _v0; })
 #define l_getv(ic,p,l) l_in(ic, p, sizeof((p)[0]) * (l))
 /* Get var sized int */
@@ -59,8 +56,8 @@ static void load_input(InCtx* ic, void* dst, a_usize len) {
 
 static GStr* l_gets(InCtx* ic, a_usize len) {
     GStr* str;
-    catch (ai_str_load(ic->env, cast(a_sbfun, ai_io_iget), len, &ic->in, &str), msg) {
-        load_report(ic, msg);
+    if (ai_str_load(ic->env, cast(a_sbfun, ai_io_iget), len, &ic->in, &str) != 0) {
+        load_report(ic, ALO_EIO);
     }
     return str;
 }
@@ -161,8 +158,10 @@ static void load_verify(InCtx* ic) {
 }
 
 static void load_chunk(a_henv env, void* ctx) {
+    quiet(env);
+
     InCtx* ic = ctx;
-    /* Verify chunk head */
+    /* Verify chunk header */
     load_verify(ic);
     /* Load root prototype */
     load_proto(ic, true);
@@ -179,10 +178,10 @@ static void load_mark(Global* gbl, InCtx* ctx) {
 	}
 }
 
-static void load_except(a_henv env, void* ctx, a_msg msg) {
-    InCtx* ic = ctx;
+static void load_except(a_henv env, InCtx* ctx, a_msg msg) {
     Global* gbl = G(env);
-	rq_for (obj, &ic->rq) {
+    quiet(msg);
+	rq_for (obj, &ctx->rq) {
 		GProto* meta = g_as(GProto, obj);
 		ai_mem_ndealloc(gbl, meta, meta->size);
 	}
