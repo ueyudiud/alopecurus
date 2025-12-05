@@ -662,7 +662,7 @@ static a_msg list_sort(a_henv env) {
 
 void aloopen_list(a_henv env) {
     static aloL_Entry const bindings[] = {
-        { "__look__", null },
+        { "__look__", nullptr },
         { "__new__", list___new__ },
         { "__mul__", list_repeat },
         { "clear", list_clear },

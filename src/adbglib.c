@@ -224,10 +224,10 @@ static void dump_code(GProto* meta, a_bool fline) {
 
 static void dump_chunk(a_henv env, GProto* proto, a_u32 options) {
 	aloi_show("fn %p ", proto);
-	if (proto->dbg_name != null) {
+	if (proto->dbg_name != nullptr) {
 		aloi_show("%s ", str2ntstr(proto->dbg_name));
 	}
-	if (proto->dbg_file != null) {
+	if (proto->dbg_file != nullptr) {
 		aloi_show("<%s:%u,%u>", str2ntstr(proto->dbg_file), proto->dbg_lndef, proto->dbg_lnldef);
 	}
 	aloi_show("\n%u %s, %u %s, %u %s, %u %s, %u %s, %u %s\n",
@@ -247,7 +247,7 @@ static void dump_chunk(a_henv env, GProto* proto, a_u32 options) {
 		}
 	}
 	if (options & ALOE_DUMP_OPT_LOCAL) {
-		if (proto->dbg_locals != null) {
+		if (proto->dbg_locals != nullptr) {
 			aloi_show("local info table <%p>\n", proto->dbg_locals);
 			for (a_u32 i = 0; i < proto->nlocal; ++i) {
 				LocalInfo* info = &proto->dbg_locals[i];
@@ -266,7 +266,7 @@ static void dump_chunk(a_henv env, GProto* proto, a_u32 options) {
                           i,
                           info->fup ? 'C' : 'R',
                           info->reg,
-                          name != null ? str2ntstr(name) : "?");
+                          name != nullptr ? str2ntstr(name) : "?");
 			}
 		}
 		else {

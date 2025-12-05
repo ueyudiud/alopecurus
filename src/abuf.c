@@ -30,9 +30,11 @@ a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg) {
 
 	va_copy(varg2, varg);
 
-	a_usize len = vsnprintf(buf_end( buf), rem, fmt, varg);
+	a_msg msg = vsnprintf(buf_end(buf), rem, fmt, varg);
+	assume(msg >= 0);
+	a_usize len = cast(a_usize, msg);
 	if (len + 1 > rem) {
-		a_msg msg = ai_buf_ncheck(env, buf, len + 1, 1, SIZE_MAX);
+		msg = ai_buf_ncheck(env, buf, len + 1, 1, SIZE_MAX);
 		if (unlikely(msg != ALO_SOK)) {
 			va_end(varg2);
 			return msg;
@@ -57,7 +59,7 @@ GBuf* ai_buf_new(a_henv env) {
 	return self;
 }
 
-a_noret ai_buf_error(a_henv env, a_msg msg, char const* what) {
+ALO_NORETURN void ai_buf_error(a_henv env, a_msg msg, char const* what) {
 	if (msg == ALO_EINVAL) {
 		ai_err_raisef(env, msg, "too many %s.", what);
 	}

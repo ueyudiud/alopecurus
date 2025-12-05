@@ -7,20 +7,20 @@
 
 #include "aobj.h"
 
-intern GList* ai_list_new(a_henv env);
-intern void ai_list_hint(a_henv env, GList* self, a_ulen add);
-intern void ai_list_grow(a_henv env, GList* self, a_ulen add);
-intern void ai_list_push(a_henv env, GList* self, Value v);
-intern void ai_list_push_all(a_henv env, GList* self, Value const* src, a_ulen len);
-intern Value ai_list_get(a_henv env, GList* self, Value vk);
-intern Value ai_list_geti(a_henv env, GList* self, a_int k);
-intern void ai_list_set(a_henv env, GList* self, Value vk, Value vv);
-intern void ai_list_seti(a_henv env, GList* self, a_int key, Value value);
+ALO_PRIVATE GList* ai_list_new(a_henv env);
+ALO_PRIVATE void ai_list_hint(a_henv env, GList* self, a_ulen add);
+ALO_PRIVATE void ai_list_grow(a_henv env, GList* self, a_ulen add);
+ALO_PRIVATE void ai_list_push(a_henv env, GList* self, Value v);
+ALO_PRIVATE void ai_list_push_all(a_henv env, GList* self, Value const* src, a_ulen len);
+ALO_PRIVATE Value ai_list_get(a_henv env, GList* self, Value vk);
+ALO_PRIVATE Value ai_list_geti(a_henv env, GList* self, a_int k);
+ALO_PRIVATE void ai_list_set(a_henv env, GList* self, Value vk, Value vv);
+ALO_PRIVATE void ai_list_seti(a_henv env, GList* self, a_int key, Value value);
 
-intern a_msg ai_list_ugeti(a_henv env, GList* self, a_int k, Value* pv);
-intern a_msg ai_list_uget(a_henv env, GList* self, Value vk, Value* pv);
-intern a_msg ai_list_useti(a_henv env, GList* self, a_int k, Value v);
-intern a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v);
+ALO_PRIVATE a_msg ai_list_ugeti(a_henv env, GList* self, a_int k, Value* pv);
+ALO_PRIVATE a_msg ai_list_uget(a_henv env, GList* self, Value vk, Value* pv);
+ALO_PRIVATE a_msg ai_list_useti(a_henv env, GList* self, a_int k, Value v);
+ALO_PRIVATE a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v);
 
 struct GList {
     GOBJ_STRUCT_HEADER;
@@ -33,17 +33,17 @@ struct GList {
 
 #define v_is_list(v) v_is(v, T_LIST)
 
-always_inline GList* v_as_list(Value v) {
+ALO_INLINE GList* v_as_list(Value v) {
     assume(v_is_list(v), "not list.");
     return g_as(GList, v_as_ref(v));
 }
 
-always_inline Value v_of_list(GList* o) {
+ALO_INLINE Value v_of_list(GList* o) {
     assume(g_is_list(o), "invalid instance.");
     return v_of_ref(o, T_LIST);
 }
 
-always_inline void v_set_list(a_henv env, Value* d, GList* o) {
+ALO_INLINE void v_set_list(a_henv env, Value* d, GList* o) {
     Value v = v_of_list(o);
     v_set(env, d, v);
 }

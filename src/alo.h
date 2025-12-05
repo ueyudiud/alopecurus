@@ -54,10 +54,14 @@ typedef double a_f64;
 # define ALO_EXPORT extern
 #endif
 
-#if __STDC_VERSION__ >= 201112L
+#if __STDC_VERSION__ >= 202311L
+# define ALO_NORETURN [[__noreturn__]]
+#elif __STDC_VERSION__ >= 201112L
 # define ALO_NORETURN _Noreturn
 #elif defined(__GNUC__)
 # define ALO_NORETURN __attribute__((__noreturn__))
+#elif defined(_MSC_VER)
+# define ALO_NORETURN __declspec(noreturn)
 #else
 # define ALO_NORETURN
 #endif
@@ -228,7 +232,7 @@ ALO_EXPORT a_bool (alo_compare)(a_henv env, a_ilen id1, a_ilen id2, a_enum op);
 
 ALO_EXPORT a_msg (alo_userget)(a_henv env, a_ilen id, a_ulen n);
 ALO_EXPORT a_msg (alo_userset)(a_henv env, a_ilen id, a_ulen n);
-ALO_EXPORT ALO_NORETURN void (alo_raise)(a_henv env);
+ALO_NORETURN ALO_EXPORT void (alo_raise)(a_henv env);
 ALO_EXPORT a_msg (alo_resume)(a_henv env);
 ALO_EXPORT void (alo_yield)(a_henv env);
 

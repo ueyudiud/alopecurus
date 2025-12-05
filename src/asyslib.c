@@ -43,7 +43,7 @@ static a_msg sys_command(a_henv env) {
 	char const* cmd = aloL_optstr(env, 0);
 	errno = 0;
 	int stat = system(cmd);
-	if (cmd != null) {
+	if (cmd != nullptr) {
 		return aloL_resulte(env, stat);
 	}
 	else {
@@ -55,7 +55,7 @@ static a_msg sys_command(a_henv env) {
 static a_msg sys_getenv(a_henv env) {
 	char const* key = aloL_checkstr(env, 0);
 	char const* val = getenv(key);
-	if (val != null) {
+	if (val != nullptr) {
 		alo_pushntstr(env, val);
 	}
 	else {

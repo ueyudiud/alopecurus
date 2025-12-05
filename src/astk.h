@@ -7,11 +7,11 @@
 
 #include "aobj.h"
 
-intern a_bool ai_stk_init(a_henv env, Stack* stack);
-intern a_isize ai_stk_grow(a_henv env, Value* top);
-intern void ai_stk_shrink(a_henv env);
-intern a_noret ai_stk_overflow(a_henv env, a_isize diff);
-intern void ai_stk_deinit(Global* gbl, Stack* stack);
+ALO_PRIVATE a_bool ai_stk_init(a_henv env, Stack* stack);
+ALO_PRIVATE a_isize ai_stk_grow(a_henv env, Value* top);
+ALO_PRIVATE void ai_stk_shrink(a_henv env);
+ALO_NORETURN ALO_PRIVATE void ai_stk_overflow(a_henv env, a_isize diff);
+ALO_PRIVATE void ai_stk_deinit(Global* gbl, Stack* stack);
 
 struct Stack {
     Value* base;
@@ -28,7 +28,7 @@ typedef a_isize StkPtr;
 # define STACK_NULL ((StkPtr) -1)
 #else
 typedef Value* StkPtr;
-# define STACK_NULL null
+# define STACK_NULL nullptr
 #endif
 
 #define STACK_GROW_FAILED isizec(1)

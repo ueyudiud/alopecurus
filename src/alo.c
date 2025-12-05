@@ -35,7 +35,7 @@
 
 typedef char* LineBuf;
 
-#  define aloi_readline(env,b,l,p) ({ quiet(env); ((b) = readline(p)) != null ? ((l) = strlen(b), ALO_SYIELD) : ALO_EOUTER; })
+#  define aloi_readline(env,b,l,p) ({ quiet(env); ((b) = readline(p)) != nullptr ? ((l) = strlen(b), ALO_SYIELD) : ALO_EOUTER; })
 #  define aloi_saveline(env,l) (quiet(env), add_history(l))
 #  define aloi_freeline(b) free(b)
 
@@ -45,11 +45,11 @@ typedef char LineBuf[512];
 
 static a_msg aloi_readline(a_henv env, LineBuf buf, a_usize* plen, char const* prompt) {
 	quiet(env);
-	if (prompt != null) {
+	if (prompt != nullptr) {
 		aloi_show("%s", prompt);
 		aloi_show_flush();
 	}
-	if (fgets(buf, sizeof(LineBuf), stdin) == null)
+	if (fgets(buf, sizeof(LineBuf), stdin) == nullptr)
 		return ALO_EOUTER;
 	a_usize len = strlen(buf);
 	*plen = len;
@@ -81,14 +81,14 @@ static InLines l_lines;
 
 static void l_init_lines(void) {
     init(&l_lines) {
-        .head = null,
+        .head = nullptr,
         .tail = &l_lines.head
     };
 }
 
 static void l_deinit_lines(void) {
 	InLine* frag = l_lines.head;
-	while (frag != null) {
+	while (frag != nullptr) {
 		InLine* next = frag->next;
 		aloi_freeline(frag->ptr);
 		free(frag);
@@ -113,7 +113,7 @@ static a_msg l_open(void) {
 
 static a_msg l_read_frag(a_henv env, char const* prompt) {
 	InLine* frag = malloc(sizeof(InLine));
-	if (frag == null) return ALO_ENOMEM;
+	if (frag == nullptr) return ALO_ENOMEM;
 
 	a_msg msg = aloi_readline(env, frag->ptr, frag->len, prompt);
 
@@ -122,7 +122,7 @@ static a_msg l_read_frag(a_henv env, char const* prompt) {
 		return msg;
 	}
 
-	frag->next = null;
+	frag->next = nullptr;
 	*l_lines.tail = frag;
 	l_lines.tail = &frag->next;
 	l_lines.len += frag->len;
@@ -132,16 +132,16 @@ static a_msg l_read_frag(a_henv env, char const* prompt) {
 
 static a_msg l_read_line(a_henv env, char const* prompt) {
 	try (l_read_frag(env, prompt));
-	loop try (l_read_frag(env, null));
+	loop try (l_read_frag(env, nullptr));
 }
 
 static void l_save_line(a_henv env) {
 	char* lines = malloc(l_lines.len + 1);
-	if (lines == null)
+	if (lines == nullptr)
 		return;
 
 	char* dst = lines;
-	for (InLine* line = l_lines.head; line != null; line = line->next) {
+	for (InLine* line = l_lines.head; line != nullptr; line = line->next) {
 		memcpy(dst, line->ptr, line->len);
 		dst += line->len;
 	}
@@ -154,13 +154,13 @@ static a_i32 l_read_lines(a_henv env, void* rctx, void const** pdst, a_usize* pl
 	InLine** pline = rctx;
 	InLine* line = *pline;
 	quiet(env);
-	if (line != null) {
+	if (line != nullptr) {
 		*pdst = line->ptr;
 		*plen = strlen(line->ptr);
 		*pline = line->next;
 	}
 	else {
-		*pdst = null;
+		*pdst = nullptr;
 		*plen = 0;
 	}
 	return 0;
@@ -292,7 +292,7 @@ static a_msg l_pread_eval(a_henv env) {
 }
 
 static a_msg l_run_file(a_henv env, char const* file) {
-    char const* fname = file[0] != '-' ? file : null;
+    char const* fname = file[0] != '-' ? file : nullptr;
     catch (aloL_compilef(env, fname, ALO_COMP_OPT_NOTHING), msg) {
         return l_print_error(env, msg);
     }
@@ -300,7 +300,7 @@ static a_msg l_run_file(a_henv env, char const* file) {
     return l_print_error(env, msg);
 }
 
-static a_noret l_run_repl(a_henv env) {
+ALO_NORETURN static void l_run_repl(a_henv env) {
 	loop {
 		a_msg msg = l_pread_eval(env);
 		l_print_result(env, msg);
@@ -326,7 +326,7 @@ static char const* l_file;
 
 static a_bool l_scan_opts(a_henv env, int argc, char const* const* argv) {
 	l_opts = 0;
-	l_file = null;
+	l_file = nullptr;
 
     int i;
 
@@ -387,12 +387,12 @@ static a_msg l_main(a_henv env) {
         aloi_show(ALO_HELP);
     }
     aloL_openlibs(env);
-    if (l_file != null) {
+    if (l_file != nullptr) {
         catch (l_run_file(env, l_file)) {
             return 0;
         }
     }
-    if (!((l_opts & OPT_V) || l_file != null) || (l_opts & OPT_I)) {
+    if (!((l_opts & OPT_V) || l_file != nullptr) || (l_opts & OPT_I)) {
         l_run_repl(env);
     }
     return 0;
@@ -405,7 +405,7 @@ int main(int argc, char const* const argv[]) {
 
 	a_henv env = aloL_create();
 
-	if (env == null) {
+	if (env == nullptr) {
 		return EXIT_FAILURE;
 	}
 

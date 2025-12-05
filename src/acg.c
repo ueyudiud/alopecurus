@@ -1993,7 +1993,7 @@ void ai_cg_bind_nils(Parser* par, Pat* pat, a_line line) {
     assume(pat->tag == PAT_VARG);
 
     /* If all node is bind. */
-    if (pat->sub == null)
+    if (pat->sub == nullptr)
         return;
 
     if (pat->fcpx) {
@@ -2004,7 +2004,7 @@ void ai_cg_bind_nils(Parser* par, Pat* pat, a_line line) {
     a_u32 num = pat->num_sub;
     a_u32 reg = tmps_alloc(par, num, line);
     a_u32 label = emit_kn(par, reg, num, line);
-    for (Pat* pat_child = pat->sub; pat_child != null; pat_child = pat_child->sib) {
+    for (Pat* pat_child = pat->sub; pat_child != nullptr; pat_child = pat_child->sib) {
         sym_local(par, pat_child->name, reg++, label, (ExprMod) {
             .mmut = pat_child->fmut
         }, pat_child->line);
@@ -2038,7 +2038,7 @@ static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
                 Pat* sub = pat->sub;
                 a_u32 sub_idx = 0;
 
-                while (sub != null) {
+                while (sub != nullptr) {
                     expr_refi(src, top, cast(a_int, sub_idx), sub->line);
                     bot = pat_bind_with(par, sub, bot, src);
 
@@ -2048,7 +2048,7 @@ static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
             }
             else {
                 emit_iabc(par, BC_UNBOX, top, src_reg, num /* TODO: variable length arguments? */, line);
-                for (Pat* sub = pat->sub; sub != null; sub = sub->sib) {
+                for (Pat* sub = pat->sub; sub != nullptr; sub = sub->sib) {
                     expr_reg(src, top, sub->line);
                     bot = pat_bind_with(par, sub, bot, src);
                     top += 1;
@@ -2087,7 +2087,7 @@ static a_u32 pat_valloc(Parser* par, Pat* pat) {
                 pat->num_bwd = max(pat->num_bwd, sub_use + num_pin);
                 num_pin += sub_pin;
 
-                if (sub->sib == null)
+                if (sub->sib == nullptr)
                     break;
 
                 sub = sub->sib;
@@ -2106,7 +2106,7 @@ void ai_cg_bind_prepare(Parser* par, Pat* pat) {
 }
 
 void ai_cg_bind_once(Parser* par, Pat* pat, Expr* e) {
-    assume(pat != null, "bind to nothing.");
+    assume(pat != nullptr, "bind to nothing.");
 
     if (pat->tag == PAT_VAR && !pat->fmut && e->tag <= CONST__MAX) { /* Try fold constant. */
         syms_push(par, (Sym) {
@@ -2125,7 +2125,7 @@ void ai_cg_bind_once(Parser* par, Pat* pat, Expr* e) {
 }
 
 a_u32 ai_cg_bind_for(Parser* par, Pat* pat, a_line line) {
-    assume(pat != null, "bind to nothing.");
+    assume(pat != nullptr, "bind to nothing.");
 
     a_u32 reg_itr = par->scope->top_reg - 3; /* The iterator register. */
 
@@ -2159,7 +2159,7 @@ void ai_cg_bind_args(Parser* par, Pat* pat, a_usize ctx) {
 
     Expr e;
 
-    while (sub != null) {
+    while (sub != nullptr) {
         if (sub->tag == PAT_VAR) {
             sym_local(par, sub->name, sub_idx, par->head_label, (ExprMod) {
                 .mmut = pat->fmut,
@@ -2225,12 +2225,12 @@ void ai_cg_block_start(Parser* par, Scope* scope, a_line line, a_u32 jmp_prop) {
 }
 
 void ai_cg_block_end(Parser* par, a_line line) {
-    assume(par->scope->upscope != null);
+    assume(par->scope->upscope != nullptr);
     scope_pop(par, line, true);
 }
 
 void ai_cg_block_end_with(Parser* par, a_line line, Expr* e) {
-    assume(par->scope->upscope != null);
+    assume(par->scope->upscope != nullptr);
     /* TODO: need ensure top value is still alive */
     if (e->tag == EXPR_REG && e->udat1 == par->scope->upscope->top_reg) {
         scope_pop(par, line, true);
@@ -2246,7 +2246,7 @@ void ai_cg_block_end_with(Parser* par, a_line line, Expr* e) {
 }
 
 void ai_cg_break(Parser* par, GStr* label, a_line line) {
-    if (label == null) {
+    if (label == nullptr) {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
             if (scope->jmp_prop & JMP_PROP_BREAK) {
                 scope->end_label = ai_cg_jump_lazily(par, scope->end_label, line);
@@ -2270,7 +2270,7 @@ void ai_cg_break(Parser* par, GStr* label, a_line line) {
 }
 
 void ai_cg_continue(Parser* par, GStr* label, a_line line) {
-    if (label == null) {
+    if (label == nullptr) {
         for (Scope* scope = par->scope; !(scope->jmp_prop & JMP_PROP_BOUND); scope = scope->upscope) {
             if (scope->jmp_prop & JMP_PROP_CONTINUE) {
                 scope->begin_label = ai_cg_jump_lazily(par, scope->end_label, line);
@@ -2338,11 +2338,11 @@ static GProto* func_end(Parser* par, GStr* name, a_line line) {
         .nline = par->lines.len - fscope->line_off,
         .flags =
         (!(par->options & ALO_COMP_OPT_STRIP_DEBUG) ? FUN_FLAG_DEBUG : 0) |
-        (fscope->fupscope == null ? FUN_FLAG_UNIQUE : 0)
+        (fscope->fupscope == nullptr ? FUN_FLAG_UNIQUE : 0)
     };
 
     GProto* proto = ai_proto_alloc(par->env, &desc);
-    if (proto == null) {
+    if (proto == nullptr) {
         ai_mem_nomem(par->env);
     }
 
@@ -2376,7 +2376,7 @@ static GProto* func_end(Parser* par, GStr* name, a_line line) {
 
         while (src != end) {
             *dst = val;
-            *src = null;
+            *src = nullptr;
 
             src = cast(GProto**, &val->gnext);
             val = *src;
@@ -2436,10 +2436,10 @@ static void parser_mark(Global* gbl, void* ctx) {
     Parser* par = ctx;
     run {
         StrSet* set = &par->lex.strs;
-        if (set->ptr != null) {
+        if (set->ptr != nullptr) {
             for (a_u32 i = 0; i <= set->hmask; ++i) {
                 GStr* str = set->ptr[i];
-                if (str != null) {
+                if (str != nullptr) {
                     g_trace(gbl, str);
                 }
             }
@@ -2454,7 +2454,7 @@ static void parser_except(a_henv env, void* ctx, a_msg msg) {
     rq_for(obj, &par->rq) {
         protos_drop(par->env, g_as(GProto, obj));
     }
-    for (FnScope* scope = par->fscope; scope != null; scope = scope->fupscope) {
+    for (FnScope* scope = par->fscope; scope != nullptr; scope = scope->fupscope) {
         at_buf_deinit(G(par->env), scope->caps);
     }
     /* Close parser. */
@@ -2464,7 +2464,7 @@ static void parser_except(a_henv env, void* ctx, a_msg msg) {
 static KStack const parse_klass = {
     .tag = ALO_TUSER,
     .flags = KLASS_FLAG_PLAIN | KLASS_FLAG_HIDDEN,
-    .name = null,
+    .name = nullptr,
     .mark = parser_mark,
     .catch = parser_except
 };
@@ -2503,11 +2503,11 @@ void ai_cg_chunk_start(Parser* par) {
 
 static void register_protos(a_henv env, GProto* proto) {
     if (proto->flags & FUN_FLAG_UNIQUE) {
-        assume(proto->cache != null, "no unique instance given");
+        assume(proto->cache != nullptr, "no unique instance given");
         ai_gc_register_normal(env, proto->cache);
     }
     else {
-        assume(proto->gnext == null, "children function not collected");
+        assume(proto->gnext == nullptr, "children function not collected");
         ai_gc_register_normal(env, proto);
     }
     for (a_u32 i = 0; i < proto->nsub; ++i) {

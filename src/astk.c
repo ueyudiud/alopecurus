@@ -30,12 +30,12 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 
 #if ALO_STACK_INNER
 	base = ai_mem_nalloc(env, alloc_size);
-	if (unlikely(base == null)) return true;
+	if (unlikely(base == nullptr)) return true;
 #else
 	quiet(env);
 	a_usize limit_page_size = MAX_OVERFLOWED_STACK_SIZE;
-	base = ai_mem_nreserve(null, limit_page_size);
-	if (unlikely(base == null)) return true;
+	base = ai_mem_nreserve(nullptr, limit_page_size);
+	if (unlikely(base == nullptr)) return true;
 	a_bool result = ai_mem_ncommit(base, base, alloc_size, NCOMMIT_PROT_READWRITE);
 	if (unlikely(!result)) {
 		ai_mem_nrelease(base, limit_page_size);
@@ -62,12 +62,12 @@ static void stack_reloc(a_henv env, a_isize diff) {
 	Stack* stack = &env->stack;
 	stack->top = addr_add(Value, stack->top, diff);
 
-	for (Frame* frame = env->frame; frame != null; frame = frame->prev) {
+	for (Frame* frame = env->frame; frame != nullptr; frame = frame->prev) {
 		frame->stack_bot = addr_add(Value, frame->stack_bot, diff);
         frame->stack_dst = addr_add(Value, frame->stack_dst, diff);
 	}
 
-    for (RcCap* cap = env->open_caps; cap != null; cap = cap->next) {
+    for (RcCap* cap = env->open_caps; cap != nullptr; cap = cap->next) {
         cap->ptr = addr_add(Value, cap->ptr, diff);
     }
 }
@@ -116,7 +116,7 @@ static a_isize stack_grow(a_henv env, Stack* stack, a_usize size_new) {
 
 #define STACK_GROW_OVERFLOW isizec(2)
 
-a_noret ai_stk_overflow(a_henv env, a_isize diff) {
+ALO_NORETURN void ai_stk_overflow(a_henv env, a_isize diff) {
 	if (diff & STACK_GROW_OVERFLOW) {
 		GStr* err = ai_str_from_ntstr(env, "stack overflow");
 		v_set_str(env, &env->error, err);

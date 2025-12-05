@@ -116,7 +116,7 @@ static void save_except(a_henv env, OutCtx* ctx, a_msg msg) {
 static KStack const save_klass = {
     .tag = ALO_TUSER,
     .flags = KLASS_FLAG_PLAIN,
-    .name = null,
+    .name = nullptr,
     .mark = save_mark,
     .catch = save_except
 };

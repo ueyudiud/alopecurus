@@ -39,12 +39,12 @@ void ai_vm_hook(a_henv env, a_msg msg, a_u32 test) {
 	/* Reset mask. */
 	gbl->hookm = mask;
 
-	if (fun != null && (mask & test)) {
+	if (fun != nullptr && (mask & test)) {
         (*fun)(env, msg, ctx);
 	}
 }
 
-static a_noret l_div_0_err(a_henv env) {
+ALO_NORETURN static void l_div_0_err(a_henv env) {
 	ai_err_raisef(env, ALO_EINVAL, "attempt to divide by 0.");
 }
 
@@ -533,7 +533,7 @@ static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_ulen num_ret, a_u32 f
 tail_call:
 	R = frame->stack_bot;
 
-	pc = null;
+	pc = nullptr;
 
     run { /* Check for function. */
         Value vf = R[0];

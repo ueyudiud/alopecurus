@@ -7,19 +7,19 @@
 
 #include "aobj.h"
 
-intern GTable* ai_table_new(a_henv env, a_enum kv);
-intern void ai_table_grow(a_henv env, GTable* self, a_ulen add);
-intern void ai_table_hint(a_henv env, GTable* self, a_ulen add);
-intern a_bool ai_table_get(a_henv env, GTable* self, Value vk, Value* pv);
-intern a_bool ai_table_geti(a_henv env, GTable* self, a_int k, Value* pv);
-intern a_bool ai_table_getls(a_henv env, GTable* self, char const* kptr, a_usize klen, Value* pv);
-intern a_bool ai_table_gets(a_henv env, GTable* self, GStr* k, Value* pv);
-intern a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv);
-intern Value* ai_table_refls(a_henv env, GTable* self, char const* kptr, a_usize klen);
-intern a_bool ai_table_del(a_henv env, GTable* self, Value vk);
-intern void ai_table_delr(a_henv env, GTable* self, Value* ref);
-intern a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex);
-intern a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv);
+ALO_PRIVATE GTable* ai_table_new(a_henv env, a_enum kv);
+ALO_PRIVATE void ai_table_grow(a_henv env, GTable* self, a_ulen add);
+ALO_PRIVATE void ai_table_hint(a_henv env, GTable* self, a_ulen add);
+ALO_PRIVATE a_bool ai_table_get(a_henv env, GTable* self, Value vk, Value* pv);
+ALO_PRIVATE a_bool ai_table_geti(a_henv env, GTable* self, a_int k, Value* pv);
+ALO_PRIVATE a_bool ai_table_getls(a_henv env, GTable* self, char const* kptr, a_usize klen, Value* pv);
+ALO_PRIVATE a_bool ai_table_gets(a_henv env, GTable* self, GStr* k, Value* pv);
+ALO_PRIVATE a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv);
+ALO_PRIVATE Value* ai_table_refls(a_henv env, GTable* self, char const* kptr, a_usize klen);
+ALO_PRIVATE a_bool ai_table_del(a_henv env, GTable* self, Value vk);
+ALO_PRIVATE void ai_table_delr(a_henv env, GTable* self, Value* ref);
+ALO_PRIVATE a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex);
+ALO_PRIVATE a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv);
 
 typedef struct TNode TNode;
 
@@ -49,17 +49,17 @@ struct TNode {
 
 #define v_is_table(v) v_is(v, T_TABLE)
 
-always_inline GTable* v_as_table(Value v) {
+ALO_INLINE GTable* v_as_table(Value v) {
     assume(v_is_table(v), "not table.");
     return g_as(GTable, v_as_ref(v));
 }
 
-always_inline Value v_of_table(GTable* o) {
+ALO_INLINE Value v_of_table(GTable* o) {
     assume(g_is_table(o), "invalid instance.");
     return v_of_ref(o, T_TABLE);
 }
 
-always_inline void v_set_table(a_henv env, Value* d, GTable* o) {
+ALO_INLINE void v_set_table(a_henv env, Value* d, GTable* o) {
     Value v = v_of_table(o);
     v_set(env, d, v);
 }

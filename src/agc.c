@@ -10,7 +10,7 @@
 
 #include "agc.h"
 
-#define trmark_null GRAY_NULL
+#define trmark_nullptr GRAY_NULL
 
 #define GCUNITSIZE 256
 
@@ -24,20 +24,20 @@
 # define ALOI_CLOSE_COST usizec(256)
 #endif
 
-always_inline void join_gc(a_gclist* list, a_gptr elem) {
+ALO_INLINE void join_gc(a_gclist* list, a_gptr elem) {
 	elem->gnext = *list;
 	*list = elem;
 }
 
 #define join_gc(list,elem) join_gc(list, g_as_ref(elem))
 
-always_inline a_gptr strip_gc(a_gclist* list) {
+ALO_INLINE a_gptr strip_gc(a_gclist* list) {
 	a_gptr elem = *list;
 	*list = elem->gnext;
 	return elem;
 }
 
-always_inline void flip_color(Global* gbl) {
+ALO_INLINE void flip_color(Global* gbl) {
 	gbl->white_bit = cast(a_u8, other_color(gbl));
 }
 
@@ -58,7 +58,7 @@ void ai_gc_register_normal_(a_henv env, a_gptr obj) {
 void ai_gc_register_normals(a_henv env, RefQueue* rq) {
 	Global* gbl = G(env);
 
-#ifdef ALOI_CHECK_ASSUME
+#ifdef ALOI_DEBUG
     rq_for(obj, rq) {
 		assume(!g_has_other_color(gbl, obj), "object is already dead.");
 	}
@@ -132,7 +132,7 @@ static void close_once(Global* gbl) {
 
 static a_bool sweep_till_alive(Global* gbl) {
     do {
-        if (*gbl->gc_sweep == null) {
+        if (*gbl->gc_sweep == nullptr) {
             return false;
         }
     }
@@ -142,7 +142,7 @@ static a_bool sweep_till_alive(Global* gbl) {
 }
 
 static a_bool propagate_work(Global* gbl, a_trmark* list) {
-	while (*list != trmark_null) {
+	while (*list != trmark_nullptr) {
         trace_once(gbl, list);
 		if (gbl->mem_work < 0) return false;
 	}
@@ -150,7 +150,7 @@ static a_bool propagate_work(Global* gbl, a_trmark* list) {
 }
 
 static a_bool sweep_work(Global* gbl) {
-	while (*gbl->gc_sweep != null) {
+	while (*gbl->gc_sweep != nullptr) {
 		if (sweep_once(gbl)) {
 			gbl->mem_work -= ALOI_SWEEP_COST;
 			if (gbl->mem_work < 0)
@@ -161,7 +161,7 @@ static a_bool sweep_work(Global* gbl) {
 }
 
 static a_bool close_work(Global* gbl) {
-	while (gbl->gc_toclose != null) {
+	while (gbl->gc_toclose != nullptr) {
 		close_once(gbl);
 		gbl->mem_work -= ALOI_CLOSE_COST;
 		if (gbl->mem_work < 0)
@@ -172,7 +172,7 @@ static a_bool close_work(Global* gbl) {
 
 static void split_closable(Global* gbl) {
     a_gptr obj;
-    for (a_gclist* list = &gbl->gc_closable; (obj = *list) != null; list = &obj->gnext) {
+    for (a_gclist* list = &gbl->gc_closable; (obj = *list) != nullptr; list = &obj->gnext) {
         if (g_has_other_color(gbl, obj)) {
             join_gc(&gbl->gc_toclose, strip_gc(list));
         }
@@ -180,38 +180,38 @@ static void split_closable(Global* gbl) {
 }
 
 static void trace_toclose(Global* gbl) {
-    for (a_gptr obj = gbl->gc_toclose; obj != null; obj = obj->gnext) {
+    for (a_gptr obj = gbl->gc_toclose; obj != nullptr; obj = obj->gnext) {
         g_trace(gbl, obj);
     }
 }
 
 static void close_all(Global* gbl) {
-    while (gbl->gc_toclose != null) {
+    while (gbl->gc_toclose != nullptr) {
         close_once(gbl);
     }
 }
 
 static void trace_all(Global* gbl, a_trmark* list) {
-	while (*list != trmark_null) {
+	while (*list != trmark_nullptr) {
         trace_once(gbl, list);
 	}
 }
 
 static void clear_all(Global* gbl, a_trmark* list) {
-	while (*list != trmark_null) {
+	while (*list != trmark_nullptr) {
         a_gptr obj = strip_trace(list);
         (*g_fetch(obj, clear))(gbl, obj);
 	}
 }
 
 static void sweep_all(Global* gbl) {
-	while (*gbl->gc_sweep != null) {
+	while (*gbl->gc_sweep != nullptr) {
         sweep_once(gbl);
 	}
 }
 
 static void drop_all(Global* gbl, a_gptr* list) {
-	while (*list != null) {
+	while (*list != nullptr) {
 		a_gptr obj = strip_gc(list);
 		drop_object(gbl, obj);
 	}
@@ -219,7 +219,7 @@ static void drop_all(Global* gbl, a_gptr* list) {
 
 static void halt_trace(Global* gbl, a_gptr* list) {
 	a_trmark white = white_color(gbl);
-	while (*list != null) {
+	while (*list != nullptr) {
 		a_gptr obj = *list;
 		list = &obj->gnext;
 		if (g_has_other_color(gbl, obj)) {
@@ -229,8 +229,8 @@ static void halt_trace(Global* gbl, a_gptr* list) {
 }
 
 static void begin_trace(Global* gbl) {
-	gbl->tr_gray = trmark_null;
-	gbl->tr_regray = trmark_null;
+	gbl->tr_gray = trmark_nullptr;
+	gbl->tr_regray = trmark_nullptr;
 	/* Mark nonvolatile root. */
 	join_trace(&gbl->tr_gray, ai_env_mroute(gbl));
 	if (v_is_ref(gbl->global_value)) {
@@ -249,7 +249,7 @@ static void begin_sweep(Global* gbl) {
 }
 
 static a_bool begin_close(Global* gbl) {
-	if (gbl->gc_toclose == null) {
+	if (gbl->gc_toclose == nullptr) {
 		gbl->gcstep = GCSTEP_PAUSE;
 		return true;
 	}
@@ -263,10 +263,10 @@ static void trace_blur(Global* gbl) {
     a_bool changed = false;
     do {
         a_trmark list = gbl->tr_blur;
-        gbl->tr_blur = trmark_null;
-        while (list != trmark_null) {
+        gbl->tr_blur = trmark_nullptr;
+        while (list != trmark_nullptr) {
             trace_once(gbl, &list);
-            if (gbl->tr_gray != trmark_null) {
+            if (gbl->tr_gray != trmark_nullptr) {
                 trace_all(gbl, &gbl->tr_gray);
                 changed = true;
             }
@@ -287,7 +287,7 @@ static void trace_atomic(Global* gbl) {
 	a_isize old_work = gbl->mem_work;
 
 	a_trmark list = gbl->tr_regray;
-	gbl->tr_regray = trmark_null;
+	gbl->tr_regray = trmark_nullptr;
     trace_all(gbl, &list);
     trace_all(gbl, &gbl->tr_gray);
     trace_blur(gbl);

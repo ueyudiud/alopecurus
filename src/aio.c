@@ -14,7 +14,7 @@ void ai_io_iinit(a_henv env, a_ifun fun, void* ctx, ZIn* in) {
         .env = env,
         .fun = fun,
         .ctx = ctx,
-        .ptr = null,
+        .ptr = nullptr,
         .len = 0
     };
 }

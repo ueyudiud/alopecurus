@@ -7,18 +7,19 @@
 
 #include <stdatomic.h>
 
+#include "asym.h"
 #include "actx.h"
 #include "astr.h"
 #include "atype.h"
 #include "astk.h"
 
-intern GRoute* ai_env_new(a_henv env, a_usize stack_size);
-intern a_henv ai_env_mroute(Global* gbl);
-intern a_msg ai_env_resume(a_henv env, GRoute* self);
-intern void ai_env_yield(a_henv env);
-intern a_msg ai_env_protect(a_henv env, a_pfun pfun, a_efun efun, void* ctx);
-intern a_msg ai_env_catch_(a_henv env, a_pfun pfun, a_gptr ctx);
-intern a_noret ai_env_raise(a_henv env, a_msg msg);
+ALO_PRIVATE GRoute* ai_env_new(a_henv env, a_usize stack_size);
+ALO_PRIVATE a_henv ai_env_mroute(Global* gbl);
+ALO_PRIVATE a_msg ai_env_resume(a_henv env, GRoute* self);
+ALO_PRIVATE void ai_env_yield(a_henv env);
+ALO_PRIVATE a_msg ai_env_protect(a_henv env, a_pfun pfun, a_efun efun, void* ctx);
+ALO_PRIVATE a_msg ai_env_catch_(a_henv env, a_pfun pfun, a_gptr ctx);
+ALO_NORETURN ALO_PRIVATE void ai_env_raise(a_henv env, a_msg msg);
 
 #define ai_env_catch(env,fun,ctx) ai_env_catch_(env, fun, g_as_ref(&(ctx)))
 
@@ -62,15 +63,15 @@ struct alo_Env {
 
 /* Some offset used in assembly, make sure the value is correct. */
 #if ALO_M64
-static_assert(offsetof(GRoute, rctx) == 0x20);
-static_assert(offsetof(GRoute, rctx_alloc) == 0x28);
-static_assert(offsetof(GRoute, caller) == 0x30);
-static_assert(offsetof(GRoute, stack.base) == 0x40);
+ALO_STATIC_ASSERT(offsetof(GRoute, rctx) == 0x20);
+ALO_STATIC_ASSERT(offsetof(GRoute, rctx_alloc) == 0x28);
+ALO_STATIC_ASSERT(offsetof(GRoute, caller) == 0x30);
+ALO_STATIC_ASSERT(offsetof(GRoute, stack.base) == 0x40);
 #else
-static_assert(offsetof(GRoute, rctx) == 0x10);
-static_assert(offsetof(GRoute, rctx_alloc) == 0x14);
-static_assert(offsetof(GRoute, caller) == 0x18);
-static_assert(offsetof(GRoute, stack.base) == 0x20);
+ALO_STATIC_ASSERT(offsetof(GRoute, rctx) == 0x10);
+ALO_STATIC_ASSERT(offsetof(GRoute, rctx_alloc) == 0x14);
+ALO_STATIC_ASSERT(offsetof(GRoute, caller) == 0x18);
+ALO_STATIC_ASSERT(offsetof(GRoute, stack.base) == 0x20);
 #endif
 
 /**
@@ -130,17 +131,17 @@ struct Global {
     GBType fast_types[PTYPE_COUNT];
 };
 
-static_assert(offsetof(Global, version) == 0); /* 'version' must be head of global. */
+ALO_STATIC_ASSERT(offsetof(Global, version) == 0); /* 'version' must be head of global. */
 
 #define RFLAG_COUNT_VARARG UINT8_MAX
 
 #define ALO_HMSWAP 0x80
 
-always_inline a_usize gbl_mem_total(Global* gbl) {
+ALO_INLINE a_usize gbl_mem_total(Global* gbl) {
     return gbl->mem_base + cast(a_usize, gbl->mem_debt);
 }
 
-always_inline GStr* g_str(a_henv env, a_u32 tag) {
+ALO_INLINE GStr* g_str(a_henv env, a_u32 tag) {
     return G(env)->fast_strs[tag];
 }
 
@@ -148,28 +149,28 @@ always_inline GStr* g_str(a_henv env, a_u32 tag) {
 
 #define g_is_route(o) g_is(o, ALO_TROUTE)
 
-always_inline a_bool v_is_route(Value v) {
+ALO_INLINE a_bool v_is_route(Value v) {
     return v_is(v, T_OTHER) && g_is_route(v_as_ref(v));
 }
 
-always_inline GRoute* v_as_route(Value v) {
+ALO_INLINE GRoute* v_as_route(Value v) {
     assume(v_is_route(v), "not route");
     return g_as(GRoute, v_as_ref(v));
 }
 
-always_inline Value v_of_route(GRoute* o) {
+ALO_INLINE Value v_of_route(GRoute* o) {
     assume(g_is_route(o), "invalid instance.");
     return v_of_ref(o, T_OTHER);
 }
 
-always_inline void v_set_route(a_henv env, Value* d, GRoute* o) {
+ALO_INLINE void v_set_route(a_henv env, Value* d, GRoute* o) {
     Value v = v_of_route(o);
     v_set(env, d, v);
 }
 
 #define route_size() sizeof(GRoute)
 
-always_inline GType* g_type(Global* gbl, a_gptr o) {
+ALO_INLINE GType* g_type(Global* gbl, a_gptr o) {
     Klass const* k = g_klass(o);
     a_u32 tag = k->tag;
     if (likely(tag < PTYPE_COUNT)) {
@@ -180,12 +181,12 @@ always_inline GType* g_type(Global* gbl, a_gptr o) {
 
 #define g_type(env,p) g_type(G(env), g_as_ref(p))
 
-always_inline char const* g_name(a_henv env, a_gptr p) {
+ALO_INLINE char const* g_name(a_henv env, a_gptr p) {
     quiet(env);
     return g_klass(p)->name ?: "user";
 }
 
-always_inline GType* v_type(Global* gbl, Value v) {
+ALO_INLINE GType* v_type(Global* gbl, Value v) {
     switch (v_get_tag(v)) {
         case T_NIL: return g_ptype(gbl, ALO_TNIL);
         case T_FALSE:
@@ -200,7 +201,7 @@ always_inline GType* v_type(Global* gbl, Value v) {
 
 #define v_type(env,v) v_type(G(env), v)
 
-always_inline char const* v_name(a_henv env, Value v) {
+ALO_INLINE char const* v_name(a_henv env, Value v) {
     switch (v_get_tag(v)) {
         case T_NIL: return "nil";
         case T_FALSE:
@@ -225,11 +226,11 @@ always_inline char const* v_name(a_henv env, Value v) {
 # define ALOI_INIT_CFRAMESIZE usizec(8)
 #endif
 
-always_inline void check_in_stack(a_henv env, Value* v) {
+ALO_INLINE void check_in_stack(a_henv env, Value* v) {
 	assume(v >= env->stack.base && v < env->stack.limit + RESERVED_STACK_SIZE, "not stack value pointer.");
 }
 
-always_inline StkPtr val2stk(a_henv env, Value* v) {
+ALO_INLINE StkPtr val2stk(a_henv env, Value* v) {
 	check_in_stack(env, v);
 #if ALO_STACK_RELOC
 	return addr_diff(v, env->stack._impl);
@@ -239,7 +240,7 @@ always_inline StkPtr val2stk(a_henv env, Value* v) {
 #endif
 }
 
-always_inline Value* stk2val(a_henv env, StkPtr p) {
+ALO_INLINE Value* stk2val(a_henv env, StkPtr p) {
 	Value* v;
 #if ALO_STACK_RELOC
 	v = addr_add(Value, env->stack.impl, p);
@@ -251,11 +252,11 @@ always_inline Value* stk2val(a_henv env, StkPtr p) {
 	return v;
 }
 
-always_inline Value* ai_stk_bot(a_henv env) {
+ALO_INLINE Value* ai_stk_bot(a_henv env) {
 	return stk2val(env, env->frame->stack_bot);
 }
 
-always_inline a_isize ai_stk_check(a_henv env, Value* top) {
+ALO_INLINE a_isize ai_stk_check(a_henv env, Value* top) {
 	if (unlikely(top > env->stack.limit)) {
 		a_isize diff = ai_stk_grow(env, top);
 		if (diff & STACK_GROW_FAILED) {
@@ -266,7 +267,7 @@ always_inline a_isize ai_stk_check(a_henv env, Value* top) {
 	return 0;
 }
 
-always_inline void ai_env_pop_error(a_henv env, Value* d) {
+ALO_INLINE void ai_env_pop_error(a_henv env, Value* d) {
 	v_cpy(env, d, &env->error);
 	v_set_nil(&env->error);
 }
@@ -288,48 +289,48 @@ enum {
 
 #define GRAY_NULL ((a_trmark) 0)
 
-always_inline a_trmark white_color(Global* gbl) {
+ALO_INLINE a_trmark white_color(Global* gbl) {
     return cast(a_trmark, gbl->white_bit);
 }
 
-always_inline a_trmark other_color(Global* gbl) {
+ALO_INLINE a_trmark other_color(Global* gbl) {
     return white_color(gbl) ^ (WHITE1_COLOR | WHITE2_COLOR);
 }
 
-always_inline a_bool g_has_black_color(a_gptr o) {
+ALO_INLINE a_bool g_has_black_color(a_gptr o) {
     return (o->tnext & BLACK_COLOR) != 0;
 }
 
 #define g_has_black_color(o) g_has_black_color(g_as_ref(o))
 
-always_inline a_bool g_has_gray_color(a_gptr o) {
+ALO_INLINE a_bool g_has_gray_color(a_gptr o) {
     return (o->tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
 
 #define g_has_gray_color(o) g_has_gray_color(g_as_ref(o))
 
-always_inline a_bool g_has_white_color(Global* gbl, a_gptr o) {
+ALO_INLINE a_bool g_has_white_color(Global* gbl, a_gptr o) {
     return (o->tnext & white_color(gbl)) != 0;
 }
 
 #define g_has_white_color(gbl,o) g_has_white_color(gbl, g_as_ref(o))
 
-always_inline a_bool g_has_other_color(Global* gbl, a_gptr o) {
+ALO_INLINE a_bool g_has_other_color(Global* gbl, a_gptr o) {
     return (o->tnext & other_color(gbl)) != 0;
 }
 
 #define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_ref(v))
 
-always_inline a_bool g_has_valid_color(Global* gbl, a_gptr o) {
+ALO_INLINE a_bool g_has_valid_color(Global* gbl, a_gptr o) {
     return !g_has_other_color(gbl, o);
 }
 
-always_inline a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o) {
+ALO_INLINE a_bool g_has_white_color_within_assume_alive(Global* gbl, a_gptr o) {
     assume(g_has_valid_color(gbl, o));
     return (o->tnext & (WHITE1_COLOR | WHITE2_COLOR)) != 0;
 }
 
-always_inline a_bool v_is_alive(Global* gbl, Value v) {
+ALO_INLINE a_bool v_is_alive(Global* gbl, Value v) {
     if (!v_is_ref(v) || v_is_str(v)) {
         return true;
     }
@@ -340,7 +341,7 @@ always_inline a_bool v_is_alive(Global* gbl, Value v) {
     return !g_has_white_color_within_assume_alive(gbl, o);
 }
 
-always_inline void v_check_alive(a_henv env, Value v) {
+ALO_INLINE void v_check_alive(a_henv env, Value v) {
     if (v_is_ref(v)) {
         a_gptr p = v_as_ref(v);
         assume(g_has_valid_color(G(env), p));

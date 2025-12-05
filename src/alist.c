@@ -24,7 +24,7 @@ GList* ai_list_new(a_henv env) {
     GList* self = ai_mem_alloc(env, list_size());
 
     self->klass = &list_klass;
-    self->ptr = null;
+    self->ptr = nullptr;
     self->cap = 0;
     self->len = 0;
 
@@ -145,7 +145,7 @@ static void list_mark(Global* gbl, GList* self) {
 }
 
 static void list_drop(Global* gbl, GList* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         ai_mem_vdel(gbl, self->ptr, self->cap);
     }
     ai_mem_dealloc(gbl, self, list_size());

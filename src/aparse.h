@@ -7,7 +7,7 @@
 
 #include "alex.h"
 
-intern a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, GFun** pfun);
+ALO_PRIVATE a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, a_u32 options, GFun** pfun);
 
 typedef struct Sym Sym;
 typedef struct FnScope FnScope;

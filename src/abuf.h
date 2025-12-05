@@ -25,8 +25,8 @@ struct GBuf {
     CHAR_BUF_STRUCT_BODY;
 };
 
-static_assert(offsetof(Buf, str.ptr) == offsetof(Buf, ptr));
-static_assert(offsetof(Buf, str.len) == offsetof(Buf, len));
+ALO_STATIC_ASSERT(offsetof(Buf, str.ptr) == offsetof(Buf, ptr));
+ALO_STATIC_ASSERT(offsetof(Buf, str.len) == offsetof(Buf, len));
 
 #define buf_end(b) cast(void*, (b)->ptr + (b)->len)
 #define buf_cast(b) from_member(Buf, _buf_head_mark, &(b)->_buf_head_mark)
@@ -36,67 +36,67 @@ static_assert(offsetof(Buf, str.len) == offsetof(Buf, len));
 
 #define g_is_buf(o) g_is(o, ALO_TBUF)
 
-always_inline a_bool v_is_buf(Value v) {
+ALO_INLINE a_bool v_is_buf(Value v) {
     return v_is(v, T_OTHER) && g_is_buf(v_as_ref(v));
 }
 
-always_inline GBuf* v_as_buf(Value v) {
+ALO_INLINE GBuf* v_as_buf(Value v) {
     assume(v_is_buf(v), "not buffer.");
     return g_as(GBuf, v_as_ref(v));
 }
 
-always_inline Value v_of_buf(GBuf* o) {
+ALO_INLINE Value v_of_buf(GBuf* o) {
     assume(g_is_buf(o), "invalid instance.");
     return v_of_ref(o, T_OTHER);
 }
 
-always_inline void v_set_buf(a_henv env, Value* d, GBuf* o) {
+ALO_INLINE void v_set_buf(a_henv env, Value* d, GBuf* o) {
     Value v = v_of_buf(o);
     v_set(env, d, v);
 }
 
-intern a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...);
-intern a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg);
-intern GBuf* ai_buf_new(a_henv env);
-intern a_noret ai_buf_error(a_henv env, a_msg msg, char const* what);
+ALO_PRIVATE a_msg ai_buf_nputfs_(a_henv env, Buf* buf, char const* fmt, ...);
+ALO_PRIVATE a_msg ai_buf_nputvfs_(a_henv env, Buf* buf, char const* fmt, va_list varg);
+ALO_PRIVATE GBuf* ai_buf_new(a_henv env);
+ALO_NORETURN ALO_PRIVATE void ai_buf_error(a_henv env, a_msg msg, char const* what);
 
-always_inline void ai_buf_init_(Buf* buf) {
-	buf->ptr = null;
+ALO_INLINE void ai_buf_init_(Buf* buf) {
+	buf->ptr = nullptr;
 	buf->len = 0;
 	buf->cap = 0;
 }
 
 #define at_buf_init(b) ai_buf_init_(buf_cast(b))
 
-always_inline void ai_buf_deinit_(Global* gbl, Buf* buf, a_usize size) {
+ALO_INLINE void ai_buf_deinit_(Global* gbl, Buf* buf, a_usize size) {
 	ai_mem_dealloc(gbl, buf->ptr, buf->cap * size);
-	buf->ptr = null;
+	buf->ptr = nullptr;
 	buf->cap = 0;
 }
 
 #define at_buf_deinit(gbl,b) ai_buf_deinit_(gbl, buf_cast(b), buf_elem_size(b))
 
 #define at_buf_for(b,v) for ( \
-	auto v = (b)->ptr,        \
+	typeof((b)->ptr) v = (b)->ptr, \
 	_end_##v =                \
         (b)->ptr + (b)->len;  \
 	v < _end_##v;             \
 	v += 1                    \
 )
 
-always_inline a_bool ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize size) {
+ALO_INLINE a_bool ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize size) {
     a_usize old_cap = buf->cap;
     assume(old_cap <= SIZE_MAX / size && new_cap <= SIZE_MAX / size, "invalid capacity.");
 
     void* ptr = ai_mem_nrealloc(env, buf->ptr, size * old_cap, size * new_cap);
-    if (unlikely(ptr == null)) return true;
+    if (unlikely(ptr == nullptr)) return true;
 
     buf->ptr = ptr;
 	buf->cap = new_cap;
     return false;
 }
 
-always_inline a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usize lim) {
+ALO_INLINE a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usize lim) {
 	a_usize old_cap = *pcap;
 	assume(add > old_cap - len, "need not grow.");
 	a_usize expect = try_add(len, add);
@@ -115,7 +115,7 @@ always_inline a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usi
 	return false;
 }
 
-always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, a_usize lim) {
+ALO_INLINE a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, a_usize lim) {
 	if (add > buf->cap - buf->len) {
 		a_usize cap = buf->cap;
 		if (ai_buf_nhint(&cap, buf->len, add, lim)) {
@@ -128,7 +128,7 @@ always_inline a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize siz
 	return ALO_SOK;
 }
 
-always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize len, a_usize size, a_usize lim) {
+ALO_INLINE a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize len, a_usize size, a_usize lim) {
 	a_msg msg = ai_buf_ncheck(env, buf, len, size, lim);
 	if (unlikely(msg != ALO_SOK)) {
 		return msg;
@@ -143,14 +143,14 @@ always_inline a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usiz
 #define at_buf_npush(env,b,v) ({ buf_elem_type(b) _va = (v); at_buf_nappend(env, b, &_va, 1); })
 
 #define at_buf_push(env,b,v,w) ({ \
-	auto _b = b;                  \
+	let(_b, b);                   \
     a_usize _bid = _b->len;       \
 	catch (at_buf_npush(env, _b, v)) { ai_buf_error(env, _e, w); } \
     _bid;                         \
 })
 
 #define at_buf_pop(env,b) ({ \
-	auto _b = b;             \
+	let(_b, b);              \
     assume(_b->len > 0, "pop empty buf."); \
     _b->ptr[--_b->len];      \
 })

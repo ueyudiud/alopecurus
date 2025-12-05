@@ -9,33 +9,33 @@
 
 #define ALO_ALLOC_ALIGN sizeof(a_f64)
 
-intern a_noret ai_mem_nomem(a_henv env);
+ALO_NORETURN ALO_PRIVATE void ai_mem_nomem(a_henv env);
 
-intern void* ai_mem_alloc(a_henv env, a_usize sz);
-intern void* ai_mem_realloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new);
-intern void ai_mem_dealloc(Global* gbl, void* blk, a_usize sz);
+ALO_PRIVATE void* ai_mem_alloc(a_henv env, a_usize sz);
+ALO_PRIVATE void* ai_mem_realloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new);
+ALO_PRIVATE void ai_mem_dealloc(Global* gbl, void* blk, a_usize sz);
 
-intern void* ai_mem_nalloc(a_henv env, a_usize sz);
-intern void* ai_mem_nrealloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new);
-intern void ai_mem_ndealloc(Global* gbl, void* blk, a_usize sz);
+ALO_PRIVATE void* ai_mem_nalloc(a_henv env, a_usize sz);
+ALO_PRIVATE void* ai_mem_nrealloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new);
+ALO_PRIVATE void ai_mem_ndealloc(Global* gbl, void* blk, a_usize sz);
 
-always_inline void* ai_mem_valloc(alo_Alloc const* af, void* ac, a_usize sz) {
+ALO_INLINE void* ai_mem_valloc(alo_Alloc const* af, void* ac, a_usize sz) {
 	assume(sz > 0);
 	void* ptr = (*af->allocate)(ac, sz);
     assume((ptr2int(ptr) & (ALO_ALLOC_ALIGN - 1)) == 0, "allocation violate alignment contract");
     return ptr;
 }
 
-always_inline void* ai_mem_vrealloc(alo_Alloc const* af, void* ac, void* blk_old, a_usize sz_old, a_usize sz_new) {
-	assume(blk_old != null && sz_old > 0);
+ALO_INLINE void* ai_mem_vrealloc(alo_Alloc const* af, void* ac, void* blk_old, a_usize sz_old, a_usize sz_new) {
+	assume(blk_old != nullptr && sz_old > 0);
 	assume(sz_new > 0);
 	void* ptr = (*af->reallocate)(ac, blk_old, sz_old, sz_new);
     assume((ptr2int(ptr) & (ALO_ALLOC_ALIGN - 1)) == 0, "reallocation violate alignment contract");
     return ptr;
 }
 
-always_inline void ai_mem_vdealloc(alo_Alloc const* af, void* ac, void* blk, a_usize sz) {
-	assume(blk != null && sz > 0);
+ALO_INLINE void ai_mem_vdealloc(alo_Alloc const* af, void* ac, void* blk, a_usize sz) {
+	assume(blk != nullptr && sz > 0);
 	(*af->deallocate)(ac, blk, sz);
 }
 
@@ -57,29 +57,29 @@ always_inline void ai_mem_vdealloc(alo_Alloc const* af, void* ac, void* blk, a_u
 #define NCOMMIT_PROT_READWRITE PAGE_READWRITE
 #define NCOMMIT_PROT_READEXEC PAGE_EXECUTE_READ
 
-always_inline void* ai_mem_nreserve(void* hint, a_usize size) {
+ALO_INLINE void* ai_mem_nreserve(void* hint, a_usize size) {
 	return VirtualAlloc(hint, size, MEM_RESERVE, PAGE_NOACCESS);
 }
 
-always_inline a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_INLINE a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
 	quiet(base);
 	void* addr2 = VirtualAlloc(addr, size, MEM_COMMIT, prot);
-	assume(addr2 == addr || addr2 == null, "unexpected result.");
-	return addr2 != null;
+	assume(addr2 == addr || addr2 == nullptr, "unexpected result.");
+	return addr2 != nullptr;
 }
 
-always_inline a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_INLINE a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
 	quiet(base);
 	DWORD old_prot;
 	return VirtualProtect(addr, size, prot, &old_prot);
 }
 
-always_inline a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
+ALO_INLINE a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
 	quiet(base);
 	return VirtualFree(addr, size, MEM_DECOMMIT);
 }
 
-always_inline a_bool ai_mem_nrelease(void* base, a_usize size) {
+ALO_INLINE a_bool ai_mem_nrelease(void* base, a_usize size) {
 	quiet(size);
 	return VirtualFree(base, 0, MEM_RELEASE);
 }
@@ -95,7 +95,7 @@ always_inline a_bool ai_mem_nrelease(void* base, a_usize size) {
 #define NCOMMIT_PROT_READWRITE (PROT_READ|PROT_WRITE)
 #define NCOMMIT_PROT_READEXEC (PROT_READ|PROT_EXEC)
 
-always_inline void* ai_mem_nreserve(void* hint, a_usize size) {
+ALO_ALWAYS_INLINE void* ai_mem_nreserve(void* hint, a_usize size) {
 	void* base = mmap(hint, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 #if ALO_USE_VALGRIND
 	VALGRIND_CREATE_MEMPOOL(base, false, false);
@@ -103,7 +103,7 @@ always_inline void* ai_mem_nreserve(void* hint, a_usize size) {
 	return base;
 }
 
-always_inline a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_ALWAYS_INLINE a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
 	quiet(base);
 	int ret = mprotect(addr, size, prot);
 #if ALO_USE_VALGRIND
@@ -115,12 +115,12 @@ always_inline a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flag
 	return ret == 0;
 }
 
-always_inline a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_ALWAYS_INLINE a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
 	quiet(base);
 	return mprotect(addr, size, prot) == 0;
 }
 
-always_inline a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
+ALO_ALWAYS_INLINE a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
 	quiet(base);
 	int ret = mprotect(addr, size, PROT_NONE);
 #if ALO_USE_VALGRIND
@@ -132,7 +132,7 @@ always_inline a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
 	return ret == 0;
 }
 
-always_inline a_bool ai_mem_nrelease(void* base, a_usize size) {
+ALO_ALWAYS_INLINE a_bool ai_mem_nrelease(void* base, a_usize size) {
 	int ret = munmap(base, size);
 #if ALO_USE_VALGRIND
 	VALGRIND_DESTROY_MEMPOOL(base);
@@ -145,23 +145,23 @@ always_inline a_bool ai_mem_nrelease(void* base, a_usize size) {
 #define NCOMMIT_PROT_READWRITE 0
 #define NCOMMIT_PROT_READEXEC 0
 
-always_inline void* ai_mem_nreserve(void* hint, a_usize size) {
+ALO_ALWAYS_INLINE void* ai_mem_nreserve(void* hint, a_usize size) {
 	return malloc(size);
 }
 
-always_inline a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_ALWAYS_INLINE a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
 	return true;
 }
 
-always_inline a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_ALWAYS_INLINE a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
 	return true;
 }
 
-always_inline a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
+ALO_ALWAYS_INLINE a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
 	return true;
 }
 
-always_inline a_bool ai_mem_nrelease(void* base, a_usize size) {
+ALO_ALWAYS_INLINE a_bool ai_mem_nrelease(void* base, a_usize size) {
 	free(base);
 	return true;
 }

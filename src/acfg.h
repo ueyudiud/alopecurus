@@ -7,6 +7,7 @@
 
 #include "aarch.h"
 #include "alo.h"
+#include "aauxlib.h"
 
 #define ALO_VDIR ALO_VERSION_STRING(".") ALO_DIR_SEP
 

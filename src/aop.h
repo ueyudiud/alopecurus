@@ -6,6 +6,7 @@
 #define aop_h_
 
 #include "adef.h"
+#include "asym.h"
 
 enum {
 #define SYMDEF(n,r) TM_##n,
@@ -33,7 +34,7 @@ enum BinaryOp {
 	OP_AND, OP_OR,
 };
 
-always_inline a_enum ai_op_bin2tm(a_enum op) {
+ALO_INLINE a_enum ai_op_bin2tm(a_enum op) {
 	assume(op >= OP_ADD && op <= OP_BIT_XOR);
 	return op - OP_ADD + TM___add__;
 }
@@ -188,7 +189,7 @@ always_inline a_enum ai_op_bin2tm(a_enum op) {
 # define ai_op_le_float(a,b) ((a) <= (b))
 #endif
 
-always_inline a_int ai_op_bin_int(a_int a, a_int b, a_enum op) {
+ALO_INLINE a_int ai_op_bin_int(a_int a, a_int b, a_enum op) {
 	switch (op) {
 		case OP_ADD:
 			return ai_op_add_int(a, b);
@@ -215,7 +216,7 @@ always_inline a_int ai_op_bin_int(a_int a, a_int b, a_enum op) {
 	}
 }
 
-always_inline a_float ai_op_bin_float(a_float a, a_float b, a_enum op) {
+ALO_INLINE a_float ai_op_bin_float(a_float a, a_float b, a_enum op) {
 	switch (op) {
 		case OP_ADD:
 			return ai_op_add_float(a, b);
@@ -234,7 +235,7 @@ always_inline a_float ai_op_bin_float(a_float a, a_float b, a_enum op) {
 	}
 }
 
-always_inline a_bool ai_op_cmp_int(a_int a, a_int b, a_enum op) {
+ALO_INLINE a_bool ai_op_cmp_int(a_int a, a_int b, a_enum op) {
 	switch (op) {
 		case OP_EQ:
 			return ai_op_eq_int(a, b);
@@ -253,7 +254,7 @@ always_inline a_bool ai_op_cmp_int(a_int a, a_int b, a_enum op) {
 	}
 }
 
-always_inline a_bool ai_op_cmp_float(a_float a, a_float b, a_enum op) {
+ALO_INLINE a_bool ai_op_cmp_float(a_float a, a_float b, a_enum op) {
 	switch (op) {
 		case OP_EQ:
 			return ai_op_eq_float(a, b);

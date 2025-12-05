@@ -80,16 +80,16 @@ IMPORT_LIST(CTX_DCL)
 #define NtCurrentProcess() cast(HANDLE, isizec(-1))
 
 #undef NtCurrentTeb
-always_inline ext(TEB)* ext(NtCurrentTeb)() {
+ALO_INLINE ext(TEB)* ext(NtCurrentTeb)() {
 	ext(TEB)* teb;
 	asm("movq %%gs:(%c1), %0":"=r"(teb):"i"(offsetof(ext(TEB), Self)));
 	return teb;
 }
 #define NtCurrentTeb ext(NtCurrentTeb)
 
-naked void ai_ctx_catch_unwind();
-naked a_msg ai_ctx_return();
-static naked a_noret ai_ctx_start();
+ALO_NAKED void ai_ctx_catch_unwind();
+ALO_NAKED a_msg ai_ctx_return();
+ALO_NORETURN ALO_NAKED static void ai_ctx_start();
 
 a_msg ai_ctx_init(void) {
 	return ALO_SOK;
@@ -162,12 +162,12 @@ EXCEPTION_DISPOSITION ai_ctx_start_catch(
 	trap();
 }
 
-a_noret ai_ctx_raise(a_henv env, a_msg msg) {
+ALO_NORETURN void ai_ctx_raise(a_henv env, a_msg msg) {
 	DWORD code = EXCEPTION_CODE_PREFIX | cast(DWORD, msg & 0xff);
-	RaiseException(code, 0, 0, null);
+	RaiseException(code, 0, 0, nullptr);
 	/* no protector found, call panic handler */
 	Global* g = G(env);
-	if (g->panic_ != null) {
+	if (g->panic_ != nullptr) {
 		(*g->panic_)(env);
 	}
 	/* no panic handler, abort process immediately */
@@ -203,7 +203,7 @@ EXCEPTION_DISPOSITION alo_specific_handler(
 
 a_bool ai_ctx_open(a_henv env, a_usize stack_size) {
 	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
-	if (header == null) return true;
+	if (header == nullptr) return true;
 
 	a_usize commit = align_forward(stack_size, ALO_PAGE_SIZE);
 	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
@@ -213,7 +213,7 @@ a_bool ai_ctx_open(a_henv env, a_usize stack_size) {
 	ext(PROCESS_STACK_ALLOCATION_INFORMATION) alloc_info = {
 		.ReserveSize = max(reserve, commit),
 		.ZeroBits = 0,
-		.StackBase = null
+		.StackBase = nullptr
 	};
 
 	NTSTATUS status = NtSetInformationProcess(NtCurrentProcess(), ProcessThreadStackAllocation, &alloc_info, sizeof(alloc_info));
@@ -222,20 +222,20 @@ a_bool ai_ctx_open(a_henv env, a_usize stack_size) {
 	addr = alloc_info.StackBase;
 #else
 	addr = VirtualAlloc(NULL, reserve, MEM_RESERVE, PAGE_NOACCESS);
-    if (addr == null) return ALO_EINVAL;
+    if (addr == nullptr) return ALO_EINVAL;
 #endif
 
-	if (VirtualAlloc(addr, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == null)
+	if (VirtualAlloc(addr, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == nullptr)
 		goto nomem;
-	if (VirtualAlloc(addr + ALO_PAGE_SIZE, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == null)
+	if (VirtualAlloc(addr + ALO_PAGE_SIZE, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD) == nullptr)
 		goto nomem;
-	if (VirtualAlloc(addr + ALO_PAGE_SIZE * 2, reserve - 2 * ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == null)
+	if (VirtualAlloc(addr + ALO_PAGE_SIZE * 2, reserve - 2 * ALO_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE) == nullptr)
 		goto nomem;
 
 	a_usize stack_base = ptr2int(alloc_info.StackBase) + reserve;
 
-    ref_of(void*, stack_base - 0x00) = null;
-    ref_of(void*, stack_base - 0x08) = null;
+    ref_of(void*, stack_base - 0x00) = nullptr;
+    ref_of(void*, stack_base - 0x08) = nullptr;
     ref_of(void*, stack_base - 0x10) = ai_ctx_start;
     env->rctx = int2ptr(void, stack_base - 0x18);
 	env->rctx_alloc = addr;
@@ -265,7 +265,7 @@ static void route_unwind(a_henv env) {
 			&UnwindHistoryTable);
 		KNONVOLATILE_CONTEXT_POINTERS NvContext = {};
 
-		if (RuntimeFunction == null) {
+		if (RuntimeFunction == nullptr) {
 			/* Unwinding leaf node. */
 			Context.Rip = ref_of(DWORD64, Context.Rsp);
 			Context.Rsp += sizeof(DWORD64);
@@ -300,7 +300,7 @@ void ai_ctx_close(a_henv env) {
 # pragma GCC optimize("no-unwind-tables")
 #endif
 
-naked a_msg ai_ctx_catch0() {
+ALO_NAKED a_msg ai_ctx_catch0() {
 	asm(".seh_proc %c0"::"p"(ai_ctx_catch0));
 
 	asm("subq $0x28, %%rsp"::);
@@ -322,7 +322,7 @@ naked a_msg ai_ctx_catch0() {
 	asm_unreachable();
 }
 
-static naked a_noret ai_ctx_start() {
+ALO_NORETURN ALO_NAKED static void ai_ctx_start() {
 	asm(".seh_proc %c0"::"p"(ai_ctx_start));
 
 	asm(".seh_stackalloc 0x08"::);
@@ -346,7 +346,7 @@ static naked a_noret ai_ctx_start() {
 	asm_unreachable();
 }
 
-naked a_msg ai_ctx_jump0() {
+ALO_NAKED a_msg ai_ctx_jump0() {
 	/* load TEB */
 	asm("movq %%gs:(%c0), %%r10"::"i"(offsetof(ext(TEB), Self)));
 

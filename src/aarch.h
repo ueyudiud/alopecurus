@@ -68,8 +68,19 @@
 # define ALO_CC ALO_ENUM_CC_OTHER
 #endif
 
+#define ALO_CC_MSVC (ALO_CC == ALO_ENUM_CC_MSVC)
 #define ALO_CC_GCC (ALO_CC == ALO_ENUM_CC_GCC)
 #define ALO_CC_CLANG (ALO_CC == ALO_ENUM_CC_CLANG)
+
+#define ALO_C11 (__STDC_VERSION__ >= 201112L)
+#define ALO_C23 (__STDC_VERSION__ >= 202311L)
+
+#if ALO_CC <= ALO_ENUM_CC_CLANG
+#elif ALO_CC == ALO_ENUM_CC_OTHER
+# if !ALO_C23
+#  error only support C23 for other C compiler.
+# endif
+#endif
 
 /**
  ** File system and naming contracts.

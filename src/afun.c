@@ -144,7 +144,7 @@ GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap) {
 static RcCap* cap_nalloc(a_henv env) {
 	Global* gbl = G(env);
 	RcCap* cap = gbl->cap_cache;
-	if (cap != null) {
+	if (cap != nullptr) {
 		gbl->cap_cache = cap->next;
 		return cap;
 	}
@@ -159,14 +159,14 @@ static RcCap* cap_nload_from_stack(a_henv env, Value* pv) {
 	RcCap* cap;
 	RcCap** now = &env->open_caps;
 
-	while ((cap = *now) != null && cap->ptr > pv) {
+	while ((cap = *now) != nullptr && cap->ptr > pv) {
 		now = &cap->next;
 	}
 	
-	if (cap == null || cap->ptr < pv) {
+	if (cap == nullptr || cap->ptr < pv) {
 		RcCap* self = cap_nalloc(env);
 
-        if (self == null) return null;
+        if (self == nullptr) return nullptr;
 
         init(self) {
             .ptr = pv,
@@ -190,7 +190,7 @@ static RcCap* cap_load(a_henv env, CapSrc const* info, RcCap** up, Value* stack)
 	}
 	else {
 		RcCap* cap = cap_nload_from_stack(env, &stack[info->reg]);
-        if (unlikely(cap == null)) ai_mem_nomem(env);
+        if (unlikely(cap == nullptr)) ai_mem_nomem(env);
         return cap;
 	}
 }
@@ -203,7 +203,7 @@ static void v_close(a_henv env, Value v) {
 RcCap* ai_cap_new(a_henv env) {
     RcCap* self = cap_nalloc(env);
 
-    if (unlikely(self == null)) ai_mem_nomem(env);
+    if (unlikely(self == nullptr)) ai_mem_nomem(env);
 
     init(self) {
         .ptr = &self->slot,
@@ -216,7 +216,7 @@ RcCap* ai_cap_new(a_henv env) {
 
 void ai_cap_mark_tbc(a_henv env, Value* p) {
 	RcCap* cap = cap_nload_from_stack(env, p);
-    if (unlikely(cap == null)) {
+    if (unlikely(cap == nullptr)) {
         /* Call close function immediately. */
         v_close(env, *p);
         ai_mem_nomem(env);
@@ -311,7 +311,7 @@ void ai_cap_close_above(a_henv env, Value* pv) {
 	check_in_stack(env, pv);
 	RcCap* caps = env->open_caps;
 	RcCap* cap;
-	while ((cap = caps) != null && cap->ptr >= pv) {
+	while ((cap = caps) != nullptr && cap->ptr >= pv) {
 		caps = cap->next;
 		ai_cap_close(env, cap);
 	}
@@ -320,8 +320,8 @@ void ai_cap_close_above(a_henv env, Value* pv) {
 
 void ai_cap_clean(Global* gbl) {
 	RcCap* cap = gbl->cap_cache;
-	gbl->cap_cache = null;
-	while (cap != null) {
+	gbl->cap_cache = nullptr;
+	while (cap != nullptr) {
 		RcCap* next = cap->next;
 		ai_cap_really_drop(gbl, cap);
 		cap = next;
@@ -339,22 +339,22 @@ static void proto_mark_body(Global* gbl, GProto* self) {
     for (a_u32 i = 0; i < self->nsub; ++i) {
         g_trace(gbl, self->subs[i]);
     }
-    if (self->dbg_name != null) {
+    if (self->dbg_name != nullptr) {
         g_trace(gbl, self->dbg_name);
     }
-    if (self->dbg_file != null) {
+    if (self->dbg_file != nullptr) {
         g_trace(gbl, self->dbg_file);
     }
-    if (self->dbg_locals != null) {
+    if (self->dbg_locals != nullptr) {
         for (a_u32 i = 0; i < self->nlocal; ++i) {
             LocalInfo* info = &self->dbg_locals[i];
-            if (info->name != null) {
+            if (info->name != nullptr) {
                 g_trace(gbl, info->name);
             }
         }
-        assume(self->dbg_cap_names != null);
+        assume(self->dbg_cap_names != nullptr);
         for (a_u32 i = 0; i < self->ncap; ++i) {
-            if (self->dbg_cap_names[i] != null) {
+            if (self->dbg_cap_names[i] != nullptr) {
                 g_trace(gbl, self->dbg_cap_names[i]);
             }
         }
@@ -363,7 +363,7 @@ static void proto_mark_body(Global* gbl, GProto* self) {
 }
 
 static void proto_mark(Global* gbl, GProto* self) {
-    self->cache = null;
+    self->cache = nullptr;
     proto_mark_body(gbl, self);
 }
 
@@ -450,7 +450,7 @@ static KHeap const cfun_klass = {
 static KHeap const proto_klass = {
     .tag = ALO_TPTR,
     .flags = KLASS_FLAG_HIDDEN,
-    .name = null,
+    .name = nullptr,
     .drop = proto_drop,
     .mark = proto_mark
 };

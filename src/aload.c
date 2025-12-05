@@ -190,7 +190,7 @@ static void load_except(a_henv env, InCtx* ctx, a_msg msg) {
 static KStack const load_klass = {
     .tag = ALO_TUSER,
     .flags = KLASS_FLAG_PLAIN,
-    .name = null,
+    .name = nullptr,
     .mark = load_mark,
     .catch = load_except
 };

@@ -113,7 +113,7 @@ static a_msg file_open0(a_henv env, GFile** pfile) {
     error = errno;
     errno = old_error;
 #endif
-    if (self->handle == null) {
+    if (self->handle == nullptr) {
         ai_mem_dealloc(G(env), self, sizeof(GFile));
         return aloL_resultcx(env, false, error, "cannot open file");
     }
@@ -135,9 +135,9 @@ static void file_mark0(Global* gbl, GFile* self) {
 static int file_close0(a_henv env, GFile* self) {
     quiet(env);
 
-    if (self->closer != null) {
+    if (self->closer != nullptr) {
         int result = (*self->closer)(self->handle);
-        self->closer = null;
+        self->closer = nullptr;
         return result;
     }
 
@@ -155,7 +155,7 @@ static GFile* check_file(a_henv env, a_ilen id) {
 
 static GFile* check_open_file(a_henv env, a_ilen id) {
     GFile* self = check_file(env, id);
-    if (self->closer == null) {
+    if (self->closer == nullptr) {
         aloL_argerror(env, id, "file already closed");
     }
     return self;
@@ -262,7 +262,7 @@ static a_msg file_line(a_henv env) {
 static void check_file_type(a_henv env) {
     static aloL_Entry const bindings[] = {
         { "__close__", file_close },
-        { "__look__", null },
+        { "__look__", nullptr },
         { "close", file_close },
         { "line", file_line },
         { "read", file_read }
@@ -298,7 +298,7 @@ static a_msg io_open(a_henv env) {
 
 void aloopen_io(a_henv env) {
     static aloL_Entry const bindings[] = {
-        { "open", null }
+        { "open", nullptr }
     };
 
     alo_NewType const info = {

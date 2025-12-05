@@ -49,7 +49,7 @@ GTable* ai_table_new(a_henv env, a_enum kv) {
     GTable* self = ai_mem_alloc(env, table_size());
 
 	self->klass = &table_klass[kv];
-    self->ptr = null;
+    self->ptr = nullptr;
     self->hmask = 0;
     self->len = 0;
 
@@ -58,7 +58,7 @@ GTable* ai_table_new(a_henv env, a_enum kv) {
 }
 
 static TNode* table_node(GTable* self, a_i32 index) {
-    assume(index == CTRL_INDEX || (self->ptr != null && index >= 0 && index <= cast(a_i32, self->hmask)), "index out of bound.");
+    assume(index == CTRL_INDEX || (self->ptr != nullptr && index >= 0 && index <= cast(a_i32, self->hmask)), "index out of bound.");
     return &self->ptr[index];
 }
 
@@ -192,7 +192,7 @@ static void table_resize(a_henv env, GTable* self, a_usize old_cap, a_usize new_
     self->hmask = new_cap - 1;
     self->ptr = new_ptr;
 
-    if (old_ptr != null) {
+    if (old_ptr != nullptr) {
         if (self->len > 0) {
             TNode* node = &old_ptr[CTRL_INDEX];
             for (a_i32 index = node->lnext; index >= 0; index = node->lnext) {
@@ -340,9 +340,9 @@ union LstrFind {
 };
 
 static a_bool table_find_lstr(a_henv env, GTable* self, char const* kptr, a_usize klen, a_hash hash, union LstrFind* out) {
-    GStr* key = ai_str_get_or_null_with_hash(env, kptr, klen, hash);
-    if (key == null) {
-        out->key = null;
+    GStr* key = ai_str_get_or_nullptr_with_hash(env, kptr, klen, hash);
+    if (key == nullptr) {
+        out->key = nullptr;
         return true;
     }
     if (table_find_with_trivial_equality(self, v_of_str(key), hash, &out->index)) {
@@ -459,7 +459,7 @@ void ai_table_delr(a_henv env, GTable* self, Value* ref) {
 a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex) {
     if (self->len == 0) return ALO_EEMPTY;
 
-    assume(self->ptr != null);
+    assume(self->ptr != nullptr);
     TNode* n = &self->ptr[*pindex];
     Value vk = *rk;
 
@@ -494,14 +494,14 @@ a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
 }
 
 static void table_drop(Global* gbl, GTable* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         bucket_dealloc(gbl, self->ptr, self->hmask + 1);
     }
     ai_mem_dealloc(gbl, self, table_size());
 }
 
 static void table_mark(Global* gbl, GTable* self) {
-	if (self->ptr != null) {
+	if (self->ptr != nullptr) {
         a_u32 cap = self->hmask + 1;
 		for (a_u32 i = 0; i < cap; ++i) {
 			TNode* node = &self->ptr[i];
@@ -516,7 +516,7 @@ static void table_mark(Global* gbl, GTable* self) {
 }
 
 static void wtable_mark(Global* gbl, GTable* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         a_bool has_weak = false;
         a_u32 cap = self->hmask + 1;
         for (a_u32 i = 0; i < cap; ++i) {
@@ -544,7 +544,7 @@ static void wtable_mark(Global* gbl, GTable* self) {
 }
 
 static void wktable_mark(Global* gbl, GTable* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         a_bool has_weak = false;
         a_bool has_blur = false;
         a_u32 cap = self->hmask + 1;
@@ -579,7 +579,7 @@ static void wktable_mark(Global* gbl, GTable* self) {
 }
 
 static void ptable_mark(Global* gbl, GTable* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         a_bool has_weak_key = false;
         a_bool has_weak = false;
         a_bool has_blur = false;
@@ -614,7 +614,7 @@ static void ptable_mark(Global* gbl, GTable* self) {
 }
 
 static void wtable_clear(Global* gbl, GTable* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         a_u32 cap = self->hmask + 1;
         for (a_u32 i = 0; i < cap; ++i) {
             TNode* node = &self->ptr[i];
@@ -631,7 +631,7 @@ static void wtable_clear(Global* gbl, GTable* self) {
 }
 
 static void ptable_clear(Global* gbl, GTable* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         a_u32 cap = self->hmask + 1;
         a_bool trace_weak = gbl->gcstep == GCSTEP_TRACE_WEAK;
         for (a_u32 i = 0; i < cap; ++i) {

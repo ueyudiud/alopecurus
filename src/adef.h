@@ -9,17 +9,11 @@
 #include <string.h>
 
 #include "acfg.h"
-#include "alo.h"
-#include "aauxlib.h"
-#include "asym.h"
 
 /**
  ** The implement variant index.
  */
 #define ALO_VARIANT 1
-
-#define ALO_C11 (__STDC_VERSION__ >= 201112L)
-#define ALO_C23 (__STDC_VERSION__ >= 202311L)
 
 #define ALO_FALSE 0
 #define ALO_TRUE 1
@@ -29,25 +23,33 @@
 #define M_cat0(a,b) a##b
 #define M_cat(a,b) M_cat0(a,b)
 
+#if ALO_CC_GCC || ALO_CC_CLANG
+# define M_opt(a...) , ##a
+#elif ALO_CC_MSVC && _MSVC_TRADITIONAL
+# define M_opt(...) , __VA_ARGS__
+#else
+# define M_opt(...) __VA_OPT__(,) __VA_ARGS__
+#endif
+
 #define ALO_COMP_OPT_EVAL 0x2000000
 
 /* Special attributes. */
 
-#undef intern
-
 #if defined(__ELF__)
-# define intern __attribute__((__visibility__("hidden"))) extern
+# define ALO_PRIVATE __attribute__((__visibility__("hidden"))) extern
 #else
-# define intern extern
+# define ALO_PRIVATE extern
 #endif
 
-#define always_inline __attribute__((__always_inline__, __gnu_inline__)) extern __inline__
-#define never_inline __attribute__((__noinline__))
-#define naked __attribute__((__noinline__, __naked__))
+#if ALO_CC_GCC || ALO_CC_CLANG
+# define ALO_INLINE __attribute__((__always_inline__, __gnu_inline__)) extern inline
+#else
+# define ALO_INLINE extern inline
+#endif
+
+#define ALO_NAKED __attribute__((__noinline__, __naked__))
 
 /* Types. */
-#define a_noret ALO_NORETURN void
-
 typedef struct {
 	char const* ptr;
 	a_usize len;
@@ -90,9 +92,11 @@ typedef void (*a_efun)(a_henv, void*, a_msg);
 
 /* Other literals. */
 
-#define null NULL
-#define false ((a_bool) ALO_FALSE)
-#define true ((a_bool) ALO_TRUE)
+#if !ALO_C23
+# define nullptr NULL
+# define false ((a_bool) ALO_FALSE)
+# define true ((a_bool) ALO_TRUE)
+#endif
 
 #if ALO_C23
 # define auto auto
@@ -100,17 +104,25 @@ typedef void (*a_efun)(a_henv, void*, a_msg);
 # define auto __auto_type
 #endif
 
-#if ALO_C11
-# ifndef static_assert
-#  define static_assert(e) _Static_assert(e, "assert failed.")
-# endif
+#if ALO_C23
+# define let(n,...) auto n = __VA_ARGS__
+#elif ALO_CC_GCC || ALO_CC_CLANG
+# define let(n,...) __auto_type n = __VA_ARGS__
+#else
+# define let(n,...) typeof(__VA_ARGS__) n = __VA_ARGS__
+#endif
+
+#if ALO_C23
+# define ALO_STATIC_ASSERT(e) static_assert(e)
+#elif ALO_C11
+# define ALO_STATIC_ASSERT(e) _Static_assert(e, "assert failed.")
 #else
 # ifdef __COUNTER__
 #  define ALO_ASSERT_NAME M_cat(ai_assert_,__COUNTER__)
 # else
 #  define ALO_ASSERT_NAME M_cat(ai_assert_,__LINE__)
 # endif
-# define static_assert(e) extern void (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
+# define ALO_STATIC_ASSERT(e) extern void (ALO_ASSERT_NAME)(int assert_failed[(e) ? 1 : -1])
 #endif
 
 /* Special control flow. */
@@ -118,23 +130,24 @@ typedef void (*a_efun)(a_henv, void*, a_msg);
 #define run if (true)
 #define loop while (true)
 
-#undef max
-#undef min
-
 /* Special generic functors. */
-
 #define init(p) *(p) = (typeof(*(p)))
 #define cast(t,e) ((t) (e))
-#define bit_cast(t,e) ({ auto _b = e; t _t; static_assert(sizeof(_b) == sizeof(t)); memcpy(&_t, &_b, sizeof(t)); _t; })
-#define addr_diff(p,q) ({ void const *_p = (p), *_q = (q); _p - _q; })
+#define bit_cast(t,e) ({ let(_b, e); t _t; ALO_STATIC_ASSERT(sizeof(_b) == sizeof(t)); memcpy(&_t, &_b, sizeof(t)); _t; })
+#define addr_diff(p,q) ((a_byte const*) (p) - (a_byte const*) (q))
 #define int2ptr(t,a) ((typeof(t)*) (a_usize) {a})
 #define ref_of(t,a) (*int2ptr(t, a))
 #define addr_add(t,p,d) int2ptr(t, ptr2int(p) + (d))
 #define addr_sub(t,p,d) int2ptr(t, ptr2int(p) - (d))
 #define from_member(t,f,v) int2ptr(t, ptr2int(v) - offsetof(t, f))
-#define fallthrough __attribute__((__fallthrough__))
 
-always_inline a_usize ptr2int(void const* p) {
+#if ALO_C23
+# define fallthrough [[__fallthrough__]]
+#else
+# define fallthrough __attribute__((__fallthrough__))
+#endif
+
+ALO_INLINE a_usize ptr2int(void const* p) {
     return bit_cast(a_usize, p);
 }
 
@@ -142,17 +155,26 @@ always_inline a_usize ptr2int(void const* p) {
 
 /* Utility functions. */
 
-#define max(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a >= _b ? _a : _b; })
-#define min(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a <= _b ? _a : _b; })
-#define swap(a,b) ({ auto _a = &(a); auto _b = &(b); quiet(_a == _b); typeof(a) _t; _t = *_a; *_a = *_b; quiet(*_b = _t); })
-#define expect(e,v) __builtin_expect(e, v)
+#undef max
+#undef min
+#if ALO_CC_GCC || ALO_CC_CLANG
+# define max(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a > _b ? _a : _b; })
+# define min(a,b) ({ typeof(0 ? (a) : (b)) _a = (a), _b = (b); _a < _b ? _a : _b; })
+# define expect(e,v) __builtin_expect(e, v)
+#else
+# define max(a, b) (((a) > (b)) ? (a) : (b))
+# define min(a, b) (((a) < (b)) ? (a) : (b))
+# define expect(e,v) (e)
+#endif
+
+#define swap(a,b) do { let(_a, &(a)); let(_b, &(b)); quiet(_a == _b); let(_t, *_a); *_a = *_b; *_b = _t; } while (false)
 #define likely(e) expect(!!(e), true)
 #define unlikely(e) expect(!!(e), false)
 #define trap() __builtin_trap()
 
 /* Error handling functions. */
 
-#define catch_(e,n,...) for (auto n = (e); unlikely(n); n = 0)
+#define catch_(e,n,...) for (let(n, e); unlikely(n); n = 0)
 
 /**
  ** Do the statement inside catch block if 'e' is not zero.
@@ -164,19 +186,27 @@ always_inline a_usize ptr2int(void const* p) {
  */
 #define try(e) catch(e) { return _e; }
 
-intern a_noret ai_dbg_panic(char const* fmt, ...);
+ALO_NORETURN ALO_PRIVATE void ai_dbg_panic(char const* fmt, ...);
 
-#if defined(ALOI_CHECK_ASSUME)
-# define assume_only(...) __VA_ARGS__
+#if defined(ALOI_DEBUG)
+# define ALO_DEBUG_ONLY(...) __VA_ARGS__
 #else
-# define assume_only(...)
+# define ALO_DEBUG_ONLY(...)
 #endif
 
-#if defined(ALOI_CHECK_ASSUME) && defined(ALO_LIB)
+#if !defined(unreachable)
+# if ALO_CC_GCC
+#  define unreachable() __builtin_unreachable()
+# elif ALO_CC_MSVC
+#  define unreachable() __assume(false)
+# else
+#  define unreachable()
+# endif
+#endif
+
+#if defined(ALOI_DEBUG) && defined(ALO_LIB)
 # define panic(...) ai_dbg_panic(""__VA_ARGS__)
-# define unreachable() panic("unreachable code.")
 #else
-# define unreachable() __builtin_unreachable()
 # define panic(...) unreachable()
 #endif
 
@@ -187,16 +217,16 @@ intern a_noret ai_dbg_panic(char const* fmt, ...);
 # define asm_unreachable() asm("")
 #endif
 
-#define assume(e,...) quiet((e) || (panic(__VA_ARGS__), false))
+#define assume(e,...) do if (unlikely(!(e))) panic(__VA_ARGS__); while (false)
 
-always_inline a_lstr nt2lstr(char const* str) {
+ALO_INLINE a_lstr nt2lstr(char const* str) {
     return (a_lstr) { str, strlen(str) };
 }
 
 /**
  ** Fill memory with zero bits.
  */
-always_inline void memclr(void* dst, a_usize len) {
+ALO_INLINE void memclr(void* dst, a_usize len) {
     memset(dst, 0, len);
 }
 

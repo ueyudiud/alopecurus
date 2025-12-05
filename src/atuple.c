@@ -67,13 +67,13 @@ Value ai_tuple_get(a_henv env, GTuple* self, Value vk) {
 }
 
 static Value const* tuple_refi(a_henv env, GTuple* self, a_int key) {
-    a_uint i = obj_idx(key, self->len, null);
+    a_uint i = obj_idx(key, self->len, nullptr);
     return &self->ptr[i];
 }
 
 Value ai_tuple_geti(a_henv env, GTuple* self, a_int k) {
 	Value const* value = tuple_refi(env, self, k);
-	if (unlikely(value == null)) {
+	if (unlikely(value == nullptr)) {
 		ai_err_raisef(env, ALO_EINVAL, "index out of bound.");
 	}
 	return *value;

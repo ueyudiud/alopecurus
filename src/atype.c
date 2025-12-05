@@ -35,7 +35,7 @@ GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, 
         .size = size,
         .body = {
             .tag = ALO_TUSER,
-            .name = name != null ? str2ntstr(name) : null,
+            .name = name != nullptr ? str2ntstr(name) : nullptr,
             .flags = (num_slot == 0 ? KLASS_FLAG_PLAIN : 0) | KLASS_FLAG_BUILD,
             .mark = ai_user_mark,
             .close = ai_tm_close,
@@ -89,7 +89,7 @@ a_bool ai_type_gets(a_henv env, GType* self, GStr* key, Value* pval) {
     a_u32 perturb = key->hash;
 
     MNode* field = &self->ptr[index];
-    if (field->key == null)
+    if (field->key == nullptr)
         return true;
 
     loop {
@@ -97,7 +97,7 @@ a_bool ai_type_gets(a_henv env, GType* self, GStr* key, Value* pval) {
             v_cpy(env, pval, &field->value);
             return false;
         }
-        if (field->key == null) {
+        if (field->key == nullptr) {
             return true;
         }
 
@@ -111,8 +111,8 @@ a_bool ai_type_gets(a_henv env, GType* self, GStr* key, Value* pval) {
 a_bool ai_type_getls(a_henv env, GType* self, char const* kptr, a_usize klen, Value* pval) {
     a_hash hash = ai_str_hashof(env, kptr, klen);
 
-    GStr* str = ai_str_get_or_null_with_hash(env, kptr, klen, hash);
-    if (str == null)
+    GStr* str = ai_str_get_or_nullptr_with_hash(env, kptr, klen, hash);
+    if (str == nullptr)
         return true;
 
     return ai_type_gets(env, self, str, pval);
@@ -126,7 +126,7 @@ static a_bool type_ref(a_henv env, GType* self, GStr* key, MNode** pnode) {
     quiet(env);
 
     if (self->len == 0) {
-        *pnode = null;
+        *pnode = nullptr;
         return true;
     }
 
@@ -134,11 +134,11 @@ static a_bool type_ref(a_henv env, GType* self, GStr* key, MNode** pnode) {
     a_u32 perturb = key->hash;
 
     a_bool can_put_inplace = !type_needs_grow(self);
-    MNode* first_empty_field = null;
+    MNode* first_empty_field = nullptr;
 
     MNode* field = &self->ptr[index];
-    if (field->key == null) {
-        *pnode = can_put_inplace ? field : null;
+    if (field->key == nullptr) {
+        *pnode = can_put_inplace ? field : nullptr;
         return true;
     }
 
@@ -147,11 +147,11 @@ static a_bool type_ref(a_henv env, GType* self, GStr* key, MNode** pnode) {
             *pnode = field;
             return false;
         }
-        if (field->key == null) {
-            *pnode = can_put_inplace ? (first_empty_field ?: field) : null;
+        if (field->key == nullptr) {
+            *pnode = can_put_inplace ? (first_empty_field ?: field) : nullptr;
             return true;
         }
-        if (field->key == dead_key && can_put_inplace && first_empty_field == null) {
+        if (field->key == dead_key && can_put_inplace && first_empty_field == nullptr) {
             first_empty_field = field;
         }
 
@@ -167,7 +167,7 @@ static MNode* type_reserve(GType* self, GStr* key) {
     a_u32 perturb = key->hash;
 
     MNode* node = &self->ptr[index];
-    if (node->key == null) return node;
+    if (node->key == nullptr) return node;
 
     loop {
         if (node->key <= dead_key) {
@@ -203,7 +203,7 @@ static void type_grow(a_henv env, GType* self) {
     self->ptr = new_ptr;
     self->hmask = new_cap - 1;
 
-    if (old_ptr != null) {
+    if (old_ptr != nullptr) {
         for (a_u32 i = 0; i < old_cap; ++i) {
             MNode* field = &old_ptr[i];
             if (field->key > dead_key) {
@@ -226,7 +226,7 @@ a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv) {
 void ai_type_sets(a_henv env, GType* self, GStr* key, Value val) {
     MNode* node;
     if (type_ref(env, self, key, &node)) {
-        if (node != null) {
+        if (node != nullptr) {
             node->key = key;
             v_set(env, &node->value, val);
         }
@@ -243,7 +243,7 @@ void ai_type_sets(a_henv env, GType* self, GStr* key, Value val) {
         self->ftmz = 0;
     }
     else {
-        assume(node != null);
+        assume(node != nullptr);
 
         v_set(env, &node->value, val);
 
@@ -257,13 +257,13 @@ Value* ai_type_refls(a_henv env, GType* self, char const* kptr, a_usize klen) {
     a_hash hash = ai_str_hashof(env, kptr, klen);
     MNode* node;
 
-    GStr* str = ai_str_get_or_null_with_hash(env, kptr, klen, hash);
-    if (str != null) {
+    GStr* str = ai_str_get_or_nullptr_with_hash(env, kptr, klen, hash);
+    if (str != nullptr) {
         if (!type_ref(env, self, str, &node)) {
             return &node->value;
         }
 
-        if (node != null) {
+        if (node != nullptr) {
             goto place;
         }
 
@@ -301,7 +301,7 @@ void ai_type_boost(a_henv env) {
 }
 
 static void type_clean(Global* gbl, GType* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         ai_mem_vdel(gbl, self->ptr, self->hmask + 1);
     }
 }
@@ -313,7 +313,7 @@ void ai_type_clean(Global* gbl) {
 }
 
 static void type_mark_dict(Global* gbl, GType* self) {
-    if (self->ptr != null) {
+    if (self->ptr != nullptr) {
         for (a_u32 i = 0; i <= self->hmask; ++i) {
             MNode* node = &self->ptr[i];
             if (node->key > dead_key) {
@@ -336,7 +336,7 @@ static void itype_mark(Global* gbl, GType* self) {
 
 static void utype_mark(Global* gbl, GType* self) {
     type_mark_dict(gbl, self);
-    if (self->name != null) {
+    if (self->name != nullptr) {
         g_trace(gbl, from_member(GStr, ptr, self->name));
     }
     ai_gc_trace_work(gbl, self->size);

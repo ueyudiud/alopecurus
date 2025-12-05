@@ -9,16 +9,16 @@
 
 typedef struct MNode MNode;
 
-intern GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot);
-intern GType* ai_itype_new(a_henv env, void const* ksrc, a_usize klen);
-intern void ai_type_boost(a_henv env);
-intern a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
-intern a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
-intern a_bool ai_type_getls(a_henv env, GType* self, char const* kptr, a_usize klen, Value* pv);
-intern a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv);
-intern void ai_type_sets(a_henv env, GType* self, GStr* key, Value val);
-intern Value* ai_type_refls(a_henv env, GType* self, char const* kptr, a_usize klen);
-intern void ai_type_clean(Global* gbl);
+ALO_PRIVATE GType* ai_utype_new(a_henv env, GStr* name, a_u32 extra_size, a_u32 block_size, a_u32 num_slot);
+ALO_PRIVATE GType* ai_itype_new(a_henv env, void const* ksrc, a_usize klen);
+ALO_PRIVATE void ai_type_boost(a_henv env);
+ALO_PRIVATE a_bool ai_type_get(a_henv env, GType* self, Value vk, Value* pv);
+ALO_PRIVATE a_bool ai_type_gets(a_henv env, GType* self, GStr* k, Value* pv);
+ALO_PRIVATE a_bool ai_type_getls(a_henv env, GType* self, char const* kptr, a_usize klen, Value* pv);
+ALO_PRIVATE a_bool ai_type_set(a_henv env, GType* self, Value vk, Value vv);
+ALO_PRIVATE void ai_type_sets(a_henv env, GType* self, GStr* key, Value val);
+ALO_PRIVATE Value* ai_type_refls(a_henv env, GType* self, char const* kptr, a_usize klen);
+ALO_PRIVATE void ai_type_clean(Global* gbl);
 
 struct MNode {
     Value value;
@@ -76,9 +76,9 @@ union GType {
     GUType as_utype[1];
 };
 
-static_assert(offsetof(GBType, name) == offsetof(GUType, body.name));
-static_assert(offsetof(GBType, tag) == offsetof(GUType, body.tag));
-static_assert(offsetof(GBType, flags) == offsetof(GUType, body.flags));
+ALO_STATIC_ASSERT(offsetof(GBType, name) == offsetof(GUType, body.name));
+ALO_STATIC_ASSERT(offsetof(GBType, tag) == offsetof(GUType, body.tag));
+ALO_STATIC_ASSERT(offsetof(GBType, flags) == offsetof(GUType, body.flags));
 
 #define FTM_BIT(tm) (u16c(1) << (tm))
 
@@ -86,21 +86,21 @@ static_assert(offsetof(GBType, flags) == offsetof(GUType, body.flags));
 
 #define g_is_type(o) g_is(o, ALO_TTYPE)
 
-always_inline a_bool v_is_type(Value v) {
+ALO_INLINE a_bool v_is_type(Value v) {
     return v_is(v, T_TYPE);
 }
 
-always_inline GType* v_as_type(Value v) {
+ALO_INLINE GType* v_as_type(Value v) {
     assume(v_is_type(v), "not type.");
     return g_as(GType, v_as_ref(v));
 }
 
-always_inline Value v_of_type(GType* o) {
+ALO_INLINE Value v_of_type(GType* o) {
     assume(g_is_type(o), "invalid instance.");
     return v_of_ref(o, T_TYPE);
 }
 
-always_inline void v_set_type(a_henv env, Value* d, GType* o) {
+ALO_INLINE void v_set_type(a_henv env, Value* d, GType* o) {
     Value v = v_of_type(o);
     v_set(env, d, v);
 }

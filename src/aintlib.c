@@ -109,9 +109,9 @@ void aloopen_int(a_henv env) {
         { "rol", int_rol },
         { "ror", int_ror },
         { "__new__", int___new__ },
-        { "__look__", null },
-        { "MAX", null },
-        { "MIN", null }
+        { "__look__", nullptr },
+        { "MAX", nullptr },
+        { "MIN", nullptr }
 	};
 
     alo_pushptype(env, ALO_TINT);

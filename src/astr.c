@@ -42,7 +42,7 @@ a_hash ai_str_hashof(a_henv env, char const* ptr, a_usize len) {
 	if (len > 0) {
 		char const* begin = ptr;
 		a_usize step = 1 + (len >> 4);
-		assume(ptr != null);
+		assume(ptr != nullptr);
 		for (char const* p = ptr + len - 1; p >= begin; p -= step) {
 			hash = (hash ^ cast(a_hash, *p)) * 0x1000193;
 		}
@@ -66,7 +66,7 @@ static void cache_grow(a_henv env, StrCache* cache) {
         GStr** q = &new_ptr[i + old_cap];
         /* Split string in same slot in old array into two slots by hash. */
         GStr* s = *p;
-        while (s != null) {
+        while (s != nullptr) {
             if (s->hash & old_cap) {
                 *q = s;
                 q = &s->snext;
@@ -77,7 +77,7 @@ static void cache_grow(a_henv env, StrCache* cache) {
             }
             s = s->snext;
         }
-        *p = *q = null;
+        *p = *q = nullptr;
     }
 
 	cache->ptr = new_ptr;
@@ -96,7 +96,7 @@ static void cache_shrink(Global* gbl, StrCache* cache) {
         GStr** q = &old_ptr[i + new_cap];
         /* Merge string from two slots into one slot. */
         GStr* s;
-        while ((s = *p) != null) {
+        while ((s = *p) != nullptr) {
             p = &s->snext;
         }
         *p = *q;
@@ -135,12 +135,12 @@ static void str_init(GStr* self, char const* ptr, a_usize len, a_hash hash) {
     self->ptr[len] = '\0';
 }
 
-static GStr* str_get_or_null_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash) {
+static GStr* str_get_or_nullptr_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash) {
     Global* gbl = G(env);
     StrCache* cache = &gbl->str_cache;
 
     /* Try lookup string in intern table. */
-    for (GStr* str = cache->ptr[hash & cache->hmask]; str != null; str = str->snext) {
+    for (GStr* str = cache->ptr[hash & cache->hmask]; str != nullptr; str = str->snext) {
         if (str->hash == hash && str->len == len && memcmp(str->ptr, ptr, len) == 0) {
             /* Revive string object if it is dead. */
             if (unlikely(g_has_other_color(gbl, str))) {
@@ -150,7 +150,7 @@ static GStr* str_get_or_null_with_hash(a_henv env, char const* ptr, a_usize len,
         }
     }
 
-	return null;
+	return nullptr;
 }
 
 GStr* ai_str_new_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash) {
@@ -168,9 +168,9 @@ GStr* ai_str_new_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash
 
 static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	a_hash hash = ai_str_hashof(env, buff->ptr, len);
-	GStr* self = str_get_or_null_with_hash(env, buff->ptr, len, hash);
+	GStr* self = str_get_or_nullptr_with_hash(env, buff->ptr, len, hash);
 	
-	if (self != null) {
+	if (self != nullptr) {
 		ai_mem_dealloc(G(env), buff, str_size(len));
 		return self;
 	}
@@ -190,12 +190,12 @@ static GStr* str_get_and_drop_buff_or_put(a_henv env, GStr* buff, a_usize len) {
 	return self;
 }
 
-GStr* ai_str_get_or_null_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash) {
-    return str_get_or_null_with_hash(env, ptr, len, hash);
+GStr* ai_str_get_or_nullptr_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash) {
+    return str_get_or_nullptr_with_hash(env, ptr, len, hash);
 }
 
 GStr* ai_str_get_or_new_with_hash(a_henv env, char const* ptr, a_usize len, a_hash hash) {
-    return ai_str_get_or_null_with_hash(env, ptr, len, hash) ?: ai_str_new_with_hash(env, ptr, len, hash);
+    return ai_str_get_or_nullptr_with_hash(env, ptr, len, hash) ?: ai_str_new_with_hash(env, ptr, len, hash);
 }
 
 GStr* ai_str_get_or_new(a_henv env, char const* ptr, a_usize len) {
@@ -265,7 +265,7 @@ static void cache_remove(StrCache* cache, GStr* str) {
     GStr** slot = cache_head(cache, str->hash);
     loop {
         GStr* str1 = *slot;
-        assume(str1 != null);
+        assume(str1 != nullptr);
         if (str == str1) {
             *slot = str->snext;
             break;
@@ -340,7 +340,7 @@ void ai_str_cache_shrink_if_need(Global* gbl) {
 void ai_str_clean(Global* gbl) {
     StrCache* cache = &gbl->str_cache;
     assume(cache->len <= STR__COUNT, "string size not matched.");
-    if (cache->ptr != null) {
+    if (cache->ptr != nullptr) {
         ai_mem_vdel(gbl, cache->ptr, cache->hmask + 1);
     }
 }
@@ -359,4 +359,4 @@ char const ai_str_interns[] = {
 #undef SYMDEF
 };
 
-static_assert(sizeof(ai_str_interns) == STR__TOTAL_LEN + 1);
+ALO_STATIC_ASSERT(sizeof(ai_str_interns) == STR__TOTAL_LEN + 1);

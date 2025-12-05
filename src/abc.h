@@ -63,19 +63,19 @@
 #define bc_load_c(ip) cast(a_u8, cast(a_u32, *(ip)) >> BC_OFF_C)
 #define bc_load_sc(ip) cast(a_i8, cast(a_i32, *(ip)) >> BC_OFF_C)
 
-always_inline a_insn bc_load(a_insn const* ip) { return *ip; }
+ALO_INLINE a_insn bc_load(a_insn const* ip) { return *ip; }
 
-always_inline void bc_store_op(a_insn* ip, a_u32 op) { *ip = (*ip & ~BC_MASK_OP) | bc_wrap_op(op); }
-always_inline void bc_store_a(a_insn* ip, a_u32 a) { *ip = (*ip & ~BC_MASK_A) | bc_wrap_a(a); }
-always_inline void bc_store_ax(a_insn* ip, a_u32 a) { *ip = (*ip & ~BC_MASK_AX) | bc_wrap_ax(a); }
-always_inline void bc_store_sax(a_insn* ip, a_i32 a) { *ip = (*ip & ~BC_MASK_AX) | bc_wrap_sax(a); }
-always_inline void bc_store_b(a_insn* ip, a_u32 b) { *ip = (*ip & ~BC_MASK_B) | bc_wrap_b(b); }
-always_inline void bc_store_bx(a_insn* ip, a_u32 b) { *ip = (*ip & ~BC_MASK_BX) | bc_wrap_bx(b); }
-always_inline void bc_store_sbx(a_insn* ip, a_u32 b) { *ip = (*ip & ~BC_MASK_BX) | bc_wrap_sbx(b); }
-always_inline void bc_store_c(a_insn* ip, a_u32 c) { *ip = (*ip & ~BC_MASK_C) | bc_wrap_c(c); }
-always_inline void bc_store_sc(a_insn* ip, a_i32 c) { *ip = (*ip & ~BC_MASK_C) | bc_wrap_sc(c); }
+ALO_INLINE void bc_store_op(a_insn* ip, a_u32 op) { *ip = (*ip & ~BC_MASK_OP) | bc_wrap_op(op); }
+ALO_INLINE void bc_store_a(a_insn* ip, a_u32 a) { *ip = (*ip & ~BC_MASK_A) | bc_wrap_a(a); }
+ALO_INLINE void bc_store_ax(a_insn* ip, a_u32 a) { *ip = (*ip & ~BC_MASK_AX) | bc_wrap_ax(a); }
+ALO_INLINE void bc_store_sax(a_insn* ip, a_i32 a) { *ip = (*ip & ~BC_MASK_AX) | bc_wrap_sax(a); }
+ALO_INLINE void bc_store_b(a_insn* ip, a_u32 b) { *ip = (*ip & ~BC_MASK_B) | bc_wrap_b(b); }
+ALO_INLINE void bc_store_bx(a_insn* ip, a_u32 b) { *ip = (*ip & ~BC_MASK_BX) | bc_wrap_bx(b); }
+ALO_INLINE void bc_store_sbx(a_insn* ip, a_u32 b) { *ip = (*ip & ~BC_MASK_BX) | bc_wrap_sbx(b); }
+ALO_INLINE void bc_store_c(a_insn* ip, a_u32 c) { *ip = (*ip & ~BC_MASK_C) | bc_wrap_c(c); }
+ALO_INLINE void bc_store_sc(a_insn* ip, a_i32 c) { *ip = (*ip & ~BC_MASK_C) | bc_wrap_sc(c); }
 
-always_inline void bc_store(a_insn* ip, a_insn v) { *ip = v; }
+ALO_INLINE void bc_store(a_insn* ip, a_insn v) { *ip = v; }
 
 #define ALO_BC_LIST(_) \
 /*        id,    name,  A,  B,  C, Ex,    description                             */ \
@@ -197,35 +197,35 @@ enum OpCode {
 
 /* Constraints of opcodes value. */
 
-static_assert((BC_KF ^ 1) == BC_KT);
-static_assert((BC_BKF ^ 1) == BC_BKT);
-static_assert((BC_BZ ^ 1) == BC_BNZ);
-static_assert((BC_BEQ ^ 1) == BC_BNE);
-static_assert((BC_BLT ^ 1) == BC_BNLT);
-static_assert((BC_BLE ^ 1) == BC_BNLE);
-static_assert((BC_BLTI ^ 1) == BC_BNLTI);
-static_assert((BC_BLEI ^ 1) == BC_BNLEI);
-static_assert((BC_BGTI ^ 1) == BC_BNGTI);
-static_assert((BC_BGEI ^ 1) == BC_BNGEI);
-static_assert(BC_GETS + 1 == BC_GETSX);
-static_assert(BC_CGETS + 1 == BC_CGETSX);
-static_assert(BC_SETS + 1 == BC_SETSX);
-static_assert(BC_CSETS + 1 == BC_CSETSX);
-static_assert(BC_UNBOX + 1 == BC_UNBOXV);
-static_assert(BC_CALL + 1 == BC_CALLV);
-static_assert(BC_CALL + 2 == BC_TCALL);
-static_assert(BC_CALLM + 1 == BC_CALLMV);
-static_assert(BC_CALLM + 2 == BC_TCALLM);
+ALO_STATIC_ASSERT((BC_KF ^ 1) == BC_KT);
+ALO_STATIC_ASSERT((BC_BKF ^ 1) == BC_BKT);
+ALO_STATIC_ASSERT((BC_BZ ^ 1) == BC_BNZ);
+ALO_STATIC_ASSERT((BC_BEQ ^ 1) == BC_BNE);
+ALO_STATIC_ASSERT((BC_BLT ^ 1) == BC_BNLT);
+ALO_STATIC_ASSERT((BC_BLE ^ 1) == BC_BNLE);
+ALO_STATIC_ASSERT((BC_BLTI ^ 1) == BC_BNLTI);
+ALO_STATIC_ASSERT((BC_BLEI ^ 1) == BC_BNLEI);
+ALO_STATIC_ASSERT((BC_BGTI ^ 1) == BC_BNGTI);
+ALO_STATIC_ASSERT((BC_BGEI ^ 1) == BC_BNGEI);
+ALO_STATIC_ASSERT(BC_GETS + 1 == BC_GETSX);
+ALO_STATIC_ASSERT(BC_CGETS + 1 == BC_CGETSX);
+ALO_STATIC_ASSERT(BC_SETS + 1 == BC_SETSX);
+ALO_STATIC_ASSERT(BC_CSETS + 1 == BC_CSETSX);
+ALO_STATIC_ASSERT(BC_UNBOX + 1 == BC_UNBOXV);
+ALO_STATIC_ASSERT(BC_CALL + 1 == BC_CALLV);
+ALO_STATIC_ASSERT(BC_CALL + 2 == BC_TCALL);
+ALO_STATIC_ASSERT(BC_CALLM + 1 == BC_CALLMV);
+ALO_STATIC_ASSERT(BC_CALLM + 2 == BC_TCALLM);
 
-intern char const ai_bc_names[][8];
-intern a_u8 const ai_bc_reloc[];
+ALO_PRIVATE char const ai_bc_names[][8];
+ALO_PRIVATE a_u8 const ai_bc_reloc[];
 
-always_inline a_bool insn_is_branch(a_insn const* ip) {
+ALO_INLINE a_bool insn_is_branch(a_insn const* ip) {
     a_enum op = bc_load_op(ip);
 	return op >= BC_BZ && op <= BC_BNGEI;
 }
 
-always_inline a_bool insn_is_leave(a_insn const* ip) {
+ALO_INLINE a_bool insn_is_leave(a_insn const* ip) {
     a_enum op = bc_load_op(ip);
 	return op >= BC_RET0 && op <= BC_RETM;
 }

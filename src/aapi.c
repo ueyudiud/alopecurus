@@ -95,7 +95,7 @@ char const ai_api_version[] = ALO_VERSION_FULL_STRING(".");
  * @return the version pointer.
  */
 char const* alo_version(a_henv env) {
-    if (env == null)
+    if (env == nullptr)
         return ai_api_version;
     Global* gbl = G(env);
     return gbl->version;
@@ -122,8 +122,8 @@ void alo_sethook(a_henv env, a_hfun kf, a_hctx kc, a_flags mask) {
 	Global* gbl = G(env);
 
 	/* Make sure null safe. */
-	if (kf == null || mask == 0) {
-		kf = null;
+	if (kf == nullptr || mask == 0) {
+		kf = nullptr;
 		mask = 0;
 	}
 
@@ -204,13 +204,13 @@ Value const* api_roslot(a_henv env, a_ilen id) {
 	if (id >= 0) {
 		Value const* bot = ai_stk_bot(env);
 		if (id >= env->stack.top - bot)
-			return null;
+			return nullptr;
 		return bot + id;
 	}
 	else if (id >= MIN_NEG_STACK_INDEX) {
 		Value const* bot = ai_stk_bot(env);
 		if (-id > env->stack.top - bot)
-			return null;
+			return nullptr;
 		return env->stack.top + id;
 	}
 	else if (id == ALO_STACK_INDEX_ERROR) {
@@ -220,13 +220,13 @@ Value const* api_roslot(a_henv env, a_ilen id) {
 		id -= ALO_STACK_INDEX_CAPTURE_BASE;
 		GFun* fun = v_as_func(*stk2val(env, env->frame->stack_bot - 1));
 		if (cast(a_u32, id) >= fun->ncap)
-			return null;
+			return nullptr;
 		return unlikely(fun->flags & FUN_FLAG_NATIVE) ? &fun->val_caps[id] : fun->ref_caps[id]->ptr;
 	}
 	else if (id == ALO_STACK_INDEX_GLOBAL) {
 		return &G(env)->global_value;
 	}
-	return null;
+	return nullptr;
 }
 
 Value const* api_rdslot(a_henv env, a_ilen id) {
@@ -307,7 +307,7 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 		}
 		case 'i': { /* Index addressing. */
 			Value const* p = api_roslot(env, va_arg(varg, a_ilen));
-			if (p == null) return ALO_EEMPTY;
+			if (p == nullptr) return ALO_EEMPTY;
 			v_cpy(env, &v, p);
 			break;
 		}
@@ -395,7 +395,7 @@ void alo_pushptr(a_henv env, void const* val) {
 }
 
 char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
-    api_check(src != null || len == 0, "string source violates contract.");
+    api_check(src != nullptr || len == 0, "string source violates contract.");
 	GStr* str = ai_str_get_or_new(env, src, len);
 	v_set_str(env, api_incr_stack(env), str);
 	ai_gc_trigger(env);
@@ -403,7 +403,7 @@ char const* alo_pushstr(a_henv env, void const* src, a_usize len) {
 }
 
 char const* alo_pushntstr(a_henv env, char const* src) {
-    api_check(src != null, "string source violates contract.");
+    api_check(src != nullptr, "string source violates contract.");
     GStr* str = ai_str_from_ntstr(env, src);
     v_set_str(env, api_incr_stack(env), str);
     ai_gc_trigger(env);
@@ -419,7 +419,7 @@ char const* alo_pushfstr(a_henv env, char const* fmt, ...) {
 }
 
 char const* alo_pushvfstr(a_henv env, char const* fmt, va_list varg) {
-    api_check(fmt != null, "format string violates contract.");
+    api_check(fmt != nullptr, "format string violates contract.");
 	GStr* str = ai_str_format(env, fmt, varg);
 	v_set_str(env, api_incr_stack(env), str);
 	ai_gc_trigger(env);
@@ -545,7 +545,7 @@ void alo_newtype(a_henv env, alo_NewType const* info) {
     Value* pv = api_incr_stack(env);
 
     GStr* name;
-    if (info->name != null) {
+    if (info->name != nullptr) {
         name = ai_str_from_ntstr(env, info->name);
         v_set_str(env, pv, name);
     }
@@ -753,7 +753,7 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
 	return ALO_SOK;
 }
 
-void alo_raise(a_henv env) {
+ALO_NORETURN void alo_raise(a_henv env) {
 	ai_err_raise(env, ALO_ERAISE, api_decr_stack(env));
 }
 
@@ -813,7 +813,7 @@ a_usize alo_gchint(a_henv env, a_enum n, a_usize s) {
 
 a_msg alo_tagof(a_henv env, a_ilen id) {
 	Value const* slot = api_roslot(env, id);
-	return slot != null ? api_tagof(env, *slot) : ALO_EEMPTY;
+	return slot != nullptr ? api_tagof(env, *slot) : ALO_EEMPTY;
 }
 
 a_bool alo_tobool(a_henv env, a_ilen id) {
@@ -846,7 +846,7 @@ char const* alo_tolstr(a_henv env, a_ilen id, a_usize* plen) {
 	Value v = api_elem(env, id);
 	api_check(v_is_str(v), "cannot convert to string");
 	GStr* p = v_as_str(v);
-	if (plen != null) {
+	if (plen != nullptr) {
 		*plen = p->len;
 	}
 	return str2ntstr(p);
@@ -856,7 +856,7 @@ void* alo_toptr(a_henv env, a_ilen id) {
     Value v = api_elem(env, id);
     switch (v_get_tag(v)) {
         case T_NIL: {
-            return null;
+            return nullptr;
         }
         case T_PTR: {
             return v_as_ptr(v);
@@ -868,7 +868,7 @@ void* alo_toptr(a_henv env, a_ilen id) {
             }
             else {
                 api_panic("primitive type has no userdata");
-                return null;
+                return nullptr;
             }
         }
         case T_USER: {
@@ -877,7 +877,7 @@ void* alo_toptr(a_henv env, a_ilen id) {
         }
         default: {
             api_panic("cannot cast to pointer");
-            return null;
+            return nullptr;
         }
     }
 }

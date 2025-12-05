@@ -19,11 +19,11 @@ enum {
     LVLSTR_LEN_BIAS = LVTAG_LSTR
 };
 
-intern a_msg ai_fun_save(a_henv env, GFun* val, a_ofun fun, void* ctx, a_flags flags);
-intern a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags);
+ALO_PRIVATE a_msg ai_fun_save(a_henv env, GFun* val, a_ofun fun, void* ctx, a_flags flags);
+ALO_PRIVATE a_msg ai_fun_load(a_henv env, GFun** pval, a_ifun fun, void* ctx, a_flags flags);
 
 enum { CHUNK_HEADER_SIZE = 4 };
 
-intern char const ai_fun_header[CHUNK_HEADER_SIZE];
+ALO_PRIVATE char const ai_fun_header[CHUNK_HEADER_SIZE];
 
 #endif /* aload_h_ */

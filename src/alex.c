@@ -14,11 +14,11 @@
 
 #include "alex.h"
 
-static a_noret l_foreign_error(Lexer* lex) {
+ALO_NORETURN static void l_foreign_error(Lexer* lex) {
 	ai_err_raise(lex->env, ALO_EOUTER, v_of_int(lex->in.err));
 }
 
-always_inline a_i32 l_poll_unchecked(Lexer* lex) {
+ALO_INLINE a_i32 l_poll_unchecked(Lexer* lex) {
     a_i32 ch = lex->next;
     lex->next = ai_io_igetc(&lex->in);
     return ch;
@@ -98,7 +98,7 @@ static a_bool strs_put(StrSet* set, GStr* str) {
         if (*slot == str) {
             return false;
         }
-        else if (*slot == null) {
+        else if (*slot == nullptr) {
             *slot = str;
             return true;
         }
@@ -136,7 +136,7 @@ static void strs_grow(Lexer* lex, StrSet* self) {
 
     for (a_usize i = 0; i < old_cap; ++i) {
         GStr* str = old_ptr[i];
-        if (str != null) {
+        if (str != nullptr) {
 			a_bool succ = strs_put(self, str);
             assume(succ, "duplicate string.");
         }
@@ -146,7 +146,7 @@ static void strs_grow(Lexer* lex, StrSet* self) {
 }
 
 static void strs_close(a_henv env, StrSet* strs) {
-	if (strs->ptr != null) {
+	if (strs->ptr != nullptr) {
 		ai_mem_vdel(G(env), strs->ptr, strs->hmask + 1);
 	}
 }
@@ -170,7 +170,7 @@ void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx, char const* file
 void ai_lex_open(Lexer* lex, a_flags options) {
     strs_alloc_array(lex->env, &lex->strs, STRS_INIT_CAP);
 
-    if (!(options & ALO_COMP_OPT_STRIP_DEBUG) && lex->file != null) {
+    if (!(options & ALO_COMP_OPT_STRIP_DEBUG) && lex->file != nullptr) {
         GStr* str = ai_lex_to_str(lex, lex->file, strlen(lex->file));
         lex->file = str2ntstr(str);
     }
@@ -186,7 +186,7 @@ void ai_lex_close(Lexer* lex) {
 char const* ai_lex_tagname(a_i32 tag) {
 	static a_u16 const l_offs[] = {
 #define SYMDEF(n,r) [TK_##n] = BEGIN_STR_##n,
-        SYM_TOKEN(SYMDEF, M_void, M_void)
+		SYM_TOKEN(SYMDEF, M_void, M_void)
 #undef SYMDEF
 	};
 
@@ -225,7 +225,7 @@ char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf) {
 	}
 }
 
-a_noret ai_lex_report(Lexer* lex, char const* fmt, ...) {
+ALO_NORETURN void ai_lex_report(Lexer* lex, char const* fmt, ...) {
     va_list varg;
     va_start(varg, fmt);
     ai_err_raisevf(lex->env, ALO_ECHUNK, fmt, varg);
@@ -677,7 +677,7 @@ static a_i32 l_scan_xdigit(Lexer* lex) {
     return i;
 }
 
-static a_noret l_error_unclosed(Lexer* lex, a_u32 line) {
+ALO_NORETURN static void l_error_unclosed(Lexer* lex, a_u32 line) {
 	if (lex->line == line) {
 		ai_lex_error(lex, "unclosed string.", lex->line);
 	}

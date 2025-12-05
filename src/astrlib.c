@@ -27,26 +27,26 @@ static Buf* l_newbuf(a_henv env) {
 }
 
 static a_lstr ntstr2lstr(char const* str) {
-    return (a_lstr) { str, str != null ? strlen(str) : 0 };
+    return (a_lstr) { str, str != nullptr ? strlen(str) : 0 };
 }
 
 static char const* lstrstr(a_lstr sub, a_lstr pat) {
     assume(pat.len > 0, "pattern string length == 0");
 
     if (sub.len < pat.len)
-        return null;
+        return nullptr;
 
     char ch = pat.ptr[0];
     char const* begin;
     char const* match_end = sub.ptr + sub.len - pat.len;
 
-    while ((begin = memchr(sub.ptr, ch, sub.len)) != null && begin <= match_end) {
+    while ((begin = memchr(sub.ptr, ch, sub.len)) != nullptr && begin <= match_end) {
         if (memcmp(begin + 1, pat.ptr + 1, pat.len - 1) == 0) {
             return begin;
         }
     }
 
-    return null;
+    return nullptr;
 }
 
 static void l_replace(a_henv env, Sub* ctx, Buf* buf) {
@@ -57,7 +57,7 @@ static void l_replace(a_henv env, Sub* ctx, Buf* buf) {
     char const* beg;
     a_lstr str = ctx->sub;
 
-    while ((beg = lstrstr(str, ctx->pat)) != null) {
+    while ((beg = lstrstr(str, ctx->pat)) != nullptr) {
         at_buf_putls(env, buf, str.ptr, beg - str.ptr);
         at_buf_putls(env, buf, ctx->rep.ptr, ctx->rep.len);
 
@@ -95,7 +95,7 @@ static a_lstr check_lstr(a_henv env, a_ilen id) {
 static a_lstr opt_lstr_(a_henv env, a_ilen id, a_lstr dfl) {
     a_lstr str;
     str.ptr = aloL_optlstr(env, id, &str.len);
-    if (str.ptr == null) {
+    if (str.ptr == nullptr) {
         str = dfl;
     }
     return str;
@@ -107,21 +107,21 @@ static char const* l_memfind(a_lstr str, a_lstr pat) {
     if (pat.len == 0)
         return pat.ptr;
     if (pat.len > str.len)
-        return null;
+        return nullptr;
 
     char const* pi;
     int ch = cast(int, *pat.ptr);
 
     pat.len -= 1;
     str.len -= pat.len;
-    while (str.len > 0 && (pi = memchr(str.ptr, ch, str.len)) != null) {
+    while (str.len > 0 && (pi = memchr(str.ptr, ch, str.len)) != nullptr) {
         pi += 1;
         if (memcmp(pi, pat.ptr + 1, pat.len) == 0)
             return pi - 1;
         str.len -= addr_diff(pi, str.ptr);
         str.ptr = pi;
     }
-    return null;  /* not found */
+    return nullptr;  /* not found */
 }
 
 static a_msg str_find(a_henv env) {
@@ -130,7 +130,7 @@ static a_msg str_find(a_henv env) {
 
     void const* found = l_memfind(str, pat);
 
-    if (found != null) {
+    if (found != nullptr) {
         a_isize off = addr_diff(found, str.ptr);
         alo_pushint(env, cast(a_i32, off));
         alo_pushint(env, cast(a_i32, off + pat.len));
@@ -162,7 +162,7 @@ static a_msg str_replace(a_henv env) {
     ctx.rep = check_lstr(env, 2);
 
     char const* beg = lstrstr(ctx.sub, ctx.pat);
-    if (beg != null) {
+    if (beg != nullptr) {
         alo_settop(env, 3);
 
         Buf* buf = l_newbuf(env);
@@ -191,7 +191,7 @@ static a_msg str_split(a_henv env) {
     alo_newlist(env, 0);
 
     char const* ptr = l_memfind(str, pat);
-    if (ptr != null) {
+    if (ptr != nullptr) {
         do {
             a_usize len = addr_diff(ptr, str.ptr);
 
@@ -203,7 +203,7 @@ static a_msg str_split(a_henv env) {
             str.len -= len + pat.len;
             str.ptr += len + pat.len;
         }
-        while ((ptr = l_memfind(str, pat)) != null);
+        while ((ptr = l_memfind(str, pat)) != nullptr);
 
         if (str.len > 0 || !strip) {
             alo_pushstr(env, str.ptr, str.len);
@@ -315,7 +315,7 @@ static a_msg str_repeat(a_henv env) {
 
 void aloopen_str(a_henv env) {
     static aloL_Entry const bindings[] = {
-        { "__look__", null },
+        { "__look__", nullptr },
         { "__mul__", str_repeat },
         { "find", str_find },
         { "repeat", str_repeat },

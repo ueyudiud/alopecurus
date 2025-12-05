@@ -70,9 +70,9 @@ static a_bool lex_test_skip(Parser* par, a_i32 tk) {
 	return false;
 }
 
-#define lex_error_got(par,fmt,args...) ({ \
-	a_tkbuf _buf;                         \
-    parse_error(par, fmt", got %s", lex_line(par), ##args, ai_lex_tkrepr(lex_token(par), _buf)); \
+#define lex_error_got(par,fmt,...) ({ \
+	a_tkbuf _buf;                     \
+	parse_error(par, fmt", got %s", lex_line(par) M_opt(__VA_ARGS__), ai_lex_tkrepr(lex_token(par), _buf)); \
 })
 
 static void lex_error_expected(Parser* par, a_i32 tk) {
@@ -95,7 +95,7 @@ static GStr* lex_check_ident(Parser* par) {
 	return ident;
 }
 
-static a_noret lex_error_bracket(Parser* par, a_i32 ltk, a_i32 rtk, a_line line) {
+ALO_NORETURN static void lex_error_bracket(Parser* par, a_i32 ltk, a_i32 rtk, a_line line) {
 	if (lex_line(par) == line) {
 		lex_error_got(par, "%s expected to match %s",
                       ai_lex_tagname(rtk),
@@ -136,7 +136,7 @@ static void scan_stat(Parser* par);
 static void scan_stats(Parser* par);
 
 static GStr* scan_label(Parser* par) {
-    return lex_test_skip(par, TK_COLON) ? lex_check_ident(par) : null;
+    return lex_test_skip(par, TK_COLON) ? lex_check_ident(par) : nullptr;
 }
 
 static GStr* scan_label_for_scope(Parser* par) {
@@ -234,7 +234,7 @@ static void scan_lambda(Parser* par, Expr* e) {
 		ai_cg_return(par, e2, scope.begin_line);
 	}
 
-	ai_cg_func_end(par, e, null, lex_line(par));
+	ai_cg_func_end(par, e, nullptr, lex_line(par));
 }
 
 static void scan_table_constructor(Parser* par, Expr* e) {
@@ -252,7 +252,7 @@ static void scan_table_constructor(Parser* par, Expr* e) {
 
     ai_cg_block_start(par, &scope, line, 0);
 
-    ai_cg_local(par, e, null, (ExprMod) { }, line);
+    ai_cg_local(par, e, nullptr, (ExprMod) { }, line);
     ai_cg_table_new(par, er, line);
     ai_cg_assign(par, e, er, line);
 
@@ -515,7 +515,7 @@ static void scan_term_with_prefix(Parser* par, Expr* e) {
 		}
 		case TK_fn: {
             lex_skip(par);
-            scan_function(par, e, null, line);
+            scan_function(par, e, nullptr, line);
 			break;
 		}
 		default: {
@@ -850,13 +850,13 @@ static void scan_assign_rhs(Parser* par, LhsNode* tail, a_u32 count) {
         ai_cg_assign(par, node->expr, en, line);
 
 		node = node->last;
-		assume(node != null);
+		assume(node != nullptr);
 		num_nil -= 1;
 	}
 
 	loop {
         ai_cg_assign(par, node->expr, rhs_last, line);
-		if ((node = node->last) == null)
+		if ((node = node->last) == nullptr)
 			return;
 
         ai_cg_vec_pop(par, rhs, rhs_last, line);
@@ -1026,7 +1026,7 @@ static void scan_return_stat(Parser* par) {
 	ai_cg_return(par, e, line);
 }
 
-static a_noret par_error_dup_mod(Parser* par, a_i32 tk) {
+ALO_NORETURN static void par_error_dup_mod(Parser* par, a_i32 tk) {
     parse_error(par, "duplicate '%s' modifier", lex_line(par), ai_lex_tagname(tk));
 }
 
@@ -1173,7 +1173,7 @@ branch_standard:
 			}
 		}
 
-		assume(up != null);
+		assume(up != nullptr);
 		slot = &up->sib;
         pat = up;
         up = up->up;
@@ -1272,7 +1272,7 @@ static void let_bind(Parser* par, Pat* p, a_usize c) {
             if (!lex_test_skip(par, TK_COMMA))
                 break;
 
-            if (pat == null) {
+            if (pat == nullptr) {
                 do {
                     scan_expr(par, e);
                     ai_cg_wild(par, e);
@@ -1555,7 +1555,7 @@ a_msg ai_parse(a_henv env, a_ifun fun, void* ctx, char const* file, GStr* name, 
 
 static GStr* api_get_str(a_henv env, a_ilen id) {
     Value const* v = api_roslot(env, id);
-    return v != null ? v_as_str(*v) : null;
+    return v != nullptr ? v_as_str(*v) : nullptr;
 }
 
 a_msg alo_compile(a_henv env, a_ifun fun, void* ctx,

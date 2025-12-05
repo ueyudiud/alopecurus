@@ -51,22 +51,16 @@ XCFLAGS=
 # Debug Features.
 ##############################################################
 ifeq ($(LEVEL),debug)
-
-XCFLAGS+= -D ALOI_CHECK_ASSUME
-
-XCFLAGS+= -D ALOI_CHECK_API
-
-XCFLAGS+= -D ALOI_CHECK_GC
-
-XCFLAGS+= -D ALOI_USE_VALGRIND
-
+#XCFLAGS+= -D ALOI_CHECK_API
+#XCFLAGS+= -D ALOI_CHECK_GC
+#XCFLAGS+= -D ALOI_USE_VALGRIND
 endif
 ##############################################################
 
 ##############################################################
 # Build tools.
 ##############################################################
-CC= gcc
+CC= gcc --std=gnu23
 AR= ar rcus
 STRIP= strip
 

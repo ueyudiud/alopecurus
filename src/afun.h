@@ -12,16 +12,16 @@ typedef struct CapSrc CapSrc;
 typedef struct LineInfo LineInfo;
 typedef struct ProtoDesc ProtoDesc;
 
-intern GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc);
-intern GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
-intern GFun* ai_fun_new(a_henv env, GProto *proto);
-intern void ai_proto_drop(Global* gbl, GProto* self);
-intern RcCap* ai_cap_new(a_henv env);
-intern void ai_cap_mark_tbc(a_henv env, Value* p);
-intern void ai_cap_really_drop(Global* gbl, RcCap* self);
-intern void ai_cap_close(a_henv env, RcCap* self);
-intern void ai_cap_close_above(a_henv env, Value* pv);
-intern void ai_cap_clean(Global* gbl);
+ALO_PRIVATE GProto* ai_proto_alloc(a_henv env, ProtoDesc const* desc);
+ALO_PRIVATE GFun* ai_cfun_create(a_henv env, a_cfun hnd, a_u32 ncap, Value const* pcap);
+ALO_PRIVATE GFun* ai_fun_new(a_henv env, GProto *proto);
+ALO_PRIVATE void ai_proto_drop(Global* gbl, GProto* self);
+ALO_PRIVATE RcCap* ai_cap_new(a_henv env);
+ALO_PRIVATE void ai_cap_mark_tbc(a_henv env, Value* p);
+ALO_PRIVATE void ai_cap_really_drop(Global* gbl, RcCap* self);
+ALO_PRIVATE void ai_cap_close(a_henv env, RcCap* self);
+ALO_PRIVATE void ai_cap_close_above(a_henv env, Value* pv);
+ALO_PRIVATE void ai_cap_clean(Global* gbl);
 
 #define FUN_FLAG_VARARG u32c(0x00000001)
 #define FUN_FLAG_NATIVE u32c(0x00000002)
@@ -130,17 +130,17 @@ struct LineInfo {
 
 #define v_is_func(v) v_is(v, T_FUNC)
 
-always_inline GFun* v_as_func(Value v) {
+ALO_INLINE GFun* v_as_func(Value v) {
     assume(v_is_func(v), "not function.");
     return g_as(GFun, v_as_ref(v));
 }
 
-always_inline Value v_of_func(GFun* o) {
+ALO_INLINE Value v_of_func(GFun* o) {
     assume(g_is_func(o), "invalid instance.");
     return v_of_ref(o, T_FUNC);
 }
 
-always_inline void v_set_func(a_henv env, Value* d, GFun* o) {
+ALO_INLINE void v_set_func(a_henv env, Value* d, GFun* o) {
     Value v = v_of_func(o);
     v_set(env, d, v);
 }

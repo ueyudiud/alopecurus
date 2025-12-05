@@ -13,23 +13,23 @@
 
 typedef struct PCtx PCtx;
 
-intern a_msg ai_ctx_init(void);
-intern void ai_ctx_deinit(void);
-intern a_noret ai_ctx_raise(a_henv env, a_msg msg);
-intern a_bool ai_ctx_open(a_henv env, a_usize stack_size);
-intern void ai_ctx_close(a_henv env);
+ALO_PRIVATE a_msg ai_ctx_init(void);
+ALO_PRIVATE void ai_ctx_deinit(void);
+ALO_NORETURN ALO_PRIVATE void ai_ctx_raise(a_henv env, a_msg msg);
+ALO_PRIVATE a_bool ai_ctx_open(a_henv env, a_usize stack_size);
+ALO_PRIVATE void ai_ctx_close(a_henv env);
 
-intern a_msg ai_ctx_catch(a_henv env, a_pfun fun, void* ctx);
-intern a_msg ai_ctx_jump(a_henv to, a_henv from, a_msg msg);
+ALO_PRIVATE a_msg ai_ctx_catch(a_henv env, a_pfun fun, void* ctx);
+ALO_PRIVATE a_msg ai_ctx_jump(a_henv to, a_henv from, a_msg msg);
 
 #if ALO_OS_WINDOWS && ALO_ARCH_X64
 
 struct PCtx {};
 
-intern naked a_msg ai_ctx_catch0();
-intern naked a_msg ai_ctx_jump0();
+ALO_PRIVATE ALO_NAKED a_msg ai_ctx_catch0();
+ALO_PRIVATE ALO_NAKED a_msg ai_ctx_jump0();
 
-always_inline a_msg ai_ctx_catch(a_henv env, a_pfun fun, void* ctx) {
+ALO_INLINE a_msg ai_ctx_catch(a_henv env, a_pfun fun, void* ctx) {
     register void* reg_env asm("rcx") = env;
     register void* reg_ctx asm("rdx") = ctx;
     register void* reg_fun asm("r8") = fun;
@@ -48,7 +48,7 @@ always_inline a_msg ai_ctx_catch(a_henv env, a_pfun fun, void* ctx) {
     return reg_msg;
 }
 
-always_inline a_msg ai_ctx_jump(a_henv to, a_henv from, a_msg msg) {
+ALO_INLINE a_msg ai_ctx_jump(a_henv to, a_henv from, a_msg msg) {
     register void* reg_to asm("rcx") = to;
     register void* reg_from asm("rdx") = from;
     register a_msg reg_msg asm("rax") = msg;

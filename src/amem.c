@@ -11,9 +11,9 @@
 
 #include "amem.h"
 
-a_noret ai_mem_nomem(a_henv env) {
+ALO_NORETURN void ai_mem_nomem(a_henv env) {
 	GStr* err = G(env)->nomem_error;
-	ai_err_raise(env, ALO_ENOMEM, likely(err != null) ? v_of_str(err) : v_of_nil());
+	ai_err_raise(env, ALO_ENOMEM, likely(err != nullptr) ? v_of_str(err) : v_of_nil());
 }
 
 void* ai_mem_alloc(a_henv env, a_usize sz) {
@@ -21,10 +21,10 @@ void* ai_mem_alloc(a_henv env, a_usize sz) {
 	ai_gc_full_gc(env, true);
 #endif
 	void* blk = ai_mem_nalloc(env, sz);
-	if (unlikely(blk == null)) {
+	if (unlikely(blk == nullptr)) {
 		ai_gc_full_gc(env, true);
 		blk = ai_mem_nalloc(env, sz);
-		if (blk == null) {
+		if (blk == nullptr) {
 			ai_mem_nomem(env);
 		}
 	}
@@ -36,10 +36,10 @@ void* ai_mem_realloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new) 
 	ai_gc_full_gc(env, true);
 #endif
 	void* blk_new = ai_mem_nrealloc(env, blk_old, sz_old, sz_new);
-	if (unlikely(blk_new == null)) {
+	if (unlikely(blk_new == nullptr)) {
 		ai_gc_full_gc(env, true);
 		blk_new = ai_mem_nrealloc(env, blk_old, sz_old, sz_new);
-		if (blk_new == null) {
+		if (blk_new == nullptr) {
 			ai_mem_nomem(env);
 		}
 	}
@@ -48,7 +48,7 @@ void* ai_mem_realloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new) 
 
 void ai_mem_dealloc(Global* gbl, void* blk, a_usize sz) {
 	if (sz > 0) {
-		assume(blk != null);
+		assume(blk != nullptr);
 		ai_mem_ndealloc(gbl, blk, sz);
 	}
 }
@@ -56,7 +56,7 @@ void ai_mem_dealloc(Global* gbl, void* blk, a_usize sz) {
 void* ai_mem_nalloc(a_henv env, a_usize sz) {
 	Global* gbl = G(env);
 	void* blk = ai_mem_valloc(&gbl->alloc_, gbl->alloc_ctx, sz);
-	if (unlikely(blk == null)) return null;
+	if (unlikely(blk == nullptr)) return nullptr;
 	gbl->mem_debt += cast(a_isize, sz);
 	return blk;
 }
@@ -68,7 +68,7 @@ void* ai_mem_nrealloc(a_henv env, void* blk_old, a_usize sz_old, a_usize sz_new)
 	else {
 		Global* gbl = G(env);
 		void* blk_new = ai_mem_vrealloc(&gbl->alloc_, gbl->alloc_ctx, blk_old, sz_old, sz_new);
-		if (unlikely(blk_new == null)) return null;
+		if (unlikely(blk_new == nullptr)) return nullptr;
 		gbl->mem_debt += cast(a_isize, sz_new - sz_old);
 		return blk_new;
 	}

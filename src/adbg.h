@@ -10,15 +10,15 @@
 ALO_EXPORT GFun* ai_dbg_get_func(a_henv env, Frame* frame);
 ALO_EXPORT a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc);
 
-always_inline char const* ai_dbg_get_func_name(a_henv env, Frame* frame) {
+ALO_INLINE char const* ai_dbg_get_func_name(a_henv env, Frame* frame) {
 	GFun* fun = ai_dbg_get_func(env, frame);
-	if (fun == null) return null;
+	if (fun == nullptr) return nullptr;
 	if (fun->flags & FUN_FLAG_NATIVE) {
 		//TODO get native function name.
-		return null;
+		return nullptr;
 	}
 	GStr* name = fun->proto->dbg_name;
-	return name != null ? str2ntstr(name) : null;
+	return name != nullptr ? str2ntstr(name) : nullptr;
 }
 
 #endif /* adbg_h_ */

@@ -40,7 +40,7 @@ static a_msg table___new__(a_henv env) {
     }
     else {
         char const* mode_str = aloL_optstr(env, 1);
-        if (mode_str != null) {
+        if (mode_str != nullptr) {
             mode = mode_from_str(env, 1, mode_str);
         }
         else {
@@ -65,7 +65,7 @@ static a_msg table___new__(a_henv env) {
 
 void aloopen_table(a_henv env) {
     static aloL_Entry const bindings[] = {
-        { "__look__", null },
+        { "__look__", nullptr },
         { "__new__", table___new__ }
     };
 

@@ -5,6 +5,7 @@
 #ifndef alex_h_
 #define alex_h_
 
+#include "asym.h"
 #include "aobj.h"
 #include "abuf.h"
 #include "aio.h"
@@ -18,20 +19,20 @@ typedef struct Token Token;
 
 typedef char a_tkbuf[MAX_TOKEN_STR_BUF_SIZE + 1];
 
-intern void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx, char const* file);
-intern void ai_lex_open(Lexer* lex, a_flags options);
-intern void ai_lex_close(Lexer* lex);
-intern char const* ai_lex_tagname(a_i32 tag);
-intern char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf);
-intern a_noret ai_lex_report(Lexer* lex, char const* fmt, ...);
-intern GStr* ai_lex_to_str(Lexer* lex, char const* ptr, a_usize len);
-intern void ai_lex_next2(Lexer* lex);
-intern void ai_lex_next(Lexer* lex);
-intern void ai_lex_next_dqstr(Lexer* lex, a_u32 line);
+ALO_PRIVATE void ai_lex_init(a_henv env, Lexer* lex, a_ifun fun, void* ctx, char const* file);
+ALO_PRIVATE void ai_lex_open(Lexer* lex, a_flags options);
+ALO_PRIVATE void ai_lex_close(Lexer* lex);
+ALO_PRIVATE char const* ai_lex_tagname(a_i32 tag);
+ALO_PRIVATE char const* ai_lex_tkrepr(Token* tk, a_tkbuf buf);
+ALO_NORETURN ALO_PRIVATE void ai_lex_report(Lexer* lex, char const* fmt, ...);
+ALO_PRIVATE GStr* ai_lex_to_str(Lexer* lex, char const* ptr, a_usize len);
+ALO_PRIVATE void ai_lex_next2(Lexer* lex);
+ALO_PRIVATE void ai_lex_next(Lexer* lex);
+ALO_PRIVATE void ai_lex_next_dqstr(Lexer* lex, a_u32 line);
 
 #define ai_lex_error(lex,fmt,...) ai_lex_report(lex, "%s:%u: "fmt, (lex)->file, __VA_ARGS__)
 
-static_assert(cast(a_u32, TK_if) == cast(a_u32, STR_if));
+ALO_STATIC_ASSERT(cast(a_u32, TK_if) == cast(a_u32, STR_if));
 
 struct Token {
     union {

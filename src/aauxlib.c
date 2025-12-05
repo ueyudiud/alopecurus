@@ -45,8 +45,8 @@ a_henv aloL_create(void) {
 		.deallocate = aux_dealloc
 	};
 	a_henv env;
-	a_msg msg = alo_create(&af, null, &env);
-	return msg == ALO_SOK ? env : null;
+	a_msg msg = alo_create(&af, nullptr, &env);
+	return msg == ALO_SOK ? env : nullptr;
 }
 
 /**
@@ -60,13 +60,13 @@ static a_ilen uid2sid(a_henv env, a_ulen id) {
     return cast(a_ilen, id);
 }
 
-void aloL_argerror(a_henv env, a_ulen id, char const* what) {
+ALO_NORETURN void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 	char const* name = ai_dbg_get_func_name(env, env->frame);
-	if (name == null) aloL_raisef(env, "bad argument #%u, %s", id, what);
+	if (name == nullptr) aloL_raisef(env, "bad argument #%u, %s", id, what);
 	aloL_raisef(env, "bad argument #%u to '%s', %s", id, name, what);
 }
 
-void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
+ALO_NORETURN void aloL_typeerror(a_henv env, a_ulen id, char const* name) {
     a_ilen sid = uid2sid(env, id);
 	Value v = api_elem(env, sid);
 	char const* what = alo_pushfstr(env, "%s expected, got %s", name, v_name(env, v));
@@ -109,7 +109,7 @@ void* aloL_checkptr(a_henv env, a_ulen id) {
     if (!v_is_ptr(v) && !v_is_nil(v)) {
         aloL_typeerror(env, id, ai_api_tagname[ALO_TPTR]);
     }
-    return v_is_ptr(v) ? v_as_ptr(v) : null;
+    return v_is_ptr(v) ? v_as_ptr(v) : nullptr;
 }
 
 char const* aloL_checklstr(a_henv env, a_ulen id, a_usize* plen) {
@@ -118,7 +118,7 @@ char const* aloL_checklstr(a_henv env, a_ulen id, a_usize* plen) {
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TSTR]);
 	}
 	GStr* str = v_as_str(v);
-	if (plen != null) {
+	if (plen != nullptr) {
 		*plen = str->len;
 	}
 	return str2ntstr(str);
@@ -128,7 +128,7 @@ a_u32 aloL_checkenum(a_henv env, a_ulen id, char const* const* es, char const* w
     char const* v = aloL_checkstr(env, id);
     char const* e;
 
-    for (a_u32 i = 0; (e = es[i]) != null; ++i) {
+    for (a_u32 i = 0; (e = es[i]) != nullptr; ++i) {
         if (strcmp(v, e) == 0)
             return i;
     }
@@ -170,12 +170,12 @@ char const* aloL_optlstr(a_henv env, a_ulen id, a_usize* plen) {
 	Value v = api_elem(env, uid2sid(env, id));
 	if (!v_is_str(v)) {
 		if (v_is_nil(v)) {
-			return null;
+			return nullptr;
 		}
 		aloL_typeerror(env, id, ai_api_tagname[ALO_TSTR]);
 	}
 	GStr* str = v_as_str(v);
-	if (plen != null) {
+	if (plen != nullptr) {
 		*plen = str->len;
 	}
 	return str2ntstr(str);
@@ -185,10 +185,10 @@ a_u32 aloL_optenum(a_henv env, a_ulen id, char const* const* es, char const* wha
     char const* v = aloL_optstr(env, id);
     char const* e;
 
-    if (v == null)
+    if (v == nullptr)
         return dfl;
 
-    for (a_u32 i = 0; (e = es[i]) != null; ++i) {
+    for (a_u32 i = 0; (e = es[i]) != nullptr; ++i) {
         if (strcmp(v, e) == 0)
             return i;
     }
@@ -204,7 +204,7 @@ a_msg aloL_resultcx(a_henv env, a_bool stat, int err, char const* what) {
 	}
 	else {
 		aloL_pushfail(env);
-		if (what != null) {
+		if (what != nullptr) {
 			alo_pushfstr(env, "%s: %s", what, strerror(err));
 		}
 		else {
@@ -232,7 +232,7 @@ a_msg aloL_resulte(a_henv env, a_i32 stat) {
 	char const* what = "exit";
 	int err = errno;
 	if (stat != 0 && err != 0) {
-		return aloL_resultcx(env, false, err, null);
+		return aloL_resultcx(env, false, err, nullptr);
 	}
 	else {
 		l_inspect_result(stat);
@@ -258,7 +258,7 @@ static a_i32 l_read_str(a_henv env, void* rctx, void const** pdst, size_t* plen)
     quiet(env);
 	*pdst = ctx->ptr;
 	*plen = ctx->len;
-	ctx->ptr = null;
+	ctx->ptr = nullptr;
 	ctx->len = 0;
 	return 0;
 }
@@ -289,7 +289,7 @@ static a_i32 l_read_file(a_henv env, void* rctx, void const** pdst, size_t* plen
 }
 
 a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
-    a_hfile file = fname != null ? open(fname, O_RDONLY) : STDIN_FILENO;
+    a_hfile file = fname != nullptr ? open(fname, O_RDONLY) : STDIN_FILENO;
 	if (file < 0) return ALO_EEMPTY;
 
 	FileReadCtx ctx;
@@ -299,7 +299,7 @@ a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
 	a_msg msg = alo_compile(env, l_read_file, &ctx, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, fname, options);
 	alo_pop(env, -2);
 
-    if (fname != null) close(ctx.file);
+    if (fname != nullptr) close(ctx.file);
 	return msg;
 }
 
@@ -322,16 +322,16 @@ typedef struct {
 
 static void trace_fill(a_henv env, Frame* frame, Trace* trace) {
 	GFun* fun = ai_dbg_get_func(env, frame);
-	assume(fun != null, "cannot trace root frame.");
+	assume(fun != nullptr, "cannot trace root frame.");
     if (fun->flags & FUN_FLAG_NATIVE) {
-        trace->name = null;
+        trace->name = nullptr;
         trace->file = TRACE_NATIVE_FILE;
         trace->line = 0;
     }
     else {
         GProto* proto = fun->proto;
-        trace->name = proto->dbg_name != null ? str2ntstr(proto->dbg_name) : null;
-        trace->file = proto->dbg_file != null ? str2ntstr(proto->dbg_file) : TRACE_UNKNOWN_FILE;
+        trace->name = proto->dbg_name != nullptr ? str2ntstr(proto->dbg_name) : nullptr;
+        trace->file = proto->dbg_file != nullptr ? str2ntstr(proto->dbg_file) : TRACE_UNKNOWN_FILE;
         trace->line = ai_dbg_get_line(proto, frame->pc - 1);
     }
 }
@@ -340,8 +340,8 @@ static Frame* virtual_unwind(a_henv env, a_usize level) {
     Frame* frame = env->frame;
 
     loop {
-        if (frame->prev == null) {
-            return null;
+        if (frame->prev == nullptr) {
+            return nullptr;
         }
         else if (level == 0) {
             return frame;
@@ -356,11 +356,11 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
     Trace trace;
 	Value* err = api_wrslot(dst, id);
     Frame* frame = virtual_unwind(src, level);
-    if (frame == null) return ALO_EINVAL;
+    if (frame == nullptr) return ALO_EINVAL;
 
     trace_fill(src, frame, &trace);
 
-    if (trace.file != null) {
+    if (trace.file != nullptr) {
         if (trace.line != 0) {
             try (ai_buf_nputfs(dst, buf, "%s:%u: ", trace.file, trace.line));
         }
@@ -395,7 +395,7 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
                 try (ai_buf_nputfs(dst, buf, "at %s", trace.file));
             }
 
-            if (trace.name != null) {
+            if (trace.name != nullptr) {
                 try (ai_buf_nputfs(dst, buf, " (%s)", trace.name));
             }
 
@@ -411,7 +411,7 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
 			}
 
             frame = frame->prev;
-            if (frame->prev == null)
+            if (frame->prev == nullptr)
                 break;
             trace_fill(dst, frame, &trace);
 
@@ -426,7 +426,7 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
 
 a_msg aloL_traceerror(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usize limit) {
     api_check(G(src) == G(dst), "not in same global context.");
-	if (src->frame->prev != null) {
+	if (src->frame->prev != nullptr) {
 		Buf buf[1] = {};
 		at_buf_init(buf);
 		a_msg msg = trace_error(dst, src, id, level, limit, buf_cast(buf));
@@ -490,13 +490,13 @@ void aloL_putalls_(a_henv env, a_ilen id, aloL_Entry const* es, a_usize ne) {
 
 	for (a_usize i = 0; i < ne; ++i) {
 		aloL_Entry const* e = &es[i];
-		assume(e->name != null, "name cannot be null.");
+		assume(e->name != nullptr, "name cannot be null.");
 
         Value* slot = ai_type_refls(env, o, e->name, strlen(e->name));
         v_set_nil(slot);
 
-		if (e->fptr != null) {
-			GFun* fun = ai_cfun_create(env, e->fptr, 0, null);
+		if (e->fptr != nullptr) {
+			GFun* fun = ai_cfun_create(env, e->fptr, 0, nullptr);
             v_set_func(env, slot, fun);
             ai_gc_barrier_backward(env, o, fun);
         }
@@ -542,9 +542,9 @@ void* aloL_newblk(a_henv env, a_usize s) {
     return self->body;
 }
 
-static_assert(offsetof(aloL_Buf, ptr) == offsetof(Buf, ptr));
-static_assert(offsetof(aloL_Buf, len) == offsetof(Buf, len));
-static_assert(offsetof(aloL_Buf, cap) == offsetof(Buf, cap));
+ALO_STATIC_ASSERT(offsetof(aloL_Buf, ptr) == offsetof(Buf, ptr));
+ALO_STATIC_ASSERT(offsetof(aloL_Buf, len) == offsetof(Buf, len));
+ALO_STATIC_ASSERT(offsetof(aloL_Buf, cap) == offsetof(Buf, cap));
 
 static GBuf* from_buff(a_henv env, aloL_Buf* raw) {
     GBuf* self = from_member(GBuf, _buf_head_mark, cast(BufHeadMark*, raw));

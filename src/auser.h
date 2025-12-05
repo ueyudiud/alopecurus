@@ -7,11 +7,11 @@
 
 #include "atype.h"
 
-intern GUser* ai_user_new(a_henv env, GUType* type);
-intern GUser* ai_user_clone(a_henv env, GUser* self);
-intern void ai_user_mark(Global* gbl, a_gptr self);
-intern void ai_user_close(Global* gbl, a_gptr self);
-intern void ai_user_drop(Global* gbl, a_gptr self);
+ALO_PRIVATE GUser* ai_user_new(a_henv env, GUType* type);
+ALO_PRIVATE GUser* ai_user_clone(a_henv env, GUser* self);
+ALO_PRIVATE void ai_user_mark(Global* gbl, a_gptr self);
+ALO_PRIVATE void ai_user_close(Global* gbl, a_gptr self);
+ALO_PRIVATE void ai_user_drop(Global* gbl, a_gptr self);
 
 struct GUser {
     Value slot[0];
@@ -21,30 +21,30 @@ struct GUser {
 
 #define g_is_user(o) g_is(o, ALO_TUSER)
 
-always_inline a_bool v_is_user(Value v) {
+ALO_INLINE a_bool v_is_user(Value v) {
     return v_is(v, T_USER);
 }
 
-always_inline GUser* v_as_user(Value v) {
+ALO_INLINE GUser* v_as_user(Value v) {
     assume(v_is_user(v), "not userdata.");
     return g_as(GUser, v_as_ref(v));
 }
 
-always_inline Value v_of_user(GUser* o) {
+ALO_INLINE Value v_of_user(GUser* o) {
     assume(g_is_user(o));
     return v_of_ref(o, T_USER);
 }
 
-always_inline void v_set_user(a_henv env, Value* d, GUser* o) {
+ALO_INLINE void v_set_user(a_henv env, Value* d, GUser* o) {
     Value v = v_of_user(o);
     v_set(env, d, v);
 }
 
-always_inline a_usize user_size(GUType* t) {
+ALO_INLINE a_usize user_size(GUType* t) {
     return sizeof(GUType) + t->block_size + sizeof(Value) * t->num_slot;
 }
 
-always_inline Value* user_slot(GUser* o, a_u32 i) {
+ALO_INLINE Value* user_slot(GUser* o, a_u32 i) {
     return o->slot - i;
 }
 

@@ -62,7 +62,7 @@ static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
 
 static a_msg lib_load(a_henv env, a_hlib lib, char const* sym, a_cfun* pproc) {
     void* addr = GetProcAddress(lib, sym);
-    if (addr == null) return lib_error(env);
+    if (addr == nullptr) return lib_error(env);
     a_cfun proc = cast(a_cfun, addr);
     *pproc = proc;
     return ALO_SOK;
@@ -79,12 +79,12 @@ static void setprogdir(a_henv env) {
     char const* path = alo_tostr(env, -1);
     char* ls;
 
-    DWORD n = GetModuleFileNameA(null, buff, sizeof(buff));
+    DWORD n = GetModuleFileNameA(nullptr, buff, sizeof(buff));
     if (n == 0 || n == sizeof(buff) / sizeof(char))
         goto bad_get;
 
     ls = strrchr(buff, '\\');
-    if (ls == null)
+    if (ls == nullptr)
         goto bad_get;
 
     *ls = '\0';
@@ -116,12 +116,12 @@ static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
     }
     a_hlib lib = dlopen(file, RTLD_NOW | RTLD_LOCAL);
     *plib = lib;
-    return lib != null ? ALO_SOK : lib_error(env);
+    return lib != nullptr ? ALO_SOK : lib_error(env);
 }
 
 static a_msg lib_load(a_henv env, a_hlib lib, char const* sym, a_cfun* pproc) {
     void* addr = dlsym(lib, sym);
-    if (addr == null) return lib_error(env);
+    if (addr == nullptr) return lib_error(env);
     a_cfun proc = cast(a_cfun, addr);
     *pproc = proc;
     return ALO_SOK;
@@ -186,10 +186,10 @@ static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
 
 static GLib* lib_cast(Value v) {
     if (!v_is_ref(v))
-        return null;
+        return nullptr;
     a_gptr obj = v_as_ref(v);
     if (!k_eq(g_klass(obj), &lib_klass))
-        return null;
+        return nullptr;
     return g_as(GLib, obj);
 }
 
@@ -219,7 +219,7 @@ static GType* check_self(a_henv env, a_ilen id) {
  * 'loadlib' function support
  *=========================================================*/
 
-static a_noret bad_state(a_henv env) {
+ALO_NORETURN static void bad_state(a_henv env) {
     aloL_raisef(env, "invalid module loader state.");
 }
 
@@ -248,7 +248,7 @@ static a_msg load_clib(a_henv env, GType* self, char const* file, GLib** plib) {
     }
     else {
         lib = lib_cast(*r);
-        if (lib == null) {
+        if (lib == nullptr) {
             alo_pushfstr(env, "library object expected for file '%s'", file);
             return ALO_EINVAL;
         }
@@ -298,7 +298,7 @@ static void resolve_clib_path(a_henv env, char const* base, char const* file, CL
 
     char const* p1 = strrchr(file, *ALO_DIR_SEP) ?: file;
     char const* p2 = strchr(p1, '-');
-    out->proc = p2 != null ?
+    out->proc = p2 != nullptr ?
                 alo_pushfstr(env, "%s%.*s", CLIB_OPEN_FUNC_PREFIX, p2 - p1, p1) :
                 alo_pushfstr(env, "%s%s", CLIB_OPEN_FUNC_PREFIX, p1);
 }
@@ -385,7 +385,7 @@ static GTable* check_cache(a_henv env, GType* self) {
     return cache;
 }
 
-static a_noret load_error(a_henv env, a_ilen id, char const* name) {
+ALO_NORETURN static void load_error(a_henv env, a_ilen id, char const* name) {
     char const* cause = alo_isstr(env, id) ? alo_tostr(env, id) : "unknown error";
     aloL_raisef(env, "error loading module '%s':\n\t%s", name, cause);
 }
@@ -471,11 +471,11 @@ static void push_paths(a_henv env, char const* paths, char const* dfl) {
     char const* p = paths;
     char const* q;
     a_bool has_dfl = false;
-    while ((q = strchr(p, *ALO_PATH_SEP)) != null) {
+    while ((q = strchr(p, *ALO_PATH_SEP)) != nullptr) {
         if (q[1] == *ALO_PATH_SEP) {
-            assume(dfl != null);
+            assume(dfl != nullptr);
             if (!has_dfl) {
-                push_paths(env, dfl, null);
+                push_paths(env, dfl, nullptr);
                 has_dfl = true;
             }
             p = q + 2;
@@ -515,12 +515,12 @@ void aloopen_load(a_henv env) {
     };
 
     static aloL_Entry const bindings[] = {
-        { "load", null },
-        { LOADED_FIELD_NAME, null },
-        { LOADER_FIEND_NAME, null },
-        { ALIB_PATH_FIELD_NAME, null },
-        { CLIB_PATH_FIEND_NAME, null },
-        { CLIB_CACHE_FIELD_NAME, null }
+        { "load", nullptr },
+        { LOADED_FIELD_NAME, nullptr },
+        { LOADER_FIEND_NAME, nullptr },
+        { ALIB_PATH_FIELD_NAME, nullptr },
+        { CLIB_PATH_FIEND_NAME, nullptr },
+        { CLIB_CACHE_FIELD_NAME, nullptr }
     };
 
     alo_NewType info = {

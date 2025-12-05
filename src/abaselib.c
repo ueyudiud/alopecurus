@@ -138,7 +138,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
 		}
         case T_TYPE: {
             GType* self = v_as_type(v);
-            if (self->name != null) {
+            if (self->name != nullptr) {
                 aloi_show("<type:%s>", self->name);
             }
             else {
@@ -164,7 +164,7 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
  */
 void aloB_show(a_henv env, a_ilen id) {
 	Value const* v = api_roslot(env, id);
-	api_check(v != null, "bad stack index.");
+	api_check(v != nullptr, "bad stack index.");
 	l_show_impl(env, *v, 0);
 }
 
@@ -210,7 +210,7 @@ void aloopen_base(a_henv env) {
         { "error", base_error },
 		{ "print", base_print },
 		{ "typeof", base_typeof },
-		{ "_VER", null }
+		{ "_VER", nullptr }
 	};
 
     alo_push(env, ALO_STACK_INDEX_GLOBAL);

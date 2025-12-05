@@ -48,7 +48,7 @@ static void route_new(GRoute* self, Global* gbl) {
         .global = gbl,
         .error = v_of_nil(),
         .frame = &self->base_frame,
-        .gc_stack = null,
+        .gc_stack = nullptr,
         .base_frame = { }
     };
 }
@@ -65,7 +65,7 @@ static void route_close(Global* gbl, GRoute* self) {
 	a_henv env = ai_env_mroute(gbl);
 	RcCap* caps = self->open_caps;
 	RcCap* cap;
-	while ((cap = caps) != null) {
+	while ((cap = caps) != nullptr) {
 		caps = cap->next;
 		ai_cap_close(env, cap);
 	}
@@ -89,7 +89,7 @@ static void route_mark_stack(Global* gbl, GRoute* self) {
         v_trace(gbl, *v);
 	}
 	if (gbl->gcstep == GCSTEP_TRACE_ATOMIC) {
-        for (a_gptr obj = self->gc_stack; obj != null; obj = obj->gnext) {
+        for (a_gptr obj = self->gc_stack; obj != nullptr; obj = obj->gnext) {
             (*g_fetch(obj, mark))(gbl, obj); /* Force mark immediately. */
         }
 		v_set_nil_ranged(stack->top, stack->limit); /* Clear no-marked stack slice. */
@@ -106,7 +106,7 @@ static void route_mark(Global* gbl, GRoute* self) {
 	ai_gc_trace_work(gbl, route_size());
 
 	route_mark_stack(gbl, self);
-	if (self->caller != null) {
+	if (self->caller != nullptr) {
 		g_trace(gbl, self->caller);
 	}
 
@@ -130,7 +130,7 @@ static KClose const route_klass = {
 };
 
 a_msg ai_env_resume(a_henv env, GRoute* self) {
-	assume(self->status == ALO_SYIELD && self->caller == null && route_is_active(env));
+	assume(self->status == ALO_SYIELD && self->caller == nullptr && route_is_active(env));
 	self->status = ALO_SOK;
 	self->caller = env;
 	return ai_ctx_jump(self, env, ALO_SOK);
@@ -140,7 +140,7 @@ void ai_env_yield(a_henv env) {
 	assume(!route_is_main(env) && env->status == ALO_SOK && route_is_active(env));
 	a_henv caller = env->caller;
 	env->status = ALO_SYIELD;
-	env->caller = null;
+	env->caller = nullptr;
 	ai_ctx_jump(caller, env, ALO_SOK);
 }
 
@@ -162,7 +162,7 @@ a_msg ai_env_catch_(a_henv env, a_pfun pfun, a_gptr ctx) {
     return msg;
 }
 
-a_noret ai_env_raise(a_henv env, a_msg msg) {
+ALO_NORETURN void ai_env_raise(a_henv env, a_msg msg) {
 	ai_ctx_raise(env, msg);
 }
 
@@ -197,7 +197,7 @@ static void global_init(a_henv env, void* ctx) {
     ai_str_boost2(env);
 
     /* Initialize global scope. */
-    v_set_type(env, &G(env)->global_value, ai_utype_new(env, null, 0, 0, 0));
+    v_set_type(env, &G(env)->global_value, ai_utype_new(env, nullptr, 0, 0, 0));
 
     /* Clear memory debt and start GC. */
     ai_gc_set_debt(&m->global, 0);
@@ -216,7 +216,7 @@ static a_usize mroute_size() {
 a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	a_usize size = mroute_size();
 	MRoute* mr = ai_mem_valloc(af, ac, size);
-	if (mr == null) return ALO_ENOMEM;
+	if (mr == nullptr) return ALO_ENOMEM;
 
 	Global* gbl = &mr->global;
 	GRoute* env = &mr->route;
@@ -242,7 +242,7 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	if (route_init(env, env)) return ALO_ENOMEM;
 
 	/* Initialize remaining components. */
-	catch (ai_env_protect(env, global_init, null, null), msg) {
+	catch (ai_env_protect(env, global_init, nullptr, nullptr), msg) {
         alo_destroy(env);
         return msg;
     }

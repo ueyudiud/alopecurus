@@ -46,7 +46,7 @@ typedef struct Value Value;
 
 struct Value { a_u64 _; };
 
-static_assert(sizeof(Value) == 8);
+ALO_STATIC_ASSERT(sizeof(Value) == 8);
 
 #define ALO_TBUF 14
 
@@ -83,9 +83,9 @@ enum {
 #define T_FLOAT T__MIN_FLT ... T__MAX_FLT
 
 /* Defined in aenv.h */
-always_inline a_bool v_is_alive(Global* gbl, Value v);
+ALO_INLINE a_bool v_is_alive(Global* gbl, Value v);
 
-always_inline void v_check_alive(a_henv env, Value v);
+ALO_INLINE void v_check_alive(a_henv env, Value v);
 
 #define V_TAG_SHIFT 47
 #define V_TAG_MASK (~u64c(0) << V_TAG_SHIFT)
@@ -97,27 +97,27 @@ always_inline void v_check_alive(a_henv env, Value v);
 #define V_GET_DATA(r) ((r) & V_DATA_MASK)
 #define V_IS(r,t) (((r) & V_TAG_MASK) == V_STENCIL(t))
 
-always_inline a_u64 v_stencil(a_enum tag) {
+ALO_INLINE a_u64 v_stencil(a_enum tag) {
     assume(tag <= T__MAX, "bad value tag.");
     return V_STENCIL(tag);
 }
 
-always_inline a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
+ALO_INLINE a_u64 v_box_nan_raw(a_enum tag, a_u64 payload) {
     assume((payload & ~V_DATA_MASK) == 0, "bad value payload.");
     return v_stencil(tag) | payload;
 }
 
-always_inline a_u64 v_box_nan_raw_min(a_enum tag) {
+ALO_INLINE a_u64 v_box_nan_raw_min(a_enum tag) {
     return v_stencil(tag);
 }
 
-always_inline a_u64 v_box_nan_raw_max(a_enum tag) {
+ALO_INLINE a_u64 v_box_nan_raw_max(a_enum tag) {
     return v_stencil(tag) | V_DATA_MASK;
 }
 
 #define v_new(v) ((Value) {v})
 
-always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
+ALO_INLINE Value v_box_nan(a_enum tag, a_u64 payload) {
     return v_new(v_box_nan_raw(tag, payload));
 }
 
@@ -133,48 +133,48 @@ always_inline Value v_box_nan(a_enum tag, a_u64 payload) {
  * Value to Value Operations
  *=========================================================*/
 
-always_inline void v_set_raw(Value* d, Value v) {
+ALO_INLINE void v_set_raw(Value* d, Value v) {
     *d = v;
 }
 
-always_inline void v_set(a_henv env, Value* d, Value v) {
+ALO_INLINE void v_set(a_henv env, Value* d, Value v) {
     v_set_raw(d, v);
     v_check_alive(env, v);
 }
 
-always_inline void v_cpy(a_henv env, Value* restrict d, Value const* restrict s) {
+ALO_INLINE void v_cpy(a_henv env, Value* restrict d, Value const* restrict s) {
     v_set(env, d, *s);
 }
 
-always_inline void v_cpy_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
+ALO_INLINE void v_cpy_all(a_henv env, Value* restrict d, Value const* restrict s, a_usize n) {
     assume(d + n < s || s + n < d, "copy regions overlapping.");
     for (a_usize i = 0; i < n; ++i) {
         v_cpy(env, &d[i], &s[i]);
     }
 }
 
-always_inline void v_mov_all_fwd(a_henv env, Value* d, Value const* s, a_usize n) {
+ALO_INLINE void v_mov_all_fwd(a_henv env, Value* d, Value const* s, a_usize n) {
     assume(d <= s, "move regions violate contract.");
     for (a_usize i = 0; i < n; ++i) {
         v_cpy(env, &d[i], &s[i]);
     }
 }
 
-always_inline void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n) {
+ALO_INLINE void v_mov_all_bwd(a_henv env, Value* d, Value const* s, a_usize n) {
     assume(d >= s, "move regions violate contract.");
     for (a_usize i = n - 1; i < n; --i) {
         v_cpy(env, &d[i], &s[i]);
     }
 }
 
-always_inline void v_swap(a_henv env, Value* v1, Value* v2) {
+ALO_INLINE void v_swap(a_henv env, Value* v1, Value* v2) {
     Value v;
     v_cpy(env, &v, v1);
     v_cpy(env, v1, v2);
     v_cpy(env, v2, &v);
 }
 
-always_inline void v_reverse(a_henv env, Value* vl, Value* vh) {
+ALO_INLINE void v_reverse(a_henv env, Value* vl, Value* vh) {
     vh -= 1;
     while (vl < vh) {
         v_swap(env, vl, vh);
@@ -190,8 +190,8 @@ always_inline void v_reverse(a_henv env, Value* vl, Value* vh) {
 #define V_STRICT_NIL (~-(u64c(0) + ALO_SOK))
 #define V_EMPTY      (~-(u64c(0) + ALO_EEMPTY))
 
-static_assert(V_IS(V_STRICT_NIL, T_NIL));
-static_assert(V_IS(V_EMPTY, T_NIL));
+ALO_STATIC_ASSERT(V_IS(V_STRICT_NIL, T_NIL));
+ALO_STATIC_ASSERT(V_IS(V_EMPTY, T_NIL));
 
 #define v_is_nil(v) v_is(v, T_NIL)
 
@@ -201,11 +201,11 @@ static_assert(V_IS(V_EMPTY, T_NIL));
 #define v_of_nil() v_new(V_STRICT_NIL)
 #define v_of_empty() v_new(V_EMPTY)
 
-always_inline void v_set_nil(Value* d) {
+ALO_INLINE void v_set_nil(Value* d) {
     v_set_raw(d, v_of_nil());
 }
 
-always_inline void v_set_nil_ranged(Value* l, Value* h) {
+ALO_INLINE void v_set_nil_ranged(Value* l, Value* h) {
     for (Value* p = l; p < h; ++p) {
         v_set_nil(p);
     }
@@ -219,10 +219,10 @@ always_inline void v_set_nil_ranged(Value* l, Value* h) {
 #define V_TRUE (V_STENCIL(T_TRUE) | V_DATA_MASK)
 #define V_FLOAT_MAX u64c(0xfff8000000000000)
 
-static_assert(V_IS(V_FALSE, T_FALSE));
-static_assert(V_IS(V_TRUE, T_TRUE));
-static_assert(V_TRUE + 1 == V_FALSE);
-static_assert(V_IS(V_FLOAT_MAX, T_NAN));
+ALO_STATIC_ASSERT(V_IS(V_FALSE, T_FALSE));
+ALO_STATIC_ASSERT(V_IS(V_TRUE, T_TRUE));
+ALO_STATIC_ASSERT(V_TRUE + 1 == V_FALSE);
+ALO_STATIC_ASSERT(V_IS(V_FLOAT_MAX, T_NAN));
 
 #define v_is_bool(v) v_in(v, T_FALSE, T_TRUE)
 
@@ -230,33 +230,33 @@ static_assert(V_IS(V_FLOAT_MAX, T_NAN));
 
 #define v_of_bool(v) v_new((v) ? V_TRUE : V_FALSE)
 
-always_inline void v_set_bool(Value* d, a_bool v) {
+ALO_INLINE void v_set_bool(Value* d, a_bool v) {
     v_set_raw(d, v_of_bool(v));
 }
 
 #define v_is_int(v) v_is(v, T_INT)
 
-always_inline a_int v_as_int(Value v) {
+ALO_INLINE a_int v_as_int(Value v) {
     assume(v_is_int(v), "not int value.");
     return cast(a_int, v._ & V_INT_MASK);
 }
 
 #define v_of_int(v) v_box_nan(T_INT, cast(a_uint, v))
 
-always_inline void v_set_int(Value* d, a_int v) {
+ALO_INLINE void v_set_int(Value* d, a_int v) {
     v_set_raw(d, v_of_int(v));
 }
 
 #define v_is_float(v) ((v)._ <= v_box_nan_raw_max(T_NAN))
 
-always_inline a_float v_as_float(Value v) {
+ALO_INLINE a_float v_as_float(Value v) {
     assume(v_is_float(v), "not float value.");
     return bit_cast(a_float, v._);
 }
 
 #define v_of_float(v) v_new(bit_cast(a_u64, v))
 
-always_inline void v_set_float(Value* d, a_float v) {
+ALO_INLINE void v_set_float(Value* d, a_float v) {
     v_set_raw(d, v_of_float(v));
 }
 
@@ -264,20 +264,20 @@ always_inline void v_set_float(Value* d, a_float v) {
 
 #define v_is_num(v) ((v)._ <= v_box_nan_raw_max(T_INT))
 
-always_inline a_float v_as_num(Value v) {
+ALO_INLINE a_float v_as_num(Value v) {
     return v_is_int(v) ? v_as_int(v) : v_as_float(v);
 }
 
 #define v_is_ptr(v) v_is(v, T_PTR)
 
-always_inline void* v_as_ptr(Value v) {
+ALO_INLINE void* v_as_ptr(Value v) {
     assume(v_is_ptr(v), "not pointer.");
     return int2ptr(void, v_get_data(v));
 }
 
 #define v_of_ptr(v) v_box_nan(T_PTR, ptr2int(v))
 
-always_inline void v_set_ptr(Value* d, void const* v) {
+ALO_INLINE void v_set_ptr(Value* d, void const* v) {
     v_set_raw(d, v_of_ptr(v));
 }
 
@@ -288,7 +288,7 @@ always_inline void v_set_ptr(Value* d, void const* v) {
 #define v_has_trivial_hash(v) (!v_in(v, T__MIN_NHH, T__MAX_NHH))
 
 /* Identity hashcode. */
-always_inline a_hash v_trivial_hash(Value v) {
+ALO_INLINE a_hash v_trivial_hash(Value v) {
     a_u32 h = v._ ^ (v._ >> 32);
     h *= u32c(0x1000193);
     h += h << 13;
@@ -299,13 +299,13 @@ always_inline a_hash v_trivial_hash(Value v) {
     return h;
 }
 
-always_inline a_hash v_float_hash(Value v) {
+ALO_INLINE a_hash v_float_hash(Value v) {
     a_float f = v_as_float(v);
     if (f == 0.0) return 0; /* Special case for 0.0 and -0.0 */
     return v_trivial_hash(v);
 }
 
-always_inline Value v_float_key(Value v) {
+ALO_INLINE Value v_float_key(Value v) {
     a_float f = v_as_float(v);
     if (f == 0.0) return v_of_float(0.0); /* Special case for 0.0 and -0.0 */
     return v;
@@ -446,8 +446,8 @@ struct KWeak {
 #define g_is(o,t) (g_tag(o) == (t))
 
 #define g_fetch(o,f) ({ \
-	auto _f2 = g_klass(o)->f; \
-	assume(_f2 != null, "method '"#f"' is null."); \
+    let(_f2, g_klass(o)->f); \
+	assume(_f2 != nullptr, "method '"#f"' is null."); \
 	_f2;                    \
 })
 
@@ -463,12 +463,12 @@ struct KWeak {
 
 #define v_is_ref(v) v_in(v, T__MIN_REF, T__MAX_REF)
 
-always_inline a_gptr v_as_ref(Value v) {
+ALO_INLINE a_gptr v_as_ref(Value v) {
     assume(v_is_ref(v), "not reference.");
     return int2ptr(GObj, v_get_data(v));
 }
 
-always_inline Value v_of_ref(a_gptr o, a_enum t) {
+ALO_INLINE Value v_of_ref(a_gptr o, a_enum t) {
     return v_new(V_STENCIL(t) | ptr2int(o));
 }
 
@@ -476,7 +476,7 @@ always_inline Value v_of_ref(a_gptr o, a_enum t) {
 
 #define v_of_other(o) v_of_ref(o, T_OTHER)
 
-always_inline void v_set_other(a_henv env, Value* d, a_gptr o) {
+ALO_INLINE void v_set_other(a_henv env, Value* d, a_gptr o) {
     v_set(env, d, v_of_other(o));
 }
 
