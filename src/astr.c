@@ -286,7 +286,7 @@ void ai_str_boost1(a_henv env, void* block) {
     run {
         /* Initialize builtin string first, but not put them into the cache. */
 
-        static a_u8 const l_str_len[STR__COUNT] = {
+        static a_u8 const intern_strlen[STR__COUNT] = {
 #define SYMDEF(n,r) sizeof(r)-1,
             SYM_ISTRS(SYMDEF, M_void, M_void)
 #undef SYMDEF
@@ -295,7 +295,7 @@ void ai_str_boost1(a_henv env, void* block) {
         char const* src = ai_str_interns;
 
         for (a_u32 i = 0; i < STR__COUNT; ++i) {
-            a_u32 len = l_str_len[i];
+            a_u32 len = intern_strlen[i];
 
             GStr* self = block;
             a_hash hash = ai_str_hashof(env, src, len);

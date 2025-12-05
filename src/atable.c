@@ -211,7 +211,8 @@ static a_usize table_capacity(GTable* self) {
 
 static a_bool table_grow_amortized(a_henv env, GTable* self, a_ulen add) {
     a_ulen need = try_add(self->len, add);
-    if (unlikely(need > TABLE_MAX_CAP)) return true;
+    if (unlikely(need > TABLE_MAX_CAP))
+        return true;
 
     a_usize old_cap = table_capacity(self);
     a_usize new_cap = ceil_power_of_two(need);
@@ -269,11 +270,13 @@ static a_bool table_erase(GTable* self, a_i32 index) {
 }
 
 static a_bool table_find_with_trivial_equality(GTable* self, Value vk, a_hash hash, a_i32* pindex) {
-    if (self->len == 0) return true;
+    if (self->len == 0)
+        return true;
 
     a_i32 index = table_hash_to_first_index(self, hash);
     TNode* node = table_node(self, index);
-    if (!table_is_head_of_hash_chain(self, index, node)) return true;
+    if (!table_is_head_of_hash_chain(self, index, node))
+        return true;
 
     loop {
         if (v_trivial_equals(vk, node->key)) {
@@ -289,11 +292,13 @@ static a_bool table_find_with_trivial_equality(GTable* self, Value vk, a_hash ha
 }
 
 static a_bool table_find_with_generic_equality(a_henv env, GTable* self, Value vk, a_hash hash, a_i32* pindex) {
-    if (self->len == 0) return true;
+    if (self->len == 0)
+        return true;
 
     a_i32 index = table_hash_to_first_index(self, hash);
     TNode* node = table_node(self, index);
-    if (!table_is_head_of_hash_chain(self, index, node)) return true;
+    if (!table_is_head_of_hash_chain(self, index, node))
+        return true;
 
     loop {
         if (ai_vm_equals(env, vk, node->key)) {
@@ -314,16 +319,14 @@ static a_bool table_find(a_henv env, GTable* self, Value vk, a_hash* phash, a_i3
         return table_find_with_trivial_equality(self, vk, *phash, pindex);
     }
     else if (likely(v_has_trivial_equals(vk))) {
-        if (v_is_nil(vk)) {
+        if (v_is_nil(vk))
             return true;
-        }
         *phash = v_trivial_hash(vk);
         return table_find_with_trivial_equality(self, vk, *phash, pindex);
     }
     else if (unlikely(v_is_float(vk))) {
-        if (unlikely(v_is_nan(vk))) {
+        if (unlikely(v_is_nan(vk)))
             return true;
-        }
         vk = v_float_key(vk);
         *phash = v_float_hash(vk);
         return table_find_with_trivial_equality(self, vk, *phash, pindex);
@@ -457,7 +460,8 @@ void ai_table_delr(a_henv env, GTable* self, Value* ref) {
 }
 
 a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex) {
-    if (self->len == 0) return ALO_EEMPTY;
+    if (self->len == 0)
+        return ALO_EEMPTY;
 
     assume(self->ptr != nullptr);
     TNode* n = &self->ptr[*pindex];

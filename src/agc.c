@@ -144,7 +144,8 @@ static a_bool sweep_till_alive(Global* gbl) {
 static a_bool propagate_work(Global* gbl, a_trmark* list) {
 	while (*list != trmark_nullptr) {
         trace_once(gbl, list);
-		if (gbl->mem_work < 0) return false;
+		if (gbl->mem_work < 0)
+			return false;
 	}
 	return true;
 }

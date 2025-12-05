@@ -89,7 +89,8 @@ ALO_INLINE a_bool ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize si
     assume(old_cap <= SIZE_MAX / size && new_cap <= SIZE_MAX / size, "invalid capacity.");
 
     void* ptr = ai_mem_nrealloc(env, buf->ptr, size * old_cap, size * new_cap);
-    if (unlikely(ptr == nullptr)) return true;
+    if (unlikely(ptr == nullptr))
+    	return true;
 
     buf->ptr = ptr;
 	buf->cap = new_cap;
@@ -102,9 +103,8 @@ ALO_INLINE a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usize 
 	a_usize expect = try_add(len, add);
 	a_usize new_cap;
 	if (unlikely(expect >= lim / 2)) {
-		if (expect > lim) {
+		if (expect > lim)
 			return true;
-		}
 		new_cap = lim;
 	}
 	else {
@@ -118,21 +118,18 @@ ALO_INLINE a_bool ai_buf_nhint(a_usize* pcap, a_usize len, a_usize add, a_usize 
 ALO_INLINE a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, a_usize lim) {
 	if (add > buf->cap - buf->len) {
 		a_usize cap = buf->cap;
-		if (ai_buf_nhint(&cap, buf->len, add, lim)) {
+		if (ai_buf_nhint(&cap, buf->len, add, lim))
             return ALO_EINVAL;
-        }
-		if (ai_buf_ngrow(env, buf, cap, size)) {
+		if (ai_buf_ngrow(env, buf, cap, size))
             return ALO_ENOMEM;
-        }
 	}
 	return ALO_SOK;
 }
 
 ALO_INLINE a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize len, a_usize size, a_usize lim) {
 	a_msg msg = ai_buf_ncheck(env, buf, len, size, lim);
-	if (unlikely(msg != ALO_SOK)) {
+	if (unlikely(msg != ALO_SOK))
 		return msg;
-	}
 	memcpy(buf->ptr + size * buf->len, src, len * size);
 	buf->len += len;
 	return ALO_SOK;

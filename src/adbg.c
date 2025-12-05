@@ -84,7 +84,8 @@ static Frame* l_load_frame(a_henv env, Frame** pframe, a_enum n) {
 
 a_bool alo_debug(a_henv env, alo_Debug* dbg, a_enum n, a_flags w) {
     Frame* frame = l_load_frame(env, cast(Frame**, &dbg->_frame), n);
-    if (frame == nullptr) return false;
+    if (frame == nullptr)
+        return false;
 
     GFun* p = ai_dbg_get_func(env, frame);
     if (w & ALO_DEBUG_FLAG_SOURCE) {

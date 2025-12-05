@@ -166,7 +166,8 @@ static RcCap* cap_nload_from_stack(a_henv env, Value* pv) {
 	if (cap == nullptr || cap->ptr < pv) {
 		RcCap* self = cap_nalloc(env);
 
-        if (self == nullptr) return nullptr;
+        if (self == nullptr)
+        	return nullptr;
 
         init(self) {
             .ptr = pv,
@@ -190,7 +191,8 @@ static RcCap* cap_load(a_henv env, CapSrc const* info, RcCap** up, Value* stack)
 	}
 	else {
 		RcCap* cap = cap_nload_from_stack(env, &stack[info->reg]);
-        if (unlikely(cap == nullptr)) ai_mem_nomem(env);
+        if (unlikely(cap == nullptr))
+        	ai_mem_nomem(env);
         return cap;
 	}
 }
@@ -203,7 +205,8 @@ static void v_close(a_henv env, Value v) {
 RcCap* ai_cap_new(a_henv env) {
     RcCap* self = cap_nalloc(env);
 
-    if (unlikely(self == nullptr)) ai_mem_nomem(env);
+    if (unlikely(self == nullptr))
+    	ai_mem_nomem(env);
 
     init(self) {
         .ptr = &self->slot,

@@ -618,7 +618,8 @@ static void scan_compare_expr(Parser* par, Expr* e) {
 
     scan_arith_expr(par, e);
     op1 = scan_compare_op(par);
-    if (op1 == 0) return;
+    if (op1 == 0)
+    	return;
 
     lex_skip(par);
     line1 = lex_line(par);

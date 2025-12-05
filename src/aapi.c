@@ -307,7 +307,8 @@ a_msg alo_pushvex(a_henv env, char const* sp, va_list varg) {
 		}
 		case 'i': { /* Index addressing. */
 			Value const* p = api_roslot(env, va_arg(varg, a_ilen));
-			if (p == nullptr) return ALO_EEMPTY;
+			if (p == nullptr)
+				return ALO_EEMPTY;
 			v_cpy(env, &v, p);
 			break;
 		}

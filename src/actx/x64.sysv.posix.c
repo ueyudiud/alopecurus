@@ -50,7 +50,8 @@ a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
     a_usize commit = align_to(stack_size, PAGE_SIZE);
 
     void* addr = mmap(nullptr, commit, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_STACK, -1, 0);
-    if (addr == MAP_FAILED) return ALO_ENOMEM;
+    if (addr == MAP_FAILED)
+        return ALO_ENOMEM;
 
 	a_usize stack_base = ptr2int(addr + commit);
 

@@ -86,7 +86,8 @@ a_msg ai_tuple_ugeti(a_henv env, GTuple* self, a_int k, Value* pv) {
 }
 
 a_msg ai_tuple_uget(a_henv env, GTuple* self, Value vk, Value* pv) {
-    if (!v_is_int(vk)) return ALO_EINVAL;
+    if (!v_is_int(vk))
+    	return ALO_EINVAL;
     return ai_tuple_ugeti(env, self, v_as_int(vk), pv);
 }
 

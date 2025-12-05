@@ -30,12 +30,14 @@ a_bool ai_stk_init(a_henv env, Stack* stack) {
 
 #if ALO_STACK_INNER
 	base = ai_mem_nalloc(env, alloc_size);
-	if (unlikely(base == nullptr)) return true;
+	if (unlikely(base == nullptr))
+		return true;
 #else
 	quiet(env);
 	a_usize limit_page_size = MAX_OVERFLOWED_STACK_SIZE;
 	base = ai_mem_nreserve(nullptr, limit_page_size);
-	if (unlikely(base == nullptr)) return true;
+	if (unlikely(base == nullptr))
+		return true;
 	a_bool result = ai_mem_ncommit(base, base, alloc_size, NCOMMIT_PROT_READWRITE);
 	if (unlikely(!result)) {
 		ai_mem_nrelease(base, limit_page_size);

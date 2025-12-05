@@ -2327,6 +2327,14 @@ static GProto* func_end(Parser* par, GStr* name, a_line line) {
 
     scope_pop(par, line, false);
 
+    a_flags flags = 0;
+    if (!(par->options & ALO_COMP_OPT_STRIP_DEBUG)) {
+        flags |= FUN_FLAG_DEBUG;
+    }
+    if (fscope->fupscope == nullptr) {
+        flags |= FUN_FLAG_UNIQUE;
+    }
+
     ProtoDesc desc = {
         .nconst = par->consts.len - fscope->const_off,
         .ninsn = par->head_label - fscope->begin_label,
@@ -2336,9 +2344,7 @@ static GProto* func_end(Parser* par, GStr* name, a_line line) {
         .nstack = fscope->max_reg,
         .nparam = fscope->nparam,
         .nline = par->lines.len - fscope->line_off,
-        .flags =
-        (!(par->options & ALO_COMP_OPT_STRIP_DEBUG) ? FUN_FLAG_DEBUG : 0) |
-        (fscope->fupscope == nullptr ? FUN_FLAG_UNIQUE : 0)
+        .flags = flags
     };
 
     GProto* proto = ai_proto_alloc(par->env, &desc);

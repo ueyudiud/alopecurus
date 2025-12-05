@@ -40,7 +40,8 @@ typedef HMODULE a_hlib;
 
 static a_msg lib_error(a_henv env) {
     DWORD error = GetLastError();
-    if (error == ERROR_MOD_NOT_FOUND) return ALO_EEMPTY;
+    if (error == ERROR_MOD_NOT_FOUND)
+        return ALO_EEMPTY;
 
     CHAR buf[128];
     if (FormatMessageA(FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
@@ -54,7 +55,8 @@ static a_msg lib_error(a_henv env) {
 
 static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
     a_hlib lib = LoadLibrary(file);
-    if (lib == NULL) return lib_error(env);
+    if (lib == NULL)
+        return lib_error(env);
 
     *plib = lib;
     return ALO_SOK;
@@ -62,7 +64,9 @@ static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
 
 static a_msg lib_load(a_henv env, a_hlib lib, char const* sym, a_cfun* pproc) {
     void* addr = GetProcAddress(lib, sym);
-    if (addr == nullptr) return lib_error(env);
+    if (addr == nullptr)
+        return lib_error(env);
+
     a_cfun proc = cast(a_cfun, addr);
     *pproc = proc;
     return ALO_SOK;
@@ -121,7 +125,8 @@ static a_msg lib_open(a_henv env, char const* file, a_hlib* plib) {
 
 static a_msg lib_load(a_henv env, a_hlib lib, char const* sym, a_cfun* pproc) {
     void* addr = dlsym(lib, sym);
-    if (addr == nullptr) return lib_error(env);
+    if (addr == nullptr)
+        return lib_error(env);
     a_cfun proc = cast(a_cfun, addr);
     *pproc = proc;
     return ALO_SOK;
@@ -327,7 +332,8 @@ static a_msg loader_clib(a_henv env) {
         resolve_clib_path(env, base, file, &path);
 
         a_msg msg = load_cfunc(env, self, path.file, path.proc);
-        if (msg != ALO_EEMPTY) return check_stat(env, msg);
+        if (msg != ALO_EEMPTY)
+            return check_stat(env, msg);
 
         alo_pushfstr(env, "\n\tno file '%s'", path.file);
         aloL_bufpush(env, buf);
@@ -353,7 +359,8 @@ static a_msg loader_alib(a_henv env) {
         char const* path = aloS_replace(env, base, PATH_PLACEHOLDER, file);
 
         a_msg msg = aloL_compilef(env, path, ALO_COMP_OPT_NOTHING);
-        if (msg != ALO_EEMPTY) return check_stat(env, msg);
+        if (msg != ALO_EEMPTY)
+            return check_stat(env, msg);
 
         alo_pushfstr(env, "\n\tno file '%s'", alo_tostr(env, -1));
         aloL_bufpush(env, buf);

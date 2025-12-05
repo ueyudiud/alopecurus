@@ -62,7 +62,9 @@ static a_ilen uid2sid(a_henv env, a_ulen id) {
 
 ALO_NORETURN void aloL_argerror(a_henv env, a_ulen id, char const* what) {
 	char const* name = ai_dbg_get_func_name(env, env->frame);
-	if (name == nullptr) aloL_raisef(env, "bad argument #%u, %s", id, what);
+	if (name == nullptr) {
+		aloL_raisef(env, "bad argument #%u, %s", id, what);
+	}
 	aloL_raisef(env, "bad argument #%u to '%s', %s", id, name, what);
 }
 
@@ -282,15 +284,17 @@ static a_i32 l_read_file(a_henv env, void* rctx, void const** pdst, size_t* plen
     FileReadCtx* ctx = rctx;
 	quiet(env);
     int count = read(ctx->file, ctx->buff, sizeof(ctx->buff));
-    if (count < 0) return count;
+    if (count < 0)
+    	return count;
     *pdst = ctx->buff;
     *plen = cast(a_usize, count);
     return 0;
 }
 
 a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
-    a_hfile file = fname != nullptr ? open(fname, O_RDONLY) : STDIN_FILENO;
-	if (file < 0) return ALO_EEMPTY;
+	a_hfile file = fname != nullptr ? open(fname, O_RDONLY) : STDIN_FILENO;
+	if (file < 0)
+		return ALO_EEMPTY;
 
 	FileReadCtx ctx;
 	ctx.file = file;
@@ -299,7 +303,8 @@ a_msg aloL_compilef(a_henv env, char const* fname, a_u32 options) {
 	a_msg msg = alo_compile(env, l_read_file, &ctx, ALO_STACK_INDEX_GLOBAL, ALO_STACK_INDEX_EMPTY, fname, options);
 	alo_pop(env, -2);
 
-    if (fname != nullptr) close(ctx.file);
+	if (fname != nullptr)
+		close(ctx.file);
 	return msg;
 }
 
@@ -356,7 +361,8 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
     Trace trace;
 	Value* err = api_wrslot(dst, id);
     Frame* frame = virtual_unwind(src, level);
-    if (frame == nullptr) return ALO_EINVAL;
+    if (frame == nullptr)
+    	return ALO_EINVAL;
 
     trace_fill(src, frame, &trace);
 

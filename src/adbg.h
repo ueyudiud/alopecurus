@@ -12,7 +12,9 @@ ALO_EXPORT a_u32 ai_dbg_get_line(GProto* proto, a_insn const* pc);
 
 ALO_INLINE char const* ai_dbg_get_func_name(a_henv env, Frame* frame) {
 	GFun* fun = ai_dbg_get_func(env, frame);
-	if (fun == nullptr) return nullptr;
+	if (fun == nullptr) {
+		return nullptr;
+	}
 	if (fun->flags & FUN_FLAG_NATIVE) {
 		//TODO get native function name.
 		return nullptr;

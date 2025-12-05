@@ -35,7 +35,9 @@ GList* ai_list_new(a_henv env) {
 
 static a_bool list_grow(a_henv env, GList* self, a_ulen add) {
     a_ulen need = try_add(self->len, add);
-    if (unlikely(need > LIST_MAX_CAP)) return true;
+    if (unlikely(need > LIST_MAX_CAP)) {
+        return true;
+    }
 
     assume(need >= self->cap, "not need to grow.");
 
@@ -119,7 +121,8 @@ a_msg ai_list_ugeti(a_henv env, GList* self, a_int k, Value* pv) {
 }
 
 a_msg ai_list_uget(a_henv env, GList* self, Value vk, Value* pv) {
-    if (!v_is_int(vk)) return ALO_EINVAL;
+    if (!v_is_int(vk))
+        return ALO_EINVAL;
     return ai_list_ugeti(env, self, v_as_int(vk), pv);
 }
 
@@ -133,7 +136,8 @@ a_msg ai_list_useti(a_henv env, GList* self, a_int k, Value v) {
 }
 
 a_msg ai_list_uset(a_henv env, GList* self, Value vk, Value v) {
-    if (!v_is_int(vk)) return ALO_EINVAL;
+    if (!v_is_int(vk))
+        return ALO_EINVAL;
     return ai_list_useti(env, self, v_as_int(vk), v);
 }
 

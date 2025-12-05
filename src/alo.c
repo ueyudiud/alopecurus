@@ -113,7 +113,8 @@ static a_msg l_open(void) {
 
 static a_msg l_read_frag(a_henv env, char const* prompt) {
 	InLine* frag = malloc(sizeof(InLine));
-	if (frag == nullptr) return ALO_ENOMEM;
+	if (frag == nullptr)
+		return ALO_ENOMEM;
 
 	a_msg msg = aloi_readline(env, frag->ptr, frag->len, prompt);
 
@@ -210,7 +211,8 @@ static void l_print_result(a_henv env, a_msg msg) {
 
 static a_msg l_try_comp_reps(a_henv env, char const* prompt, a_bool* peval) {
 	a_msg msg = l_read_line(env, prompt);
-	if (msg < 0) return msg;
+	if (msg < 0)
+		return msg;
 
 	InLine* ctx;
 

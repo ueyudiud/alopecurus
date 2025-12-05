@@ -301,13 +301,19 @@ ALO_INLINE a_hash v_trivial_hash(Value v) {
 
 ALO_INLINE a_hash v_float_hash(Value v) {
     a_float f = v_as_float(v);
-    if (f == 0.0) return 0; /* Special case for 0.0 and -0.0 */
+    if (f == 0.0) {
+        /* Special case for 0.0 and -0.0 */
+        return 0;
+    }
     return v_trivial_hash(v);
 }
 
 ALO_INLINE Value v_float_key(Value v) {
     a_float f = v_as_float(v);
-    if (f == 0.0) return v_of_float(0.0); /* Special case for 0.0 and -0.0 */
+    if (f == 0.0) {
+        /* Special case for 0.0 and -0.0 */
+        return v_of_float(0.0);
+    }
     return v;
 }
 

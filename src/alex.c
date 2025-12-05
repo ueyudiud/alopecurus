@@ -25,7 +25,7 @@ ALO_INLINE a_i32 l_poll_unchecked(Lexer* lex) {
 }
 
 static void l_back(Lexer* lex, a_i32 ch) {
-    assume(ch >= 0, "cannot unwind error.");
+    assume(ch >= 0, "cannot unwind character.");
     lex->in.ptr -= 1;
     lex->in.len += 1;
     lex->next = ch;

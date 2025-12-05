@@ -167,7 +167,8 @@ static MNode* type_reserve(GType* self, GStr* key) {
     a_u32 perturb = key->hash;
 
     MNode* node = &self->ptr[index];
-    if (node->key == nullptr) return node;
+    if (node->key == nullptr)
+        return node;
 
     loop {
         if (node->key <= dead_key) {

@@ -216,7 +216,8 @@ static a_usize mroute_size() {
 a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	a_usize size = mroute_size();
 	MRoute* mr = ai_mem_valloc(af, ac, size);
-	if (mr == nullptr) return ALO_ENOMEM;
+	if (mr == nullptr)
+		return ALO_ENOMEM;
 
 	Global* gbl = &mr->global;
 	GRoute* env = &mr->route;
@@ -239,7 +240,8 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 	route_new(env, gbl);
 
 	/* Initialize context and stack of route. */
-	if (route_init(env, env)) return ALO_ENOMEM;
+	if (route_init(env, env))
+		return ALO_ENOMEM;
 
 	/* Initialize remaining components. */
 	catch (ai_env_protect(env, global_init, nullptr, nullptr), msg) {

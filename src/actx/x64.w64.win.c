@@ -186,7 +186,8 @@ EXCEPTION_DISPOSITION alo_specific_handler(
 	}
 	else {
 		a_msg msg = code2msg(ExceptionRecord->ExceptionCode);
-		if (msg == ALO_SOK) return EXCEPTION_CONTINUE_SEARCH;
+		if (msg == ALO_SOK)
+			return EXCEPTION_CONTINUE_SEARCH;
 
 		ai_err_except(env, msg);
 
@@ -203,7 +204,8 @@ EXCEPTION_DISPOSITION alo_specific_handler(
 
 a_bool ai_ctx_open(a_henv env, a_usize stack_size) {
 	PIMAGE_NT_HEADERS header = RtlImageNtHeader(NtCurrentTeb()->ProcessEnvironmentBlock->ImageBaseAddress);
-	if (header == nullptr) return true;
+	if (header == nullptr)
+		return true;
 
 	a_usize commit = align_forward(stack_size, ALO_PAGE_SIZE);
 	a_usize reserve = header->OptionalHeader.SizeOfStackReserve;
@@ -217,12 +219,14 @@ a_bool ai_ctx_open(a_henv env, a_usize stack_size) {
 	};
 
 	NTSTATUS status = NtSetInformationProcess(NtCurrentProcess(), ProcessThreadStackAllocation, &alloc_info, sizeof(alloc_info));
-	if (status != 0) return true;
+	if (status != 0)
+		return true;
 
 	addr = alloc_info.StackBase;
 #else
 	addr = VirtualAlloc(NULL, reserve, MEM_RESERVE, PAGE_NOACCESS);
-    if (addr == nullptr) return ALO_EINVAL;
+    if (addr == nullptr)
+    	return ALO_EINVAL;
 #endif
 
 	if (VirtualAlloc(addr, ALO_PAGE_SIZE, MEM_COMMIT, PAGE_NOACCESS) == nullptr)
