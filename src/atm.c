@@ -31,7 +31,7 @@ static a_bool type_lookft(a_henv env, GType* type, a_enum tm, Value* pv) {
     assume(tm <= TM__FAST_MAX, "cannot fast lookup tagged method.");
     if (!mt_has_ftm(type, tm))
         return true;
-    catch (type_lookt(env, type, tm, pv)) {
+    if (type_lookt(env, type, tm, pv)) {
         type->ftmz |= FTM_BIT(tm);
         return true;
     }

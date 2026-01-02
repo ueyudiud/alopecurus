@@ -30,10 +30,7 @@ static a_msg in_fetch(ZIn* in) {
 
 a_i32 ai_io_igetc(ZIn* in) {
     if (unlikely(in->len == 0)) {
-        a_msg msg = in_fetch(in);
-        if (unlikely(msg != 0)) {
-            return msg;
-        }
+        try (in_fetch(in));
     }
     a_i32 ch = *in->ptr;
     in->ptr += 1;

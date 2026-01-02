@@ -177,7 +177,8 @@ static a_msg lib_new(a_henv env, char const* file, GLib** plib) {
     GLib* self = ai_mem_alloc(env, sizeof(GLib));
     self->klass = &lib_klass;
 
-    catch (lib_open(env, file, &self->lib), msg) {
+    a_msg msg = lib_open(env, file, &self->lib);
+    if (unlikely(msg != ALO_SOK)) {
         ai_mem_dealloc(G(env), self, sizeof(GLib));
         return msg;
     }
@@ -230,7 +231,7 @@ ALO_NORETURN static void bad_state(a_henv env) {
 
 static GTable* check_ccache(a_henv env, GType* self) {
     Value v;
-    catch (ai_type_getls(env, self, CLIB_CACHE_FIELD_NAME, strlen(CLIB_CACHE_FIELD_NAME), &v) || !v_as_table(v)) {
+    if (ai_type_getls(env, self, CLIB_CACHE_FIELD_NAME, strlen(CLIB_CACHE_FIELD_NAME), &v) || !v_as_table(v)) {
         bad_state(env);
     }
     return v_as_table(v);
@@ -242,7 +243,8 @@ static a_msg load_clib(a_henv env, GType* self, char const* file, GLib** plib) {
 
     Value* r = ai_table_refls(env, cache, file, strlen(file));
     if (v_is_nil(*r)) {
-        catch (lib_new(env, file, &lib), msg) {
+        a_msg msg = lib_new(env, file, &lib);
+        if (unlikely(msg != ALO_SOK)) {
             ai_table_delr(env, cache, r);
             return msg;
         }
@@ -280,7 +282,7 @@ static a_msg load_cfunc(a_henv env, GType* self, char const* file, char const* f
 
 static GList* check_list(a_henv env, GType* self, char const* str) {
     Value v;
-    catch (ai_type_getls(env, self, str, strlen(str), &v) || !v_is_list(v)) {
+    if (ai_type_getls(env, self, str, strlen(str), &v) || !v_is_list(v)) {
         bad_state(env);
     }
     return v_as_list(v);
@@ -309,7 +311,7 @@ static void resolve_clib_path(a_henv env, char const* base, char const* file, CL
 }
 
 static a_msg check_stat(a_henv env, a_msg msg) {
-    catch (msg) {
+    if (unlikely(msg != ALO_SOK)) {
         aloL_pushfail(env);
         alo_push(env, -2);
         return 2;
@@ -404,7 +406,7 @@ static void load_module(a_henv env, GType* self, GStr* name) {
     for (a_u32 i = 0; i < loaders->len; ++i) {
         vm_push_args(env, loaders->ptr[i], v_of_str(name));
 
-        catch (alo_pcall(env, 1, 2, ALO_STACK_INDEX_EMPTY)) {
+        if (alo_pcall(env, 1, 2, ALO_STACK_INDEX_EMPTY) != ALO_SOK) {
             load_error(env, -1, str2ntstr(name));
         }
 

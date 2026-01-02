@@ -224,7 +224,7 @@ static a_bool table_grow_amortized(a_henv env, GTable* self, a_ulen add) {
 }
 
 void ai_table_grow(a_henv env, GTable* self, a_ulen add) {
-    catch (table_grow_amortized(env, self, add)) {
+    if (table_grow_amortized(env, self, add)) {
         ai_err_raisef(env, ALO_EINVAL, "too many elements.");
     }
 }
@@ -423,7 +423,7 @@ Value* ai_table_refls(a_henv env, GTable* self, char const* kptr, a_usize klen) 
     union LstrFind out;
     a_hash hash = ai_str_hashof(env, kptr, klen);
 
-    catch (table_find_lstr(env, self, kptr, klen, hash, &out)) {
+    if (table_find_lstr(env, self, kptr, klen, hash, &out)) {
         ai_table_hint(env, self, 1);
 
         GStr* key = out.key ?: ai_str_new_with_hash(env, kptr, klen, hash);
@@ -432,8 +432,6 @@ Value* ai_table_refls(a_henv env, GTable* self, char const* kptr, a_usize klen) 
         self->len += 1;
 
         ai_gc_barrier_backward(env, self, key);
-
-        break;
     }
 
     TNode* node = table_node(self, out.index);
@@ -470,7 +468,7 @@ a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex) {
     /* Attempt to use cached index. */
     if (!v_trivial_equals(vk, n->key)) {
         /* Failed, try to locate index again. */
-        catch (table_find_with_trivial_equality(self, vk, ai_vm_hash(env, vk), pindex)) {
+        if (table_find_with_trivial_equality(self, vk, ai_vm_hash(env, vk), pindex)) {
             /* No key found, raise error here. */
             ai_err_raisef(env, ALO_EINVAL, "modified iterator.");
         }
@@ -488,7 +486,7 @@ a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
     a_i32 index;
     a_hash hash;
 
-    catch (table_find(env, self, vk, &hash, &index)) {
+    if (table_find(env, self, vk, &hash, &index)) {
         return ALO_EEMPTY;
     }
 

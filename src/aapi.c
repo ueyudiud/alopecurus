@@ -741,7 +741,8 @@ a_msg alo_pcall(a_henv env, a_ulen narg, a_ilen nres, a_ilen id_errf) {
     Frame* frame = env->frame;
     StkPtr p_bot = val2stk(env, env->stack.top - (narg + 1));
 
-    catch (ai_env_protect(env, do_pcall, do_ecall, &ctx), msg) {
+	a_msg msg = ai_env_protect(env, do_pcall, do_ecall, &ctx);
+    if (msg != ALO_SOK) {
         env->frame = frame; /* Recover frame. */
 
         Value* bot = stk2val(env, p_bot);

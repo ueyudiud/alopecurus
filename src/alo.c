@@ -102,10 +102,7 @@ static void l_close(void) {
 
 static a_msg l_open(void) {
 	l_init_lines();
-	a_msg msg = alo_init();
-	if (msg != ALO_SOK) {
-		return msg;
-	}
+	try (alo_init());
 
 	atexit(l_close); /* add exit handler. */
 	return ALO_SOK;
@@ -176,7 +173,7 @@ static a_bool l_test_eof(a_henv env) {
 }
 
 static a_msg l_print_error(a_henv env, a_msg msg) {
-    catch (msg) {
+    if (msg != ALO_SOK) {
         switch (alo_tagof(env, -1)) {
             case ALO_TINT: {
                 aloi_show("error code: %d\n", alo_toint(env, -1));
@@ -295,10 +292,11 @@ static a_msg l_pread_eval(a_henv env) {
 
 static a_msg l_run_file(a_henv env, char const* file) {
     char const* fname = file[0] != '-' ? file : nullptr;
-    catch (aloL_compilef(env, fname, ALO_COMP_OPT_NOTHING), msg) {
+	a_msg msg = aloL_compilef(env, fname, ALO_COMP_OPT_NOTHING);
+    if (msg != ALO_SOK) {
         return l_print_error(env, msg);
     }
-    a_msg msg = l_eval(env);
+    msg = l_eval(env);
     return l_print_error(env, msg);
 }
 
@@ -377,7 +375,7 @@ static a_msg l_main(a_henv env) {
     char const* const* argv = aloL_checkptr(env, 1);
     alo_settop(env, 0);
 
-    catch (l_scan_opts(env, argc, argv)) {
+    if (l_scan_opts(env, argc, argv) != ALO_SOK) {
         aloi_show(ALO_HELP);
         return 0;
     }
@@ -390,7 +388,7 @@ static a_msg l_main(a_henv env) {
     }
     aloL_openlibs(env);
     if (l_file != nullptr) {
-        catch (l_run_file(env, l_file)) {
+        if (l_run_file(env, l_file) != ALO_SOK) {
             return 0;
         }
     }
@@ -401,7 +399,7 @@ static a_msg l_main(a_henv env) {
 }
 
 int main(int argc, char const* const argv[]) {
-	catch (l_open()) {
+	if (l_open() != ALO_SOK) {
 		return EXIT_FAILURE; /* fatal error. */
 	}
 

@@ -77,11 +77,10 @@ ALO_INLINE void ai_buf_deinit_(Global* gbl, Buf* buf, a_usize size) {
 #define at_buf_deinit(gbl,b) ai_buf_deinit_(gbl, buf_cast(b), buf_elem_size(b))
 
 #define at_buf_for(b,v) for ( \
-	typeof((b)->ptr) v = (b)->ptr, \
-	_end_##v =                \
-        (b)->ptr + (b)->len;  \
-	v < _end_##v;             \
-	v += 1                    \
+	let(v, (b)->ptr);         \
+	let(_end_##v, (b)->ptr + (b)->len); \
+	(v) < _end_##v;           \
+	(v) += 1                  \
 )
 
 ALO_INLINE a_bool ai_buf_ngrow(a_henv env, Buf* buf, a_usize new_cap, a_usize size) {
@@ -127,9 +126,7 @@ ALO_INLINE a_msg ai_buf_ncheck(a_henv env, Buf* buf, a_usize add, a_usize size, 
 }
 
 ALO_INLINE a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize len, a_usize size, a_usize lim) {
-	a_msg msg = ai_buf_ncheck(env, buf, len, size, lim);
-	if (unlikely(msg != ALO_SOK))
-		return msg;
+	try (ai_buf_ncheck(env, buf, len, size, lim));
 	memcpy(buf->ptr + size * buf->len, src, len * size);
 	buf->len += len;
 	return ALO_SOK;
@@ -142,7 +139,8 @@ ALO_INLINE a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize l
 #define at_buf_push(env,b,v,w) ({ \
 	let(_b, b);                   \
     a_usize _bid = _b->len;       \
-	catch (at_buf_npush(env, _b, v)) { ai_buf_error(env, _e, w); } \
+    a_msg _e = at_buf_npush(env, _b, v); \
+	if (unlikely(_e != ALO_SOK)) { ai_buf_error(env, _e, w); } \
     _bid;                         \
 })
 
@@ -161,8 +159,16 @@ ALO_INLINE a_msg ai_buf_nappend(a_henv env, Buf* buf, void const* src, a_usize l
 #define ai_buf_nputfs(env,b,...) ai_buf_nputfs_(env, buf_cast(b), __VA_ARGS__)
 #define ai_buf_nputvfs(env,b,f,v) ai_buf_nputvfs_(env, buf_cast(b), f, v)
 
-#define at_buf_check(env,b,a) catch (at_buf_ncheck(env, b, a)) { ai_buf_error(env, _e, "byte"); }
-#define at_buf_putls(env,b,s,l) catch (ai_buf_nputls(env, b, s, l), _msg) { ai_buf_error(env, _msg, "byte"); }
+#define at_buf_check(env,b,a) \
+	do { \
+		a_msg _e = at_buf_ncheck(env, b, a); \
+		if (unlikely(_e != ALO_SOK)) { ai_buf_error(env, _e, "byte"); } \
+	} while (false)
+#define at_buf_putls(env,b,s,l) \
+	do { \
+		a_msg _e = ai_buf_nputls(env, b, s, l); \
+		if (unlikely(_e != ALO_SOK)) { ai_buf_error(env, _e, "byte"); } \
+	} while (false)
 #define at_buf_puts(env,b,s) at_buf_putls(env, b, s, strlen(s))
 #define at_buf_putc(env,b,c) at_buf_push(env, b, c, "char")
 

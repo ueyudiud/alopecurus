@@ -41,7 +41,7 @@ a_usize ai_fmt_int2str(char* p, a_int v) {
 void ai_fmt_puti(a_henv env, Buf* buf, a_int v) {
 	char cs[16];
 	a_usize len = ai_fmt_int2str(cs + 16, v);
-	catch (ai_buf_nputls(env, buf, cs + 16 - len, len)) {
+	if (ai_buf_nputls(env, buf, cs + 16 - len, len) != ALO_SOK) {
 		ai_mem_nomem(env);
 	}
 }
@@ -56,7 +56,7 @@ a_usize ai_fmt_float2str(char* p, a_float v) {
 void ai_fmt_putf(a_henv env, Buf* buf, a_float v) {
 	char cs[32];
 	a_usize len = ai_fmt_float2str(cs + 32, v);
-	catch (ai_buf_nputls(env, buf, cs + 32 - len, len)) {
+	if (ai_buf_nputls(env, buf, cs + 32 - len, len) != ALO_SOK) {
 		ai_mem_nomem(env);
 	}
 }

@@ -504,6 +504,7 @@ static void expr_drop(Parser* par, Expr* e) {
             tmps_free(par, e->udat1);
             break;
         }
+        default: break;
     }
 }
 
@@ -600,6 +601,7 @@ static void resolve_symbol(Parser* par, Expr* e, a_u32 id) {
                 e->line = sym->line;
                 return;
             }
+            default: break;
         }
     }
 

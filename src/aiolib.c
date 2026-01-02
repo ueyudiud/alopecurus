@@ -197,7 +197,8 @@ static a_msg file_read(a_henv env) {
         api_check(fp <= fs, "bad file position.");
         GStr* out;
 
-        catch (ai_str_load(env, file_read_full, fs - fp, self->handle, &out), msg) {
+        a_msg msg = ai_str_load(env, file_read_full, fs - fp, self->handle, &out);
+        if (unlikely(msg != ALO_SOK)) {
             if (msg == ALO_ENOMEM) {
                 ai_mem_nomem(env);
             }
@@ -290,7 +291,8 @@ static void check_file_type(a_henv env) {
 static a_msg io_open(a_henv env) {
     GFile* file;
     check_file_type(env);
-    catch (file_open0(env, &file), msg) {
+    a_msg msg = file_open0(env, &file);
+    if (msg != ALO_SOK) {
         return msg;
     }
     return 1;

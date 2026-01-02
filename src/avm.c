@@ -51,7 +51,7 @@ ALO_NORETURN static void l_div_0_err(a_henv env) {
 static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
     Value vr;
 
-    catch (ai_tm_unary(env, tm, v1, &vr)) {
+    if (ai_tm_unary(env, tm, v1, &vr)) {
         ai_err_bad_tm(env, tm);
     }
 
@@ -61,7 +61,7 @@ static Value vm_meta_unr(a_henv env, Value v1, a_enum tm) {
 static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
     Value vr;
 
-    catch (ai_tm_binary(env, tm, v1, v2, &vr)) {
+    if (ai_tm_binary(env, tm, v1, v2, &vr)) {
         ai_err_bad_tm(env, tm);
     }
 
@@ -71,7 +71,7 @@ static Value vm_meta_bin(a_henv env, Value v1, Value v2, a_enum tm) {
 static a_bool vm_meta_cmp(a_henv env, Value v1, Value v2, a_enum tm) {
     a_bool r;
 
-    catch (ai_tm_relation(env, tm, v1, v2, &r)) {
+    if (ai_tm_relation(env, tm, v1, v2, &r)) {
         ai_err_bad_tm(env, tm);
     }
 
@@ -226,7 +226,7 @@ static void vm_look(a_henv env, Value v, GStr* k, Value* pv) {
     Value vm;
 
     if (ai_tm_look(env, v, k, &vm)) {
-        catch (!v_is_type(v) || ai_type_gets(env, v_as_type(v), k, &vm)) {
+        if (!v_is_type(v) || ai_type_gets(env, v_as_type(v), k, &vm)) {
             ai_err_bad_look(env, v_name(env, v), k);
         }
 
@@ -279,14 +279,14 @@ Value ai_vm_get(a_henv env, Value v1, Value v2) {
         }
 		case T_TABLE: {
             Value v;
-            catch (ai_table_get(env, v_as_table(v1), v2, &v)) {
+            if (ai_table_get(env, v_as_table(v1), v2, &v)) {
                 return v_of_nil();
             }
             return v;
         }
         case T_TYPE: {
             Value v;
-            catch (ai_type_get(env, v_as_type(v1), v2, &v)) {
+            if (ai_type_get(env, v_as_type(v1), v2, &v)) {
                 return v_of_nil();
             }
             return v;
@@ -384,7 +384,7 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
             GTable* p = v_as_table(vc);
             a_i32 i = v_as_int(vb[1]);
             Value k = vb[2];
-            catch (ai_table_next(env, p, &k, &i)) {
+            if (ai_table_next(env, p, &k, &i)) {
                 return ALO_EEMPTY;
             }
 
@@ -455,7 +455,7 @@ static a_bool vm_append(a_henv env, Buf* buf, Value v) {
 void ai_vm_append(a_henv env, GBuf* buf, Value v) {
     if (vm_append(env, buf_cast(buf), v)) {
         GStr* str;
-        catch (ai_tm_str(env, v, &str)) {
+        if (ai_tm_str(env, v, &str)) {
             ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_name(env, v));
         }
         at_buf_putls(env, buf, str->ptr, str->len);
@@ -471,7 +471,7 @@ static GStr* vm_cat(a_henv env, Value* base, a_ulen n) {
         if (vm_append(env, buf_cast(buf), v)) {
             GStr* str;
             StkPtr bptr = val2stk(env, base);
-            catch (ai_tm_str(env, v, &str)) {
+            if (ai_tm_str(env, v, &str)) {
                 ai_err_raisef(env, ALO_EINVAL, "cannot convert %s to string.", v_name(env, v));
             }
             base = stk2val(env, bptr);
@@ -547,7 +547,7 @@ tail_call:
             vf = R[0];
         }
         while (unlikely(!v_is_func(vf))) {
-            catch (ai_tm_precall(env, vf, &vf)) {
+            if (ai_tm_precall(env, vf, &vf)) {
                 ai_err_bad_tm(env, TM___call__);
             }
 

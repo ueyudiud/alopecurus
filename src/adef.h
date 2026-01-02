@@ -174,17 +174,10 @@ ALO_INLINE a_usize ptr2int(void const* p) {
 
 /* Error handling functions. */
 
-#define catch_(e,n,...) for (let(n, e); unlikely(n); n = 0)
-
-/**
- ** Do the statement inside catch block if 'e' is not zero.
- ** The error is assumed happening rarely.
- */
-#define catch(...) catch_(__VA_ARGS__, _e)
 /**
  ** Leave current function and return 'e' if 'e' is not zero.
  */
-#define try(e) catch(e) { return _e; }
+#define try(e) do { let(_e, e); if (unlikely(_e != ALO_SOK)) return _e; } while (false)
 
 ALO_NORETURN ALO_PRIVATE void ai_dbg_panic(char const* fmt, ...);
 

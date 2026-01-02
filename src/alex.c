@@ -51,18 +51,14 @@ static a_i32 c_bdigit(a_i32 ch) {
 	if (ch >= '0' && ch <= '1') {
 		return ch - '0';
 	}
-	else {
-		return -1;
-	}
+	return -1;
 }
 
 static a_i32 c_ddigit(a_i32 ch) {
 	if (ch >= '0' && ch <= '9') {
 		return ch - '0';
 	}
-	else {
-		return -1;
-	}
+	return -1;
 }
 
 static a_i32 c_xdigit(a_i32 ch) {
@@ -383,7 +379,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 				l_skip(lex);
                 scan_digits(c_xdigit) {
 					a_u32 t;
-					catch (ckd_mul(&t, i, 16)) {
+					if (ckd_mul(&t, i, 16)) {
                         /* Overflow cases, the literal can only be float value. */
 						n = cast(a_u64, i) * 16 + j;
 						eb = 0;
@@ -407,7 +403,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
             float_hex_head: {
                 scan_digits(c_ddigit) {
 					n = n * 16 + j;
-					catch (n >= u64c(0x1000000000000)) {
+					if (unlikely(n >= u64c(0x1000000000000))) {
 						eb = 1;
 						goto float_hex_ignore_int;
 					}
@@ -423,7 +419,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 scan_digits(c_ddigit) {
 					n = n * 16 + j;
 					eb -= 1;
-					catch (n >= u64c(0x1000000000000)) {
+					if (unlikely(n >= u64c(0x1000000000000))) {
                         goto float_hex_ignore_frag;
                     }
 				}
@@ -443,7 +439,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
             
             float_hex_ignore_frag:
 				/* Ignore digits. */
-                scan_digits(c_xdigit);
+                scan_digits(c_xdigit) {}
 
             float_hex_exp:
                 check_end_sep();
@@ -453,7 +449,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 e = 0;
                 if (l_test_skip(lex, '-')) {
                     scan_digits(c_ddigit) {
-						catch (ckd_mul(&e, e, 10) || ckd_sub(&e, e, j)) {
+						if (ckd_mul(&e, e, 10) || ckd_sub(&e, e, j)) {
                             goto error_overflow;
                         }
 					}
@@ -461,12 +457,12 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 else {
                     l_test_skip(lex, '+');
                     scan_digits(c_ddigit) {
-						catch (ckd_mul(&e, e, 10) || ckd_add(&e, e, j)) {
+						if (ckd_mul(&e, e, 10) || ckd_add(&e, e, j)) {
                             goto error_overflow;
                         }
 					}
                 }
-                catch (ckd_add(&e, e, eb)) {
+                if (ckd_add(&e, e, eb)) {
                     goto error_overflow;
                 }
                 
@@ -479,7 +475,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
 				l_skip(lex);
                 scan_digits(c_bdigit) {
 					a_u32 t;
-					catch (ckd_mul(&t, i, 2)) {
+					if (ckd_mul(&t, i, 2)) {
                         goto error_overflow;
                     }
 					i = t + j;
@@ -501,7 +497,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 a_u32 i = c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_u32 t;
-                    catch (ckd_mul(&t, i, 10) || ckd_add(&t, t, j)) {
+                    if (ckd_mul(&t, i, 10) || ckd_add(&t, t, j)) {
 						n = cast(a_u64, i) * 10 + j;
 						sign = 1;
 						goto float_head;
@@ -526,7 +522,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 a_i32 i = c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_i32 t;
-					catch (ckd_mul(&t, i, 10) || ckd_add(&t, t, j)) {
+					if (ckd_mul(&t, i, 10) || ckd_add(&t, t, j)) {
 						n = cast(a_u64, cast(a_i64, i)) * 10 + j;
 						goto float_head;
 					}
@@ -550,7 +546,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 a_i32 i = -c_ddigit(ch);
                 scan_digits(c_ddigit) {
 					a_i32 t;
-					catch (ckd_mul(&t, i, 10) || ckd_sub(&t, t, j)) {
+					if (ckd_mul(&t, i, 10) || ckd_sub(&t, t, j)) {
 						n = cast(a_u64, -cast(a_i64, i)) * 10 + j;
 						goto float_head;
 					}
@@ -573,7 +569,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
             float_head: {
                 scan_digits(c_ddigit) {
 					n = n * 10 + j;
-					catch (n >= u64c(10000000000000000)) {
+					if (unlikely(n >= u64c(10000000000000000))) {
                         goto float_ignore_int;
                     }
 				}
@@ -594,7 +590,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                 scan_digits(c_ddigit) {
 					n = n * 10 + j;
 					eb -= 1;
-					catch (n >= u64c(10000000000000000)) {
+					if (unlikely(n >= u64c(10000000000000000))) {
                         goto float_ignore_frag;
                     }
 				}
@@ -623,7 +619,7 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     e = 0;
                     if (l_test_skip(lex, '-')) {
                         scan_digits(c_ddigit) {
-                            catch (ckd_mul(&e, e, 10) || ckd_sub(&e, e, j)) {
+                            if (ckd_mul(&e, e, 10) || ckd_sub(&e, e, j)) {
                                 goto error_overflow;
                             }
 						}
@@ -631,12 +627,12 @@ static a_i32 l_scan_number(Lexer* lex, Token* tk, a_i32 sign, a_i32 ch) {
                     else {
                         l_test_skip(lex, '+');
                         scan_digits(c_ddigit) {
-							catch (ckd_mul(&e, e, 10) || ckd_add(&e, e, j)) {
+							if (ckd_mul(&e, e, 10) || ckd_add(&e, e, j)) {
                                 goto error_overflow;
                             }
 						}
                     }
-                    catch (ckd_add(&e, e, eb)) {
+                    if (ckd_add(&e, e, eb)) {
                         goto error_overflow;
                     }
                 }

@@ -244,7 +244,8 @@ a_msg alo_create(alo_Alloc const* af, void* ac, a_henv* penv) {
 		return ALO_ENOMEM;
 
 	/* Initialize remaining components. */
-	catch (ai_env_protect(env, global_init, nullptr, nullptr), msg) {
+	a_msg msg = ai_env_protect(env, global_init, nullptr, nullptr);
+	if (unlikely(msg != ALO_SOK)) {
         alo_destroy(env);
         return msg;
     }

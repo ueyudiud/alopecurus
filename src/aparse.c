@@ -1532,7 +1532,7 @@ static void scan_chunk(a_henv env, void* ctx) {
 	Parser* par = ctx;
     ai_cg_chunk_start(par);
 
-	if (unlikely(par->options & ALO_COMP_OPT_EVAL)) {
+	if (par->options & ALO_COMP_OPT_EVAL) {
         scan_eval_expr(par);
 	}
 	else {
