@@ -20,6 +20,9 @@
 #define ALO_ENUM_CC_GCC 2
 #define ALO_ENUM_CC_CLANG 2
 
+#define ALO_ENUM_SIMD_NATIVE 0
+#define ALO_ENUM_SIMD_GCC 1
+
 #ifndef ALOI_ARCH
 # if defined(__i386) || defined(__i386__)
 #  define ALO_ARCH ALO_ENUM_ARCH_X86
@@ -121,5 +124,13 @@
 #define ALO_STACK_OUTER (ALO_STACK != ALO_ENUM_STACK_INNER)
 
 #define ALO_STACK_RELOC (ALO_STACK == ALO_STACK_INNER)
+
+#ifndef ALOI_SIMD
+# define ALO_SIMD ALOI_SIMD
+#else
+# define ALO_SIMD ALO_ENUM_SIMD_GCC
+#endif
+
+#define ALO_SIMD_GCC (ALO_SIMD == ALO_SIMD_GCC)
 
 #endif /* aarch_h_ */

@@ -18,31 +18,34 @@ ALO_PRIVATE a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv);
 ALO_PRIVATE Value* ai_table_refls(a_henv env, GTable* self, char const* kptr, a_usize klen);
 ALO_PRIVATE a_bool ai_table_del(a_henv env, GTable* self, Value vk);
 ALO_PRIVATE void ai_table_delr(a_henv env, GTable* self, Value* ref);
-ALO_PRIVATE a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex);
+ALO_PRIVATE a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex, Value* pv);
 ALO_PRIVATE a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv);
 
-typedef struct TNode TNode;
+typedef struct TLink TLink;
 
 /**
- ** Linked hash table.
+ ** SwissTable with an insertion-ordered linked list.
  */
 struct GTable {
     GOBJ_STRUCT_HEADER;
     a_ulen len;
     a_ulen hmask;
-    TNode* ptr;
-};
-
-/**
- ** Table node.
- */
-struct TNode {
-    a_hash hash;
-    a_i32 hnext;
-    a_i32 lprev;
-    a_i32 lnext;
-    Value key;
-    Value value;
+    /**
+     * Pointer to bucket.
+     *
+     * The bucket block of a table is laid out as:
+     *
+     *   [TNode cap-1] ... [TNode 0][TLink ctrl][TCtrl 0] ... [TCtrl cap-1]
+     *                     ^
+     *                    ptr
+     *
+     * 'hmask' is the mask of the capacity, which is a power of two and is
+     * aligned to TCTRL_GROUP_WIDTH, so that the control block can be probed
+     * group by group.
+     */
+    TLink* ptr;
+    /* Empty slots count. */
+    a_ulen nempty;
 };
 
 #define g_is_table(o) g_is(o, ALO_TTABLE)

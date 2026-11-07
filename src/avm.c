@@ -384,17 +384,16 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
             GTable* p = v_as_table(vc);
             a_i32 i = v_as_int(vb[1]);
             Value k = vb[2];
-            if (ai_table_next(env, p, &k, &i)) {
+            Value v;
+            if (ai_table_next(env, p, &k, &i, &v)) {
                 return ALO_EEMPTY;
             }
 
             v_set_int(&vb[1], i);
             v_set(env, &vb[2], k);
 
-            TNode* n = &p->ptr[i];
-
             env->stack.top = vs;
-            vm_push_args(env, n->key, n->value);
+            vm_push_args(env, k, v);
             return 2;
         }
         default: {

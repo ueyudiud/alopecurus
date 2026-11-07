@@ -110,22 +110,22 @@ static void l_show_impl(a_henv env, Value v, a_u32 depth) {
                     a_u32 n = MAX_SHOW_LEN;
                     aloi_show("{");
                     a_bool tail = false;
-                    TNode* node;
-                    for (a_i32 itr = val->ptr[-1].lnext; itr >= 0; itr = node->lnext) {
-                        node = &val->ptr[itr];
+                	Value vk, vv;
+                	a_i32 i = -1;
+                	while (!ai_table_next(env, val, &vk, &i, &vv)) {
+                        if (--n == 0) {
+                            aloi_show(", ...");
+                            break;
+                        }
                         if (tail) {
                             aloi_show(", ");
                         }
                         else {
                             tail = true;
                         }
-                        l_show_impl(env, node->key, depth + 1);
+                        l_show_impl(env, vk, depth + 1);
                         aloi_show(" -> ");
-                        l_show_impl(env, node->value, depth + 1);
-                        if (--n == 0) {
-                            aloi_show(", ...");
-                            break;
-                        }
+                        l_show_impl(env, vv, depth + 1);
                     }
                     aloi_show("}");
                 }

@@ -16,31 +16,190 @@
 
 static KWeak const table_klass[];
 
-#if ALO_M64
-# define TABLE_MAX_CAP (cast(a_usize, INT32_MAX) + 1)
-#elif ALO_M32
-# define TABLE_MAX_CAP ceil_power_of_two(INT32_MAX / sizeof(TNode))
-#endif
+/**
+ * Control Block
+ *
+ * A control block wraps a 7-bit hash tag and a 1-bit occupancy marker,
+ * and is probed in groups of TCTRL_GROUP_WIDTH blocks.
+ */
+typedef a_u8 TCtrl;
 
-enum {
-    CTRL_INDEX = i32c(-1)
+typedef struct TCtrlGroup TCtrlGroup;
+
+TCtrlGroup tctrl_load_group(TCtrl const* pctrl);
+
+/* Get the bitmap of blocks which equal to the given one. */
+a_u32 tctrl_match_group(TCtrlGroup group, TCtrl c);
+
+#if (ALO_ARCH_X86 || ALO_ARCH_X64) && defined(__SSE2__)
+
+# include <emmintrin.h>
+
+#define TCTRL_EMPTY   u8c(0x00)
+#define TCTRL_DEAD    u8c(0x01)
+#define TCTRL_H2_MASK u32c(0x7f)
+#define TCTRL_H2_MARK u32c(0x80)
+
+#define TCTRL_GROUP_WIDTH u32c(16)
+
+struct TCtrlGroup {
+    __m128i value;
 };
 
-static a_usize bucket_size(a_u32 cap) {
-    return sizeof(TNode) * (cap + 1);
+ALO_INLINE TCtrlGroup tctrl_load_group(TCtrl const* pctrl) {
+    assume((ptr2int(pctrl) & (alignof(TCtrlGroup) - 1)) == 0, "unaligned control array");
+    return (TCtrlGroup) { _mm_load_si128(cast(__m128i const*, pctrl)) };
 }
 
-#define bucket_offset() sizeof(TNode)
+ALO_INLINE a_u32 tctrl_match_group(TCtrlGroup group, TCtrl c) {
+    return cast(a_u32, _mm_movemask_epi8(_mm_cmpeq_epi8(group.value, _mm_set1_epi8(cast(char, c)))));
+}
 
-static TNode* bucket_alloc(a_henv env, a_u32 cap) {
+#elif ALO_SIMD_GCC
+
+#define TCTRL_EMPTY   u8c(0x00)
+#define TCTRL_DEAD    u8c(0x01)
+#define TCTRL_H2_MASK u32c(0x7f)
+#define TCTRL_H2_MARK u32c(0x80)
+
+#define TCTRL_GROUP_WIDTH 16
+
+struct TCtrlGroup {
+    TCtrl value __attribute__((vector_size(TCTRL_GROUP_WIDTH)));
+};
+
+static_assert(alignof(TCtrlGroup) <= TCTRL_GROUP_WIDTH);
+
+ALO_INLINE TCtrlGroup tctrl_load_group(TCtrl const* pctrl) {
+    assume((ptr2int(pctrl) & (alignof(TCtrlGroup) - 1)) == 0, "unaligned control array");
+    return (TCtrlGroup) { *cast(TCtrlGroup const*, pctrl) };
+}
+
+ALO_INLINE a_u32 tctrl_match_group(TCtrlGroup group, TCtrl c) {
+    a_u32 m = 0;
+    for (a_u32 i = 0; i < TCTRL_GROUP_WIDTH; ++i) {
+        if (group.value[i] == c) {
+            m |= 1 << i;
+        }
+    }
+    return m;
+}
+
+#else
+
+#define TCTRL_EMPTY   u8c(0x00)
+#define TCTRL_DEAD    u8c(0x01)
+#define TCTRL_H2_MASK u32c(0x7f)
+#define TCTRL_H2_MARK u32c(0x80)
+
+#define TCTRL_GROUP_WIDTH __SIZEOF_SIZE_T__
+
+struct TCtrlGroup {
+    alignas(alignof(a_usize)) TCtrl value[sizeof(a_usize) / sizeof(TCtrl)];
+};
+
+ALO_INLINE TCtrlGroup tctrl_load_group(TCtrl const* pctrl) {
+    return *cast(TCtrlGroup const*, pctrl);
+}
+
+/**
+ ** Get the bitmap of blocks which equal to the given one.
+ */
+ALO_INLINE a_u32 tctrl_match_group(TCtrlGroup group, TCtrl c) {
+    a_u32 m = 0;
+    for (a_u32 i = 0; i < TCTRL_GROUP_WIDTH; ++i) {
+        if (group.value[i] == c) {
+            m |= 1 << i;
+        }
+    }
+    return m;
+}
+
+#endif
+
+/**
+ ** Build a control block from the hash code, low 7 bits are the tag.
+ */
+ALO_INLINE TCtrl tctrl_make(a_hash hash) {
+    return cast(TCtrl, (hash & TCTRL_H2_MASK) | TCTRL_H2_MARK);
+}
+
+#define TLINK_HEADER \
+    alignas(alignof(TCtrlGroup)) a_byte align[0]; \
+    a_i32 lprev;     \
+    a_i32 lnext
+
+/**
+ * Table link.
+ */
+struct TLink {
+    TLINK_HEADER;
+};
+
+/**
+ ** Table node.
+ */
+typedef union {
+    TLink link;
+    struct {
+        TLINK_HEADER;
+        a_hash hash;
+        Value key;
+        Value value;
+    };
+} TNode;
+
+/*
+ * The load factor is limited to 7/8, so that every probe sequence can
+ * always meet an empty control block before it wraps around.
+ * The capacity is also limited so that node indices always fit in a_i32.
+ */
+#define TABLE_MAX_CAP (cast(a_ulen, INT32_MAX) / 8 * 7)
+
+#define TABLE_MIN_CAP cast(a_ulen, TCTRL_GROUP_WIDTH)
+
+#define CTRL_INDEX i32c(-1)
+
+static a_ulen table_nonempty_capacity(GTable* self) {
+    assume(self->hmask != 0, "table bucket is empty");
+    return self->hmask + 1;
+}
+
+static a_ulen table_capacity(GTable* self) {
+    return self->hmask != 0 ? table_nonempty_capacity(self) : 0;
+}
+
+static a_usize bucket_size(a_ulen cap) {
+    return sizeof(TNode) * cap + sizeof(TLink) + sizeof(TCtrl) * cap;
+}
+
+static void* bucket_alloc(a_henv env, a_ulen cap) {
+    a_usize node_size = sizeof(TNode) * cap + sizeof(TLink);
     a_usize size = bucket_size(cap);
-    void* bucket = ai_mem_alloc(env, size);
-    memset(bucket, -1, size);
-    return addr_add(TNode, bucket, bucket_offset());
+
+    void* block = ai_mem_alloc(env, size);
+
+    /* Fill nodes with -1 raw, which is the strict nil key for the iterator. */
+    memset(block, -1, node_size);
+    memclr(addr_add(TCtrl, block, node_size), sizeof(TCtrl) * cap);
+
+    return addr_add(void, block, sizeof(TNode) * (cap - 1));
 }
 
-static void bucket_dealloc(Global* gbl, TNode* bucket, a_u32 cap) {
-    ai_mem_dealloc(gbl, addr_sub(void, bucket, bucket_offset()), bucket_size(cap));
+static void bucket_dealloc(Global* gbl, void* bucket, a_ulen cap) {
+    ai_mem_dealloc(gbl, addr_sub(void, bucket, sizeof(TNode) * (cap - 1)), bucket_size(cap));
+}
+
+static TLink* bucket_link(TLink* ptr, a_ulen cap, a_i32 index) {
+    assume(index == CTRL_INDEX || (index >= 0 && cast(a_u32, index) < cap), "index out of bound.");
+    TNode* bucket = from_member(TNode, link, ptr);
+    return &(bucket - index)->link;
+}
+
+static TNode* bucket_node(TLink* ptr, a_ulen cap, a_i32 index) {
+    assume(index >= 0 && cast(a_u32, index) < cap, "index out of bound.");
+    TNode* bucket = from_member(TNode, link, ptr);
+    return bucket - index;
 }
 
 GTable* ai_table_new(a_henv env, a_enum kv) {
@@ -48,91 +207,46 @@ GTable* ai_table_new(a_henv env, a_enum kv) {
 
     GTable* self = ai_mem_alloc(env, table_size());
 
+    static struct {
+        TLink link;
+        TCtrl ctrl[TCTRL_GROUP_WIDTH];
+    } const g_empty = {};
+
 	self->klass = &table_klass[kv];
-    self->ptr = nullptr;
+    self->ptr = cast(TLink*, &g_empty);
     self->hmask = 0;
     self->len = 0;
+    self->nempty = 0;
 
 	ai_gc_register_normal(env, self);
     return self;
 }
 
-static TNode* table_node(GTable* self, a_i32 index) {
-    assume(index == CTRL_INDEX || (self->ptr != nullptr && index >= 0 && index <= cast(a_i32, self->hmask)), "index out of bound.");
-    return &self->ptr[index];
+static TNode* table_node(GTable* self, a_ilen index) {
+    return bucket_node(self->ptr, table_nonempty_capacity(self), index);
 }
 
-static TNode* table_ctrl_node(GTable* self) {
-    return table_node(self, CTRL_INDEX);
+static a_i32 table_node_index(GTable* self, TNode* node) {
+    assume(table_node(self, self->hmask) <= node && node <= table_node(self, 0), "node out of bound.");
+    return cast(a_i32, cast(TNode*, self->ptr) - node);
 }
 
-static a_i32 table_hash_to_first_index(GTable* self, a_hash hash) {
-    return cast(a_i32, hash & self->hmask);
-}
-
-static a_bool table_is_head_of_hash_chain(GTable* self, a_i32 index, TNode* node) {
-    return index == table_hash_to_first_index(self, node->hash);
-}
-
-static void table_move_node(GTable* self, a_i32 index_src, a_i32 index_dst) {
-    TNode* node_src = table_node(self, index_src);
-    TNode* node_dst = table_node(self, index_dst);
-
-    /* Copy key-value. */
-    v_set_raw(&node_dst->key, node_src->key);
-    v_set_raw(&node_dst->value, node_src->value);
-    node_dst->hash = node_src->hash;
-    node_dst->hnext = node_src->hnext;
-
-    /* Copy linked information. */
-    a_i32 index_prev = node_src->lprev;
-    a_i32 index_next = node_src->lnext;
-    TNode* node_prev = table_node(self, index_prev);
-    TNode* node_next = table_node(self, index_next);
-
-    node_dst->lprev = index_prev;
-    node_dst->lnext = index_next;
-    node_prev->lnext = index_dst;
-    node_next->lprev = index_dst;
-}
-
-static a_i32 table_reserve_free(GTable* self, a_hash hash) {
-    a_u32 hmask = self->hmask;
-    a_u32 probe = hash;
-
-    hash += 1;
-
-    loop {
-        a_i32 index_free = cast(a_i32, hash & hmask);
-        TNode* node_free = table_node(self, index_free);
-
-        if (v_is_nil(node_free->key))
-            return index_free;
-
-        probe >>= 5;
-        hash = hash * 5 + probe + 1;
-    }
-}
-
-static void table_redirect_from_hash_chain(GTable* self, a_i32 index_seek, a_hash hash, a_i32 index_new) {
-    a_i32 index = table_hash_to_first_index(self, hash);
-    assume(index != index_seek);
-
-    loop {
-        assume(index != CTRL_INDEX, "index is not in hash chain");
-        TNode* node = table_node(self, index);
-        if (node->hnext == index_seek) {
-            node->hnext = index_new;
-            break;
-        }
-        index = node->hnext;
-    }
+/**
+ ** Get the control block array, which begins at the end of the TNode array.
+ ** The control node is 'ptr[1]', so the control block array starts right
+ ** after it, which is also the end of the bucket block of nodes.
+ */
+static TCtrl* table_ctrls(GTable* self) {
+    assume(self->ptr != nullptr, "table is not allocated.");
+    return addr_add(TCtrl, self->ptr, sizeof(TNode) + sizeof(TLink));
 }
 
 static void table_join_before(GTable* self, a_i32 index_next, a_i32 index) {
-    TNode* node_next = table_node(self, index_next);
-    TNode* node_prev = table_node(self, node_next->lprev);
-    TNode* node = table_node(self, index);
+    void* ptr = self->ptr;
+    a_ulen cap = table_nonempty_capacity(self);
+    TLink* node_next = bucket_link(ptr, cap, index_next);
+    TLink* node_prev = bucket_link(ptr, cap, node_next->lprev);
+    TNode* node = bucket_node(ptr, cap, index);
 
     node->lnext = index_next;
     node->lprev = node_next->lprev;
@@ -140,64 +254,95 @@ static void table_join_before(GTable* self, a_i32 index_next, a_i32 index) {
     node_next->lprev = index;
 }
 
+/**
+ ** Get the first group of the probe sequence of the given hash.
+ ** The high bits select the group and the low 7 bits are the tag, so that
+ ** the probe sequence and the tag are independent of each other.
+ */
+static a_u32 table_probe_start(GTable* self, a_hash hash) {
+    return (hash >> 7) & self->hmask & ~(TCTRL_GROUP_WIDTH - 1);
+}
+
+/**
+ ** Reserve a vacant slot for the given hash.
+ ** The slot is either empty or the first deleted one in the probe sequence.
+ */
+static a_i32 table_reserve_slot(GTable* self, a_hash hash) {
+    a_u32 mask = self->hmask;
+    TCtrl* pctrl = table_ctrls(self);
+    a_u32 group_index = table_probe_start(self, hash);
+    a_i32 index_reuse = CTRL_INDEX;
+
+    loop {
+        TCtrlGroup group = tctrl_load_group(pctrl + group_index);
+
+        a_u32 match = tctrl_match_group(group, TCTRL_DEAD);
+        if (index_reuse == CTRL_INDEX && match != 0) {
+            index_reuse = cast(a_i32, group_index + count_trailing_zero(match));
+        }
+
+        match = tctrl_match_group(group, TCTRL_EMPTY);
+        if (match != 0) {
+            a_u32 index = group_index + count_trailing_zero(match);
+            return index_reuse != CTRL_INDEX ? index_reuse : cast(a_i32, index);
+        }
+
+        group_index = (group_index + TCTRL_GROUP_WIDTH) & mask;
+    }
+}
+
 static a_i32 table_emplace_backward(a_henv env, GTable* self, Value key, a_hash hash, Value value) {
-    a_i32 index;
-    TNode* node;
+    a_i32 index = table_reserve_slot(self, hash);
+    TNode* node = table_node(self, index);
+    TCtrl* pctrl = table_ctrls(self) + index;
 
-    a_i32 index_head = table_hash_to_first_index(self, hash);
-    TNode* node_head = &self->ptr[index_head];
+    assume(v_is_nil(node->key), "slot is occupied.");
 
-    if (v_is_nil(node_head->key)) {
-        index = index_head;
-        node = node_head;
-
-        node->hnext = CTRL_INDEX;
+    if (*pctrl == TCTRL_DEAD) {
+        /* Reuse a tombstone, the count of empty slots is untouched. */
     }
     else {
-        a_i32 index_free = table_reserve_free(self, index_head);
-        TNode* node_free = table_node(self, index_free);
-
-        if (table_is_head_of_hash_chain(self, index_head, node_head)) {
-            index = index_free;
-            node = node_free;
-
-            node->hnext = node_head->hnext;
-            node_head->hnext = index;
-        }
-        else {
-            table_redirect_from_hash_chain(self, index_head, node_head->hash, index_free);
-            table_move_node(self, index_head, index_free);
-
-            index = index_head;
-            node = node_head;
-
-            node_head->hnext = CTRL_INDEX;
-        }
+        assume(*pctrl == TCTRL_EMPTY, "slot is not vacant.");
+        self->nempty -= 1;
     }
+    *pctrl = tctrl_make(hash);
 
     v_set(env, &node->key, key);
     v_set(env, &node->value, value);
     node->hash = hash;
+
     table_join_before(self, CTRL_INDEX, index);
 
     return index;
 }
 
-static void table_resize(a_henv env, GTable* self, a_usize old_cap, a_usize new_cap) {
+/**
+ ** Get the capacity which is able to hold 'nuse' slots under the load factor.
+ */
+static a_ulen table_grown_capacity(a_ulen nuse) {
+    a_ulen cap = TABLE_MIN_CAP;
+    while (cap - cap / 8 < nuse)
+        cap += cap;
+    return cap;
+}
+
+static void table_resize(a_henv env, GTable* self, a_ulen old_cap, a_ulen new_cap) {
     assume(new_cap > 0, "resize nothing");
 
-    TNode* old_ptr = self->ptr;
-    TNode* new_ptr = bucket_alloc(env, new_cap);
+    void* old_ptr = self->ptr;
+    void* new_ptr = bucket_alloc(env, new_cap);
 
     self->hmask = new_cap - 1;
+    self->nempty = new_cap - new_cap / 8;
     self->ptr = new_ptr;
 
-    if (old_ptr != nullptr) {
+    if (old_cap != 0) {
         if (self->len > 0) {
-            TNode* node = &old_ptr[CTRL_INDEX];
-            for (a_i32 index = node->lnext; index >= 0; index = node->lnext) {
-                node = &old_ptr[index];
+            TLink* link = bucket_link(old_ptr, old_cap, CTRL_INDEX);
+            for (a_i32 index = link->lnext; index >= 0; index = link->lnext) {
+                TNode* node = bucket_node(old_ptr, old_cap, index);
                 table_emplace_backward(env, self, node->key, node->hash, node->value);
+                link = &node->link;
             }
         }
 
@@ -205,19 +350,14 @@ static void table_resize(a_henv env, GTable* self, a_usize old_cap, a_usize new_
     }
 }
 
-static a_usize table_capacity(GTable* self) {
-    return (self->hmask + usizec(1)) & ~usizec(1);
-}
-
 static a_bool table_grow_amortized(a_henv env, GTable* self, a_ulen add) {
     a_ulen need = try_add(self->len, add);
     if (unlikely(need > TABLE_MAX_CAP))
         return true;
 
-    a_usize old_cap = table_capacity(self);
-    a_usize new_cap = ceil_power_of_two(need);
-    new_cap = max(new_cap, 4);
-    assume(new_cap <= TABLE_MAX_CAP);
+    a_ulen old_cap = table_capacity(self);
+    a_ulen new_cap = table_grown_capacity(need);
+    new_cap = max(new_cap, old_cap);
 
     table_resize(env, self, old_cap, new_cap);
     return false;
@@ -230,14 +370,13 @@ void ai_table_grow(a_henv env, GTable* self, a_ulen add) {
 }
 
 void ai_table_hint(a_henv env, GTable* self, a_ulen add) {
-    if (unlikely(add > table_capacity(self) - self->len)) {
+    if (unlikely(add > self->nempty)) {
         ai_table_grow(env, self, add);
     }
 }
 
-static a_bool table_erase(GTable* self, a_i32 index) {
+static void table_erase(GTable* self, a_i32 index) {
     TNode* node = table_node(self, index);
-    TNode* node_ctrl = table_ctrl_node(self);
 
     a_i32 index_prev = node->lprev;
     a_i32 index_next = node->lnext;
@@ -246,94 +385,73 @@ static a_bool table_erase(GTable* self, a_i32 index) {
     TNode* node_next = table_node(self, index_next);
 
     v_set_nil(&node->key);
-
-    a_bool move_backward = false;
-    if (table_is_head_of_hash_chain(self, index, node)) {
-        if (index_next >= 0) {
-            table_move_node(self, index_next, index);
-            move_backward = index < index_next;
-        }
-    }
-    else {
-        table_redirect_from_hash_chain(self, index, node->hash, node->hnext);
-    }
-
-    node->hnext = node_ctrl->hnext;
-    node_ctrl->hnext = index;
+    v_set_nil(&node->value);
+    *(table_ctrls(self) + index) = TCTRL_DEAD;
 
     node_prev->lnext = index_next;
     node_next->lprev = index_prev;
 
     self->len -= 1;
-
-    return move_backward;
 }
 
-static a_bool table_find_with_trivial_equality(GTable* self, Value vk, a_hash hash, a_i32* pindex) {
+static a_bool table_find_in(a_henv env, GTable* self, Value vk, a_hash hash, a_bool trivial, a_i32* pindex) {
     if (self->len == 0)
         return true;
 
-    a_i32 index = table_hash_to_first_index(self, hash);
-    TNode* node = table_node(self, index);
-    if (!table_is_head_of_hash_chain(self, index, node))
-        return true;
+    void* bucket = self->ptr;
+    a_u32 mask = self->hmask;
+    TCtrl* pctrl = table_ctrls(self);
+    a_u32 group_index = table_probe_start(self, hash);
+    TCtrl ctrl = tctrl_make(hash);
 
     loop {
-        if (v_trivial_equals(vk, node->key)) {
-            *pindex = index;
-            return false;
+        TCtrlGroup group = tctrl_load_group(pctrl + group_index);
+        a_u32 match = tctrl_match_group(group, ctrl);
+
+        while (match != 0) {
+            a_u32 index = group_index + count_trailing_zero(match);
+            TNode* node = bucket_node(bucket, mask + 1, index);
+
+            a_bool equals = trivial
+                    ? v_trivial_equals(vk, node->key)
+                    : ai_vm_equals(env, vk, node->key);
+
+            if (equals) {
+                *pindex = cast(a_i32, index);
+                return false;
+            }
+
+            match &= match - 1;
         }
-        index = node->hnext;
-        if (index == CTRL_INDEX) {
+
+        if (tctrl_match_group(group, TCTRL_EMPTY) != 0)
             return true;
-        }
-        node = table_node(self, index);
-    }
-}
 
-static a_bool table_find_with_generic_equality(a_henv env, GTable* self, Value vk, a_hash hash, a_i32* pindex) {
-    if (self->len == 0)
-        return true;
-
-    a_i32 index = table_hash_to_first_index(self, hash);
-    TNode* node = table_node(self, index);
-    if (!table_is_head_of_hash_chain(self, index, node))
-        return true;
-
-    loop {
-        if (ai_vm_equals(env, vk, node->key)) {
-            *pindex = index;
-            return false;
-        }
-        index = node->hnext;
-        if (index == CTRL_INDEX) {
-            return true;
-        }
-        node = table_node(self, index);
+        group_index = (group_index + TCTRL_GROUP_WIDTH) & mask;
     }
 }
 
 static a_bool table_find(a_henv env, GTable* self, Value vk, a_hash* phash, a_i32* pindex) {
     if (likely(v_is_str(vk))) {
         *phash = v_as_str(vk)->hash;
-        return table_find_with_trivial_equality(self, vk, *phash, pindex);
+        return table_find_in(env, self, vk, *phash, true, pindex);
     }
     else if (likely(v_has_trivial_equals(vk))) {
         if (v_is_nil(vk))
             return true;
         *phash = v_trivial_hash(vk);
-        return table_find_with_trivial_equality(self, vk, *phash, pindex);
+        return table_find_in(env, self, vk, *phash, true, pindex);
     }
     else if (unlikely(v_is_float(vk))) {
         if (unlikely(v_is_nan(vk)))
             return true;
         vk = v_float_key(vk);
         *phash = v_float_hash(vk);
-        return table_find_with_trivial_equality(self, vk, *phash, pindex);
+        return table_find_in(env, self, vk, *phash, true, pindex);
     }
     else {
         *phash = ai_vm_hash(env, vk);
-        return table_find_with_generic_equality(env, self, vk, *phash, pindex);
+        return table_find_in(env, self, vk, *phash, false, pindex);
     }
 }
 
@@ -348,7 +466,7 @@ static a_bool table_find_lstr(a_henv env, GTable* self, char const* kptr, a_usiz
         out->key = nullptr;
         return true;
     }
-    if (table_find_with_trivial_equality(self, v_of_str(key), hash, &out->index)) {
+    if (table_find_in(env, self, v_of_str(key), hash, true, &out->index)) {
         out->key = key;
         return true;
     }
@@ -370,7 +488,7 @@ a_bool ai_table_geti(a_henv env, GTable* self, a_int k, Value* pv) {
     a_i32 index;
     Value vk = v_of_int(k);
 
-    try (table_find_with_trivial_equality(self, vk, v_trivial_hash(vk), &index));
+    try (table_find_in(env, self, vk, v_trivial_hash(vk), true, &index));
 
     TNode* node = table_node(self, index);
     v_cpy(env, pv, &node->value);
@@ -392,7 +510,7 @@ a_bool ai_table_gets(a_henv env, GTable* self, GStr* k, Value* pv) {
     a_i32 index;
     Value vk = v_of_str(k);
 
-    try (table_find_with_trivial_equality(self, vk, k->hash, &index));
+    try (table_find_in(env, self, vk, k->hash, true, &index));
 
     TNode* node = table_node(self, index);
     v_cpy(env, pv, &node->value);
@@ -404,7 +522,7 @@ a_bool ai_table_set(a_henv env, GTable* self, Value vk, Value vv) {
     a_hash hash;
 
     if (!table_find(env, self, vk, &hash, &index)) {
-        v_set(env, &self->ptr[index].value, vv);
+        v_set(env, &table_node(self, index)->value, vv);
         return true;
     }
     else {
@@ -451,34 +569,40 @@ a_bool ai_table_del(a_henv env, GTable* self, Value vk) {
 void ai_table_delr(a_henv env, GTable* self, Value* ref) {
     quiet(env);
     TNode* node = from_member(TNode, value, ref);
-    assume(table_node(self, 0) <= node && node <= table_node(self, self->hmask), "not table reference");
-
-    a_i32 index = cast(a_i32, node - self->ptr);
+    a_i32 index = table_node_index(self, node);
     table_erase(self, index);
 }
 
-a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex) {
-    if (self->len == 0)
-        return ALO_EEMPTY;
+a_bool ai_table_next(a_henv env, GTable* self, Value* rk, a_int* pindex, Value* pv) {
+    a_i32 index = *pindex;
+    a_ulen cap = table_capacity(self);
+    void* ptr = self->ptr;
 
-    assume(self->ptr != nullptr);
-    TNode* n = &self->ptr[*pindex];
-    Value vk = *rk;
+    TLink* l = bucket_link(ptr, cap, CTRL_INDEX);
+    if (index != CTRL_INDEX) {
+        /* Check index validity, since the table may changed during iteration. */
+        TNode* n = from_member(TNode, link, l);
 
-    /* Attempt to use cached index. */
-    if (!v_trivial_equals(vk, n->key)) {
-        /* Failed, try to locate index again. */
-        if (table_find_with_trivial_equality(self, vk, ai_vm_hash(env, vk), pindex)) {
-            /* No key found, raise error here. */
-            ai_err_raisef(env, ALO_EINVAL, "modified iterator.");
+        Value vk = *rk;
+        if (!v_trivial_equals(vk, n->key)) {
+            /* Failed, try to locate index again. */
+            if (table_find_in(env, self, vk, ai_vm_hash(env, vk), true, &index)) {
+                /* No key found, raise error here. */
+                ai_err_raisef(env, ALO_EINVAL, "modified iterator.");
+            }
+            l = bucket_link(ptr, cap, index);
         }
     }
 
-    if (n->lnext < 0)
+    index = l->lnext;
+    if (index < 0)
         return true;
+    *pindex = index;
 
-    *pindex = n->lnext;
-    v_cpy(env, rk, &self->ptr[*pindex].key);
+    TNode* n = table_node(self, index);
+    v_cpy(env, rk, &n->key);
+    v_cpy(env, pv, &n->value);
+
     return false;
 }
 
@@ -496,17 +620,18 @@ a_msg ai_table_uset(a_henv env, GTable* self, Value vk, Value vv) {
 }
 
 static void table_drop(Global* gbl, GTable* self) {
-    if (self->ptr != nullptr) {
-        bucket_dealloc(gbl, self->ptr, self->hmask + 1);
+    if (self->hmask != 0) {
+        bucket_dealloc(gbl, self->ptr, table_nonempty_capacity(self));
     }
     ai_mem_dealloc(gbl, self, table_size());
 }
 
 static void table_mark(Global* gbl, GTable* self) {
-	if (self->ptr != nullptr) {
-        a_u32 cap = self->hmask + 1;
+    if (self->len > 0) {
+        a_u32 cap = table_nonempty_capacity(self);
+        void* ptr = self->ptr;
 		for (a_u32 i = 0; i < cap; ++i) {
-			TNode* node = &self->ptr[i];
+            TNode* node = bucket_node(ptr, cap, i);
 			if (!v_is_nil(node->key)) {
                 v_trace(gbl, node->key);
                 v_trace(gbl, node->value);
@@ -518,11 +643,12 @@ static void table_mark(Global* gbl, GTable* self) {
 }
 
 static void wtable_mark(Global* gbl, GTable* self) {
-    if (self->ptr != nullptr) {
+    if (self->len > 0) {
         a_bool has_weak = false;
-        a_u32 cap = self->hmask + 1;
+        a_u32 cap = table_nonempty_capacity(self);
+        void* ptr = self->ptr;
         for (a_u32 i = 0; i < cap; ++i) {
-            TNode* node = &self->ptr[i];
+            TNode* node = bucket_node(ptr, cap, i);
             if (!v_is_nil(node->key)) {
                 if (v_is_alive(gbl, node->value)) {
                     v_trace(gbl, node->key);
@@ -546,12 +672,13 @@ static void wtable_mark(Global* gbl, GTable* self) {
 }
 
 static void wktable_mark(Global* gbl, GTable* self) {
-    if (self->ptr != nullptr) {
+    if (self->len > 0) {
         a_bool has_weak = false;
         a_bool has_blur = false;
-        a_u32 cap = self->hmask + 1;
+        a_u32 cap = table_nonempty_capacity(self);
+        void* ptr = self->ptr;
         for (a_u32 i = 0; i < cap; ++i) {
-            TNode* node = &self->ptr[i];
+            TNode* node = bucket_node(ptr, cap, i);
             if (!v_is_nil(node->key)) {
                 if (v_is_alive(gbl, node->key)) {
                     v_trace(gbl, node->value);
@@ -581,13 +708,14 @@ static void wktable_mark(Global* gbl, GTable* self) {
 }
 
 static void ptable_mark(Global* gbl, GTable* self) {
-    if (self->ptr != nullptr) {
+    if (self->len > 0) {
         a_bool has_weak_key = false;
         a_bool has_weak = false;
         a_bool has_blur = false;
-        a_u32 cap = self->hmask + 1;
+        a_ulen cap = table_nonempty_capacity(self);
+        void* ptr = self->ptr;
         for (a_u32 i = 0; i < cap; ++i) {
-            TNode* node = &self->ptr[i];
+            TNode* node = bucket_node(ptr, cap, i);
             if (!v_is_nil(node->key)) {
                 a_bool weak_key = !v_is_alive(gbl, node->key);
                 a_bool weak_value = !v_is_alive(gbl, node->value);
@@ -616,36 +744,32 @@ static void ptable_mark(Global* gbl, GTable* self) {
 }
 
 static void wtable_clear(Global* gbl, GTable* self) {
-    if (self->ptr != nullptr) {
-        a_u32 cap = self->hmask + 1;
+    if (self->len > 0) {
+        a_u32 cap = table_nonempty_capacity(self);
+        void* ptr = self->ptr;
         for (a_u32 i = 0; i < cap; ++i) {
-            TNode* node = &self->ptr[i];
-            if (!v_is_nil(node->key)) erase: {
-                a_bool dead_value = !v_is_alive(gbl, node->value);
-                if (dead_value) {
-                    if (table_erase(self, cast(a_i32, i))) {
-                        goto erase;
-                    }
-                }
+            TNode* node = bucket_node(ptr, cap, i);
+            if (!v_is_nil(node->key) && !v_is_alive(gbl, node->value)) {
+                table_erase(self, cast(a_i32, i));
             }
         }
     }
 }
 
 static void ptable_clear(Global* gbl, GTable* self) {
-    if (self->ptr != nullptr) {
-        a_u32 cap = self->hmask + 1;
+    if (self->len > 0) {
+        a_u32 cap = table_nonempty_capacity(self);
+        void* ptr = self->ptr;
         a_bool trace_weak = gbl->gcstep == GCSTEP_TRACE_WEAK;
         for (a_u32 i = 0; i < cap; ++i) {
-            TNode* node = &self->ptr[i];
-            if (!v_is_nil(node->key)) erase: {
-                a_bool dead_key = !v_is_alive(gbl, node->key);
-                a_bool dead_value = !v_is_alive(gbl, node->value);
-                if (trace_weak ? dead_key || dead_value : !dead_key && dead_value) {
-                    if (table_erase(self, cast(a_i32, i))) {
-                        goto erase;
-                    }
-                }
+            TNode* node = bucket_node(ptr, cap, i);
+            if (v_is_nil(node->key))
+                continue;
+
+            a_bool dead_key = !v_is_alive(gbl, node->key);
+            a_bool dead_value = !v_is_alive(gbl, node->value);
+            if (trace_weak ? dead_key || dead_value : !dead_key && dead_value) {
+                table_erase(self, cast(a_i32, i));
             }
         }
     }
