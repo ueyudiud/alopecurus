@@ -65,7 +65,6 @@ ALO_INLINE a_gptr strip_trace(a_trmark* list) {
 }
 
 ALO_PRIVATE void ai_gc_push_stack_(a_henv env, a_gptr obj);
-ALO_PRIVATE void ai_gc_pop_stack(a_henv env);
 ALO_PRIVATE void ai_gc_register_normal_(a_henv env, a_gptr obj);
 ALO_PRIVATE void ai_gc_register_normals(a_henv env, RefQueue* rq);
 ALO_PRIVATE void ai_gc_register_closable_(a_henv env, a_gptr obj);

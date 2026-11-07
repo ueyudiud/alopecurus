@@ -47,7 +47,7 @@ a_msg ai_ctx_catch(a_henv env, a_pfun pfun, void* pctx) {
 }
 
 a_msg ai_ctx_open(a_henv env, a_usize stack_size) {
-    a_usize commit = align_to(stack_size, PAGE_SIZE);
+    a_usize commit = align_to(stack_size, ALO_PAGE_SIZE);
 
     void* addr = mmap(nullptr, commit, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_STACK, -1, 0);
     if (addr == MAP_FAILED)

@@ -175,7 +175,7 @@ Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op) {
                 a_float val = ai_op_bin_float(v_as_num(v1), v_as_num(v2), op);
                 return v_of_float(val);
             }
-            return vm_meta_bin(env, v1, v1, ai_op_bin2tm(op));
+            return vm_meta_bin(env, v1, v2, ai_op_bin2tm(op));
         }
         case OP_SHL:
         case OP_SHR:
@@ -186,7 +186,7 @@ Value ai_vm_binary(a_henv env, Value v1, Value v2, a_enum op) {
                 a_int val = ai_op_bin_int(v_as_int(v1), v_as_int(v2), op);
                 return v_of_int(val);
             }
-            return vm_meta_bin(env, v1, v1, ai_op_bin2tm(op));
+            return vm_meta_bin(env, v1, v2, ai_op_bin2tm(op));
         }
         default: unreachable();
     }

@@ -348,22 +348,6 @@ struct GObj {
     a_u32 tag;             \
     a_u32 flags
 
-#define KOBJ_METHODS(_) \
-    _(drop, void(Global* gbl, a_gptr self))
-
-#define KHEAP_METHODS(_) \
-    _(drop, void(Global* gbl, a_gptr self))
-
-#define KSTACK_METHODS(_) \
-    _(close, void(a_henv env, a_gptr self)) \
-    _(close, void(a_henv env, a_gptr self)) \
-
-#define KANY_METHODS(_) \
-    _(drop, void(Global* gbl, a_gptr self)) \
-    _(mark, void(Global* gbl, a_gptr self)) \
-    _(close, void(a_henv env, a_gptr self)) \
-    _(drain, void(Global* gbl, a_gptr self))
-
 /**
  ** The virtual table for type, used for fast dispatch.
  ** Primitive types do not have virtual table.
@@ -388,36 +372,53 @@ struct Klass {
     };
 };
 
+#define KBASE_METHODS(_) \
+    _(mark, void(Global* gbl, a_gptr self))
+
+#define KSTACK_METHODS(_) \
+    KBASE_METHODS(_)      \
+    _(catch, void(a_henv env, a_gptr self))
+
+#define KHEAP_METHODS(_) \
+    KBASE_METHODS(_)     \
+    _(drop, void(Global* gbl, a_gptr self))
+
+#define KCLOSE_METHODS(_) \
+    KHEAP_METHODS(_)      \
+    _(close, void(a_henv env, a_gptr self))
+
+#define KWEAK_METHODS(_) \
+    KHEAP_METHODS(_)     \
+    _(clear, void(a_henv env, a_gptr self))
+
+#define DEFINE(f,t) void const* (f);
+
 struct KLocal {
     KOBJ_STRUCT_HEADER;
-    void const* mark;
+    KBASE_METHODS(DEFINE);
 };
 
 struct KStack {
     KOBJ_STRUCT_HEADER;
-    void const* mark;
-    void const* catch;
+    KSTACK_METHODS(DEFINE);
 };
 
 struct KHeap {
     KOBJ_STRUCT_HEADER;
-    void const* mark;
-    void const* drop;
+    KHEAP_METHODS(DEFINE);
 };
 
 struct KClose {
     KOBJ_STRUCT_HEADER;
-    void const* mark;
-    void const* drop;
-    void const* close;
+    KCLOSE_METHODS(DEFINE);
 };
 
 struct KWeak {
     KOBJ_STRUCT_HEADER;
-    void const* mark;
-    void const* drop;
-    void const* clear;
+    KWEAK_METHODS(DEFINE);
 };
+
+#undef DEFINE
 
 #define KLASS_FLAG_NONE    u8c(0x00)
 /**

@@ -107,9 +107,9 @@ ALO_ALWAYS_INLINE a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_
 	quiet(base);
 	int ret = mprotect(addr, size, prot);
 #if ALO_USE_VALGRIND
-	a_usize page_count = size / PAGE_SIZE;
+	a_usize page_count = size / ALO_PAGE_SIZE;
 	for (a_usize i = 0; i < page_count; ++i) {
-		VALGRIND_MEMPOOL_ALLOC(base, addr + PAGE_SIZE * i, PAGE_SIZE);
+		VALGRIND_MEMPOOL_ALLOC(base, addr + ALO_PAGE_SIZE * i, ALO_PAGE_SIZE);
 	}
 #endif
 	return ret == 0;
@@ -124,9 +124,9 @@ ALO_ALWAYS_INLINE a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) 
 	quiet(base);
 	int ret = mprotect(addr, size, PROT_NONE);
 #if ALO_USE_VALGRIND
-	a_usize page_count = size / PAGE_SIZE;
+	a_usize page_count = size / ALO_PAGE_SIZE;
 	for (a_usize i = 0; i < page_count; ++i) {
-		VALGRIND_MEMPOOL_FREE(base, addr + PAGE_SIZE * i);
+		VALGRIND_MEMPOOL_FREE(base, addr + ALO_PAGE_SIZE * i);
 	}
 #endif
 	return ret == 0;
@@ -145,23 +145,23 @@ ALO_ALWAYS_INLINE a_bool ai_mem_nrelease(void* base, a_usize size) {
 #define NCOMMIT_PROT_READWRITE 0
 #define NCOMMIT_PROT_READEXEC 0
 
-ALO_ALWAYS_INLINE void* ai_mem_nreserve(void* hint, a_usize size) {
+ALO_INLINE void* ai_mem_nreserve(void* hint, a_usize size) {
 	return malloc(size);
 }
 
-ALO_ALWAYS_INLINE a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_INLINE a_bool ai_mem_ncommit(void* base, void* addr, a_usize size, a_flags prot) {
 	return true;
 }
 
-ALO_ALWAYS_INLINE a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
+ALO_INLINE a_bool ai_mem_nprotect(void* base, void* addr, a_usize size, a_flags prot) {
 	return true;
 }
 
-ALO_ALWAYS_INLINE a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
+ALO_INLINE a_bool ai_mem_ndecommit(void* base, void* addr, a_usize size) {
 	return true;
 }
 
-ALO_ALWAYS_INLINE a_bool ai_mem_nrelease(void* base, a_usize size) {
+ALO_INLINE a_bool ai_mem_nrelease(void* base, a_usize size) {
 	free(base);
 	return true;
 }
