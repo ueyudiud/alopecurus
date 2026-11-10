@@ -21,7 +21,7 @@ ALO_PRIVATE a_msg ai_env_protect(a_henv env, a_pfun pfun, a_efun efun, void* ctx
 ALO_PRIVATE a_msg ai_env_catch_(a_henv env, a_pfun pfun, a_gptr ctx);
 ALO_NORETURN ALO_PRIVATE void ai_env_raise(a_henv env, a_msg msg);
 
-#define ai_env_catch(env,fun,ctx) ai_env_catch_(env, fun, g_as_ref(&(ctx)))
+#define ai_env_catch(env,fun,ctx) ai_env_catch_(env, fun, g_as_any(&(ctx)))
 
 #define FRAME_FLAG_NONE 0x00
 #define FRAME_FLAG_TRIM_RET 0x01
@@ -179,7 +179,7 @@ ALO_INLINE GType* g_type(Global* gbl, a_gptr o) {
     return g_as(GType, from_member(GUType, body, k));
 }
 
-#define g_type(env,p) g_type(G(env), g_as_ref(p))
+#define g_type(env,p) g_type(G(env), g_as_any(p))
 
 ALO_INLINE char const* g_name(a_henv env, a_gptr p) {
     quiet(env);
@@ -301,25 +301,25 @@ ALO_INLINE a_bool g_has_black_color(a_gptr o) {
     return (o->tnext & BLACK_COLOR) != 0;
 }
 
-#define g_has_black_color(o) g_has_black_color(g_as_ref(o))
+#define g_has_black_color(o) g_has_black_color(g_as_any(o))
 
 ALO_INLINE a_bool g_has_gray_color(a_gptr o) {
     return (o->tnext & (BLACK_COLOR | WHITE1_COLOR | WHITE2_COLOR)) == 0;
 }
 
-#define g_has_gray_color(o) g_has_gray_color(g_as_ref(o))
+#define g_has_gray_color(o) g_has_gray_color(g_as_any(o))
 
 ALO_INLINE a_bool g_has_white_color(Global* gbl, a_gptr o) {
     return (o->tnext & white_color(gbl)) != 0;
 }
 
-#define g_has_white_color(gbl,o) g_has_white_color(gbl, g_as_ref(o))
+#define g_has_white_color(gbl,o) g_has_white_color(gbl, g_as_any(o))
 
 ALO_INLINE a_bool g_has_other_color(Global* gbl, a_gptr o) {
     return (o->tnext & other_color(gbl)) != 0;
 }
 
-#define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_ref(v))
+#define g_has_other_color(gbl,v) g_has_other_color(gbl, g_as_any(v))
 
 ALO_INLINE a_bool g_has_valid_color(Global* gbl, a_gptr o) {
     return !g_has_other_color(gbl, o);

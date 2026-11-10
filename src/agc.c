@@ -29,7 +29,7 @@ ALO_INLINE void join_gc(a_gclist* list, a_gptr elem) {
 	*list = elem;
 }
 
-#define join_gc(list,elem) join_gc(list, g_as_ref(elem))
+#define join_gc(list,elem) join_gc(list, g_as_any(elem))
 
 ALO_INLINE a_gptr strip_gc(a_gclist* list) {
 	a_gptr elem = *list;

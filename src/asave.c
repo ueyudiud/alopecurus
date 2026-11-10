@@ -126,7 +126,7 @@ a_msg ai_fun_save(a_henv env, GFun* val, a_ofun fun, void* ctx, a_flags flags) {
         .klass = &save_klass,
         .flags = flags
     };
-    oc.gnext = g_as_ref(val->proto);
+    oc.gnext = g_as_any(val->proto);
     ai_io_oinit(env, fun, ctx, &oc.out);
 
     a_msg msg = ai_env_catch(env, save_chunk, oc);

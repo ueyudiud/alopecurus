@@ -25,7 +25,7 @@ ALO_INLINE void rq_push(RefQueue* rq, a_gptr p) {
 	rq->tail = &p->gnext;
 }
 
-#define rq_push(rq,o) rq_push(rq, g_as_ref(o))
+#define rq_push(rq,o) rq_push(rq, g_as_any(o))
 
 #define rq_for(v,rq) for ( \
 	a_gptr *_p_##v = &(rq)->head, v; \
@@ -37,26 +37,26 @@ ALO_INLINE void g_set_white(Global* gbl, a_gptr o) {
     o->tnext = white_color(gbl);
 }
 
-#define g_set_white(gbl,o) g_set_white(gbl, g_as_ref(o))
+#define g_set_white(gbl,o) g_set_white(gbl, g_as_any(o))
 
 ALO_INLINE void g_set_gray(a_gptr v) {
     v->tnext = GRAY_NULL;
 }
 
-#define g_set_gray(o) g_set_gray(g_as_ref(o))
+#define g_set_gray(o) g_set_gray(g_as_any(o))
 
 ALO_INLINE void g_set_black(a_gptr o) {
     o->tnext = BLACK_COLOR;
 }
 
-#define g_set_black(o) g_set_black(g_as_ref(o))
+#define g_set_black(o) g_set_black(g_as_any(o))
 
 ALO_INLINE void join_trace(a_trmark* list, a_gptr o) {
     o->tnext = *list;
 	*list = ptr2int(o);
 }
 
-#define join_trace(list,o) join_trace(list, g_as_ref(o))
+#define join_trace(list,o) join_trace(list, g_as_any(o))
 
 ALO_INLINE a_gptr strip_trace(a_trmark* list) {
     a_gptr o = int2ptr(GObj, *list);
@@ -74,10 +74,10 @@ ALO_PRIVATE void ai_gc_incr_gc(a_henv env);
 ALO_PRIVATE void ai_gc_full_gc(a_henv env, a_bool emergency);
 ALO_PRIVATE void ai_gc_clean(Global* gbl);
 
-#define ai_gc_push_stack(env,obj) ai_gc_push_stack_(env, g_as_ref(obj))
+#define ai_gc_push_stack(env,obj) ai_gc_push_stack_(env, g_as_any(obj))
 #define ai_gc_pop_stack(env,obj) quiet((env)->gc_stack = (obj)->gnext)
-#define ai_gc_register_normal(env,obj) ai_gc_register_normal_(env, g_as_ref(obj))
-#define ai_gc_register_closable(env,obj) ai_gc_register_closable_(env, g_as_ref(obj))
+#define ai_gc_register_normal(env,obj) ai_gc_register_normal_(env, g_as_any(obj))
+#define ai_gc_register_closable(env,obj) ai_gc_register_closable_(env, g_as_any(obj))
 
 ALO_INLINE a_bool g_trace(Global* gbl, a_gptr obj) {
 	if (g_has_white_color_within_assume_alive(gbl, obj)) {
@@ -87,7 +87,7 @@ ALO_INLINE a_bool g_trace(Global* gbl, a_gptr obj) {
     return false;
 }
 
-#define g_trace(gbl,obj) g_trace(gbl, g_as_ref(obj))
+#define g_trace(gbl,obj) g_trace(gbl, g_as_any(obj))
 
 ALO_INLINE a_bool v_trace(Global* gbl, Value v) {
 	return v_is_ref(v) && g_trace(gbl, v_as_ref(v));
@@ -128,7 +128,7 @@ ALO_INLINE void ai_gc_barrier_forward(a_henv env, a_gptr obj1, a_gptr obj2) {
 	}
 }
 
-#define ai_gc_barrier_forward(env,obj1,obj2) ai_gc_barrier_forward(env, g_as_ref(obj1), g_as_ref(obj2))
+#define ai_gc_barrier_forward(env,obj1,obj2) ai_gc_barrier_forward(env, g_as_any(obj1), g_as_any(obj2))
 
 ALO_INLINE void ai_gc_barrier_forward_val(a_henv env, a_gptr obj, Value val) {
 	if (v_is_ref(val)) {
@@ -136,7 +136,7 @@ ALO_INLINE void ai_gc_barrier_forward_val(a_henv env, a_gptr obj, Value val) {
 	}
 }
 
-#define ai_gc_barrier_forward_val(env,obj,val) ai_gc_barrier_forward_val(env, g_as_ref(obj), val)
+#define ai_gc_barrier_forward_val(env,obj,val) ai_gc_barrier_forward_val(env, g_as_any(obj), val)
 
 ALO_INLINE void ai_gc_barrier_backward(a_henv env, a_gptr obj1, a_gptr obj2) {
 	Global* gbl = G(env);
@@ -145,7 +145,7 @@ ALO_INLINE void ai_gc_barrier_backward(a_henv env, a_gptr obj1, a_gptr obj2) {
 	}
 }
 
-#define ai_gc_barrier_backward(env,obj1,obj2) ai_gc_barrier_backward(env, g_as_ref(obj1), g_as_ref(obj2))
+#define ai_gc_barrier_backward(env,obj1,obj2) ai_gc_barrier_backward(env, g_as_any(obj1), g_as_any(obj2))
 
 ALO_INLINE void ai_gc_barrier_backward_val(a_henv env, a_gptr obj, Value val) {
 	if (v_is_ref(val)) {
@@ -153,6 +153,6 @@ ALO_INLINE void ai_gc_barrier_backward_val(a_henv env, a_gptr obj, Value val) {
 	}
 }
 
-#define ai_gc_barrier_backward_val(env,obj,val) ai_gc_barrier_backward_val(env, g_as_ref(obj), val)
+#define ai_gc_barrier_backward_val(env,obj,val) ai_gc_barrier_backward_val(env, g_as_any(obj), val)
 
 #endif /* agc_h_ */

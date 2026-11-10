@@ -459,7 +459,8 @@ struct KWeak {
 })
 
 #define g_as(t,o) from_member(t, _obj_head, &(o)->_obj_head)
-#define g_as_ref(o) g_as(GObj, o)
+
+#define g_as_any(o) g_as(GObj, o)
 
 #define obj_idx(k,l,f) ({ \
     a_int _k = k; a_uint _l = l; \
@@ -479,7 +480,7 @@ ALO_INLINE Value v_of_ref(a_gptr o, a_enum t) {
     return v_new(V_STENCIL(t) | ptr2int(o));
 }
 
-#define v_of_ref(o,t) v_of_ref(g_as_ref(o), t)
+#define v_of_ref(o,t) v_of_ref(g_as_any(o), t)
 
 #define v_of_other(o) v_of_ref(o, T_OTHER)
 
@@ -487,6 +488,6 @@ ALO_INLINE void v_set_other(a_henv env, Value* d, a_gptr o) {
     v_set(env, d, v_of_other(o));
 }
 
-#define v_set_other(env,d,o) v_set_other(env, d, g_as_ref(o))
+#define v_set_other(env,d,o) v_set_other(env, d, g_as_any(o))
 
 #endif /* aobj_h_ */
