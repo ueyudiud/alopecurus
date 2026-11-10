@@ -241,7 +241,7 @@ ALO_INLINE a_int v_as_int(Value v) {
     return cast(a_int, v._ & V_INT_MASK);
 }
 
-ALO_INLINE a_int v_as_uint(Value v) {
+ALO_INLINE a_uint v_as_uint(Value v) {
     return cast(a_uint, v_as_int(v));
 }
 
