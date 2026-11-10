@@ -53,7 +53,7 @@ static a_msg table___new__(a_henv env) {
             break;
         }
         case T_INT: {
-            alo_newtablex(env, cast(a_uint, v_as_int(v)), mode);
+            alo_newtablex(env, v_as_uint(v), mode);
             break;
         }
         default: {

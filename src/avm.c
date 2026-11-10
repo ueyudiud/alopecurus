@@ -360,7 +360,7 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
     switch (v_get_tag(vc)) {
         case T_TUPLE: {
             GTuple* p = v_as_tuple(vc);
-            a_u32 i = cast(a_u32, v_as_int(vb[2]));
+            a_u32 i = v_as_uint(vb[2]);
             if (i >= p->len)
                 return ALO_EEMPTY;
             
@@ -371,7 +371,7 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
         }
         case T_LIST: {
             GList* p = v_as_list(vc);
-            a_u32 i = cast(a_u32, v_as_int(vb[2]));
+            a_u32 i = v_as_uint(vb[2]);
             if (i >= p->len)
                 return ALO_EEMPTY;
             

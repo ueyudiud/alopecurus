@@ -382,7 +382,7 @@ static a_msg trace_error(a_henv dst, a_henv src, a_ilen id, a_usize level, a_usi
             break;
         }
         case T_INT: {
-            a_u32 code = cast(a_u32, v_as_int(*err));
+            a_u32 code = v_as_uint(*err);
             try (ai_buf_nputfs(dst, buf, "error code: %08x", code));
             break;
         }

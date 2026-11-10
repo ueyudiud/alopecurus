@@ -31,7 +31,7 @@ static a_msg list___new__(a_henv env) { /* Should this function write in script?
             break;
         }
         case T_INT: {
-            alo_newlist(env, cast(a_uint, v_as_int(v)));
+            alo_newlist(env, v_as_uint(v));
             break;
         }
         case T_TUPLE: {

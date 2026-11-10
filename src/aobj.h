@@ -241,6 +241,10 @@ ALO_INLINE a_int v_as_int(Value v) {
     return cast(a_int, v._ & V_INT_MASK);
 }
 
+ALO_INLINE a_int v_as_uint(Value v) {
+    return cast(a_uint, v_as_int(v));
+}
+
 #define v_of_int(v) v_box_nan(T_INT, cast(a_uint, v))
 
 ALO_INLINE void v_set_int(Value* d, a_int v) {
