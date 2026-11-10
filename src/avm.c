@@ -355,11 +355,11 @@ void ai_vm_iter(a_henv env, Value* restrict vs, Value v) {
     }
 }
 
-static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
-    Value vc = vb[0];
-    switch (v_get_tag(vc)) {
+static a_msg vm_next(a_henv env, Value* vs, Value* vb) {
+    Value vb0 = vb[0];
+    switch (v_get_tag(vb0)) {
         case T_TUPLE: {
-            GTuple* p = v_as_tuple(vc);
+            GTuple* p = v_as_tuple(vb0);
             a_u32 i = v_as_uint(vb[2]);
             if (i >= p->len)
                 return ALO_EEMPTY;
@@ -370,7 +370,7 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
             return 1;
         }
         case T_LIST: {
-            GList* p = v_as_list(vc);
+            GList* p = v_as_list(vb0);
             a_u32 i = v_as_uint(vb[2]);
             if (i >= p->len)
                 return ALO_EEMPTY;
@@ -381,7 +381,7 @@ static a_msg vm_next(a_henv env, Value* restrict vs, Value* vb) {
             return 1;
         }
         case T_TABLE: {
-            GTable* p = v_as_table(vc);
+            GTable* p = v_as_table(vb0);
             a_i32 i = v_as_int(vb[1]);
             Value k = vb[2];
             Value v;
@@ -531,8 +531,6 @@ static a_msg vm_call(a_henv env, Value* dst, Value* bot, a_ulen num_ret, a_u32 f
     frame->num_ret = num_ret;
     frame->flags = flags;
 
-	env->frame = frame;
-
 tail_call:
 	R = frame->stack_bot;
 
@@ -574,6 +572,8 @@ tail_call:
             frame->stack_bot = frame->stack_dst;
         }
     }
+
+	env->frame = frame;
 
     assume(frame->stack_bot == frame->stack_dst, "unexpected stack pointer.");
 

@@ -45,7 +45,7 @@ ALO_PRIVATE void ai_cg_lookup(Parser* par, Expr* e, GStr* k, a_line line);
 ALO_PRIVATE void ai_cg_call(Parser* par, Expr* e, a_line line);
 ALO_PRIVATE void ai_cg_unbox(Parser* par, Expr* e, a_line line);
 ALO_PRIVATE void ai_cg_unpack(Parser* par, Expr* e, a_line line);
-ALO_PRIVATE void ai_cg_str_init(Parser* par, ConExpr* ce, Expr* e, a_line line);
+ALO_PRIVATE void ai_cg_str_init(Parser* par, ConExpr* ce);
 ALO_PRIVATE void ai_cg_str_cat(Parser* par, ConExpr* ce, Expr* e, a_line line);
 ALO_PRIVATE void ai_cg_str_build(Parser* par, ConExpr* ce, Expr* e, a_line line);
 ALO_PRIVATE void ai_cg_vec_init(Parser* par, Expr* es);
@@ -61,7 +61,7 @@ ALO_PRIVATE void ai_cg_check_not_nil(Parser* par, Expr* e, a_line line);
 ALO_PRIVATE void ai_cg_merge(Parser* par, Expr* e1, Expr* e2, a_u32 label, a_line line);
 ALO_PRIVATE void ai_cg_merge_nil(Parser* par, Expr* e, a_u32 label, a_line line);
 
-ALO_PRIVATE void ai_cg_wild(Parser* par, Expr* e);
+ALO_PRIVATE void ai_cg_discard(Parser* par, Expr* e);
 ALO_PRIVATE void ai_cg_assign(Parser* par, Expr* e1, Expr* e2, a_line line);
 ALO_PRIVATE void ai_cg_return(Parser* par, Expr* e, a_line line);
 ALO_PRIVATE void ai_cg_break(Parser* par, GStr* label, a_line line);
@@ -79,8 +79,8 @@ ALO_PRIVATE void ai_cg_block_end(Parser* par, a_line line);
 ALO_PRIVATE void ai_cg_block_end_with(Parser* par, a_line line, Expr* e);
 
 enum ETag {
-    EXPR_UNIT,
     /* Constants */
+    EXPR_NEVER,
     EXPR_NIL,
     EXPR_FALSE,
     EXPR_TRUE,
@@ -101,13 +101,14 @@ enum ETag {
     EXPR_VDYN,
     EXPR_CALL,
     EXPR_VCALL,
-
+    /* Shortcut control flow */
     EXPR_REG_OR_NIL,
     EXPR_DYN_OR_NIL,
 
     EXPR_FALSE_OR_TRUE,
     EXPR_TRUE_OR_FALSE,
-
+    /* Multiple value */
+    EXPR_UNIT,
     EXPR_NTMP,
     EXPR_VNTMP,
     EXPR_NTMPC,
@@ -120,10 +121,10 @@ enum ETag {
 
 enum PTag {
     /**
-     ** Wildcard pattern:
+     ** Drop pattern:
      ** The accepted value will be discarded.
      */
-    PAT_WILD,
+    PAT_DROP,
     /**
      ** Variable pattern:
      ** The accepted value will be bind to a new variable.
@@ -189,6 +190,7 @@ struct Expr {
                 };
                 ExprMod mod;
             };
+            /* a_u8 pad; */
             a_line line;
         };
         TConst tdat;
@@ -223,6 +225,10 @@ struct Sym {
     };
     GStr* name; /* The symbol name. */
 };
+
+static_assert(offsetof(Expr, udat1) == offsetof(Expr, idat));
+static_assert(offsetof(Expr, tag) == offsetof(TConst, tag));
+static_assert(offsetof(Expr, line) == offsetof(Sym, line));
 
 struct ConExpr {
     Expr expr[1];
@@ -275,33 +281,46 @@ ALO_INLINE void expr_copy(Expr* dst, Expr* src) {
 
 ALO_INLINE void expr_unit(Expr* e) {
     e->tag = EXPR_UNIT;
+    e->mod = (ExprMod) {};
+    e->line = 0;
+}
+
+ALO_INLINE void expr_never(Expr* e, a_line line) {
+    e->tag = EXPR_NEVER;
+    e->mod = (ExprMod) {};
+    e->line = line;
 }
 
 ALO_INLINE void expr_nil(Expr* e, a_line line) {
     e->tag = EXPR_NIL;
     e->line = line;
+    e->mod = (ExprMod) {};
 }
 
 ALO_INLINE void expr_bool(Expr* e, a_bool val, a_line line) {
     e->tag = val ? EXPR_TRUE : EXPR_FALSE;
     e->line = line;
+    e->mod = (ExprMod) {};
 }
 
 ALO_INLINE void expr_int(Expr* e, a_int val, a_line line) {
     e->tag = EXPR_INT;
     e->idat = val;
+    e->mod = (ExprMod) {};
     e->line = line;
 }
 
 ALO_INLINE void expr_float(Expr* e, a_float val, a_line line) {
     e->tag = EXPR_FLOAT;
     e->fdat = val;
+    e->mod = (ExprMod) {};
     e->line = line;
 }
 
 ALO_INLINE void expr_str(Expr* e, GStr* val, a_line line) {
     e->tag = EXPR_STR;
     e->sdat = val;
+    e->mod = (ExprMod) {};
     e->line = line;
 }
 

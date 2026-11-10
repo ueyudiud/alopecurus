@@ -31,6 +31,7 @@ static void expr_reg(Expr* e, a_reg reg, a_line line) {
     assume(reg != R_DMB, "invalid register.");
     e->tag = EXPR_REG;
     e->udat1 = reg;
+    e->mod = (ExprMod) {};
     e->line = line;
 }
 
@@ -38,6 +39,7 @@ static void expr_dyn(Expr* e, a_u32 label, a_line line) {
     assume(label != NO_LABEL);
     e->tag = EXPR_DYN;
     e->udat1 = label;
+    e->mod = (ExprMod) {};
     e->line = line;
 }
 
@@ -47,6 +49,7 @@ static void expr_refi(Expr* e, a_reg reg, a_int key, a_line line) {
     e->tag = EXPR_REFI;
     e->udat1 = reg;
     e->udat2 = cast(a_u32, key);
+    e->mod = (ExprMod) {};
     e->line = line;
 }
 
@@ -60,13 +63,12 @@ enum {
 /*=========================================================*/
 
 static a_bool expr_is_const(Expr* e) {
-    return expr_match(e, EXPR_UNIT, EXPR_NIL, EXPR_FALSE, EXPR_TRUE, EXPR_INT, EXPR_FLOAT, EXPR_STR);
+    return expr_match(e, EXPR_NEVER, EXPR_NIL, EXPR_FALSE, EXPR_TRUE, EXPR_INT, EXPR_FLOAT, EXPR_STR);
 }
 
 static a_bool expr_has_vararg_top(Expr* e) {
-    a_enum k = e->tag;
-    assume(k < EXPR__MAX, "invalid expression.");
-    return ((u64c(1) << k) & (u64c(1) << EXPR_VCALL | u64c(1) << EXPR_VDYN | u64c(1) << EXPR_VNTMP | u64c(1) << EXPR_VNTMPC)) != 0;
+    a_enum t = expr_tag(e);
+    return ((u64c(1) << t) & (u64c(1) << EXPR_VCALL | u64c(1) << EXPR_VDYN | u64c(1) << EXPR_VNTMP | u64c(1) << EXPR_VNTMPC)) != 0;
 }
 
 /**
@@ -374,16 +376,24 @@ static void merge_label(Parser* par, a_u32* plabel, a_u32 label2, a_u32 line) {
     }
 }
 
-static a_reg tmps_alloc(Parser* par, a_u32 num, a_u32 line) {
-    Scope* scope = par->scope;
-    a_u32 reg = scope->top_reg;
-    scope->top_reg += num;
-    if (scope->top_reg > par->fscope->max_reg) {
-        par->fscope->max_reg = scope->top_reg;
+static void tmps_check(Parser* par, a_reg reg, a_line line) {
+    if (reg > par->fscope->max_reg) {
+        par->fscope->max_reg = reg;
         if (reg > BC_MAX_A) {
             parse_error(par, "too many register used.", line);
         }
     }
+}
+
+static void tmp_check(Parser* par, a_reg reg, a_line line) {
+    tmps_check(par, reg + 1, line);
+}
+
+static a_reg tmps_alloc(Parser* par, a_u32 num, a_u32 line) {
+    Scope* scope = par->scope;
+    a_reg reg = scope->top_reg;
+    scope->top_reg += num;
+    tmps_check(par, scope->top_reg, line);
     return reg;
 }
 
@@ -486,7 +496,9 @@ static void reg2_free(Parser* par, a_reg reg1, a_reg reg2) {
 static void expr_drop(Parser* par, Expr* e) {
     switch (expr_tag(e)) {
         case EXPR_REG:
-        case EXPR_REG_OR_NIL: {
+        case EXPR_REG_OR_NIL:
+        case EXPR_REFI:
+        case EXPR_REFK: {
             reg_free(par, e->udat1);
             break;
         }
@@ -495,8 +507,6 @@ static void expr_drop(Parser* par, Expr* e) {
             reg_free(par, e->udat1);
             break;
         }
-        case EXPR_VCALL:
-        case EXPR_VDYN:
         case EXPR_NTMP:
         case EXPR_NTMPC:
         case EXPR_VNTMP:
@@ -504,7 +514,9 @@ static void expr_drop(Parser* par, Expr* e) {
             tmps_free(par, e->udat1);
             break;
         }
-        default: break;
+        default: {
+            break;
+        }
     }
 }
 
@@ -572,11 +584,11 @@ static a_u32 lookup_capture(Parser* par, Sym* sym) {
 
 static void expr_pub_to_index(Parser* par, Expr* e, a_line line) {
     a_u32 id = e->udat1;
-    assume(e->tag == EXPR_PUB, "not global variable.");
+    assume(expr_tag(e) == EXPR_PUB, "not global variable.");
     resolve_symbol(par, e, par->gvar_index);
-    assume(e->tag == EXPR_CAP, "global variable not captured.");
+    assume(expr_tag(e) == EXPR_CAP, "global variable not captured.");
     e->tag = EXPR_REFCK;
-    e->udat1 = par->gvar_index;
+    e->udat1 = lookup_capture(par, &par->syms.ptr[par->gvar_index]);
     e->udat2 = id;
     e->line = line;
 }
@@ -595,7 +607,7 @@ static void resolve_symbol(Parser* par, Expr* e, a_u32 id) {
             }
             case EXPR_PUB: {
                 e->tag = EXPR_REFCK;
-                e->udat1 = par->gvar_index;
+                e->udat1 = lookup_capture(par, &par->syms.ptr[par->gvar_index]);
                 e->udat2 = sym->udat1;
                 e->mod = sym->mod;
                 e->line = sym->line;
@@ -643,6 +655,9 @@ void ai_cg_symbol(Parser* par, Expr* e, GStr* name, a_line line) {
 }
 
 void ai_cg_index_int(Parser* par, Expr* e, a_int k, a_line line) {
+    if (expr_tag(e) == EXPR_NEVER) {
+        return;
+    }
     a_u32 reg = eval_to_reg(par, e);
     if (k >= 0 && k <= BC_MAX_C) {
         expr_refi(e, reg, k, line);
@@ -656,6 +671,9 @@ void ai_cg_index_int(Parser* par, Expr* e, a_int k, a_line line) {
 }
 
 void ai_cg_index_str(Parser* par, Expr* e, GStr* k, a_line line) {
+    if (expr_tag(e) == EXPR_NEVER) {
+        return;
+    }
     a_u32 index = const_index(par, v_of_str(k));
     if (expr_tag(e) == EXPR_CAP) {
         e->tag = EXPR_REFCK;
@@ -679,6 +697,7 @@ void ai_cg_lookup(Parser* par, Expr* e, GStr* k, a_line line) {
 
     e->tag = EXPR_NTMP;
     e->udat1 = reg2;
+    e->mod = (ExprMod) {};
     e->line = line;
 }
 
@@ -690,7 +709,10 @@ void ai_cg_lookup(Parser* par, Expr* e, GStr* k, a_line line) {
  *@param line the line of operation.
  */
 void ai_cg_index(Parser* par, Expr* ev, Expr* ek, a_line line) {
-    switch (ek->tag) {
+    switch (expr_tag(ek)) {
+        case EXPR_NEVER: {
+            break;
+        }
         case EXPR_INT: {
             ai_cg_index_int(par, ev, ek->idat, line);
             break;
@@ -741,7 +763,7 @@ static void branch_negate(Parser* par, a_u32* plabel, a_u32 label, a_line line) 
 }
 
 static void branch_instantiate(Parser* par, Expr* e, a_u32 reg) {
-    assume(e->tag == EXPR_TRUE_OR_FALSE || e->tag == EXPR_FALSE_OR_TRUE);
+    assume(expr_match(e, EXPR_TRUE_OR_FALSE, EXPR_FALSE_OR_TRUE));
     if (should_emit(par)) {
         assume(par->head_label == e->udat2 + 1);
         assume(insn_is_branch(code_at(par, e->udat2 - 1)));
@@ -752,12 +774,12 @@ static void branch_instantiate(Parser* par, Expr* e, a_u32 reg) {
         }
 
         /* Swap last instruction. */
-        bc_store(code_at(par, par->head_label - 1), bc_make_ia(e->tag == EXPR_TRUE_OR_FALSE ? BC_BKF : BC_BKT, reg));
-        emit_ia(par, e->tag == EXPR_TRUE_OR_FALSE ? BC_KT : BC_KF, reg, e->line);
+        bc_store(code_at(par, par->head_label - 1), bc_make_ia(expr_tag(e) == EXPR_TRUE_OR_FALSE ? BC_BKF : BC_BKT, reg));
+        emit_ia(par, expr_tag(e) == EXPR_TRUE_OR_FALSE ? BC_KT : BC_KF, reg, e->line);
     }
     else {
         ai_cg_mark_label(par, e->udat2, e->line);
-        emit_ia(par, e->tag == EXPR_TRUE_OR_FALSE ? BC_KF : BC_KT, reg, e->line);
+        emit_ia(par, expr_tag(e) == EXPR_TRUE_OR_FALSE ? BC_KF : BC_KT, reg, e->line);
     }
 }
 
@@ -766,8 +788,8 @@ void ai_cg_table_new(Parser* par, Expr* e, a_line line) {
 }
 
 void ai_cg_neg(Parser* par, Expr* e, a_line line) {
-    switch (e->tag) {
-        case EXPR_UNIT: {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER: {
             assume(!should_emit(par));
             break;
         }
@@ -790,8 +812,8 @@ void ai_cg_neg(Parser* par, Expr* e, a_line line) {
 }
 
 void ai_cg_bit_inv(Parser* par, Expr* e, a_line line) {
-    switch (e->tag) {
-        case EXPR_UNIT: {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER: {
             assume(!should_emit(par));
             break;
         }
@@ -803,15 +825,15 @@ void ai_cg_bit_inv(Parser* par, Expr* e, a_line line) {
         default: {
             a_u32 reg = eval_to_reg(par, e);
             reg_free(par, reg);
-            emit_idb(par, BC_NEG, e, reg, line);
+            emit_idb(par, BC_BNOT, e, reg, line);
             break;
         }
     }
 }
 
 void ai_cg_not(Parser* par, Expr* e, a_line line) {
-    switch (e->tag) {
-        case EXPR_UNIT: {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER: {
             assume(!should_emit(par));
             break;
         }
@@ -909,14 +931,14 @@ void ai_cg_binary_left(Parser* par, Expr* e, a_enum op, a_line line) {
         case OP_AND: {
             a_u32 label = NO_LABEL;
             test_true(par, e, &label, line);
-            ai_cg_wild(par, e);
+            ai_cg_discard(par, e);
             e->udat2 = label;
             break;
         }
         case OP_OR: {
             a_u32 label = NO_LABEL;
             test_false(par, e, &label, line);
-            ai_cg_wild(par, e);
+            ai_cg_discard(par, e);
             e->udat2 = label;
             break;
         }
@@ -1023,12 +1045,12 @@ static a_bool try_fold_float(Parser* par, TConst* d1, TConst* d2, a_u32 op, a_li
 }
 
 static a_bool try_compare_int(Parser* par, Expr* e1, Expr* e2, a_u32 bc1, a_u32 bc2, a_line line) {
-    if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SBX && e2->idat <= BC_MAX_SBX) {
+    if (expr_tag(e2) == EXPR_INT && e2->idat >= BC_MIN_SBX && e2->idat <= BC_MAX_SBX) {
         a_u32 reg1 = eval_to_reg_and_drop(par, e1);
         emit_iasbx(par, bc1, reg1, e2->idat, line);
         return false;
     }
-    else if (e1->tag == EXPR_INT && e1->idat >= BC_MIN_SBX && e1->idat <= BC_MAX_SBX) {
+    else if (expr_tag(e1) == EXPR_INT && e1->idat >= BC_MIN_SBX && e1->idat <= BC_MAX_SBX) {
         a_u32 reg2 = eval_to_reg_and_drop(par, e2);
         emit_iasbx(par, bc2, reg2, e1->idat, line);
         return false;
@@ -1069,7 +1091,7 @@ void ai_cg_binary_right(Parser* par, Expr* e1, Expr* e2, a_enum op, a_line line)
         case OP_MOD: {
             if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line) || try_fold_float(par, &e1->tdat, &e2->tdat, op, line))
                 return;
-            if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
+            if (expr_tag(e2) == EXPR_INT && e2->idat >= BC_MIN_SC && e2->idat <= BC_MAX_SC) {
                 a_u32 reg1 = eval_to_reg_and_drop(par, e1);
                 emit_idbsc(par, BC_ADDI + op - OP_ADD, e1, reg1, e2->idat, line);
             }
@@ -1085,7 +1107,7 @@ void ai_cg_binary_right(Parser* par, Expr* e1, Expr* e2, a_enum op, a_line line)
         case OP_BIT_XOR: {
             if (try_fold_int(par, &e1->tdat, &e2->tdat, op, line))
                 return;
-            if (e2->tag == EXPR_INT && e2->idat >= BC_MIN_SC && e2->tag <= BC_MAX_SC) {
+            if (expr_tag(e2) == EXPR_INT && e2->idat >= BC_MIN_SC && e2->idat <= BC_MAX_SC) {
                 a_u32 reg1 = eval_to_reg_and_drop(par, e1);
                 emit_idbsc(par, BC_SHLI + op - OP_SHL, e1, reg1, e2->idat, line);
             }
@@ -1154,7 +1176,7 @@ void ai_cg_binary_right(Parser* par, Expr* e1, Expr* e2, a_enum op, a_line line)
         }
         case OP_AND: {
             test_true(par, e2, &e1->udat2, line);
-            ai_cg_wild(par, e2);
+            ai_cg_discard(par, e2);
             if (e1->udat2 == NO_LABEL) {
                 e1->tag = EXPR_TRUE;
             }
@@ -1165,7 +1187,7 @@ void ai_cg_binary_right(Parser* par, Expr* e1, Expr* e2, a_enum op, a_line line)
         }
         case OP_OR: {
             test_false(par, e2, &e1->udat2, line);
-            ai_cg_wild(par, e2);
+            ai_cg_discard(par, e2);
             if (e1->udat2 == NO_LABEL) {
                 e1->tag = EXPR_FALSE;
             }
@@ -1187,7 +1209,7 @@ static void merge_opt_reg(Parser* par, a_u32 label, a_u32 reg, a_line line) {
 
 void ai_cg_merge(Parser* par, Expr* e1, Expr* e2, a_u32 label, a_line line) {
     switch (expr_tag(e1)) {
-        case EXPR_UNIT: {
+        case EXPR_NEVER: {
             assume(label == NO_LABEL);
             expr_copy(e1, e2);
             break;
@@ -1242,7 +1264,7 @@ void ai_cg_merge(Parser* par, Expr* e1, Expr* e2, a_u32 label, a_line line) {
 void ai_cg_break_and_case(Parser* par, Expr* e, a_u32* plabel, a_line line) {
     a_u32 label = *plabel;
     switch (expr_tag(e)) {
-        case EXPR_UNIT: {
+        case EXPR_NEVER: {
             assume(!should_emit(par));
             break;
         }
@@ -1283,7 +1305,7 @@ void ai_cg_merge_nil(Parser* par, Expr* e, a_u32 label, a_line line) {
     if (label == NO_LABEL)
         return;
     switch (expr_tag(e)) {
-        case EXPR_UNIT: {
+        case EXPR_NEVER: {
             ai_cg_mark_label(par, label, line);
             expr_nil(e, e->line);
             break;
@@ -1312,10 +1334,10 @@ void ai_cg_merge_nil(Parser* par, Expr* e, a_u32 label, a_line line) {
 }
 
 void ai_cg_check_not_nil(Parser* par, Expr* e, a_line line) {
-    switch (e->tag) {
+    switch (expr_tag(e)) {
         case EXPR_NIL: {
             emit_leave(par, bc_make_i(BC_RET0), line);
-            e->tag = EXPR_UNIT;
+            e->tag = EXPR_NEVER;
             break;
         }
         case EXPR_FALSE:
@@ -1415,28 +1437,30 @@ void ai_cg_vec_push_right(Parser *par, Expr* es, Expr* e) {
     }
 
     switch (expr_tag(e)) {
-        case EXPR_UNIT: {
-            assume(!should_emit(par));
-            break;
-        }
         case EXPR_VCALL: {
             a_insn* ip = code_at(par, e->udat1);
-            assume(bc_load_a(ip) == par->scope->top_reg, "can not place variable.");
+            a_reg reg = bc_load_a(ip);
+            assume(reg == par->scope->top_reg, "can not place variable.");
 
             bc_store_op(ip, bc_load_op(ip) + 1);
             bc_store_c(ip, DMB);
 
             es->tag = EXPR_VNTMP;
+            es->udat1 = reg;
+            es->mod = (ExprMod) { };
             break;
         }
         case EXPR_VDYN: {
             a_insn* ip = code_at(par, e->udat1);
+            a_reg reg = par->scope->top_reg;
 
             bc_store_op(ip, bc_load_op(ip) + 1);
-            bc_store_a(ip, par->scope->top_reg);
+            bc_store_a(ip, reg);
             bc_store_c(ip, DMB);
 
             es->tag = EXPR_VNTMP;
+            es->udat1 = reg;
+            es->mod = (ExprMod) { };
             break;
         }
         default: {
@@ -1447,11 +1471,11 @@ void ai_cg_vec_push_right(Parser *par, Expr* es, Expr* e) {
 }
 
 void ai_cg_vec_pop(Parser* par, Expr* es, Expr* e, a_line line) {
-    if (es->tag == EXPR_NTMP) {
+    if (expr_tag(es) == EXPR_NTMP) {
         expr_reg(e, par->scope->top_reg - 1, line);
     }
     else {
-        assume(es->tag != EXPR_NTMPC);
+        assume(expr_tag(es) != EXPR_NTMPC);
         expr_copy(e, es);
         expr_unit(es);
     }
@@ -1472,7 +1496,7 @@ void ai_cg_tuple_box(Parser* par, Expr* e, a_line line) {
 
 void ai_cg_list_box(Parser* par, Expr* e, a_line line) {
     exprs_fix(par, e);
-    switch (e->tag) {
+    switch (expr_tag(e)) {
         case EXPR_UNIT: {
             emit_idbx(par, BC_LNEW, e, 0, line);
             break;
@@ -1514,19 +1538,20 @@ void ai_cg_call(Parser* par, Expr* e, a_line line) {
     if (label != NO_LABEL) {
         e->tag = EXPR_CALL;
         e->udat1 = label;
+        e->mod = (ExprMod) {};
         e->line = line;
     }
     else {
-        e->tag = EXPR_UNIT;
+        expr_never(e, line);
     }
 }
 
 void ai_cg_return(Parser* par, Expr* e, a_line line) {
     clear_close(par);
-    if (e->tag == EXPR_REG) {
+    if (expr_tag(e) == EXPR_REG) {
         emit_leave(par, bc_make_iab(BC_RET, e->udat1, 1), line);
     }
-    else if (e->tag == EXPR_VCALL) {
+    else if (expr_tag(e) == EXPR_VCALL) {
         a_insn* ip = code_at(par, e->udat1);
         a_enum op = bc_load_op(ip);
 
@@ -1556,10 +1581,10 @@ void ai_cg_return(Parser* par, Expr* e, a_line line) {
 }
 
 static void exprs_take(Parser* par, Expr* e, a_u32 n, a_line line) {
-    assume(e->tag == EXPR_VCALL || e->tag == EXPR_VDYN, "not vararg expressions.");
+    assume(expr_match(e, EXPR_VCALL, EXPR_VDYN), "not vararg expressions.");
     a_u32 reg = tmps_alloc(par, n, line);
     a_insn* ip = code_at(par, e->udat1);
-    if (e->tag != EXPR_VCALL) {
+    if (expr_tag(e) != EXPR_VCALL) {
         bc_store_a(ip, reg);
     }
     else {
@@ -1579,7 +1604,7 @@ static void exprs_take(Parser* par, Expr* e, a_u32 n, a_line line) {
  */
 a_u32 ai_cg_vec_trim(Parser* par, Expr* ei, Expr* el, a_u32 n, a_line line) {
     assume(n > 0, "truncate nothing.");
-    switch (ei->tag) {
+    switch (expr_tag(ei)) {
         case EXPR_UNIT: {
             if (expr_has_vararg_top(el)) {
                 exprs_take(par, el, n, line);
@@ -1594,7 +1619,7 @@ a_u32 ai_cg_vec_trim(Parser* par, Expr* ei, Expr* el, a_u32 n, a_line line) {
             if (m >= n) {
                 a_u32 top = ei->udat1 + n;
                 tmps_free(par, top);
-                ai_cg_wild(par, el);
+                ai_cg_discard(par, el);
                 expr_reg(el, top - 1, line);
                 return 0;
             }
@@ -1624,91 +1649,115 @@ a_u32 ai_cg_vec_trim(Parser* par, Expr* ei, Expr* el, a_u32 n, a_line line) {
                 return n - 2;
             }
 
-            ai_cg_wild(par, el);
+            ai_cg_discard(par, el);
 
             if (n > 0) {
                 expr_copy(el, ei);
                 expr_unit(ei);
             }
             else {
-                ai_cg_wild(par, ei);
+                ai_cg_discard(par, ei);
             }
             return 0;
         }
     }
 }
 
-static a_bool try_fold_append(Parser* par, Expr* e) {
-    switch (e->tag) {
+static a_bool try_fold_append(Parser* par, Expr* e, a_bool empty, a_line line) {
+    a_bool changed = empty;
+    switch (expr_tag(e)) {
         case EXPR_INT: {
             at_fmt_puti(par->env, par->sbuf, e->idat);
-            return true;
+            break;
         }
         case EXPR_FLOAT: {
             at_fmt_putf(par->env, par->sbuf, e->fdat);
-            return true;
+            break;
         }
         case EXPR_STR: {
             GStr* str = e->sdat;
+            changed &= str->len > 0;
             at_buf_putls(par->env, par->sbuf, str->ptr, str->len);
-            return true;
+            break;
         }
         default: {
             return false;
         }
     }
+    if (changed) {
+        tmp_alloc(par, line);
+    }
+    return true;
 }
 
 static GStr* buf_to_str(Parser* par, ConExpr* ce) {
     Buf* buf = par->sbuf;
     GStr* str = ai_lex_to_str(lex(par), buf->ptr + ce->off, buf->len - ce->off);
-    at_buf_clear(buf);
+    buf->len = ce->off;
     return str;
 }
 
-void ai_cg_str_init(Parser* par, ConExpr* ce, Expr* e, a_line line) {
-    a_regs regs = exprs_to_top_tmps(par, e);
-    ce->expr->tag = regs.len != N_VLR ? EXPR_NTMP : EXPR_NTMPC;
-    ce->expr->udat1 = regs.bot;
-    ce->expr->line = line;
+void ai_cg_str_init(Parser* par, ConExpr* ce) {
+    expr_unit(ce->expr);
     ce->off = par->sbuf->len;
 }
 
 void ai_cg_str_cat(Parser* par, ConExpr* ce, Expr* e, a_line line) {
+    // TODO change to string buffer implementation
     a_bool empty = par->sbuf->len == ce->off;
-    if (try_fold_append(par, e)) {
-        if (empty) {
-            tmp_alloc(par, line);
-        }
-    }
-    else {
-        a_regs regs = exprs_to_top_tmps(par, ce->expr);
+    if (try_fold_append(par, e, empty, line))
+        return;
+
+    a_regs regs = exprs_to_top_tmps(par, ce->expr);
+    if (regs.len == N_VLR) {
         if (!empty) {
             GStr* str = buf_to_str(par, ce);
-            emit_k(par, regs.bot + regs.len - 1, v_of_str(str), line);
+            regs.bot -= 1;
+            emit_k(par, regs.bot, v_of_str(str), line);
         }
+
         ai_cg_vec_push_right(par, ce->expr, e);
+
+        emit_idb(par, BC_CATM, ce->expr, regs.bot, line);
+    }
+    else {
+        ai_cg_vec_push_right(par, ce->expr, e);
+        exprs_fix(par, ce->expr);
     }
 }
 
 void ai_cg_str_build(Parser* par, ConExpr* ce, Expr* e, a_line line) {
-    if (ce->expr->tag == EXPR_UNIT) {
-        expr_str(e, buf_to_str(par, ce), line);
-    }
-    else {
-        a_regs regs = exprs_to_top_tmps(par, ce->expr);
-        if (par->sbuf->len > ce->off) {
-            GStr* str = buf_to_str(par, ce);
-            emit_k(par, regs.bot + regs.len - 1, v_of_str(str), line);
-        }
-        if (regs.len != N_VLR) {
-            emit_idbc(par, BC_CAT, e, regs.bot, regs.len, line);
+    a_bool empty = par->sbuf->len == ce->off;
+    if (expr_tag(ce->expr) == EXPR_UNIT) {
+        if (empty) {
+            expr_str(e, g_str(par->env, STR_NIL), line);
         }
         else {
-            emit_idb(par, BC_CATM, e, regs.bot, line);
+            tmp_free(par, par->scope->top_reg - 1);
+            expr_str(e, buf_to_str(par, ce), line);
         }
-        tmps_free(par, regs.bot);
+        return;
     }
+
+    a_bool ready = expr_tag(ce->expr) == EXPR_DYN && bc_load_op(code_at(par, ce->expr->udat1)) == BC_CATM;
+
+    if (ready && empty) {
+        expr_copy(e, ce->expr);
+        return;
+    }
+
+    a_regs regs = exprs_to_top_tmps(par, ce->expr);
+    assume(regs.len != N_VLR, "variable length should be compute while concating");
+
+    if (!empty) {
+        GStr* str = buf_to_str(par, ce);
+        emit_k(par, regs.bot + regs.len, v_of_str(str), line);
+        regs.len += 1;
+        ready = false;
+    }
+
+    emit_idbc(par, BC_CAT, e, regs.bot, regs.len, line);
+    tmps_free(par, regs.bot);
 }
 
 void ai_cg_unpack(Parser* par, Expr* e, a_line line) {
@@ -1807,8 +1856,8 @@ a_u32 ai_cg_test_true(Parser* par, Expr* e, a_line line) {
  *@param par the parser.
  *@param e the expression to be discarded.
  */
-void ai_cg_wild(Parser* par, Expr* e) {
-    switch (e->tag) {
+void ai_cg_discard(Parser* par, Expr* e) {
+    switch (expr_tag(e)) {
         case EXPR_DYN: {
             a_insn* ip = code_at(par, e->udat1);
             a_u32 reg = tmp_alloc(par, e->line);
@@ -1822,13 +1871,8 @@ void ai_cg_wild(Parser* par, Expr* e) {
             bc_store_c(ip, 0);
             break;
         }
-        case EXPR_REG:
-        case EXPR_REFI:
-        case EXPR_REFK: {
-            expr_drop(par, e);
-            break;
-        }
         default: {
+            expr_drop(par, e);
             break;
         }
     }
@@ -1852,6 +1896,9 @@ static char const* sym_name(Parser* par, Expr* e) {
         case EXPR_CAP: {
             return str2ntstr(par->fscope->caps->ptr[e->udat1].name);
         }
+        default: {
+            break;
+        }
     }
     return "?";
 }
@@ -1868,7 +1915,7 @@ void ai_cg_pin(Parser* par, Expr* e1, Expr* e2) {
 }
 
 void ai_cg_assign(Parser* par, Expr* e1, Expr* e2, a_line line) {
-    switch (e1->tag) {
+    switch (expr_tag(e1)) {
         case EXPR_REG: {
             sym_check_writable(par, e1, line);
             ai_cg_pin(par, e1, e2);
@@ -1903,7 +1950,7 @@ void ai_cg_assign(Parser* par, Expr* e1, Expr* e2, a_line line) {
         }
         case EXPR_PUB: {
             if (!(par->options & ALO_COMP_OPT_SCRIPT) || &par->root_scope != par->fscope) {
-                GStr* name = v_as_str(const_at(par, e1->udat2));
+                GStr* name = v_as_str(const_at(par, e1->udat1));
                 parse_error(par, "cannot assign to anonymous variable '%s'", line, str2ntstr(name));
             }
             expr_pub_to_index(par, e1, line);
@@ -1924,7 +1971,7 @@ void ai_cg_assign(Parser* par, Expr* e1, Expr* e2, a_line line) {
 }
 
 void ai_cg_tbc(Parser* par, Expr* e, a_line line) {
-    assume(e->tag == EXPR_REG, "cannot mark a non-register storage variable to-be-closed.");
+    assume(expr_tag(e) == EXPR_REG, "cannot mark a non-register storage variable to-be-closed.");
     emit_ia(par, BC_TBC, e->udat1, line);
 }
 
@@ -2008,7 +2055,8 @@ void ai_cg_bind_nils(Parser* par, Pat* pat, a_line line) {
     a_u32 label = emit_kn(par, reg, num, line);
     for (Pat* pat_child = pat->sub; pat_child != nullptr; pat_child = pat_child->sib) {
         sym_local(par, pat_child->name, reg++, label, (ExprMod) {
-            .mmut = pat_child->fmut
+            .mmut = pat_child->fmut,
+            .muse = pat_child->fuse
         }, pat_child->line);
     }
 
@@ -2017,10 +2065,11 @@ void ai_cg_bind_nils(Parser* par, Pat* pat, a_line line) {
 
 static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
     switch (pat->tag) {
-        case PAT_WILD: {
+        case PAT_DROP: {
             return bot;
         }
         case PAT_VAR: {
+            tmp_check(par, bot, pat->line);
             eval_to(par, src, bot);
             sym_local(par, pat->name, bot, par->head_label, (ExprMod) {
                 .mmut = pat->fmut,
@@ -2028,13 +2077,25 @@ static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
             }, pat->line);
             return bot + 1;
         }
+        case PAT_VARG: {
+            /* The expression for PAT_VARG always unbox at top of stack, unbox it directly. */
+            exprs_take(par, src, pat->num_sub /* TODO: variable length arguments */, pat->line);
+            a_reg top = bot + pat->num_bwd;
+            for (Pat* sub = pat->sub; sub != nullptr; sub = sub->sib) {
+                expr_reg(src, top, sub->line);
+                bot = pat_bind_with(par, sub, bot, src);
+                top += 1;
+            }
+            return bot;
+        }
         case PAT_TUPLE: {
             a_u32 line = pat->line;
             a_u32 num = pat->num_sub;
             a_u32 top = bot + pat->num_bwd;
-            a_u32 src_reg = eval_to_reg_or(par, src, top);
+            a_reg src_reg = eval_to_reg_or(par, src, top);
             if (pat->fcpx && num > 2) {
                 top += pat->num_sub - 1;
+                tmp_check(par, top, line);
                 emit_iab(par, BC_UNBOXT, top, src_reg, line);
 
                 Pat* sub = pat->sub;
@@ -2049,7 +2110,8 @@ static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
                 }
             }
             else {
-                emit_iabc(par, BC_UNBOX, top, src_reg, num /* TODO: variable length arguments? */, line);
+                tmps_check(par, top + num, line);
+                emit_iabc(par, BC_UNBOX, top, src_reg, num /* TODO: variable length arguments */, line);
                 for (Pat* sub = pat->sub; sub != nullptr; sub = sub->sib) {
                     expr_reg(src, top, sub->line);
                     bot = pat_bind_with(par, sub, bot, src);
@@ -2058,7 +2120,12 @@ static a_u32 pat_bind_with(Parser* par, Pat* pat, a_u32 bot, Expr* src) {
             }
             return bot;
         }
-        default: panic("not implemented."); //TODO
+        case PAT_LIST:
+        case PAT_TABLE: {
+            /* TODO */
+            parse_error(par, "not yet implemented", pat->line);
+        }
+        default: unreachable();
     }
 }
 
@@ -2073,7 +2140,7 @@ static a_u32 pat_valloc(Parser* par, Pat* pat) {
         case PAT_VAR: {
             return 1;
         }
-        case PAT_WILD: {
+        case PAT_DROP: {
             return 0;
         }
         case PAT_VARG:
@@ -2086,7 +2153,7 @@ static a_u32 pat_valloc(Parser* par, Pat* pat) {
             loop {
                 a_u32 sub_pin = pat_valloc(par, sub);
                 a_u32 sub_use = num_pin + sub->num_bwd + sub->num_sub;
-                pat->num_bwd = max(pat->num_bwd, sub_use + num_pin);
+                pat->num_bwd = max(pat->num_bwd, sub_use);
                 num_pin += sub_pin;
 
                 if (sub->sib == nullptr)
@@ -2098,46 +2165,63 @@ static a_u32 pat_valloc(Parser* par, Pat* pat) {
             pat->num_bwd -= pat->num_sub;
             return num_pin;
         }
+        case PAT_LIST:
+        case PAT_TABLE: {
+            /* TODO */
+            parse_error(par, "not yet implemented", pat->line);
+        }
         default: unreachable();
     }
 }
 
 void ai_cg_bind_prepare(Parser* par, Pat* pat) {
     pat_valloc(par, pat);
+    /*
+     * Allocate backward reserved space for pattern matching.
+     * The temporal registers are allocated when binding occurs.
+     */
     tmps_alloc(par, pat->num_bwd, pat->line);
 }
 
 void ai_cg_bind_once(Parser* par, Pat* pat, Expr* e) {
-    assume(pat != nullptr, "bind to nothing.");
+    assume(pat != nullptr, "nothing to bind.");
 
-    if (pat->tag == PAT_VAR && !pat->fmut && e->tag <= CONST__MAX) { /* Try fold constant. */
+    if (pat->tag == PAT_VAR && !pat->fmut && expr_tag(e) <= CONST__MAX) {
+        /* Try fold constant. */
         syms_push(par, (Sym) {
-            .tag = e->tag,
+            .tag = expr_tag(e),
             .kdat = e->kdat,
             .name = pat->name,
             .scope_depth = par->scope_depth,
+            .line = pat->line,
         });
+        assume(pat->num_bwd == 0, "unexpected reserved registers for pattern binding.");
+        return;
     }
-    else {
-        a_u32 old_top = par->scope->top_reg - pat->num_bwd;
-        a_u32 new_top = pat_bind_with(par, pat, old_top, e);
-        tmps_pin(par, new_top - old_top);
-        tmps_free(par, par->scope->top_reg - new_top);
-    }
+
+    a_u32 old_top = par->scope->top_reg - pat->num_bwd;
+    a_u32 new_top = pat_bind_with(par, pat, old_top, e);
+    tmps_pin(par, new_top);
+    par->scope->top_reg = new_top; /* TODO: should extract this as a function like 'tmps_change'? */
 }
 
 a_u32 ai_cg_bind_for(Parser* par, Pat* pat, a_line line) {
-    assume(pat != nullptr, "bind to nothing.");
+    assume(pat != nullptr, "nothing to bind.");
 
     a_u32 reg_itr = par->scope->top_reg - 3; /* The iterator register. */
 
     Expr e[1];
     a_u32 label = emit_branch(par, bc_make_iabc(BC_NEXTG, R_DYN, reg_itr, N_DYN), NO_LABEL, line);
 
-    init(e) {
-        .tag = EXPR_VDYN,
-        .udat1 = label - 1
-    };
+    if (likely(label != NO_LABEL)) {
+        init(e) {
+            .tag = EXPR_VDYN,
+            .udat1 = label - 1
+        };
+    }
+    else {
+        expr_never(e, line);
+    }
 
     ai_cg_bind_prepare(par, pat);
     ai_cg_bind_once(par, pat, e);
@@ -2164,13 +2248,13 @@ void ai_cg_bind_args(Parser* par, Pat* pat, a_usize ctx) {
     while (sub != nullptr) {
         if (sub->tag == PAT_VAR) {
             sym_local(par, sub->name, sub_idx, par->head_label, (ExprMod) {
-                .mmut = pat->fmut,
-                .muse = pat->fuse
-            }, line);
+                .mmut = sub->fmut,
+                .muse = sub->fuse
+            }, sub->line);
         }
         else {
             pat_valloc(par, sub);
-            expr_reg(&e, sub_idx, pat->line);
+            expr_reg(&e, sub_idx, sub->line);
             scope->top_reg = pat_bind_with(par, sub, scope->top_reg, &e);
         }
 
@@ -2204,10 +2288,13 @@ static void scope_pop(Parser* par, a_line line, a_bool leave) {
         a_u32 label = par->head_label - par->fscope->begin_label;
         for (a_u32 i = bot; i < top; ++i) {
             Sym* sym = &par->syms.ptr[i];
-            switch (sym->tag) {
+            switch (expr_tag(&sym->expr)) {
                 case EXPR_REG: {
                     LocalInfo* info = &par->locals.ptr[sym->udat2];
                     info->lend = label;
+                    break;
+                }
+                default: {
                     break;
                 }
             }
@@ -2234,7 +2321,7 @@ void ai_cg_block_end(Parser* par, a_line line) {
 void ai_cg_block_end_with(Parser* par, a_line line, Expr* e) {
     assume(par->scope->upscope != nullptr);
     /* TODO: need ensure top value is still alive */
-    if (e->tag == EXPR_REG && e->udat1 == par->scope->upscope->top_reg) {
+    if (expr_tag(e) == EXPR_REG && e->udat1 == par->scope->upscope->top_reg) {
         scope_pop(par, line, true);
 
         a_u32 reg = tmp_alloc(par, line);
@@ -2541,8 +2628,8 @@ void ai_cg_chunk_end(Parser* par, a_line line) {
  *@return the label of movement instruction.
  */
 static a_u32 eval_to_explicit(Parser* par, Expr* e, a_u32 reg) {
-    switch (e->tag) {
-        case EXPR_UNIT: {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER: {
             assume(!should_emit(par));
             return NO_LABEL;
         }
@@ -2645,13 +2732,13 @@ static a_u32 eval_to_explicit(Parser* par, Expr* e, a_u32 reg) {
             return emit_iab(par, BC_MOV, reg, reg2, e->line);
         }
         default: {
-            panic("cannot move expression with tag: %u.", e->tag);
+            panic("cannot move expression with tag: %u.", expr_tag(e));
         }
     }
 }
 
 static void eval_to(Parser* par, Expr* e, a_u32 reg) {
-    switch (e->tag) {
+    switch (expr_tag(e)) {
         case EXPR_NIL: {
             emit_kn(par, reg, 1, e->line);
             break;
@@ -2709,7 +2796,7 @@ static a_reg eval_to_top_tmp(Parser* par, Expr* e) {
 
 static a_reg eval_to_reg(Parser* par, Expr* e) {
     switch (expr_tag(e)) {
-        case EXPR_UNIT: {
+        case EXPR_NEVER: {
             return R_DMB;
         }
         case EXPR_REG: {
@@ -2766,20 +2853,21 @@ static a_reg eval_to_tmp(Parser* par, Expr* e) {
 }
 
 static void expr_to_dyn(Parser* par, Expr* e) {
-    if (!expr_match(e, EXPR_UNIT, EXPR_DYN)) {
+    if (!expr_match(e, EXPR_NEVER, EXPR_DYN)) {
         expr_drop(par, e);
         a_u32 label = eval_to_explicit(par, e, R_DYN);
         if (label != NO_LABEL) {
             expr_dyn(e, label, e->line);
         }
         else {
-            e->tag = EXPR_UNIT;
+            expr_never(e, e->line);
         }
     }
 }
 
 static void exprs_fix(Parser* par, Expr* e) {
-    switch (e->tag) {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER:
         case EXPR_UNIT: {
             break;
         }
@@ -2844,7 +2932,10 @@ static void exprs_fix(Parser* par, Expr* e) {
 }
 
 static a_regs exprs_to_top_tmps(Parser* par, Expr* e) {
-    switch (e->tag) {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER: {
+            return (a_regs) { 0, 0 };
+        }
         case EXPR_UNIT: {
             return (a_regs) { par->scope->top_reg, 0 };
         }
@@ -2910,7 +3001,7 @@ static a_regs exprs_to_top_tmps(Parser* par, Expr* e) {
 
 static void test_true(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
     switch (expr_tag(e)) {
-        case EXPR_UNIT:
+        case EXPR_NEVER:
         case EXPR_TRUE:
         case EXPR_INT:
         case EXPR_FLOAT:
@@ -2952,7 +3043,7 @@ static void test_true(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
 
 static void test_false(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
     switch (expr_tag(e)) {
-        case EXPR_UNIT:
+        case EXPR_NEVER:
         case EXPR_NIL:
         case EXPR_FALSE: {
             break;
@@ -2993,16 +3084,17 @@ static void test_false(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
 }
 
 void ai_cg_test_eq_nil(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
-    switch (e->tag) {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER:
+        case EXPR_NIL: {
+            break;
+        }
         case EXPR_TRUE:
         case EXPR_INT:
         case EXPR_FLOAT:
         case EXPR_STR:
         case EXPR_FALSE: {
             *plabel = ai_cg_jump_lazily(par, *plabel, line);
-            break;
-        }
-        case EXPR_NIL: {
             break;
         }
         case EXPR_REG_OR_NIL: {
@@ -3016,27 +3108,25 @@ void ai_cg_test_eq_nil(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
             a_u32 label = e->udat2;
 
             expr_dyn(e, e->udat1, e->line);
-            eval_to_reg(par, e);
-
-            assume(e->tag == EXPR_REG);
-            *plabel = emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
+            a_reg reg = eval_to_reg(par, e);
+            expr_reg(e, reg, line);
+            *plabel = emit_branch(par, bc_make_ia(BC_BN, reg), *plabel, line);
             ai_cg_mark_label(par, label, line);
 
             break;
         }
         default: {
-            eval_to_reg(par, e);
-
-            assume(e->tag == EXPR_REG);
-            *plabel = emit_branch(par, bc_make_ia(BC_BN, e->udat1), *plabel, line);
-
+            a_reg reg = eval_to_reg(par, e);
+            expr_reg(e, reg, line);
+            *plabel = emit_branch(par, bc_make_ia(BC_BN, reg), *plabel, line);
             break;
         }
     }
 }
 
 void ai_cg_test_ne_nil(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
-    switch (e->tag) {
+    switch (expr_tag(e)) {
+        case EXPR_NEVER:
         case EXPR_TRUE:
         case EXPR_INT:
         case EXPR_FLOAT:
@@ -3046,7 +3136,7 @@ void ai_cg_test_ne_nil(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
         }
         case EXPR_NIL: {
             *plabel = ai_cg_jump_lazily(par, *plabel, line);
-            e->tag = EXPR_UNIT;
+            e->tag = EXPR_NEVER;
             break;
         }
         case EXPR_REG_OR_NIL: {
@@ -3063,20 +3153,18 @@ void ai_cg_test_ne_nil(Parser* par, Expr* e, a_u32* plabel, a_u32 line) {
             fallthrough;
         }
         default: {
-            eval_to_reg(par, e);
-            assume(e->tag == EXPR_REG);
-            *plabel = emit_branch(par, bc_make_ia(BC_BNN, e->udat1), *plabel, line);
+            a_reg reg = eval_to_reg(par, e);
+            expr_reg(e, reg, line);
+            *plabel = emit_branch(par, bc_make_ia(BC_BNN, reg), *plabel, line);
             break;
         }
     }
 }
 
 static a_u32 expr_catch_nil_branch(Parser* par, Expr* e, a_u32 line) {
-    switch (e->tag) {
+    switch (expr_tag(e)) {
         case EXPR_NIL: {
-            a_u32 label = ai_cg_jump_lazily(par, NO_LABEL, line);
-            e->tag = EXPR_NIL;
-            return label;
+            return ai_cg_jump_lazily(par, NO_LABEL, line);
         }
         case EXPR_DYN_OR_NIL: {
             a_u32 label = e->udat2;

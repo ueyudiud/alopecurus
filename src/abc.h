@@ -121,10 +121,10 @@ ALO_INLINE void bc_store(a_insn* ip, a_insn v) { *ip = v; }
     _(  LOOK,  "look",reg,reg,kst,___) /* R[a:a+2] := look(R[b], K[c])            */ \
     _( LOOKX, "lookx",reg,reg,___,kst) /* R[a:a+2] := look(R[b], K[ex])           */ \
     _(  ITER,  "iter",reg,reg,___,___) /* R[a:a+2] := iter(R[b])                  */ \
-    _( NEXTG, "nextg",reg,reg,len,___) /* t, R[a:a+c] := next(R[b:b+2])
-                                          if R[a] { pc += 1; R[b+2] := t }        */ \
-    _(NEXTGV,"nextgv",reg,reg,___,___) /* t, R[a:] := next(R[b:b+2])
-                                          if t { pc += 1; R[b+2] := t }           */ \
+    _( NEXTG, "nextg",reg,reg,len,___) /* R[b+1:b+3], R[a:a+c] := next(R[b:b+3])
+                                          if R[b+1] { pc += 1 }                   */ \
+    _(NEXTGV,"nextgv",reg,reg,___,___) /* R[b+1:b+3], R[a:] := next(R[b:b+3])
+                                          if R[b+1] { pc += 1 }                   */ \
     _(   GET,   "get",reg,reg,reg,___) /* R[a] := R[b][R[c]]                      */ \
     _(  GETI,  "geti",reg,reg,int,___) /* R[a] := R[b][int(c)]                    */ \
     _(  GETS,  "gets",reg,reg,kst,___) /* R[a] := R[b][K[c]: str]                 */ \
@@ -140,9 +140,9 @@ ALO_INLINE void bc_store(a_insn* ip, a_insn v) { *ip = v; }
     _(   NEG,   "neg",reg,reg,___,___) /* R[a] := -R[b]                           */ \
     _(  BNOT,  "bnot",reg,reg,___,___) /* R[a] := ~R[b]                           */ \
     _(   LEN,   "len",reg,reg,___,___) /* R[a] := #R[b]                           */ \
-    _( UNBOX, "unbox",reg,___,len,___) /* R[a:a+c] := *R[b]                       */ \
-    _(UNBOXV,"unboxv",reg,___,___,___) /* R[a:] := *R[b]                          */ \
-    _(UNBOXT,"unboxt",reg,___,___,___) /* R[a] := tuple(*R[b])                    */ \
+    _( UNBOX, "unbox",reg,reg,len,___) /* R[a:a+c] := *R[b]                       */ \
+    _(UNBOXV,"unboxv",reg,reg,___,___) /* R[a:] := *R[b]                          */ \
+    _(UNBOXT,"unboxt",reg,reg,___,___) /* R[a] := tuple(*R[b])                    */ \
     _(  TNEW,  "tnew",reg,reg,len,___) /* R[a] := (R[b:b+c])                      */ \
     _( TNEWM, "tnewm",reg,reg,___,___) /* R[a] := (R[b:])                         */ \
     _(  LNEW,  "lnew",reg,ini,___,___) /* R[a] := [] (with size hint b)           */ \
@@ -218,7 +218,6 @@ ALO_STATIC_ASSERT(BC_CALLM + 1 == BC_CALLMV);
 ALO_STATIC_ASSERT(BC_CALLM + 2 == BC_TCALLM);
 
 ALO_PRIVATE char const ai_bc_names[][8];
-ALO_PRIVATE a_u8 const ai_bc_reloc[];
 
 ALO_INLINE a_bool insn_is_branch(a_insn const* ip) {
     a_enum op = bc_load_op(ip);

@@ -166,16 +166,25 @@ static a_bool scan_dqstr_frag(Parser* par, Expr* e, a_u32 line) {
 }
 
 static void scan_dqstr(Parser* par, Expr* e) {
-	ConExpr ce;
 	a_u32 line = lex_line(par);
-    scan_dqstr_frag(par, e, line);
-    ai_cg_str_init(par, &ce, e, line);
 
-	while (!scan_dqstr_frag(par, e, line)) {
-        ai_cg_str_cat(par, &ce, e, lex_line(par));
+	if (scan_dqstr_frag(par, e, line)) {
+    	expr_str(e, g_str(par->env, STR_NIL), line);
+    	return;
+    }
+
+	if (lex_peek_dqstr(par, line) != TK_TSFINISH) {
+		ConExpr ce;
+		ai_cg_str_init(par, &ce);
+
+		ai_cg_str_cat(par, &ce, e, line);
+
+		while (!scan_dqstr_frag(par, e, line)) {
+			ai_cg_str_cat(par, &ce, e, lex_line(par));
+		}
+
+		ai_cg_str_build(par, &ce, e, lex_line(par));
 	}
-
-    ai_cg_str_build(par, &ce, e, lex_line(par));
 }
 
 static void scan_function(Parser* par, Expr* e, GStr* name, a_line line) {
@@ -642,7 +651,7 @@ static void scan_compare_expr(Parser* par, Expr* e) {
         scan_arith_expr(par, e3);
         ai_cg_binary_right(par, e2, e3, op2, line2);
 
-        ai_cg_wild(par, e3);
+        ai_cg_discard(par, e3);
         ai_cg_binary_right(par, e, e2, OP_AND, line2);
 
         op2 = scan_compare_op(par);
@@ -692,7 +701,8 @@ static void scan_concatenate_expr(Parser* par, Expr* e) {
     a_line line1 = lex_line(par);
     if (lex_test_skip(par, TK_BDOT)) {
         ConExpr ce;
-        ai_cg_str_init(par, &ce, e, line1);
+        ai_cg_str_init(par, &ce);
+    	ai_cg_str_cat(par, &ce, e, line1);
         do {
             a_u32 line2 = lex_line(par);
             scan_relation_expr(par, e);
@@ -734,7 +744,7 @@ static void scan_ternary_expr(Parser* par, Expr* e) {
 
             lex_skip(par);
 
-            ai_cg_wild(par, e);
+            ai_cg_discard(par, e);
             scan_ternary_expr(par, e);
 
             lex_check_pair_right(par, TK_QUESTION, TK_COLON, line);
@@ -894,7 +904,7 @@ static void scan_assign_or_call(Parser* par) {
 	}
 
     lex_test_skip(par, TK_SEMI);
-    ai_cg_wild(par, lhs.head.expr);
+    ai_cg_discard(par, lhs.head.expr);
 }
 
 static void scan_do_stat(Parser* par) {
@@ -920,7 +930,7 @@ static void scan_if_stat(Parser* par) {
     Expr ep[1];
     scan_expr(par, ep);
 	a_u32 label1 = ai_cg_test_true(par, ep, line);
-    ai_cg_wild(par, ep);
+    ai_cg_discard(par, ep);
 
 	lex_check_pair_right(par, TK_LBK, TK_RBK, line);
 	lex_skip(par);
@@ -957,7 +967,7 @@ static void scan_while_stat(Parser* par) {
     Expr ep[1];
     scan_expr(par, ep);
 	a_u32 label2 = ai_cg_test_true(par, ep, line);
-    ai_cg_wild(par, ep);
+    ai_cg_discard(par, ep);
 
     lex_check_pair_right(par, TK_LBK, TK_RBK, line);
     lex_skip(par);
@@ -1087,7 +1097,7 @@ branch_standard:
 		case TK__: {
             lex_skip(par);
             up->fcpx = true;
-            pat->tag = PAT_WILD;
+            pat->tag = PAT_DROP;
             pat->line = lex_line(par);
 			break;
 		}
@@ -1251,7 +1261,7 @@ static void scan_for_stat(Parser* par) {
 
     ai_cg_block_end(par, lex_line(par));
 
-    ai_cg_wild(par, e);
+    ai_cg_discard(par, e);
 }
 
 static void let_bind(Parser* par, Pat* p, a_usize c) {
@@ -1276,7 +1286,7 @@ static void let_bind(Parser* par, Pat* p, a_usize c) {
             if (pat == nullptr) {
                 do {
                     scan_expr(par, e);
-                    ai_cg_wild(par, e);
+                    ai_cg_discard(par, e);
                 }
                 while (lex_test_skip(par, TK_COMMA));
 
@@ -1348,6 +1358,8 @@ static void scan_fn_stat(Parser* par) {
 	GStr* name = lex_check_ident(par);
 
     if (lex_test_skip(par, TK_DOT)) {
+    	ai_cg_symbol(par, en, name, line);
+
         do {
             name = lex_check_ident(par);
             ai_cg_index_str(par, en, name, lex_line(par));
